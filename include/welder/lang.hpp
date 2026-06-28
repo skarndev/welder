@@ -7,12 +7,11 @@
 
 WELDER_EXPORT namespace welder {
 
-// The set of target languages welder can generate bindings for. `cpp` is a
-// placeholder for a future C++-to-C++ adapter; today only `py` has a backend.
+// The set of target languages welder can generate bindings for.
+// today only `py` has a backend.
 enum class lang : unsigned char {
     py,
     lua,
-    cpp,
 };
 
 } // namespace welder
