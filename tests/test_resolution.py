@@ -31,6 +31,12 @@ MEMBER_CASES = [
     pytest.param("Counter", "value", True, id="method/const-bound"),
     pytest.param("Counter", "version", True, id="static-method/bound"),
     pytest.param("Counter", "secret", False, id="method/excluded"),
+    # --- access control: only public members are bound -----------------------
+    pytest.param("Access", "visible", True, id="access/public-data-bound"),
+    pytest.param("Access", "read_hidden", True, id="access/public-method-bound"),
+    pytest.param("Access", "hidden", False, id="access/private-data-not-bound"),
+    pytest.param("Access", "guarded", False, id="access/protected-data-not-bound"),
+    pytest.param("Access", "helper", False, id="access/private-method-not-bound"),
 ]
 
 

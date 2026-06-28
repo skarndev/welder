@@ -101,9 +101,12 @@ pybind11::class_<T> bind(pybind11::module_& m, const char* name = nullptr) {
     }
 
     // --- data members --------------------------------------------------------
+    // Query with an unchecked context (so welder *sees* every member) but only
+    // bind public ones: private/protected members are not part of the public API
+    // exposed to Python. (Exposing them via accessors could be a future policy.)
     template for (constexpr auto mem : std::define_static_array(
                       std::meta::nonstatic_data_members_of(^^T, ctx))) {
-        if constexpr (member_bound(mem, L, pol)) {
+        if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
             constexpr const char* mname =
                 std::define_static_string(std::meta::identifier_of(mem));
             cls.def_readwrite(mname, &[:mem:]);

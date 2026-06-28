@@ -72,6 +72,20 @@ Calc {
     int sum(int a, int b) const { return base + a + b; } // overload 2
 };
 
+// ---- access control: only the public API is bound ---------------------------
+struct [[=welder::weld(welder::lang::py)]]
+Access {
+    int visible = 0;             // public data   -> bound
+    int read_hidden() const { return hidden; } // public method -> bound
+
+private:
+    int hidden = 9;              // private data  -> not bound
+    void helper() {}             // private method-> not bound
+
+protected:
+    int guarded = 0;             // protected data-> not bound
+};
+
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_bindings
 #endif
@@ -83,4 +97,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     welder::py::bind<Values>(m);
     welder::py::bind<Counter>(m);
     welder::py::bind<Calc>(m);
+    welder::py::bind<Access>(m);
 }
