@@ -56,4 +56,18 @@ consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
     return included_for(member, L);
 }
 
+// The types of the *public* base classes of `type`. Private/protected bases are
+// an implementation detail and never participate in a binding. Backends decide
+// how to treat a public base: typically, a base that is itself welded for the
+// target language maps to native inheritance in that backend, while a non-welded
+// base has its members flattened into the derived binding.
+consteval std::vector<std::meta::info> public_bases(std::meta::info type) {
+    std::vector<std::meta::info> out;
+    constexpr auto ctx = std::meta::access_context::unchecked();
+    for (auto b : std::meta::bases_of(type, ctx))
+        if (std::meta::is_public(b))
+            out.push_back(std::meta::type_of(b));
+    return out;
+}
+
 } // namespace welder

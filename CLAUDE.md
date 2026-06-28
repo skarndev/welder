@@ -42,9 +42,22 @@ consumption forms, producing an importable Python module):
   - constructors (default + each public non-copy/move constructor, with
     parameter types reflected into `pybind11::init<...>`);
   - methods and static methods, including overloads.
+  - inheritance from public bases. `weld` is a **discovery marker** ("this type
+    is an independently-registered, module-discoverable entity"), not an
+    inheritance directive: the *most-derived* type's `weld` drives which languages
+    bind, and a base need not be welded to contribute members. From that:
+    a **welded** base — registered as its own Python class — becomes a native
+    pybind11 base (`class_<T, Base...>`, real subclass, inherited members via the
+    MRO; bind it separately, before T), including welded bases reached only
+    *through* non-welded ones (nearest welded ancestors, deduplicated). A
+    **non-welded** base is a plain C++ mixin whose eligible members are flattened
+    into each derived binding (recursively, honoring the base's own marks/policy).
+    Virtual diamonds are supported and tested; non-virtual diamonds with a shared
+    welded base are a C++ ambiguity (not worked around).
 
-Inheritance, enums, properties, custom type converters, and additional
-languages (Lua, …) are designed-for but **not yet implemented**.
+Enums, properties, custom type converters, and additional languages (Lua, …)
+are designed-for but **not yet implemented**. The namespace/module-level
+introspection that consumes the `weld` discovery marker is the planned next step.
 
 ## The idea / public API
 
@@ -108,7 +121,7 @@ include/welder/
   detail/config.hpp   WELDER_EXPORT macro (export under the module, else empty)
   lang.hpp            enum class lang                       — std-free vocabulary
   annotations.hpp     weld / policy / mark + mask helpers   — std-free vocabulary
-  reflect.hpp         welded_for / policy_of / member_bound — uses <meta>
+  reflect.hpp         welded_for / policy_of / member_bound / public_bases — uses <meta>
   welder.hpp          header-only umbrella: lang+annotations+reflect
   python.hpp          pybind11 backend: welder::py::bind<T>
 modules/

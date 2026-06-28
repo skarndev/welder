@@ -86,6 +86,78 @@ protected:
     int guarded = 0;             // protected data-> not bound
 };
 
+// ---- inheritance: a welded base maps to native pybind11 inheritance ---------
+struct [[=welder::weld(welder::lang::py)]]
+Base {
+    int base_field = 1;
+    int base_method() const { return base_field; }
+    [[=welder::mark::exclude]] int base_secret = 0; // excluded on the base itself
+};
+
+struct [[=welder::weld(welder::lang::py)]]
+Derived : public Base {                            // issubclass(Derived, Base)
+    int derived_field = 2;
+    int derived_method() const { return derived_field; }
+};
+
+// ---- inheritance: a multi-level welded chain (Leaf -> Mid -> Base) -----------
+struct [[=welder::weld(welder::lang::py)]]
+Mid : public Base {
+    int mid_field = 5;
+};
+struct [[=welder::weld(welder::lang::py)]]
+Leaf : public Mid {
+    int leaf_field = 6;
+};
+
+// ---- inheritance: a non-welded base is flattened in (mixin) ------------------
+struct Mixin {                                     // NOT welded -> not its own type
+    int mixin_field = 3;
+    int mixin_method() const { return mixin_field; }
+    [[=welder::mark::exclude]] int mixin_secret = 0; // marks honored when flattened
+};
+
+struct [[=welder::weld(welder::lang::py)]]
+WithMixin : public Mixin {
+    int own_field = 4;
+};
+
+// ---- inheritance: a welded base reached only THROUGH a non-welded base -------
+// Welded (welded) <- Bridge (non-welded, flattened) <- Through (welded). The
+// link to Welded must survive the non-welded bridge.
+struct [[=welder::weld(welder::lang::py)]]
+Welded {
+    int welded_field = 10;
+    int welded_method() const { return welded_field; }
+};
+struct Bridge : public Welded {                    // NOT welded -> flattened
+    int bridge_field = 11;
+};
+struct [[=welder::weld(welder::lang::py)]]
+Through : public Bridge {
+    int through_field = 12;
+};
+
+// ---- inheritance: a virtual diamond, all welded -----------------------------
+// Apex <- (virtual) Left, Right <- Bottom. The shared virtual base is listed
+// once; every level stays reachable.
+struct [[=welder::weld(welder::lang::py)]]
+Apex {
+    int apex_field = 20;
+};
+struct [[=welder::weld(welder::lang::py)]]
+Left : public virtual Apex {
+    int left_field = 21;
+};
+struct [[=welder::weld(welder::lang::py)]]
+Right : public virtual Apex {
+    int right_field = 22;
+};
+struct [[=welder::weld(welder::lang::py)]]
+Bottom : public Left, public Right {
+    int bottom_field = 23;
+};
+
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_bindings
 #endif
@@ -98,4 +170,16 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     welder::py::bind<Counter>(m);
     welder::py::bind<Calc>(m);
     welder::py::bind<Access>(m);
+    // Native bases must be registered before the types that derive from them.
+    welder::py::bind<Base>(m);
+    welder::py::bind<Derived>(m);
+    welder::py::bind<Mid>(m);
+    welder::py::bind<Leaf>(m);
+    welder::py::bind<WithMixin>(m);
+    welder::py::bind<Welded>(m);
+    welder::py::bind<Through>(m);
+    welder::py::bind<Apex>(m);
+    welder::py::bind<Left>(m);
+    welder::py::bind<Right>(m);
+    welder::py::bind<Bottom>(m);
 }
