@@ -37,10 +37,14 @@ consumption forms, producing an importable Python module):
 
 - Annotation vocabulary (`weld`, `policy`, `mark::exclude`, `mark::include`).
 - Compile-time resolution of which members bind for a given language.
-- pybind11 backend binding public data members of a struct, honoring exclusion.
+- pybind11 backend binding, honoring exclude/include/policy:
+  - public data members (read/write);
+  - constructors (default + each public non-copy/move constructor, with
+    parameter types reflected into `pybind11::init<...>`);
+  - methods and static methods, including overloads.
 
-Methods, inheritance, enums, custom type converters, and additional languages
-(Lua, …) are designed-for but **not yet implemented**.
+Inheritance, enums, properties, custom type converters, and additional
+languages (Lua, …) are designed-for but **not yet implemented**.
 
 ## The idea / public API
 

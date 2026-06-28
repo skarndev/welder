@@ -44,6 +44,34 @@ Values {
     std::string s;
 };
 
+// ---- constructors + methods -------------------------------------------------
+struct [[=welder::weld(welder::lang::py)]]
+Counter {
+    int count = 0;
+
+    Counter() = default;
+    Counter(int start) : count(start) {}          // overloaded constructor
+
+    void increment() { ++count; }                 // method (mutating)
+    void add(int n) { count += n; }               // method with a parameter
+    int value() const { return count; }           // const method
+    static int version() { return 7; }            // static method
+
+    [[=welder::mark::exclude]] void secret() {}    // excluded -> not bound
+};
+
+// ---- overloaded methods -----------------------------------------------------
+struct [[=welder::weld(welder::lang::py)]]
+Calc {
+    int base = 0;
+
+    Calc() = default;
+    Calc(int b) : base(b) {}
+
+    int sum(int a) const { return base + a; }            // overload 1
+    int sum(int a, int b) const { return base + a + b; } // overload 2
+};
+
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_bindings
 #endif
@@ -53,4 +81,6 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     welder::py::bind<Automatic>(m);
     welder::py::bind<OptIn>(m);
     welder::py::bind<Values>(m);
+    welder::py::bind<Counter>(m);
+    welder::py::bind<Calc>(m);
 }

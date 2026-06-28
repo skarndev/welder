@@ -26,6 +26,11 @@ MEMBER_CASES = [
     pytest.param("OptIn", "incl_py", True, id="opt_in/include-python"),
     pytest.param("OptIn", "incl_lua", False, id="opt_in/include-other-language-not-bound"),
     pytest.param("OptIn", "incl_then_excl", False, id="opt_in/exclude-beats-include"),
+    # --- methods resolve the same way as data members ------------------------
+    pytest.param("Counter", "increment", True, id="method/bound"),
+    pytest.param("Counter", "value", True, id="method/const-bound"),
+    pytest.param("Counter", "version", True, id="static-method/bound"),
+    pytest.param("Counter", "secret", False, id="method/excluded"),
 ]
 
 
