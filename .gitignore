@@ -5,8 +5,7 @@ CMakeUserPresets.json
 
 # Conan
 /conan/data/
-CMakeUserPresets.json
-*.lock
+conan.lock
 
 # Python
 __pycache__/
@@ -18,3 +17,6 @@ __pycache__/
 .cache/
 compile_commands.json
 temp_*
+
+# uv / virtualenv
+.venv/

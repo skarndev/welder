@@ -1,0 +1,24 @@
+[project]
+name = "welder-tests"
+version = "0.0.0"
+description = "Test suite for welder's generated Python bindings"
+requires-python = ">=3.14"
+dependencies = []
+
+# Managed by uv. pytest runs the suite; mypy is included for upcoming
+# type-level testing of generated bindings (stubs, typed wrappers).
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "mypy>=1.13",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+# The compiled extension has no stubs yet; don't fail on its missing types.
+ignore_missing_imports = true

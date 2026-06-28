@@ -28,6 +28,9 @@ namespace welder::py {
 template <class T>
 pybind11::class_<T> bind(pybind11::module_& m, const char* name = nullptr) {
     constexpr lang L = lang::py;
+    static_assert(welded_for(^^T, L),
+                  "welder::py::bind<T>: T is not welded for Python; annotate it "
+                  "with [[=welder::weld(welder::lang::py)]]");
     constexpr policy_kind pol = policy_of(^^T);
 
     const char* cls_name =

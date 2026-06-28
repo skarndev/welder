@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(WELDER_BUILD_MODULE "Build the importable `welder` C++20 module wrapper" ON)
 option(WELDER_BUILD_PYTHON "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_EXAMPLES "Build examples" ON)
+option(WELDER_BUILD_TESTS "Build tests" ON)
 
 # All toolchain-specific flags for C++26 reflection + annotations live here, so
 # the rest of the project stays standard. gcc-16 is currently the only compiler
@@ -29,4 +30,9 @@ add_subdirectory(src)
 
 if(WELDER_BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+if(WELDER_BUILD_TESTS AND WELDER_BUILD_PYTHON)
+  enable_testing()
+  add_subdirectory(tests)
 endif()
