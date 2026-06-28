@@ -6,57 +6,50 @@ from __future__ import annotations
 
 from types import ModuleType
 
+import pytest
+
 from conftest import public_attrs
 
-
-class TestAutomaticPolicy:
-    """Default policy: every member is bound unless excluded."""
-
-    def test_plain_member_is_bound(self, mod: ModuleType) -> None:
-        assert "kept" in public_attrs(mod.Automatic())
-
-    def test_exclude_all_languages(self, mod: ModuleType) -> None:
-        assert "excl_all" not in public_attrs(mod.Automatic())
-
-    def test_exclude_python(self, mod: ModuleType) -> None:
-        assert "excl_py" not in public_attrs(mod.Automatic())
-
-    def test_exclude_other_language_is_kept(self, mod: ModuleType) -> None:
-        # Excluded for lua only -> still bound for python.
-        assert "excl_lua" in public_attrs(mod.Automatic())
-
-    def test_redundant_include_is_kept(self, mod: ModuleType) -> None:
-        # include under automatic policy is redundant, member stays bound.
-        assert "incl_py" in public_attrs(mod.Automatic())
+# Each case: (struct, member, should_be_bound). The struct names a type defined
+# in tests/cpp/bindings.cpp; `bound` is whether welder should expose `member` to
+# Python given that struct's policy and the member's marks. ids describe intent.
+MEMBER_CASES = [
+    # --- automatic policy: bind everything unless excluded -------------------
+    pytest.param("Automatic", "kept", True, id="automatic/plain-member-is-bound"),
+    pytest.param("Automatic", "excl_all", False, id="automatic/exclude-all-languages"),
+    pytest.param("Automatic", "excl_py", False, id="automatic/exclude-python"),
+    pytest.param("Automatic", "excl_lua", True, id="automatic/exclude-other-language-kept"),
+    pytest.param("Automatic", "incl_py", True, id="automatic/redundant-include-kept"),
+    # --- opt_in policy: bind only what is explicitly included ----------------
+    pytest.param("OptIn", "unmarked", False, id="opt_in/unmarked-not-bound"),
+    pytest.param("OptIn", "incl_all", True, id="opt_in/include-all-languages"),
+    pytest.param("OptIn", "incl_py", True, id="opt_in/include-python"),
+    pytest.param("OptIn", "incl_lua", False, id="opt_in/include-other-language-not-bound"),
+    pytest.param("OptIn", "incl_then_excl", False, id="opt_in/exclude-beats-include"),
+]
 
 
-class TestOptInPolicy:
-    """opt_in policy: only members explicitly included are bound."""
-
-    def test_unmarked_member_not_bound(self, mod: ModuleType) -> None:
-        assert "unmarked" not in public_attrs(mod.OptIn())
-
-    def test_include_all_languages(self, mod: ModuleType) -> None:
-        assert "incl_all" in public_attrs(mod.OptIn())
-
-    def test_include_python(self, mod: ModuleType) -> None:
-        assert "incl_py" in public_attrs(mod.OptIn())
-
-    def test_include_other_language_not_bound(self, mod: ModuleType) -> None:
-        # Included for lua only -> not bound for python.
-        assert "incl_lua" not in public_attrs(mod.OptIn())
-
-    def test_exclude_beats_include(self, mod: ModuleType) -> None:
-        assert "incl_then_excl" not in public_attrs(mod.OptIn())
+@pytest.mark.parametrize(("struct", "member", "bound"), MEMBER_CASES)
+def test_member_binding(
+    mod: ModuleType, struct: str, member: str, bound: bool
+) -> None:
+    instance = getattr(mod, struct)()
+    assert (member in public_attrs(instance)) is bound
 
 
-class TestReadWrite:
-    """Bound members are read/write properties of the right type."""
+def test_bound_members_are_exactly_the_expected_set(mod: ModuleType) -> None:
+    assert public_attrs(mod.Values()) == {"i", "d", "s"}
 
-    def test_full_attribute_set(self, mod: ModuleType) -> None:
-        assert public_attrs(mod.Values()) == {"i", "d", "s"}
 
-    def test_roundtrip(self, mod: ModuleType) -> None:
-        v = mod.Values()
-        v.i, v.d, v.s = 7, 2.5, "hi"
-        assert (v.i, v.d, v.s) == (7, 2.5, "hi")
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        pytest.param("i", 7, id="int-field"),
+        pytest.param("d", 2.5, id="double-field"),
+        pytest.param("s", "hi", id="string-field"),
+    ],
+)
+def test_readwrite_roundtrip(mod: ModuleType, field: str, value: object) -> None:
+    instance = mod.Values()
+    setattr(instance, field, value)
+    assert getattr(instance, field) == value
