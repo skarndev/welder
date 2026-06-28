@@ -1,0 +1,19 @@
+# Build / CMake
+/build/
+/cmake-build-*/
+CMakeUserPresets.json
+
+# Conan
+/conan/data/
+CMakeUserPresets.json
+*.lock
+
+# Python
+__pycache__/
+*.so
+*.pyd
+
+# Editor / OS
+.DS_Store
+.cache/
+compile_commands.json

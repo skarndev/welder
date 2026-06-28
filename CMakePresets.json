@@ -1,0 +1,23 @@
+{
+  "version": 4,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "welder-gcc16",
+      "displayName": "welder (gcc-16, Conan)",
+      "description": "C++26 modules + reflection via gcc-16; deps from Conan",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/welder-gcc16",
+      "toolchainFile": "${sourceDir}/build/Release/generators/conan_toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "welder-gcc16", "configurePreset": "welder-gcc16" }
+  ],
+  "testPresets": [
+    { "name": "welder-gcc16", "configurePreset": "welder-gcc16" }
+  ]
+}
