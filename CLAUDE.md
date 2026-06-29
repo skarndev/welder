@@ -54,10 +54,25 @@ consumption forms, producing an importable Python module):
     into each derived binding (recursively, honoring the base's own marks/policy).
     Virtual diamonds are supported and tested; non-virtual diamonds with a shared
     welded base are a C++ ambiguity (not worked around).
+  - whole-namespace introspection via `welder::py::bind_namespace<^^ns>(m)`. `weld`
+    is the discovery gate for **leaf entities only** — a class type / free function
+    / namespace-scope variable is a *candidate* iff welded (namespaces are never
+    welded). The namespace's `policy` (default automatic) and the member's
+    exclude/include marks then resolve what binds, mirroring struct member
+    resolution (`welded_for && member_bound`). Exposes class types (via `bind<T>`),
+    free functions (overloads included), and namespace-scope variables as module
+    attributes — a **value snapshot if const/constexpr, else a live get/set
+    property** over the C++ global (installed by swapping the module's `__class__`
+    for a `ModuleType` subclass carrying the property descriptors). A **nested
+    namespace** is resolved like a leaf member under the *parent's* policy
+    (`member_bound`, no weld): automatic recurses unless `mark::exclude`'d, opt_in
+    recurses only if `mark::include`'d — letting you keep `namespace detail`/`impl`
+    out. It becomes a submodule when it holds bound content (then resolved under its
+    own policy). Members bind in declaration order, so a welded base precedes its
+    derived types (C++ already requires that within a namespace).
 
 Enums, properties, custom type converters, and additional languages (Lua, …)
-are designed-for but **not yet implemented**. The namespace/module-level
-introspection that consumes the `weld` discovery marker is the planned next step.
+are designed-for but **not yet implemented**.
 
 ## The idea / public API
 

@@ -169,6 +169,127 @@ void bind_members(Cls& cls) {
     }
 }
 
+// --- namespace introspection ------------------------------------------------
+//
+// bind_namespace<^^ns> scans a namespace and exposes its members. `weld` is the
+// discovery gate: a class type, free function or namespace-scope variable is a
+// *candidate* iff welded for L. Whether a candidate actually binds is then
+// resolved exactly like a struct member — by the namespace's `policy` (default
+// automatic) and the member's exclude/include marks (member_bound). So a welded
+// entity can be suppressed per-language with mark::exclude, and an opt_in
+// namespace binds only its welded-and-included members.
+//
+//   class type          -> bind<T>
+//   free function        -> module function (overloads included)
+//   namespace-scope var  -> module attribute: a value snapshot if const/constexpr,
+//                           else a live get/set property over the C++ global
+//   nested namespace     -> submodule (pruned by mark::exclude; recursed when it
+//                           holds bound content, under its own policy)
+
+// The member kinds welder can expose. is_class_type throws on a non-type
+// reflection, so it is reached only after is_type; the other predicates are
+// total and safe on any reflection.
+consteval bool is_bindable_kind(std::meta::info mem) {
+    return (std::meta::is_type(mem) && std::meta::is_class_type(mem)) ||
+           std::meta::is_function(mem) || std::meta::is_variable(mem);
+}
+
+// A leaf entity binds iff it is a welded candidate that also resolves as bound
+// under namespace policy `pol` and its own marks.
+consteval bool entity_bound(std::meta::info mem, lang L, policy_kind pol) {
+    return is_bindable_kind(mem) && welded_for(mem, L) && member_bound(mem, L, pol);
+}
+
+// Whether `ns` holds anything that would bind, directly or nested — i.e. whether
+// exposing it would yield a non-empty (sub)module. Each namespace contributes
+// under its own policy; a nested namespace is recursed by the same rule as the
+// dispatch (member_bound under ns's policy: automatic unless excluded, opt_in
+// only if included).
+consteval bool namespace_has_bound(std::meta::info ns, lang L) {
+    constexpr auto ctx = std::meta::access_context::unchecked();
+    const policy_kind pol = policy_of(ns);
+    for (auto mem : std::meta::members_of(ns, ctx)) {
+        if (std::meta::is_namespace(mem)) {
+            if (member_bound(mem, L, pol) && namespace_has_bound(mem, L))
+                return true;
+        } else if (entity_bound(mem, L, pol)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Reassign `m`'s Python class to a fresh ModuleType subclass carrying `props`
+// (name -> property), giving those names live get/set semantics. Python modules
+// don't support properties directly, but a module's __class__ may be swapped for
+// a ModuleType subclass. Used only when a namespace exposes a mutable variable.
+inline void install_live_properties(pybind11::module_& m, pybind11::dict props) {
+    auto builtins = pybind11::module_::import("builtins");
+    auto types = pybind11::module_::import("types");
+    auto subclass = builtins.attr("type")(
+        pybind11::str("welder_live_module"),
+        pybind11::make_tuple(types.attr("ModuleType")), props);
+    m.attr("__class__") = subclass;
+}
+
+} // namespace detail
+
+// Forward declarations. bind_namespace and its per-member dispatch are mutually
+// recursive (a nested namespace becomes a submodule bound the same way), and the
+// dispatch defers to bind<T> for class members, defined further below.
+template <class T>
+auto bind(pybind11::module_& m, const char* name = nullptr);
+template <std::meta::info Ns>
+void bind_namespace(pybind11::module_& m);
+
+namespace detail {
+
+// Expose a single namespace member onto module `m`, resolved under namespace
+// policy Pol. Mutable variables accumulate into `live` for one __class__ swap by
+// the caller. Wrapped in a template (over the reflection) so the discarded
+// if constexpr branches — and their kind-specific splices — are never
+// instantiated for the wrong kind.
+template <std::meta::info M, policy_kind Pol>
+void bind_namespace_member(pybind11::module_& m, pybind11::dict& live) {
+    constexpr lang L = lang::py;
+    if constexpr (std::meta::is_type(M) && std::meta::is_class_type(M)) {
+        if constexpr (welded_for(M, L) && member_bound(M, L, Pol))
+            bind<typename [:M:]>(m);
+    } else if constexpr (std::meta::is_function(M)) {
+        if constexpr (welded_for(M, L) && member_bound(M, L, Pol))
+            m.def(std::define_static_string(std::meta::identifier_of(M)), &[:M:]);
+    } else if constexpr (std::meta::is_variable(M)) {
+        if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
+            constexpr const char* vname =
+                std::define_static_string(std::meta::identifier_of(M));
+            if constexpr (std::meta::is_const_type(std::meta::type_of(M))) {
+                m.attr(vname) = [:M:]; // immutable: a value snapshot at bind time
+            } else {
+                // Mutable: a live property over the C++ global. The descriptors
+                // take a leading `self` (the module) and ignore it.
+                auto property =
+                    pybind11::module_::import("builtins").attr("property");
+                live[vname] = property(
+                    pybind11::cpp_function([](pybind11::object) { return [:M:]; }),
+                    pybind11::cpp_function(
+                        [](pybind11::object, typename [:std::meta::type_of(M):] v) {
+                            [:M:] = v;
+                        }));
+            }
+        }
+    } else if constexpr (std::meta::is_namespace(M)) {
+        // A nested namespace is resolved like a leaf member under the parent
+        // policy Pol (but is never welded): automatic recurses unless excluded,
+        // opt_in recurses only if included. It becomes a submodule when it holds
+        // bound content (which is then resolved under its *own* policy).
+        if constexpr (member_bound(M, L, Pol) && namespace_has_bound(M, L)) {
+            auto sub = m.def_submodule(
+                std::define_static_string(std::meta::identifier_of(M)));
+            bind_namespace<M>(sub);
+        }
+    }
+}
+
 } // namespace detail
 
 // Reflect over T and register, on a pybind11::class_<T, NativeBases...>:
@@ -190,7 +311,7 @@ void bind_members(Cls& cls) {
 // carries the native bases, hence the deduced return) so callers can chain
 // additional pybind11 registrations.
 template <class T>
-auto bind(pybind11::module_& m, const char* name = nullptr) {
+auto bind(pybind11::module_& m, const char* name) {
     constexpr lang L = lang::py;
     static_assert(welded_for(^^T, L),
                   "welder::py::bind<T>: T is not welded for Python; annotate it "
@@ -226,6 +347,38 @@ auto bind(pybind11::module_& m, const char* name = nullptr) {
     detail::bind_members<^^T, L>(cls);
 
     return cls;
+}
+
+// Reflect over a whole namespace and expose its members on module `m`. `weld`
+// makes an entity a candidate; the namespace `policy` (default automatic) and
+// per-member exclude/include marks then resolve what binds, mirroring struct
+// member resolution. Exposed:
+//   * each welded class type, via bind<T> (so its own bases/members resolve as
+//     usual; declare a welded base before its derived types — C++ already
+//     requires this within a namespace);
+//   * each welded free function, as a module-level function (overloads bind as
+//     one overloaded callable);
+//   * each welded namespace-scope variable, as a module attribute: a value
+//     snapshot if it is const/constexpr, otherwise a live get/set property over
+//     the C++ global;
+//   * each nested namespace holding bound content, as a submodule.
+//
+// Members are visited in declaration order. Usage:
+//   PYBIND11_MODULE(mymod, m) { welder::py::bind_namespace<^^myns>(m); }
+template <std::meta::info Ns>
+void bind_namespace(pybind11::module_& m) {
+    static_assert(std::meta::is_namespace(Ns),
+                  "welder::py::bind_namespace<Ns>: Ns must reflect a namespace");
+    constexpr auto ctx = std::meta::access_context::unchecked();
+    constexpr policy_kind pol = policy_of(Ns);
+    // Collects live (mutable-variable) properties; installed in one __class__
+    // swap after all members are visited (only if any were produced).
+    pybind11::dict live;
+    template for (constexpr auto mem :
+                  std::define_static_array(std::meta::members_of(Ns, ctx)))
+        detail::bind_namespace_member<mem, pol>(m, live);
+    if (live.size() != 0)
+        detail::install_live_properties(m, live);
 }
 
 } // namespace welder::py
