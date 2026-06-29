@@ -11,39 +11,64 @@
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend.
 #include <string>
 
-namespace [[=welder::doc("The documented sample namespace.")]]
+namespace
+[[=welder::doc("The documented sample namespace.")]]
 documented {
 
 // --- class + method docstrings ----------------------------------------------
-struct [[=welder::weld(welder::lang::py)]] [[=welder::doc("A circle.")]]
+struct
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("A circle.")
+]]
 Circle {
     double r{0.0};
+
     Circle() = default;
     Circle(double radius) : r{radius} {}
 
     [[=welder::doc("Compute the area.")]]
-    double area() const { return 3.14159 * r * r; }
+    double area() const {
+        return 3.14159 * r * r;
+    }
 
     [[=welder::doc("The unit circle.")]]
-    static Circle unit() { return Circle{1.0}; }
+    static Circle unit() {
+        return Circle{1.0};
+    }
 
-    double circumference() const { return 2 * 3.14159 * r; } // undocumented method
+    // undocumented method
+    double circumference() const {
+        return 2 * 3.14159 * r;
+    }
 };
 
 // --- free function + parameter docstrings -----------------------------------
-[[=welder::weld(welder::lang::py)]] [[=welder::doc("Add two integers.")]]
-int add([[=welder::doc("left operand")]] int a,
-        [[=welder::doc("right operand")]] int b) {
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("Add two integers.")
+]]
+int add(
+    [[=welder::doc("left operand")]] int a,
+    [[=welder::doc("right operand")]] int b) {
     return a + b;
 }
 
 // Documented function, but no parameter docs -> docstring is just the summary
 // (no Args: block).
-[[=welder::weld(welder::lang::py)]] [[=welder::doc("Negate a value.")]]
-int negate(int x) { return -x; }
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("Negate a value.")
+]]
+int negate(int x) {
+    return -x;
+}
 
 // --- variable doc is ignored (no module/attr __doc__ in Python) -------------
-[[=welder::weld(welder::lang::py)]] [[=welder::doc("ignored on a variable")]]
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("ignored on a variable")
+]]
 inline constexpr int ANSWER{42};
 
 } // namespace documented

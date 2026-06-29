@@ -9,18 +9,23 @@
 #include <pybind11/stl.h>
 #include <welder/backends/pybind11.hpp> // pybind11 backend
 
-struct [[=welder::weld(welder::lang::py)]]
+struct
+[[=welder::weld(welder::lang::py)]]
 Point {
     double x{0.0};
     double y{0.0};
+
     [[=welder::mark::exclude(welder::lang::py)]]
     std::uint64_t internal_id{0};
 };
 
-struct [[=welder::weld(welder::lang::py)]]
+struct
+[[=welder::weld(welder::lang::py)]]
 Label {
     std::string text;
-    [[=welder::mark::exclude]] std::string cache;
+
+    [[=welder::mark::exclude]]
+    std::string cache;
 };
 
 PYBIND11_MODULE(welder_poc_ho, m) {

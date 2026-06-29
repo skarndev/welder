@@ -14,9 +14,13 @@ struct
 [[=welder::weld(welder::lang::py)]]
 Item {
     int id{0};
+
     Item() = default;
     Item(int i) : id{i} {}
-    int get_id() const { return id; }
+
+    int get_id() const {
+        return id;
+    }
 };
 
 // no weld -> not exposed
@@ -52,28 +56,46 @@ int total(int a) {
 }
 
 // no weld -> not exposed
-int internal_helper(int x) { return x; }
+int internal_helper(int x) {
+    return x;
+}
 
 // Welded candidate, but excluded for Python -> resolved out, like a struct member.
 [[
-    =welder::weld(welder::lang::py),
-    =welder::mark::exclude(welder::lang::py)
+  =welder::weld(welder::lang::py),
+  =welder::mark::exclude(welder::lang::py)
 ]]
 int suppressed() {
     return -1;
 }
 
 // --- variables become module attributes -------------------------------------
-[[=welder::weld(welder::lang::py)]] inline constexpr int LIMIT{100};
-[[=welder::weld(welder::lang::py)]] inline const std::string TAG{"catalog"};
-inline constexpr int PRIVATE_LIMIT{7};  // no weld -> not exposed
+
+[[=welder::weld(welder::lang::py)]]
+inline constexpr int LIMIT{100};
+
+[[=welder::weld(welder::lang::py)]]
+inline const std::string TAG{"catalog"};
+
+// no weld -> not exposed
+inline constexpr int PRIVATE_LIMIT{7};
 
 // --- mutable variables become live properties -------------------------------
-[[=welder::weld(welder::lang::py)]] inline int counter{0};
-[[=welder::weld(welder::lang::py)]] void bump() { ++counter; } // mutate from C++
+
+[[=welder::weld(welder::lang::py)]]
+inline int counter{0};
+
+// mutate the global from C++
+[[=welder::weld(welder::lang::py)]]
+void bump() {
+    ++counter;
+}
 
 // --- nested namespaces ------------------------------------------------------
-namespace sub {  // -> submodule "sub"
+
+// -> submodule "sub"
+namespace sub {
+
 struct
 [[=welder::weld(welder::lang::py)]]
 Nested {
@@ -81,8 +103,14 @@ Nested {
 };
 
 }
-namespace quiet { // no weld -> not exposed                                         // no welded content
-    struct Plain { int p{0}; };
+
+// no welded content -> not exposed
+namespace quiet {
+
+struct Plain {
+    int p{0};
+};
+
 }
 
 // opt_in namespace: only welded members that are *also* included bind, and a
@@ -90,23 +118,60 @@ namespace quiet { // no weld -> not exposed                                     
 namespace
 [[=welder::policy::opt_in]]
 strict {
-    [[=welder::weld(welder::lang::py)]] int candidate() { return 1; }   // welded, not included -> skipped
-    [[=welder::weld(welder::lang::py)]] [[=welder::mark::include(welder::lang::py)]]
-    int chosen() {
-        return 2;
-    }                                         // welded + included -> bound
 
-    namespace [[=welder::mark::include(welder::lang::py)]] shown {      // included -> recursed
-    struct [[=welder::weld(welder::lang::py)]] Gizmo { int g{9}; };
-    }
-    namespace omitted {                                                // not included -> not recursed
-    struct [[=welder::weld(welder::lang::py)]] Ghost { int x{0}; };
-    }
-    }
-    // A whole sub-namespace pruned for Python via mark::exclude.
-    namespace [[=welder::mark::exclude(welder::lang::py)]] secret {
-    struct [[=welder::weld(welder::lang::py)]] Spy { int s{0}; };
-    }
+// welded, but not included -> skipped
+[[=welder::weld(welder::lang::py)]]
+int candidate() {
+    return 1;
+}
+
+// welded + included -> bound
+[[
+  =welder::weld(welder::lang::py),
+  =welder::mark::include(welder::lang::py)
+]]
+int chosen() {
+    return 2;
+}
+
+// included -> recursed
+namespace
+[[=welder::mark::include(welder::lang::py)]]
+shown {
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Gizmo {
+    int g{9};
+};
+
+}
+
+// not included -> not recursed
+namespace omitted {
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Ghost {
+    int x{0};
+};
+
+}
+
+}
+
+// A whole sub-namespace pruned for Python via mark::exclude.
+namespace
+[[=welder::mark::exclude(welder::lang::py)]]
+secret {
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Spy {
+    int s{0};
+};
+
+}
 
 } // namespace catalog
 

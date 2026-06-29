@@ -16,10 +16,15 @@
 
 // The namespace name doubles as the module name (import shapes). Its doc becomes
 // the module docstring.
-namespace [[=welder::doc("A small shapes module built by welder.")]]
+namespace
+[[=welder::doc("A small shapes module built by welder.")]]
 shapes {
 
-struct [[=welder::weld(welder::lang::py)]] [[=welder::doc("An axis-aligned rectangle.")]]
+struct
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("An axis-aligned rectangle.")
+]]
 Rect {
     double w{0.0};
     double h{0.0};
@@ -28,12 +33,18 @@ Rect {
     Rect(double width, double height) : w{width}, h{height} {}
 
     [[=welder::doc("The area of the rectangle.")]]
-    double area() const { return w * h; }
+    double area() const {
+        return w * h;
+    }
 };
 
-[[=welder::weld(welder::lang::py)]] [[=welder::doc("Scale a length by a factor.")]]
-double scale([[=welder::doc("the length to scale")]] double length,
-             [[=welder::doc("the multiplier")]] double factor) {
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("Scale a length by a factor.")
+]]
+double scale(
+    [[=welder::doc("the length to scale")]] double length,
+    [[=welder::doc("the multiplier")]] double factor) {
     return length * factor;
 }
 

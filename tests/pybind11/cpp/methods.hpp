@@ -5,31 +5,61 @@
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend.
 
 // --- constructors + methods -------------------------------------------------
-struct [[=welder::weld(welder::lang::py)]]
+
+struct
+[[=welder::weld(welder::lang::py)]]
 Counter {
     int count{0};
 
     Counter() = default;
-    Counter(int start) : count{start} {}          // overloaded constructor
 
-    void increment() { ++count; }                 // method (mutating)
-    void add(int n) { count += n; }               // method with a parameter
-    int value() const { return count; }           // const method
-    static int version() { return 7; }            // static method
+    // overloaded constructor
+    Counter(int start) : count{start} {}
 
-    [[=welder::mark::exclude]] void secret() {}    // excluded -> not bound
+    // method (mutating)
+    void increment() {
+        ++count;
+    }
+
+    // method with a parameter
+    void add(int n) {
+        count += n;
+    }
+
+    // const method
+    int value() const {
+        return count;
+    }
+
+    // static method
+    static int version() {
+        return 7;
+    }
+
+    // excluded -> not bound
+    [[=welder::mark::exclude]]
+    void secret() {}
 };
 
 // --- overloaded methods -----------------------------------------------------
-struct [[=welder::weld(welder::lang::py)]]
+
+struct
+[[=welder::weld(welder::lang::py)]]
 Calc {
     int base{0};
 
     Calc() = default;
     Calc(int b) : base{b} {}
 
-    int sum(int a) const { return base + a; }            // overload 1
-    int sum(int a, int b) const { return base + a + b; } // overload 2
+    // overload 1
+    int sum(int a) const {
+        return base + a;
+    }
+
+    // overload 2
+    int sum(int a, int b) const {
+        return base + a + b;
+    }
 };
 
 inline void register_methods(pybind11::module_& m) {

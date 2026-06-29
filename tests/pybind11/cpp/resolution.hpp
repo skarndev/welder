@@ -12,28 +12,65 @@
 #include <string>
 
 // --- automatic policy: bind everything unless excluded ----------------------
-struct [[=welder::weld(welder::lang::py)]]
+
+struct
+[[=welder::weld(welder::lang::py)]]
 Automatic {
-    int kept{0};                                                   // bound
-    [[=welder::mark::exclude]]                    int excl_all{0};  // excluded (all)
-    [[=welder::mark::exclude(welder::lang::py)]]  int excl_py{0};   // excluded (py)
-    [[=welder::mark::exclude(welder::lang::lua)]] int excl_lua{0};  // excluded lua only -> kept for py
-    [[=welder::mark::include(welder::lang::py)]]  int incl_py{0};   // redundant under automatic -> kept
+    // bound
+    int kept{0};
+
+    // excluded (all languages)
+    [[=welder::mark::exclude]]
+    int excl_all{0};
+
+    // excluded (py)
+    [[=welder::mark::exclude(welder::lang::py)]]
+    int excl_py{0};
+
+    // excluded lua only -> kept for py
+    [[=welder::mark::exclude(welder::lang::lua)]]
+    int excl_lua{0};
+
+    // redundant under automatic -> kept
+    [[=welder::mark::include(welder::lang::py)]]
+    int incl_py{0};
 };
 
 // --- opt_in policy: bind only what is explicitly included -------------------
-struct [[=welder::weld(welder::lang::py)]] [[=welder::policy::opt_in]]
+
+struct
+[[
+  =welder::weld(welder::lang::py),
+  =welder::policy::opt_in
+]]
 OptIn {
-    int unmarked{0};                                               // not opted in -> not bound
-    [[=welder::mark::include]]                    int incl_all{0};  // included (all) -> bound
-    [[=welder::mark::include(welder::lang::py)]]  int incl_py{0};   // included (py) -> bound
-    [[=welder::mark::include(welder::lang::lua)]] int incl_lua{0};  // included lua only -> not bound for py
+    // not opted in -> not bound
+    int unmarked{0};
+
+    // included (all languages) -> bound
+    [[=welder::mark::include]]
+    int incl_all{0};
+
+    // included (py) -> bound
     [[=welder::mark::include(welder::lang::py)]]
-    [[=welder::mark::exclude(welder::lang::py)]]  int incl_then_excl{0}; // exclude wins -> not bound
+    int incl_py{0};
+
+    // included lua only -> not bound for py
+    [[=welder::mark::include(welder::lang::lua)]]
+    int incl_lua{0};
+
+    // exclude wins -> not bound
+    [[
+      =welder::mark::include(welder::lang::py),
+      =welder::mark::exclude(welder::lang::py)
+    ]]
+    int incl_then_excl{0};
 };
 
 // --- read/write roundtrip (and the exact bound set) -------------------------
-struct [[=welder::weld(welder::lang::py)]]
+
+struct
+[[=welder::weld(welder::lang::py)]]
 Values {
     int i{0};
     double d{0.0};
@@ -44,17 +81,28 @@ Values {
 // Exercised against `Counter` (defined in methods.hpp, bound by register_methods).
 
 // --- access control: only public members are bound --------------------------
-struct [[=welder::weld(welder::lang::py)]]
+
+struct
+[[=welder::weld(welder::lang::py)]]
 Access {
-    int visible{0};                            // public data   -> bound
-    int read_hidden() const { return hidden; } // public method -> bound
+    // public data -> bound
+    int visible{0};
+
+    // public method -> bound
+    int read_hidden() const {
+        return hidden;
+    }
 
 private:
-    int hidden{9};               // private data  -> not bound
-    void helper() {}             // private method-> not bound
+    // private data -> not bound
+    int hidden{9};
+
+    // private method -> not bound
+    void helper() {}
 
 protected:
-    int guarded{0};              // protected data-> not bound
+    // protected data -> not bound
+    int guarded{0};
 };
 
 inline void register_resolution(pybind11::module_& m) {

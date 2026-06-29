@@ -9,7 +9,8 @@ import welder; // annotation vocabulary (module form)
 
 // A struct welded for Python. Default policy (automatic) reflects every member
 // unless excluded.
-struct [[=welder::weld(welder::lang::py)]]
+struct
+[[=welder::weld(welder::lang::py)]]
 Point {
     double x{0.0};
     double y{0.0};
@@ -19,10 +20,14 @@ Point {
     std::uint64_t internal_id{0};
 };
 
-struct [[=welder::weld(welder::lang::py)]]
+struct
+[[=welder::weld(welder::lang::py)]]
 Label {
     std::string text;
-    [[=welder::mark::exclude]] std::string cache; // excluded everywhere
+
+    // excluded everywhere
+    [[=welder::mark::exclude]]
+    std::string cache;
 };
 
 PYBIND11_MODULE(welder_poc, m) {
