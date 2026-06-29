@@ -11,9 +11,12 @@ The project targets **C++26 and newer only**.
 
 ## Delivery model (Boost-style)
 
-welder is fundamentally a **header-only** library (`include/welder/…`). On top of
-that it ships **one** optional C++20 module wrapper (`modules/welder.cppm`) so
+welder is fundamentally a **header-only** library (`src/welder/…`). On top of
+that it ships **one** optional C++20 module wrapper (`src/welder/welder.cppm`) so
 users can write `import welder;` instead of including headers.
+
+Everything lives under a single tree (`src/welder/`) — there is no separate
+`include/` directory — so user includes always start from `welder/`.
 
 We deliberately do **not** modularize internally (no partitions, no per-component
 module units). C++20 modules on the only currently-viable toolchain (gcc-16) are
@@ -28,7 +31,7 @@ import welder;                  // module form
 #include <welder/welder.hpp>    // header-only form
 ```
 
-Backends are always header-only (e.g. `#include <welder/python.hpp>`).
+Backends are always header-only (e.g. `#include <welder/backends/pybind11.hpp>`).
 
 ## Status
 
@@ -54,7 +57,7 @@ consumption forms, producing an importable Python module):
     into each derived binding (recursively, honoring the base's own marks/policy).
     Virtual diamonds are supported and tested; non-virtual diamonds with a shared
     welded base are a C++ ambiguity (not worked around).
-  - whole-namespace introspection via `welder::py::bind_namespace<^^ns>(m)`. `weld`
+  - whole-namespace introspection via `welder::pybind11::bind_namespace<^^ns>(m)`. `weld`
     is the discovery gate for **leaf entities only** — a class type / free function
     / namespace-scope variable is a *candidate* iff welded (namespaces are never
     welded). The namespace's `policy` (default automatic) and the member's
@@ -79,7 +82,7 @@ are designed-for but **not yet implemented**.
 ```cpp
 import welder;            // or: #include <welder/welder.hpp>
 #include <pybind11/pybind11.h>
-#include <welder/python.hpp>
+#include <welder/backends/pybind11.hpp>
 
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]] // expose to py+lua
        [[=welder::policy::automatic]]                         // reflect all members
@@ -96,7 +99,7 @@ ReflectedStruct {
 };
 
 PYBIND11_MODULE(mymod, m) {
-    welder::py::bind<ReflectedStruct>(m); // name defaults to identifier_of(^^T)
+    welder::pybind11::bind<ReflectedStruct>(m); // name defaults to identifier_of(^^T)
 }
 ```
 
@@ -131,17 +134,20 @@ Language-agnostic **core** + pluggable **backends**. Adding a language = adding 
 backend header that consumes the same resolution API; the core never depends on a
 backend.
 
+`src/` is the include root, so every public include starts from `welder/`.
+
 ```
-include/welder/
-  detail/config.hpp   WELDER_EXPORT macro (export under the module, else empty)
-  lang.hpp            enum class lang                       — std-free vocabulary
-  annotations.hpp     weld / policy / mark + mask helpers   — std-free vocabulary
-  reflect.hpp         welded_for / policy_of / member_bound / public_bases — uses <meta>
-  welder.hpp          header-only umbrella: lang+annotations+reflect
-  python.hpp          pybind11 backend: welder::py::bind<T>
-modules/
-  welder.cppm         the single `export module welder;` (exports vocabulary only)
-src/CMakeLists.txt    targets: welder::headers / welder::module / welder::python
+src/welder/
+  detail/config.hpp     WELDER_EXPORT macro (export under the module, else empty)
+  lang.hpp              enum class lang                       — std-free vocabulary
+  annotations.hpp       weld / policy / mark + mask helpers   — std-free vocabulary
+  reflect.hpp           welded_for / policy_of / member_bound / public_bases — uses <meta>
+  welder.hpp            header-only umbrella: lang+annotations+reflect
+  welder.cppm           the single `export module welder;` (exports vocabulary only)
+  backends/
+    pybind11.hpp        pybind11 backend: welder::pybind11::bind<T>
+    CMakeLists.txt      target: welder::pybind11  (nanobind / lua planned here)
+src/CMakeLists.txt      targets: welder::headers / welder::module
 examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only
@@ -149,14 +155,16 @@ examples/
 
 CMake targets:
 - **`welder::headers`** — INTERFACE, the header-only core (include path + flags).
-- **`welder::module`** — STATIC, builds `modules/welder.cppm`; provides `import welder;`.
-- **`welder::python`** — INTERFACE, the pybind11 backend (links headers + pybind11 + Python).
+- **`welder::module`** — STATIC, builds `src/welder/welder.cppm`; provides `import welder;`.
+- **`welder::pybind11`** — INTERFACE, the pybind11 backend (links headers + pybind11 + Python).
+  Gated by `WELDER_BUILD_PYBIND11`. Future Python (nanobind) / Lua backends get
+  their own `welder::<backend>` target alongside it.
 
 ### Module-vs-header boundary (important, gcc-16 specific)
 
 The **`welder` module exports only the std-free vocabulary** (`lang`,
-`annotations`). Reflection (`reflect.hpp`) and backends (`python.hpp`) are
-header-only and are **not** part of the module.
+`annotations`). Reflection (`reflect.hpp`) and backends (`backends/pybind11.hpp`)
+are header-only and are **not** part of the module.
 
 Why: on gcc-16, if a module unit pulls *any* standard-library header into its
 purview/GMF (even `<cstdint>`), every consumer that both `import`s it and
@@ -168,10 +176,16 @@ or pybind11 stays a header. Flattening partitions does **not** help — it is th
 std-in-module-purview that conflicts, not partitioning. (Empirically established;
 revisit if gcc fixes module/std merging or pybind11 becomes importable.)
 
-`reflect.hpp`/`python.hpp` therefore do **not** include the vocabulary headers
-(that would redeclare what `import welder;` already provides). Provide the
+`reflect.hpp`/`backends/pybind11.hpp` therefore do **not** include the vocabulary
+headers (that would redeclare what `import welder;` already provides). Provide the
 vocabulary first — `import welder;` *or* `#include <welder/welder.hpp>` — then the
 backend header.
+
+**Backend namespace.** The pybind11 backend lives in `welder::pybind11` (so a
+future nanobind backend can be `welder::nanobind`; both target the `lang::py`
+*language*). Inside `welder::pybind11`, the unqualified name `pybind11` would
+resolve to *that* namespace rather than the library, so the header aliases the
+real one once — `namespace py = ::pybind11;` — and uses `py::` throughout.
 
 Complex/custom type conversions are intended to be registered per-backend via
 pybind11's own mechanisms, separately from core resolution — design pending.
@@ -238,6 +252,9 @@ PYTHONPATH=build/welder-gcc16/examples/python_poc_headeronly \
   so the module can export them safely. Anything needing `<meta>`/std stays in
   `reflect.hpp`/backends.
 - Keep the core backend-agnostic. New languages are new headers under
-  `include/welder/` (e.g. `lua.hpp`).
+  `src/welder/backends/` (e.g. `lua.hpp`), each with its own `welder::<backend>`
+  target in `src/welder/backends/CMakeLists.txt`.
+- Prefer **brace initialization** (`int n{0};`) for variable initialization where
+  possible.
 - We value API/design quality over speed; write throwaway probes and *compile
   them* to validate reflection behavior before building on it.

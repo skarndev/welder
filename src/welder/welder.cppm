@@ -4,7 +4,7 @@
 // re-exports the std-free annotation vocabulary so users can write
 // `import welder;` instead of including the headers. Only the vocabulary is
 // exported: reflection and backends depend on <meta>/pybind11, which do not
-// coexist with module units on gcc-16 (see include/welder/detail/config.hpp).
+// coexist with module units on gcc-16 (see welder/detail/config.hpp).
 //
 // The vocabulary headers carry WELDER_EXPORT on their namespace; defining it to
 // `export` here turns the included declarations into the module's interface.

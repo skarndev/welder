@@ -1,4 +1,4 @@
-"""Tests for welder::py::bind_namespace — exposing a whole namespace at once.
+"""Tests for welder::pybind11::bind_namespace — exposing a whole namespace at once.
 
 The C++ namespace ``catalog`` is bound under the ``catalog`` submodule of the test
 module. welder walks it and exposes every member carrying a ``weld``: classes,

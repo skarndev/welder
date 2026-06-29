@@ -8,8 +8,8 @@
 //
 // Then:
 //   #include <pybind11/pybind11.h>
-//   #include <welder/python.hpp>
-//   PYBIND11_MODULE(mymod, m) { welder::py::bind<MyType>(m); }
+//   #include <welder/backends/pybind11.hpp>
+//   PYBIND11_MODULE(mymod, m) { welder::pybind11::bind<MyType>(m); }
 //
 #include <array>
 #include <type_traits>
@@ -19,7 +19,12 @@
 
 #include <pybind11/pybind11.h>
 
-namespace welder::py {
+namespace welder::pybind11 {
+
+// Inside `welder::pybind11`, the unqualified name `pybind11` resolves to *this*
+// namespace, not the library. Alias the real one once — the way pybind11's own
+// docs spell it — and use `py::` for every library reference below.
+namespace py = ::pybind11;
 
 namespace detail {
 
@@ -27,18 +32,18 @@ namespace detail {
 // non-type template argument so it can be spliced back into a pack).
 template <std::meta::info Fn>
 consteval auto param_types() {
-    constexpr std::size_t n = std::meta::parameters_of(Fn).size();
+    constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
     std::array<std::meta::info, n> types{};
-    std::size_t i = 0;
+    std::size_t i{0};
     for (auto p : std::meta::parameters_of(Fn))
         types[i++] = std::meta::type_of(p);
     return types;
 }
 
-// Register pybind11::init<P0, P1, ...>() from reflected parameter types.
+// Register py::init<P0, P1, ...>() from reflected parameter types.
 template <class T, auto Params, std::size_t... I>
-void def_init(pybind11::class_<T>& cls, std::index_sequence<I...>) {
-    cls.def(pybind11::init<typename [:Params[I]:]...>());
+void def_init(py::class_<T>& cls, std::index_sequence<I...>) {
+    cls.def(py::init<typename [:Params[I]:]...>());
 }
 
 // A non-default, non-copy/move public constructor we should expose. The default
@@ -85,7 +90,7 @@ consteval void collect_native_bases(std::meta::info type, lang L,
                                     std::vector<std::meta::info>& out) {
     for (auto base : welder::public_bases(type)) {
         if (welder::welded_for(base, L)) {
-            bool seen = false;
+            bool seen{false};
             for (auto e : out)
                 if (e == base) {
                     seen = true;
@@ -103,29 +108,28 @@ consteval void collect_native_bases(std::meta::info type, lang L,
 // template argument (spliced into class_<T, Bases...>).
 template <std::meta::info Type, lang L>
 consteval auto native_base_types() {
-    constexpr std::size_t n = [] {
+    constexpr std::size_t n{[] {
         std::vector<std::meta::info> v;
         collect_native_bases(Type, L, v);
         return v.size();
-    }();
+    }()};
     std::array<std::meta::info, n> types{};
     // Guard the fill: std::array<T, 0>::operator[] is not consteval, so it must
     // not be instantiated when a type has no native bases (the common case).
     if constexpr (n != 0) {
         std::vector<std::meta::info> v;
         collect_native_bases(Type, L, v);
-        std::size_t i = 0;
+        std::size_t i{0};
         for (auto base : v)
             types[i++] = base;
     }
     return types;
 }
 
-// Construct pybind11::class_<T, NativeBases...> from a reflected base-type array.
+// Construct py::class_<T, NativeBases...> from a reflected base-type array.
 template <class T, auto Bases, std::size_t... I>
-auto make_class(pybind11::module_& m, const char* name,
-                std::index_sequence<I...>) {
-    return pybind11::class_<T, typename [:Bases[I]:]...>(m, name);
+auto make_class(py::module_& m, const char* name, std::index_sequence<I...>) {
+    return py::class_<T, typename [:Bases[I]:]...>(m, name);
 }
 
 // Bind the eligible public data members and methods of Src onto `cls` (a
@@ -137,7 +141,7 @@ auto make_class(pybind11::module_& m, const char* name,
 // clash, the member declared closer to the derived type wins in Python.
 template <std::meta::info Src, lang L, class Cls>
 void bind_members(Cls& cls) {
-    constexpr auto ctx = std::meta::access_context::unchecked();
+    constexpr auto ctx{std::meta::access_context::unchecked()};
 
     template for (constexpr auto base :
                   std::define_static_array(welder::public_bases(Src))) {
@@ -145,13 +149,13 @@ void bind_members(Cls& cls) {
             bind_members<base, L>(cls);
     }
 
-    constexpr policy_kind pol = policy_of(Src);
+    constexpr policy_kind pol{policy_of(Src)};
 
     template for (constexpr auto mem : std::define_static_array(
                       std::meta::nonstatic_data_members_of(Src, ctx))) {
         if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
-            constexpr const char* mname =
-                std::define_static_string(std::meta::identifier_of(mem));
+            constexpr const char* mname{
+                std::define_static_string(std::meta::identifier_of(mem))};
             cls.def_readwrite(mname, &[:mem:]);
         }
     }
@@ -159,8 +163,8 @@ void bind_members(Cls& cls) {
     template for (constexpr auto fn :
                   std::define_static_array(std::meta::members_of(Src, ctx))) {
         if constexpr (is_bindable_method(fn, L, pol)) {
-            constexpr const char* fname =
-                std::define_static_string(std::meta::identifier_of(fn));
+            constexpr const char* fname{
+                std::define_static_string(std::meta::identifier_of(fn))};
             if constexpr (std::meta::is_static_member(fn))
                 cls.def_static(fname, &[:fn:]);
             else
@@ -206,8 +210,8 @@ consteval bool entity_bound(std::meta::info mem, lang L, policy_kind pol) {
 // dispatch (member_bound under ns's policy: automatic unless excluded, opt_in
 // only if included).
 consteval bool namespace_has_bound(std::meta::info ns, lang L) {
-    constexpr auto ctx = std::meta::access_context::unchecked();
-    const policy_kind pol = policy_of(ns);
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    const policy_kind pol{policy_of(ns)};
     for (auto mem : std::meta::members_of(ns, ctx)) {
         if (std::meta::is_namespace(mem)) {
             if (member_bound(mem, L, pol) && namespace_has_bound(mem, L))
@@ -223,12 +227,12 @@ consteval bool namespace_has_bound(std::meta::info ns, lang L) {
 // (name -> property), giving those names live get/set semantics. Python modules
 // don't support properties directly, but a module's __class__ may be swapped for
 // a ModuleType subclass. Used only when a namespace exposes a mutable variable.
-inline void install_live_properties(pybind11::module_& m, pybind11::dict props) {
-    auto builtins = pybind11::module_::import("builtins");
-    auto types = pybind11::module_::import("types");
-    auto subclass = builtins.attr("type")(
-        pybind11::str("welder_live_module"),
-        pybind11::make_tuple(types.attr("ModuleType")), props);
+inline void install_live_properties(py::module_& m, py::dict props) {
+    auto builtins{py::module_::import("builtins")};
+    auto types{py::module_::import("types")};
+    auto subclass{builtins.attr("type")(
+        py::str("welder_live_module"),
+        py::make_tuple(types.attr("ModuleType")), props)};
     m.attr("__class__") = subclass;
 }
 
@@ -238,9 +242,9 @@ inline void install_live_properties(pybind11::module_& m, pybind11::dict props) 
 // recursive (a nested namespace becomes a submodule bound the same way), and the
 // dispatch defers to bind<T> for class members, defined further below.
 template <class T>
-auto bind(pybind11::module_& m, const char* name = nullptr);
+auto bind(py::module_& m, const char* name = nullptr);
 template <std::meta::info Ns>
-void bind_namespace(pybind11::module_& m);
+void bind_namespace(py::module_& m);
 
 namespace detail {
 
@@ -250,8 +254,8 @@ namespace detail {
 // if constexpr branches — and their kind-specific splices — are never
 // instantiated for the wrong kind.
 template <std::meta::info M, policy_kind Pol>
-void bind_namespace_member(pybind11::module_& m, pybind11::dict& live) {
-    constexpr lang L = lang::py;
+void bind_namespace_member(py::module_& m, py::dict& live) {
+    constexpr lang L{lang::py};
     if constexpr (std::meta::is_type(M) && std::meta::is_class_type(M)) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol))
             bind<typename [:M:]>(m);
@@ -260,19 +264,18 @@ void bind_namespace_member(pybind11::module_& m, pybind11::dict& live) {
             m.def(std::define_static_string(std::meta::identifier_of(M)), &[:M:]);
     } else if constexpr (std::meta::is_variable(M)) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
-            constexpr const char* vname =
-                std::define_static_string(std::meta::identifier_of(M));
+            constexpr const char* vname{
+                std::define_static_string(std::meta::identifier_of(M))};
             if constexpr (std::meta::is_const_type(std::meta::type_of(M))) {
                 m.attr(vname) = [:M:]; // immutable: a value snapshot at bind time
             } else {
                 // Mutable: a live property over the C++ global. The descriptors
                 // take a leading `self` (the module) and ignore it.
-                auto property =
-                    pybind11::module_::import("builtins").attr("property");
+                auto property{py::module_::import("builtins").attr("property")};
                 live[vname] = property(
-                    pybind11::cpp_function([](pybind11::object) { return [:M:]; }),
-                    pybind11::cpp_function(
-                        [](pybind11::object, typename [:std::meta::type_of(M):] v) {
+                    py::cpp_function([](py::object) { return [:M:]; }),
+                    py::cpp_function(
+                        [](py::object, typename [:std::meta::type_of(M):] v) {
                             [:M:] = v;
                         }));
             }
@@ -283,8 +286,8 @@ void bind_namespace_member(pybind11::module_& m, pybind11::dict& live) {
         // opt_in recurses only if included. It becomes a submodule when it holds
         // bound content (which is then resolved under its *own* policy).
         if constexpr (member_bound(M, L, Pol) && namespace_has_bound(M, L)) {
-            auto sub = m.def_submodule(
-                std::define_static_string(std::meta::identifier_of(M)));
+            auto sub{m.def_submodule(
+                std::define_static_string(std::meta::identifier_of(M)))};
             bind_namespace<M>(sub);
         }
     }
@@ -292,7 +295,7 @@ void bind_namespace_member(pybind11::module_& m, pybind11::dict& live) {
 
 } // namespace detail
 
-// Reflect over T and register, on a pybind11::class_<T, NativeBases...>:
+// Reflect over T and register, on a py::class_<T, NativeBases...>:
 //   * native inheritance from T's nearest welded ancestors (each passed as a
 //     pybind11 base; bind those bases separately, before T). Welded bases reached
 //     only through non-welded ones are still linked.
@@ -311,30 +314,30 @@ void bind_namespace_member(pybind11::module_& m, pybind11::dict& live) {
 // carries the native bases, hence the deduced return) so callers can chain
 // additional pybind11 registrations.
 template <class T>
-auto bind(pybind11::module_& m, const char* name) {
-    constexpr lang L = lang::py;
+auto bind(py::module_& m, const char* name) {
+    constexpr lang L{lang::py};
     static_assert(welded_for(^^T, L),
-                  "welder::py::bind<T>: T is not welded for Python; annotate it "
-                  "with [[=welder::weld(welder::lang::py)]]");
-    constexpr auto ctx = std::meta::access_context::unchecked();
+                  "welder::pybind11::bind<T>: T is not welded for Python; annotate "
+                  "it with [[=welder::weld(welder::lang::py)]]");
+    constexpr auto ctx{std::meta::access_context::unchecked()};
 
-    const char* cls_name =
-        name ? name : std::define_static_string(std::meta::identifier_of(^^T));
+    const char* cls_name{
+        name ? name : std::define_static_string(std::meta::identifier_of(^^T))};
 
     // --- native (welded) bases ----------------------------------------------
     // class_<T, Base...> wires up the Python class hierarchy for bases that are
     // themselves welded; the user binds those bases separately.
-    constexpr auto bases = detail::native_base_types<^^T, L>();
-    auto cls = detail::make_class<T, bases>(
-        m, cls_name, std::make_index_sequence<bases.size()>{});
+    constexpr auto bases{detail::native_base_types<^^T, L>()};
+    auto cls{detail::make_class<T, bases>(
+        m, cls_name, std::make_index_sequence<bases.size()>{})};
 
     // --- constructors --------------------------------------------------------
     if constexpr (std::is_default_constructible_v<T>)
-        cls.def(pybind11::init<>());
+        cls.def(py::init<>());
     template for (constexpr auto ctor :
                   std::define_static_array(std::meta::members_of(^^T, ctx))) {
         if constexpr (detail::is_bindable_constructor(ctor)) {
-            constexpr auto params = detail::param_types<ctor>();
+            constexpr auto params{detail::param_types<ctor>()};
             detail::def_init<T, params>(cls,
                                         std::make_index_sequence<params.size()>{});
         }
@@ -364,16 +367,16 @@ auto bind(pybind11::module_& m, const char* name) {
 //   * each nested namespace holding bound content, as a submodule.
 //
 // Members are visited in declaration order. Usage:
-//   PYBIND11_MODULE(mymod, m) { welder::py::bind_namespace<^^myns>(m); }
+//   PYBIND11_MODULE(mymod, m) { welder::pybind11::bind_namespace<^^myns>(m); }
 template <std::meta::info Ns>
-void bind_namespace(pybind11::module_& m) {
+void bind_namespace(py::module_& m) {
     static_assert(std::meta::is_namespace(Ns),
-                  "welder::py::bind_namespace<Ns>: Ns must reflect a namespace");
-    constexpr auto ctx = std::meta::access_context::unchecked();
-    constexpr policy_kind pol = policy_of(Ns);
+                  "welder::pybind11::bind_namespace<Ns>: Ns must reflect a namespace");
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    constexpr policy_kind pol{policy_of(Ns)};
     // Collects live (mutable-variable) properties; installed in one __class__
     // swap after all members are visited (only if any were produced).
-    pybind11::dict live;
+    py::dict live;
     template for (constexpr auto mem :
                   std::define_static_array(std::meta::members_of(Ns, ctx)))
         detail::bind_namespace_member<mem, pol>(m, live);
@@ -381,4 +384,4 @@ void bind_namespace(pybind11::module_& m) {
         detail::install_live_properties(m, live);
 }
 
-} // namespace welder::py
+} // namespace welder::pybind11

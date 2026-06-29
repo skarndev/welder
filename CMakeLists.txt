@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(WELDER_BUILD_MODULE "Build the importable `welder` C++20 module wrapper" ON)
-option(WELDER_BUILD_PYTHON "Build the pybind11 Python backend" ON)
+option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_EXAMPLES "Build examples" ON)
 option(WELDER_BUILD_TESTS "Build tests" ON)
 
@@ -32,7 +32,7 @@ if(WELDER_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-if(WELDER_BUILD_TESTS AND WELDER_BUILD_PYTHON)
+if(WELDER_BUILD_TESTS AND WELDER_BUILD_PYBIND11)
   enable_testing()
   add_subdirectory(tests)
 endif()

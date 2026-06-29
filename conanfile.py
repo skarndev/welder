@@ -9,14 +9,14 @@ class WelderConan(ConanFile):
     generators = "CMakeToolchain", "CMakeDeps"
 
     options = {
-        "with_python": [True, False],
+        "with_pybind11": [True, False],
     }
     default_options = {
-        "with_python": True,
+        "with_pybind11": True,
     }
 
     def requirements(self):
-        if self.options.with_python:
+        if self.options.with_pybind11:
             self.requires("pybind11/2.13.6")
 
     def layout(self):

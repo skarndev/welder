@@ -15,14 +15,14 @@ namespace welder {
 
 // Is `type` welded for language `L`? (i.e. carries a matching weld annotation)
 consteval bool welded_for(std::meta::info type, lang L) {
-    auto anns = std::meta::annotations_of_with_type(type, ^^weld_spec);
+    auto anns{std::meta::annotations_of_with_type(type, ^^weld_spec)};
     return !anns.empty() &&
            (std::meta::extract<weld_spec>(anns[0]).mask & lang_bit(L)) != 0;
 }
 
 // The reflection policy declared on `type`, defaulting to automatic.
 consteval policy_kind policy_of(std::meta::info type) {
-    auto anns = std::meta::annotations_of_with_type(type, ^^policy_spec);
+    auto anns{std::meta::annotations_of_with_type(type, ^^policy_spec)};
     return anns.empty() ? policy_kind::automatic
                         : std::meta::extract<policy_spec>(anns[0]).kind;
 }
@@ -30,7 +30,7 @@ consteval policy_kind policy_of(std::meta::info type) {
 // Does `member` carry an exclude mark covering language `L`?
 consteval bool excluded_for(std::meta::info member, lang L) {
     for (auto a : std::meta::annotations_of_with_type(member, ^^exclude_spec)) {
-        auto s = std::meta::extract<exclude_spec>(a);
+        auto s{std::meta::extract<exclude_spec>(a)};
         if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
             return true;
     }
@@ -40,7 +40,7 @@ consteval bool excluded_for(std::meta::info member, lang L) {
 // Does `member` carry an include mark covering language `L`?
 consteval bool included_for(std::meta::info member, lang L) {
     for (auto a : std::meta::annotations_of_with_type(member, ^^include_spec)) {
-        auto s = std::meta::extract<include_spec>(a);
+        auto s{std::meta::extract<include_spec>(a)};
         if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
             return true;
     }
@@ -63,7 +63,7 @@ consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
 // base has its members flattened into the derived binding.
 consteval std::vector<std::meta::info> public_bases(std::meta::info type) {
     std::vector<std::meta::info> out;
-    constexpr auto ctx = std::meta::access_context::unchecked();
+    constexpr auto ctx{std::meta::access_context::unchecked()};
     for (auto b : std::meta::bases_of(type, ctx))
         if (std::meta::is_public(b))
             out.push_back(std::meta::type_of(b));
