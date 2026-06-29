@@ -73,6 +73,31 @@ consumption forms, producing an importable Python module):
     out. It becomes a submodule when it holds bound content (then resolved under its
     own policy). Members bind in declaration order, so a welded base precedes its
     derived types (C++ already requires that within a namespace).
+  - docstrings via the `[[=welder::doc("text")]]` annotation on a class,
+    namespace, function, or function parameter. The reading/formatting layer
+    (`src/welder/doc.hpp`) is backend-agnostic: `doc_of<^^E>()` extracts the text;
+    `function_docstring<^^Fn, Style>()` folds a function's own doc and its
+    parameter docs into one docstring via a pluggable **style** (default
+    `welder::google_style` — summary + a Google `Args:` block). The pybind11
+    backend surfaces them as Python `__doc__`: class/namespace docstrings verbatim,
+    methods/free functions with their argument docs folded in. **Variable docs are
+    intentionally ignored** (module attributes / `def_readwrite` properties have no
+    natural `__doc__` slot in this model). The text is stored *inline*
+    (`welder::fixed_string`) because a `const char*` to a string literal is not a
+    permitted annotation constant on gcc-16.
+  - whole-module binding from a namespace via `welder::pybind11::build_module<^^ns>(m, pre, post)`
+    (a top-level namespace → a filled module: optional `pre` hook, `bind_namespace`,
+    optional `post` hook; the namespace's `doc` becomes the module docstring). It is
+    macro-free but fills an *existing* module — the module's C entry symbol
+    (`PyInit_<name>`) must be pasted by the preprocessor, so it can't be synthesized
+    from a reflection. The backend-agnostic **`WELDER_MODULE(ns, backend)`** macro
+    (`src/welder/module.hpp`) hides that one irreducible macro: it expands to the
+    selected backend's entry-point macro + a `build_module<^^ns>` call, with the
+    namespace token doubling as the module name and an optional trailing `{ }` block
+    of post-glue (the module handle in scope as `module`). Different *languages* can
+    coexist in one TU (one `WELDER_MODULE` per backend — `PyInit_<name>` vs
+    `luaopen_<name>` are distinct symbols); two Python backends (pybind11 +
+    nanobind) cannot, as both emit `PyInit_<name>`.
 
 Enums, properties, custom type converters, and additional languages (Lua, …)
 are designed-for but **not yet implemented**.
@@ -113,6 +138,7 @@ PYBIND11_MODULE(mymod, m) {
 | `mark::exclude` | Exclude member from **all** welded languages. |
 | `mark::exclude(lang...)` | Exclude member from the listed languages only. |
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
+| `doc("text")` | Docstring for a class, namespace, function, or function parameter. Surfaced as the target language's `__doc__`; ignored on variables. |
 
 **Naming deviation from the original sketch:** the sketch used
 `welder::policy::auto`, but `auto` is a reserved keyword, so welder spells it
@@ -140,18 +166,27 @@ backend.
 src/welder/
   detail/config.hpp     WELDER_EXPORT macro (export under the module, else empty)
   lang.hpp              enum class lang                       — std-free vocabulary
-  annotations.hpp       weld / policy / mark + mask helpers   — std-free vocabulary
+  annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary
   reflect.hpp           welded_for / policy_of / member_bound / public_bases — uses <meta>
-  welder.hpp            header-only umbrella: lang+annotations+reflect
+  doc.hpp               doc_of / param_docs / doc styles / function_docstring — uses <meta>
+  module.hpp            WELDER_MODULE(ns, backend) entry-point dispatch macro
+  welder.hpp            header-only umbrella: lang+annotations+reflect+doc
   welder.cppm           the single `export module welder;` (exports vocabulary only)
   backends/
-    pybind11.hpp        pybind11 backend: welder::pybind11::bind<T>
+    pybind11.hpp        pybind11 backend: bind<T> / bind_namespace / build_module
     CMakeLists.txt      target: welder::pybind11  (nanobind / lua planned here)
 src/CMakeLists.txt      targets: welder::headers / welder::module
 examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only
+  welder_module/          whole-module binding via WELDER_MODULE
 ```
+
+`doc.hpp` is part of the reflection layer (like `reflect.hpp`): it uses `<meta>`
+and is header-only, so it is **not** part of the `welder` module and does not
+include `annotations.hpp` (the vocabulary arrives first via `import welder;` or
+`welder.hpp`). `module.hpp` is macro-only and backend-agnostic; each backend
+header defines its `WELDER_DETAIL_MODULE_ENTRY_<backend>` expansion.
 
 CMake targets:
 - **`welder::headers`** — INTERFACE, the header-only core (include path + flags).

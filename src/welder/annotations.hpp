@@ -78,4 +78,40 @@ inline constexpr exclude_spec exclude{};
 inline constexpr include_spec include{};
 } // namespace mark
 
+// --- doc: human-readable documentation --------------------------------------
+//
+// [[=welder::doc("text")]] attaches a docstring to a namespace, class, function,
+// or function parameter. Backends surface it in the target language (e.g. a
+// Python __doc__, with parameter docs folded into the function's docstring).
+//
+// The text is stored *inline* (a char array) rather than as a `const char*` to a
+// string literal: a pointer-to-literal is not a permitted annotation value
+// (gcc-16 rejects it as a non-structural constant), whereas an inline array is.
+// Reading the text back — matching any `doc_spec<N>` and folding parameter docs
+// into a styled docstring — is the reflection layer's job (<welder/doc.hpp>);
+// this header stays std-include-free so the module can export the vocabulary.
+
+// A string literal captured by value, length included, so it can live in a
+// structural annotation constant. (decltype(sizeof(0)) is size_t without a
+// standard-library include — see the std-free constraint above.)
+template <decltype(sizeof(0)) N>
+struct fixed_string {
+    char data[N]{};
+    consteval fixed_string(const char (&s)[N]) {
+        for (decltype(sizeof(0)) i{0}; i < N; ++i)
+            data[i] = s[i];
+    }
+};
+
+template <decltype(sizeof(0)) N>
+struct doc_spec {
+    fixed_string<N> text;
+};
+
+// Usage: [[=welder::doc("Summary line.")]]
+template <decltype(sizeof(0)) N>
+consteval doc_spec<N> doc(const char (&s)[N]) {
+    return doc_spec<N>{fixed_string<N>{s}};
+}
+
 } // namespace welder

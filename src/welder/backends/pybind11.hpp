@@ -12,10 +12,13 @@
 //   PYBIND11_MODULE(mymod, m) { welder::pybind11::bind<MyType>(m); }
 //
 #include <array>
+#include <string>
 #include <type_traits>
 #include <utility>
 
 #include <welder/reflect.hpp> // <meta> + resolution (welded_for, member_bound)
+#include <welder/doc.hpp>     // doc_of / function_docstring (docstring layer)
+#include <welder/module.hpp>  // WELDER_MODULE dispatch (entry-point macro)
 
 #include <pybind11/pybind11.h>
 
@@ -126,9 +129,15 @@ consteval auto native_base_types() {
     return types;
 }
 
-// Construct py::class_<T, NativeBases...> from a reflected base-type array.
+// Construct py::class_<T, NativeBases...> from a reflected base-type array. A
+// non-null `doc` becomes the class docstring (pybind11 treats a bare const char*
+// extra as the doc); nullptr is branched out rather than passed, since pybind11
+// would strdup it.
 template <class T, auto Bases, std::size_t... I>
-auto make_class(py::module_& m, const char* name, std::index_sequence<I...>) {
+auto make_class(py::module_& m, const char* name, const char* doc,
+                std::index_sequence<I...>) {
+    if (doc)
+        return py::class_<T, typename [:Bases[I]:]...>(m, name, doc);
     return py::class_<T, typename [:Bases[I]:]...>(m, name);
 }
 
@@ -165,10 +174,20 @@ void bind_members(Cls& cls) {
         if constexpr (is_bindable_method(fn, L, pol)) {
             constexpr const char* fname{
                 std::define_static_string(std::meta::identifier_of(fn))};
-            if constexpr (std::meta::is_static_member(fn))
-                cls.def_static(fname, &[:fn:]);
-            else
-                cls.def(fname, &[:fn:]);
+            // The method's own doc plus its parameter docs, folded into one
+            // docstring; empty (and thus omitted) when wholly undocumented.
+            const std::string fdoc{welder::function_docstring<fn>()};
+            if constexpr (std::meta::is_static_member(fn)) {
+                if (fdoc.empty())
+                    cls.def_static(fname, &[:fn:]);
+                else
+                    cls.def_static(fname, &[:fn:], fdoc.c_str());
+            } else {
+                if (fdoc.empty())
+                    cls.def(fname, &[:fn:]);
+                else
+                    cls.def(fname, &[:fn:], fdoc.c_str());
+            }
         }
     }
 }
@@ -260,8 +279,15 @@ void bind_namespace_member(py::module_& m, py::dict& live) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol))
             bind<typename [:M:]>(m);
     } else if constexpr (std::meta::is_function(M)) {
-        if constexpr (welded_for(M, L) && member_bound(M, L, Pol))
-            m.def(std::define_static_string(std::meta::identifier_of(M)), &[:M:]);
+        if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
+            constexpr const char* fname{
+                std::define_static_string(std::meta::identifier_of(M))};
+            const std::string fdoc{welder::function_docstring<M>()};
+            if (fdoc.empty())
+                m.def(fname, &[:M:]);
+            else
+                m.def(fname, &[:M:], fdoc.c_str());
+        }
     } else if constexpr (std::meta::is_variable(M)) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
             constexpr const char* vname{
@@ -329,7 +355,8 @@ auto bind(py::module_& m, const char* name) {
     // themselves welded; the user binds those bases separately.
     constexpr auto bases{detail::native_base_types<^^T, L>()};
     auto cls{detail::make_class<T, bases>(
-        m, cls_name, std::make_index_sequence<bases.size()>{})};
+        m, cls_name, welder::doc_of<^^T>(),
+        std::make_index_sequence<bases.size()>{})};
 
     // --- constructors --------------------------------------------------------
     if constexpr (std::is_default_constructible_v<T>)
@@ -374,6 +401,12 @@ void bind_namespace(py::module_& m) {
                   "welder::pybind11::bind_namespace<Ns>: Ns must reflect a namespace");
     constexpr auto ctx{std::meta::access_context::unchecked()};
     constexpr policy_kind pol{policy_of(Ns)};
+    // A [[=welder::doc]] on the namespace becomes the (sub)module docstring. This
+    // covers every entry point: the top-level module (build_module / the
+    // WELDER_PYBIND11_MODULE macro), a user-made submodule, and nested namespaces
+    // recursed below (each binds into its own submodule).
+    if (const char* nsdoc{welder::doc_of<Ns>()})
+        m.doc() = nsdoc;
     // Collects live (mutable-variable) properties; installed in one __class__
     // swap after all members are visited (only if any were produced).
     py::dict live;
@@ -384,4 +417,56 @@ void bind_namespace(py::module_& m) {
         detail::install_live_properties(m, live);
 }
 
+// A do-nothing module hook; the default for build_module's pre/post callbacks.
+inline constexpr auto noop = [](py::module_&) {};
+
+// Build a whole Python module out of a top-level C++ namespace `Ns`: run the
+// optional `pre` hook, bind the namespace into `m` (exposing its welded members,
+// and adopting any namespace-level [[=welder::doc]] as the module docstring),
+// then run the optional `post` hook. The hooks let callers fold hand-written
+// bindings in around welder's generated body; pass welder::pybind11::noop for
+// `pre` to set only a `post` hook.
+//
+// This is the macro-free core of a module definition — it fills an existing
+// py::module_. It cannot emit the module's C entry symbol itself: Python imports
+// a module by dlsym'ing `PyInit_<name>`, a token the preprocessor must paste, so
+// the symbol can't be synthesized from a reflection. Pair this with an
+// entry-point macro that forms that symbol — pybind11's own, or welder's
+// backend-agnostic WELDER_MODULE (which expands to one and calls this):
+//
+//   namespace shapes { struct [[=welder::weld(welder::lang::py)]] Circle {...}; }
+//   PYBIND11_MODULE(shapes, m) { welder::pybind11::build_module<^^shapes>(m); }
+//
+// `Ns` is asserted top-level: its identifier is meant to be the module name.
+template <std::meta::info Ns, class Pre = decltype(noop), class Post = decltype(noop)>
+void build_module(py::module_& m, Pre pre = noop, Post post = noop) {
+    static_assert(std::meta::is_namespace(Ns),
+                  "welder::pybind11::build_module<Ns>: Ns must reflect a namespace");
+    static_assert(std::meta::parent_of(Ns) == ^^::,
+                  "welder::pybind11::build_module<Ns>: Ns must be a top-level "
+                  "namespace (its name is meant to be the module name)");
+    pre(m);
+    bind_namespace<Ns>(m);
+    post(m);
+}
+
 } // namespace welder::pybind11
+
+// pybind11's expansion of the backend-agnostic WELDER_MODULE(ns, pybind11): emit
+// the PyInit_<ns> entry point, bind namespace ^^ns into it, then run the optional
+// trailing { } block as post-glue with the module handle named `module` in scope.
+// The block is supplied as the body of a forward-declared, internally-linked glue
+// function (the same technique PYBIND11_MODULE itself uses for its body), so
+// `WELDER_MODULE(ns, pybind11) { ... }` and `WELDER_MODULE(ns, pybind11) {}` both
+// work. Defined at file scope (macros ignore namespaces); see <welder/module.hpp>
+// for the WELDER_MODULE dispatch.
+#define WELDER_DETAIL_MODULE_ENTRY_pybind11(ns)                                   \
+    static void welder_glue_##ns##_pybind11(::pybind11::module_&);                \
+    PYBIND11_MODULE(ns, welder_module_var_) {                                     \
+        ::welder::pybind11::build_module<^^ns>(                                   \
+            welder_module_var_, ::welder::pybind11::noop,                         \
+            [](::pybind11::module_& welder_glue_m_) {                             \
+                welder_glue_##ns##_pybind11(welder_glue_m_);                      \
+            });                                                                   \
+    }                                                                             \
+    static void welder_glue_##ns##_pybind11(::pybind11::module_& module)

@@ -9,6 +9,7 @@
 //   methods.hpp     <-> tests/test_methods.py
 //   inheritance.hpp <-> tests/test_inheritance.py
 //   namespace.hpp   <-> tests/test_namespace.py
+//   doc.hpp         <-> tests/test_doc.py
 #include <cstdint>
 #include <string>
 
@@ -29,6 +30,7 @@ import welder;
 #include "methods.hpp"
 #include "inheritance.hpp"
 #include "namespace.hpp"
+#include "doc.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -40,4 +42,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_methods(m);     // <-> test_methods.py
     register_inheritance(m); // <-> test_inheritance.py
     register_namespace(m);   // <-> test_namespace.py
+    register_doc(m);         // <-> test_doc.py
 }

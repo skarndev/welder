@@ -8,3 +8,4 @@
 #include <welder/lang.hpp>
 #include <welder/annotations.hpp>
 #include <welder/reflect.hpp>
+#include <welder/doc.hpp>
