@@ -27,7 +27,10 @@ Circle {
     Circle() = default;
     Circle(double radius) : r{radius} {}
 
-    [[=welder::doc("Compute the area.")]]
+    [[
+      =welder::doc("Compute the area."),
+      =welder::returns("the area")
+    ]]
     double area() const {
         return 3.14159 * r * r;
     }
@@ -46,7 +49,8 @@ Circle {
 // --- free function + parameter docstrings -----------------------------------
 [[
   =welder::weld(welder::lang::py),
-  =welder::doc("Add two integers.")
+  =welder::doc("Add two integers."),
+  =welder::returns("their sum")
 ]]
 int add(
     [[=welder::doc("left operand")]] int a,
@@ -62,6 +66,16 @@ int add(
 ]]
 int negate(int x) {
     return -x;
+}
+
+// Only a return doc, no summary and no parameter docs -> the docstring is just a
+// Returns: block (no leading blank line).
+[[
+  =welder::weld(welder::lang::py),
+  =welder::returns("the doubled value")
+]]
+int twice(int x) {
+    return 2 * x;
 }
 
 // --- variable doc is ignored (no module/attr __doc__ in Python) -------------

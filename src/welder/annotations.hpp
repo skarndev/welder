@@ -114,4 +114,20 @@ consteval doc_spec<N> doc(const char (&s)[N]) {
     return doc_spec<N>{fixed_string<N>{s}};
 }
 
+// A return value is not a reflectable entity, so its documentation is attached to
+// the *function* as a distinct annotation type — `doc` there is already the
+// function's summary. The reflection layer tells the two apart by spec type, the
+// same way it ignores `weld`/`mark` on a documented entity.
+//
+// Usage: [[=welder::returns("what the call yields")]] on a function.
+template <decltype(sizeof(0)) N>
+struct return_doc_spec {
+    fixed_string<N> text;
+};
+
+template <decltype(sizeof(0)) N>
+consteval return_doc_spec<N> returns(const char (&s)[N]) {
+    return return_doc_spec<N>{fixed_string<N>{s}};
+}
+
 } // namespace welder

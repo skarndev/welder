@@ -34,6 +34,12 @@ def test_method_docstring(doc: ModuleType) -> None:
     assert "Compute the area." in doc.Circle.area.__doc__
 
 
+def test_method_return_docstring(doc: ModuleType) -> None:
+    text = doc.Circle.area.__doc__
+    assert "Returns:" in text
+    assert "    the area" in text
+
+
 def test_static_method_docstring(doc: ModuleType) -> None:
     assert "The unit circle." in doc.Circle.unit.__doc__
     assert doc.Circle.unit().r == 1.0
@@ -61,6 +67,23 @@ def test_function_without_param_docs_has_no_args_block(doc: ModuleType) -> None:
     assert "Negate a value." in text
     assert "Args:" not in text
     assert doc.negate(5) == -5
+
+
+# --- return value docstrings ------------------------------------------------
+def test_function_docstring_with_returns_block(doc: ModuleType) -> None:
+    text = doc.add.__doc__
+    # summary, Args, and Returns coexist (and in that order).
+    assert "Add two integers." in text
+    assert text.index("Args:") < text.index("Returns:")
+    assert "    their sum" in text
+
+
+def test_returns_only_function_has_just_a_returns_block(doc: ModuleType) -> None:
+    text = doc.twice.__doc__
+    assert "Returns:" in text
+    assert "    the doubled value" in text
+    assert "Args:" not in text
+    assert doc.twice(21) == 42
 
 
 # --- namespace docstring (adopted as the module docstring) -------------------

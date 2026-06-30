@@ -74,13 +74,20 @@ consumption forms, producing an importable Python module):
     own policy). Members bind in declaration order, so a welded base precedes its
     derived types (C++ already requires that within a namespace).
   - docstrings via the `[[=welder::doc("text")]]` annotation on a class,
-    namespace, function, or function parameter. The reading/formatting layer
-    (`src/welder/doc.hpp`) is backend-agnostic: `doc_of<^^E>()` extracts the text;
-    `function_docstring<^^Fn, Style>()` folds a function's own doc and its
-    parameter docs into one docstring via a pluggable **style** (default
-    `welder::google_style` — summary + a Google `Args:` block). The pybind11
-    backend surfaces them as Python `__doc__`: class/namespace docstrings verbatim,
-    methods/free functions with their argument docs folded in. **Variable docs are
+    namespace, function, or function parameter, plus `[[=welder::returns("text")]]`
+    on a function to document its **return value**. A return value is not a
+    reflectable entity, so its doc rides on the function as a *distinct* spec type
+    (`return_doc_spec`) — the summary `doc` there is already taken; the reflection
+    layer tells them apart by spec type. The reading/formatting layer
+    (`src/welder/doc.hpp`) is backend-agnostic: `annotation_text_of<^^E, ^^Spec>()`
+    is the generic reader behind `doc_of<^^E>()` and `return_doc_of<^^Fn>()`;
+    `function_docstring<^^Fn, Style>()` folds a function's summary, parameter docs,
+    and return doc (gathered into a `function_doc` parts struct — extensible to
+    future `Raises:`/`Note:` sections without re-breaking the style API) into one
+    docstring via a pluggable **style** (default `welder::google_style` — summary +
+    Google `Args:` + `Returns:` blocks). The pybind11 backend surfaces them as
+    Python `__doc__`: class/namespace docstrings verbatim, methods/free functions
+    with their argument and return docs folded in. **Variable docs are
     intentionally ignored** (module attributes / `def_readwrite` properties have no
     natural `__doc__` slot in this model). The text is stored *inline*
     (`welder::fixed_string`) because a `const char*` to a string literal is not a
@@ -163,6 +170,7 @@ PYBIND11_MODULE(mymod, m) {
 | `mark::exclude(lang...)` | Exclude member from the listed languages only. |
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
 | `doc("text")` | Docstring for a class, namespace, function, or function parameter. Surfaced as the target language's `__doc__`; ignored on variables. |
+| `returns("text")` | Documents a function's return value (a `Returns:` block in its docstring). Distinct from the function's summary `doc`. |
 
 **Naming deviation from the original sketch:** the sketch used
 `welder::policy::auto`, but `auto` is a reserved keyword, so welder spells it
@@ -192,7 +200,7 @@ src/welder/
   lang.hpp              enum class lang                       — std-free vocabulary
   annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary
   reflect.hpp           welded_for / policy_of / member_bound / public_bases — uses <meta>
-  doc.hpp               doc_of / param_docs / doc styles / function_docstring — uses <meta>
+  doc.hpp               doc_of / return_doc_of / param_docs / doc styles / function_docstring — uses <meta>
   module.hpp            WELDER_MODULE(ns, backend) entry-point dispatch macro
   welder.hpp            header-only umbrella: lang+annotations+reflect+doc
   welder.cppm           the single `export module welder;` (exports vocabulary only)

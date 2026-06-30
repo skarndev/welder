@@ -20,25 +20,40 @@
 
 namespace welder {
 
-// The docstring attached to `Ent` (a class, namespace, function, or parameter),
-// or nullptr if it carries no `doc`. `Ent` is a template parameter rather than a
-// runtime argument because `doc_spec` is a template: matching it requires
-// splicing the annotation's concrete `doc_spec<N>` type, which must be a
-// constant. The returned pointer has static storage (define_static_string), so
-// it is usable at runtime.
-template <std::meta::info Ent>
-consteval const char* doc_of() {
+// The text of the annotation on `Ent` whose class template is `SpecTmpl`, or
+// nullptr if it carries none. `Ent`/`SpecTmpl` are template parameters rather than
+// runtime arguments because matching requires splicing the annotation's concrete
+// `SpecTmpl<N>` type, which must be a constant. `SpecTmpl` must be a class template
+// whose specialization has a `.text` member convertible to a C string (`doc_spec`,
+// `return_doc_spec`). The returned pointer has static storage
+// (define_static_string), so it is usable at runtime.
+template <std::meta::info Ent, std::meta::info SpecTmpl>
+consteval const char* annotation_text_of() {
     template for (constexpr auto a :
                   std::define_static_array(std::meta::annotations_of(Ent))) {
         constexpr std::meta::info t{std::meta::type_of(a)};
         if constexpr (std::meta::has_template_arguments(t) &&
-                      std::meta::template_of(t) == ^^doc_spec) {
+                      std::meta::template_of(t) == SpecTmpl) {
             using spec_type = [:t:];
             constexpr auto spec{std::meta::extract<spec_type>(a)};
             return std::define_static_string(spec.text.data);
         }
     }
     return nullptr;
+}
+
+// The `doc` text on `Ent` (a class, namespace, function, or parameter), or
+// nullptr. The function's own `doc` is its summary.
+template <std::meta::info Ent>
+consteval const char* doc_of() {
+    return annotation_text_of<Ent, ^^doc_spec>();
+}
+
+// The `returns` text on function `Fn` (documentation of its return value), or
+// nullptr. A distinct spec type, so it does not collide with the summary `doc`.
+template <std::meta::info Fn>
+consteval const char* return_doc_of() {
+    return annotation_text_of<Fn, ^^return_doc_spec>();
 }
 
 // One function parameter's documentation: its identifier (nullptr if unnamed)
@@ -67,38 +82,57 @@ consteval auto param_docs() {
 
 // --- docstring styles -------------------------------------------------------
 //
-// A *style* folds a function's own doc (its summary) plus its parameter docs
-// into one docstring. It is the customization point for how documentation reads
-// in the target language; swap it to emit Google-, NumPy-, or any house style.
-// Any type with `static std::string format(const char* summary,
-// std::span<const param_doc>)` qualifies.
+// The raw documentation pieces of a function, handed to a style to assemble. A
+// struct (rather than a growing argument list) so adding future sections — a
+// `Raises:`, a `Note:` — does not re-break the `doc_style` concept. Any member
+// may be empty/null: a function with only a `returns` and no summary is valid.
+struct function_doc {
+    const char* summary{nullptr};       // the function's own `doc`
+    std::span<const param_doc> params{}; // per-parameter `doc`, declaration order
+    const char* returns{nullptr};       // the function's `returns`
+};
+
+// A *style* folds a `function_doc` into one docstring. It is the customization
+// point for how documentation reads in the target language; swap it to emit
+// Google-, NumPy-, or any house style. Any type with
+// `static std::string format(const function_doc&)` qualifies.
 
 template <class S>
-concept doc_style =
-    requires(const char* summary, std::span<const param_doc> params) {
-        { S::format(summary, params) } -> std::same_as<std::string>;
-    };
+concept doc_style = requires(const function_doc& d) {
+    { S::format(d) } -> std::same_as<std::string>;
+};
 
 // Google-style: the summary, then an `Args:` block listing each *documented*
-// parameter ("    name: text"). Undocumented parameters are omitted; if none are
-// documented the block is dropped entirely, leaving just the summary.
+// parameter ("    name: text"), then a `Returns:` block. Undocumented parameters
+// are omitted; the `Args:`/`Returns:` blocks are dropped entirely when empty,
+// and blocks are separated from preceding content by a blank line.
 struct google_style {
-    static std::string format(const char* summary,
-                              std::span<const param_doc> params) {
+    static std::string format(const function_doc& d) {
         std::string out{};
-        if (summary)
-            out += summary;
-        bool any_documented{false};
-        for (const auto& p : params)
+        // Separate a new block from preceding content by exactly one blank line,
+        // whether or not that content already ended in a newline (the Args block
+        // leaves a trailing one per parameter line; the summary does not).
+        auto blank_line = [&out]() {
+            if (!out.empty()) {
+                if (out.back() != '\n')
+                    out += '\n';
+                out += '\n';
+            }
+        };
+
+        if (d.summary)
+            out += d.summary;
+
+        bool any_param_doc{false};
+        for (const auto& p : d.params)
             if (p.text) {
-                any_documented = true;
+                any_param_doc = true;
                 break;
             }
-        if (any_documented) {
-            if (!out.empty())
-                out += "\n\n";
+        if (any_param_doc) {
+            blank_line();
             out += "Args:\n";
-            for (const auto& p : params)
+            for (const auto& p : d.params)
                 if (p.text) {
                     out += "    ";
                     out += p.name ? p.name : "?";
@@ -107,17 +141,25 @@ struct google_style {
                     out += '\n';
                 }
         }
+
+        if (d.returns) {
+            blank_line();
+            out += "Returns:\n    ";
+            out += d.returns;
+        }
         return out;
     }
 };
 
-// The complete docstring for function `Fn` under `Style` (Google by default):
-// its own `doc` summary with its parameter docs folded in. Empty when the
-// function carries no documentation at all, so a backend can skip emitting it.
+// The complete docstring for function `Fn` under `Style` (Google by default): its
+// own `doc` summary with its parameter docs and `returns` folded in. Empty when
+// the function carries no documentation at all, so a backend can skip emitting it.
 template <std::meta::info Fn, doc_style Style = google_style>
 std::string function_docstring() {
     static constexpr auto pds{param_docs<Fn>()};
-    return Style::format(doc_of<Fn>(), std::span<const param_doc>{pds});
+    return Style::format(function_doc{doc_of<Fn>(),
+                                      std::span<const param_doc>{pds},
+                                      return_doc_of<Fn>()});
 }
 
 } // namespace welder
