@@ -35,6 +35,17 @@ else()
   endif()
 endif()
 
+# Type-check the test sources themselves (backend-agnostic): a plain strict mypy
+# over the .py specs + conftest (the `files` list in pyproject.toml; no .venv, no
+# stubs needed — the specs reach the extension through a ModuleType fixture). The
+# type-level cases (test_types.mypy-testing) are checked per-backend instead.
+if(WELDER_TEST_VENV_PYTHON)
+  add_test(
+    NAME mypy.tests
+    COMMAND ${WELDER_TEST_VENV_PYTHON} -m mypy
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
 # Per-backend test trees (each builds its extensions + registers CTest).
 if(WELDER_BUILD_PYBIND11)
   add_subdirectory(pybind11)

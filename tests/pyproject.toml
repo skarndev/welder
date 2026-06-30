@@ -5,13 +5,22 @@ description = "Test suite for welder's generated Python bindings"
 requires-python = ">=3.14"
 dependencies = []
 
-# Managed by uv. pytest runs the suite; mypy is included for upcoming
-# type-level testing of generated bindings (stubs, typed wrappers).
+# Managed by uv. Three layers of checking: pytest runs the behavioral specs;
+# pytest-mypy-testing runs the type-level cases (test_types.mypy-testing) through
+# mypy; pybind11-stubgen emits the .pyi stubs those cases check against. The plain
+# `mypy` run (mypy.tests CTest) type-checks the .py test sources themselves.
+# pybind11-stubgen is sourced from its GitHub main branch — the stub fixes welder
+# relies on are not yet on a PyPI release.
 [dependency-groups]
 dev = [
     "pytest>=8",
     "mypy>=1.13",
+    "pytest-mypy-testing>=0.1",
+    "pybind11-stubgen",
 ]
+
+[tool.uv.sources]
+pybind11-stubgen = { git = "https://github.com/pybind/pybind11-stubgen", branch = "main" }
 
 [tool.pytest.ini_options]
 testpaths = ["."]
@@ -20,5 +29,11 @@ addopts = "-q"
 [tool.mypy]
 python_version = "3.14"
 strict = true
-# The compiled extension has no stubs yet; don't fail on its missing types.
-ignore_missing_imports = true
+# When invoked with no path args (the mypy.tests CTest), check just the .py test
+# sources — not .venv or the build. The runtime specs reach the extension through
+# a ModuleType fixture (every access is Any — they're behavioral, not type tests),
+# so they need no stubs to pass. The type-level cases live in
+# test_types.mypy-testing and are checked by pytest-mypy-testing instead (it puts
+# the backend's stub tree on MYPYPATH under the canonical name `welder_test`).
+files = ["conftest.py", "test_*.py"]
+# No blanket ignore_missing_imports: stub types come from the pybind11-stubgen .pyi.

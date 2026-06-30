@@ -12,3 +12,8 @@ find_package(pybind11 REQUIRED)
 Python_add_library(shapes MODULE WITH_SOABI example.cpp)
 target_compile_features(shapes PRIVATE cxx_std_26)
 target_link_libraries(shapes PRIVATE welder::headers welder::pybind11)
+
+# Opt-in .pyi stubs (see examples/CMakeLists.txt for WELDER_STUBGEN_PYTHON).
+if(WELDER_BUILD_STUBS AND WELDER_STUBGEN_PYTHON)
+  welder_pybind11_generate_stubs(shapes PYTHON ${WELDER_STUBGEN_PYTHON})
+endif()

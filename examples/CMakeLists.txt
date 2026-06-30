@@ -1,3 +1,9 @@
+# Each example may emit .pyi stubs next to its module via
+# welder_pybind11_generate_stubs() (called in its own CMakeLists, since POST_BUILD
+# must attach to a target in the same directory). It's opt-in: examples build
+# against the system Python (find_package(Python)), which has no pybind11-stubgen,
+# so pass -DWELDER_STUBGEN_PYTHON=<interp> pointing at an ABI-compatible
+# interpreter that has it installed (e.g. the tests/ uv env) to turn it on.
 if(WELDER_BUILD_PYBIND11)
   if(WELDER_BUILD_MODULE)
     add_subdirectory(python_poc) # consumes `import welder;`

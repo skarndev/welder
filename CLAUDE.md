@@ -98,6 +98,30 @@ consumption forms, producing an importable Python module):
     coexist in one TU (one `WELDER_MODULE` per backend — `PyInit_<name>` vs
     `luaopen_<name>` are distinct symbols); two Python backends (pybind11 +
     nanobind) cannot, as both emit `PyInit_<name>`.
+  - Python type stubs (`.pyi`) generated from a built extension via
+    [pybind11-stubgen](https://github.com/pybind/pybind11-stubgen). This is a
+    *build-time* concern, not C++: the `welder_pybind11_generate_stubs(<target>
+    PYTHON <interp> [MODULE …] [OUTPUT_DIR …] [ARGS …])` CMake helper
+    (`cmake/WelderPybind11Stubgen.cmake`, `include`d from the root) attaches a
+    POST_BUILD step that imports the freshly built module and emits stubs
+    (`--exit-code`, so an unrepresentable stub fails the build). The interpreter
+    passed in `PYTHON` must both *import the extension* (ABI match) and have
+    pybind11-stubgen installed. The welder docstrings reflected into pybind11
+    `__doc__` flow straight through into the stubs (Google `Args:` blocks and all).
+    Gated by `WELDER_BUILD_STUBS` (default ON). Three layers of type-checking in
+    the tests (see `welder-pybind11-stubgen` / `welder-test-harness` memories):
+    `stubcheck.<variant>` runs `mypy --strict` over each generated tree (stubs
+    well-formed?); `typingcases.pybind11` runs **pytest-mypy-testing** cases
+    (`tests/test_types.mypy-testing`, backend-neutral — they import the canonical
+    name `welder_test`, which the CTest puts on `MYPYPATH` pointing at the stubs)
+    that assert revealed types (stubs correct in use?); and `mypy.tests` runs a
+    plain strict mypy over the `.py` specs themselves. The runtime specs reach the
+    module through a `ModuleType` fixture, so they're `Any` to mypy — the
+    type-level cases are where the stubs get exercised. Examples generate stubs
+    opt-in via `-DWELDER_STUBGEN_PYTHON=<interp>`. **pybind11-stubgen
+    is currently sourced from its GitHub `main` branch** (the stub fixes welder
+    relies on aren't on a PyPI release yet) — see `tests/pyproject.toml`
+    `[tool.uv.sources]`.
 
 Enums, properties, custom type converters, and additional languages (Lua, …)
 are designed-for but **not yet implemented**.
@@ -176,6 +200,8 @@ src/welder/
     pybind11.hpp        pybind11 backend: bind<T> / bind_namespace / build_module
     CMakeLists.txt      target: welder::pybind11  (nanobind / lua planned here)
 src/CMakeLists.txt      targets: welder::headers / welder::module
+cmake/
+  WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
 examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only

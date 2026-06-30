@@ -11,3 +11,8 @@ Python_add_library(welder_poc MODULE WITH_SOABI example.cpp)
 target_compile_features(welder_poc PRIVATE cxx_std_26)
 # welder::module  -> `import welder;`   welder::pybind11 -> the pybind11 backend
 target_link_libraries(welder_poc PRIVATE welder::module welder::pybind11)
+
+# Opt-in .pyi stubs (see examples/CMakeLists.txt for WELDER_STUBGEN_PYTHON).
+if(WELDER_BUILD_STUBS AND WELDER_STUBGEN_PYTHON)
+  welder_pybind11_generate_stubs(welder_poc PYTHON ${WELDER_STUBGEN_PYTHON})
+endif()

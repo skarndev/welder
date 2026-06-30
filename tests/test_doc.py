@@ -10,6 +10,7 @@ are intentionally dropped (module attributes have no ``__doc__``).
 from __future__ import annotations
 
 from types import ModuleType
+from typing import cast
 
 import pytest
 
@@ -18,7 +19,9 @@ from conftest import public_attrs
 
 @pytest.fixture()
 def doc(mod: ModuleType) -> ModuleType:
-    return mod.documented
+    # mod.<attr> is Any (ModuleType.__getattr__); cast back at this boundary so
+    # the dynamic access stays contained and strict mypy still covers the rest.
+    return cast(ModuleType, mod.documented)
 
 
 # --- class + method docstrings ----------------------------------------------

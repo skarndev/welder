@@ -8,6 +8,7 @@ free functions, namespace-scope variables, and nested namespaces (as submodules)
 from __future__ import annotations
 
 from types import ModuleType
+from typing import cast
 
 import pytest
 
@@ -16,7 +17,9 @@ from conftest import public_attrs
 
 @pytest.fixture()
 def cat(mod: ModuleType) -> ModuleType:
-    return mod.catalog
+    # mod.<attr> is Any (ModuleType.__getattr__); cast back at this boundary so
+    # the dynamic access stays contained and strict mypy still covers the rest.
+    return cast(ModuleType, mod.catalog)
 
 
 # --- classes ----------------------------------------------------------------
@@ -79,7 +82,7 @@ def test_mutable_variable_reads_live_from_cpp(cat: ModuleType) -> None:
 
 
 def test_mutable_variable_writes_through_to_cpp(cat: ModuleType) -> None:
-    cat.counter = 500
+    setattr(cat, "counter", 500)  # noqa: B010 — module attr set; ModuleType has no static slot
     cat.bump()  # C++ increments the same global
     assert cat.counter == 501
 

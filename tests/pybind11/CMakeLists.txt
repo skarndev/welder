@@ -31,16 +31,63 @@ if(WELDER_BUILD_MODULE)
   list(APPEND _variants welder_test_pybind11)
 endif()
 
-# Register the shared pytest specs against each variant — but only when the uv
-# environment was prepared at the tests/ root (otherwise just build the modules).
+# Everything below needs the uv environment that was prepared at the tests/ root
+# (it carries pytest, mypy, and pybind11-stubgen). Without it, just build the
+# modules — they double as a compile check.
 if(NOT WELDER_TEST_VENV_PYTHON)
   return()
 endif()
+
+# pybind11-stubgen writes each variant's package under here (named after its
+# module: welder_test_pybind11/ and welder_test_pybind11_ho/), so they coexist.
+set(_stubs_dir ${CMAKE_CURRENT_BINARY_DIR}/stubs)
+
 foreach(variant IN LISTS _variants)
+  # Behavioral specs: import the compiled extension and assert what binds.
+  # -p no:mypy-testing so this run only executes the runtime specs — the type-level
+  # cases (test_types.mypy-testing) are run separately, with stubs on MYPYPATH.
   add_test(
     NAME pytest.${variant}
-    COMMAND ${WELDER_TEST_VENV_PYTHON} -m pytest ${WELDER_TEST_PYDIR})
+    COMMAND ${WELDER_TEST_VENV_PYTHON} -m pytest ${WELDER_TEST_PYDIR} -p no:mypy-testing
+    WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
   set_tests_properties(pytest.${variant} PROPERTIES
     ENVIRONMENT
       "WELDER_TEST_MODULE=${variant};PYTHONPATH=$<TARGET_FILE_DIR:${variant}>")
+
+  if(WELDER_BUILD_STUBS)
+    # Emit .pyi stubs from the freshly built extension via pybind11-stubgen.
+    welder_pybind11_generate_stubs(${variant}
+      PYTHON ${WELDER_TEST_VENV_PYTHON}
+      OUTPUT_DIR ${_stubs_dir})
+
+    # ...and type-check them: mypy --strict over the generated package proves the
+    # stubs are internally consistent and well-typed. Run from the tests/ dir so
+    # mypy picks up [tool.mypy] from pyproject.toml.
+    add_test(
+      NAME stubcheck.${variant}
+      COMMAND ${WELDER_TEST_VENV_PYTHON} -m mypy ${_stubs_dir}/${variant}
+      WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
+  endif()
 endforeach()
+
+# Type-level cases: tests/test_types.mypy-testing imports the backend-neutral name
+# `welder_test` and asserts revealed types, so a wrong stub type fails. Expose the
+# module-form stubs under that canonical name (rename-safe — the tree uses only
+# relative imports) and run the shared cases against them via pytest-mypy-testing.
+# Skip when only the header-only variant is built (no module-form stubs).
+if(WELDER_BUILD_STUBS AND WELDER_BUILD_MODULE)
+  set(_canon_stubs ${CMAKE_CURRENT_BINARY_DIR}/typing-stubs)
+  add_custom_command(TARGET welder_test_pybind11 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${_canon_stubs}/welder_test
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${_stubs_dir}/welder_test_pybind11 ${_canon_stubs}/welder_test
+    VERBATIM
+    COMMENT "welder: exposing pybind11 stubs as `welder_test` for shared typing cases")
+
+  add_test(
+    NAME typingcases.pybind11
+    COMMAND ${WELDER_TEST_VENV_PYTHON} -m pytest ${WELDER_TEST_PYDIR}/test_types.mypy-testing
+    WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
+  set_tests_properties(typingcases.pybind11 PROPERTIES
+    ENVIRONMENT "MYPYPATH=${_canon_stubs}")
+endif()

@@ -9,6 +9,11 @@ option(WELDER_BUILD_MODULE "Build the importable `welder` C++20 module wrapper" 
 option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_EXAMPLES "Build examples" ON)
 option(WELDER_BUILD_TESTS "Build tests" ON)
+option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built pybind11 modules" ON)
+
+# Reusable CMake helpers (e.g. welder_pybind11_generate_stubs).
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(WelderPybind11Stubgen)
 
 # All toolchain-specific flags for C++26 reflection + annotations live here, so
 # the rest of the project stays standard. gcc-16 is currently the only compiler

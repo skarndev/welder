@@ -165,6 +165,11 @@ wheels = [
 ]
 
 [[package]]
+name = "pybind11-stubgen"
+version = "2.5.5"
+source = { git = "https://github.com/pybind/pybind11-stubgen?branch=main#083e185c973470d281f0de67597daf6be2ab3d9d" }
+
+[[package]]
 name = "pygments"
 version = "2.20.0"
 source = { registry = "https://pypi.org/simple" }
@@ -190,6 +195,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-mypy-testing"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mypy" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/17/6f/d083965c8c8b5095fbc7e7c16199af59d59cabd7d1a4a4641ef4507463fe/pytest_mypy_testing-0.2.0.tar.gz", hash = "sha256:ad56d3d0a806c4a38b5a65cbbf5ae569139565c50b4c1ff3da95a1a17d27a8ab", size = 106280, upload-time = "2026-01-26T19:15:57.371Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/87/71765e9b74872352e2c97f60e18cc390b4531a332aac2df346aa6a57a170/pytest_mypy_testing-0.2.0-py3-none-any.whl", hash = "sha256:710404fd81005827ad77cbc850e1bed6df5611d382a8142b9ede889b8efc5f1d", size = 23039, upload-time = "2026-01-26T19:15:55.574Z" },
+]
+
+[[package]]
 name = "typing-extensions"
 version = "4.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -206,7 +224,9 @@ source = { virtual = "." }
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "pybind11-stubgen" },
     { name = "pytest" },
+    { name = "pytest-mypy-testing" },
 ]
 
 [package.metadata]
@@ -214,5 +234,7 @@ dev = [
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=1.13" },
+    { name = "pybind11-stubgen", git = "https://github.com/pybind/pybind11-stubgen?branch=main" },
     { name = "pytest", specifier = ">=8" },
+    { name = "pytest-mypy-testing", specifier = ">=0.1" },
 ]
