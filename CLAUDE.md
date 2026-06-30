@@ -11,127 +11,84 @@ The project targets **C++26 and newer only**.
 
 ## Delivery model (Boost-style)
 
-welder is fundamentally a **header-only** library (`src/welder/…`). On top of
-that it ships **one** optional C++20 module wrapper (`src/welder/welder.cppm`) so
-users can write `import welder;` instead of including headers.
-
-Everything lives under a single tree (`src/welder/`) — there is no separate
-`include/` directory — so user includes always start from `welder/`.
-
-We deliberately do **not** modularize internally (no partitions, no per-component
-module units). C++20 modules on the only currently-viable toolchain (gcc-16) are
-too fragile — see "Module-vs-header boundary" below. Header-only is the source of
-truth and the fallback when a compiler's modules break.
-
-So there are two equivalent ways to consume the core:
-
-```cpp
-import welder;                  // module form
-// — or —
-#include <welder/welder.hpp>    // header-only form
-```
-
-Backends are always header-only (e.g. `#include <welder/backends/pybind11.hpp>`).
+welder is fundamentally **header-only** (`src/welder/…`), with **one** optional
+C++20 module wrapper (`src/welder/welder.cppm`) so users can `import welder;`
+instead of including headers. Everything lives under a single tree — no separate
+`include/`, so user includes start from `welder/`. We deliberately do **not**
+modularize internally (no partitions, no per-component units): C++20 modules on
+gcc-16 are too fragile (see "Module-vs-header boundary" below), so header-only is
+the source of truth and the fallback. The core thus has two equivalent forms —
+`import welder;` *or* `#include <welder/welder.hpp>` — and backends are always
+header-only (e.g. `#include <welder/backends/pybind11.hpp>`).
 
 ## Status
 
-Early development / proof-of-concept. Working today (verified end-to-end, both
-consumption forms, producing an importable Python module):
+Early POC, verified end-to-end (both consumption forms → an importable Python
+module):
 
-- Annotation vocabulary (`weld`, `policy`, `mark::exclude`, `mark::include`).
-- Compile-time resolution of which members bind for a given language.
-- pybind11 backend binding, honoring exclude/include/policy:
-  - public data members (read/write);
-  - constructors (default + each public non-copy/move constructor, with
-    parameter types reflected into `pybind11::init<...>`);
-  - methods and static methods, including overloads.
-  - inheritance from public bases. `weld` is a **discovery marker** ("this type
-    is an independently-registered, module-discoverable entity"), not an
-    inheritance directive: the *most-derived* type's `weld` drives which languages
-    bind, and a base need not be welded to contribute members. From that:
-    a **welded** base — registered as its own Python class — becomes a native
-    pybind11 base (`class_<T, Base...>`, real subclass, inherited members via the
-    MRO; bind it separately, before T), including welded bases reached only
-    *through* non-welded ones (nearest welded ancestors, deduplicated). A
-    **non-welded** base is a plain C++ mixin whose eligible members are flattened
-    into each derived binding (recursively, honoring the base's own marks/policy).
-    Virtual diamonds are supported and tested; non-virtual diamonds with a shared
-    welded base are a C++ ambiguity (not worked around).
-  - whole-namespace introspection via `welder::pybind11::bind_namespace<^^ns>(m)`. `weld`
-    is the discovery gate for **leaf entities only** — a class type / free function
-    / namespace-scope variable is a *candidate* iff welded (namespaces are never
-    welded). The namespace's `policy` (default automatic) and the member's
-    exclude/include marks then resolve what binds, mirroring struct member
-    resolution (`welded_for && member_bound`). Exposes class types (via `bind<T>`),
-    free functions (overloads included), and namespace-scope variables as module
-    attributes — a **value snapshot if const/constexpr, else a live get/set
-    property** over the C++ global (installed by swapping the module's `__class__`
-    for a `ModuleType` subclass carrying the property descriptors). A **nested
-    namespace** is resolved like a leaf member under the *parent's* policy
-    (`member_bound`, no weld): automatic recurses unless `mark::exclude`'d, opt_in
-    recurses only if `mark::include`'d — letting you keep `namespace detail`/`impl`
-    out. It becomes a submodule when it holds bound content (then resolved under its
-    own policy). Members bind in declaration order, so a welded base precedes its
-    derived types (C++ already requires that within a namespace).
-  - docstrings via the `[[=welder::doc("text")]]` annotation on a class,
-    namespace, function, or function parameter, plus `[[=welder::returns("text")]]`
-    on a function to document its **return value**. A return value is not a
-    reflectable entity, so its doc rides on the function as a *distinct* spec type
-    (`return_doc_spec`) — the summary `doc` there is already taken; the reflection
-    layer tells them apart by spec type. The reading/formatting layer
-    (`src/welder/doc.hpp`) is backend-agnostic: `annotation_text_of<^^E, ^^Spec>()`
-    is the generic reader behind `doc_of<^^E>()` and `return_doc_of<^^Fn>()`;
-    `function_docstring<^^Fn, Style>()` folds a function's summary, parameter docs,
-    and return doc (gathered into a `function_doc` parts struct — extensible to
-    future `Raises:`/`Note:` sections without re-breaking the style API) into one
-    docstring via a pluggable **style** (default `welder::google_style` — summary +
-    Google `Args:` + `Returns:` blocks). The pybind11 backend surfaces them as
-    Python `__doc__`: class/namespace docstrings verbatim, methods/free functions
-    with their argument and return docs folded in. **Variable docs are
-    intentionally ignored** (module attributes / `def_readwrite` properties have no
-    natural `__doc__` slot in this model). The text is stored *inline*
-    (`welder::fixed_string`) because a `const char*` to a string literal is not a
-    permitted annotation constant on gcc-16.
-  - whole-module binding from a namespace via `welder::pybind11::build_module<^^ns>(m, pre, post)`
-    (a top-level namespace → a filled module: optional `pre` hook, `bind_namespace`,
-    optional `post` hook; the namespace's `doc` becomes the module docstring). It is
-    macro-free but fills an *existing* module — the module's C entry symbol
-    (`PyInit_<name>`) must be pasted by the preprocessor, so it can't be synthesized
-    from a reflection. The backend-agnostic **`WELDER_MODULE(ns, backend)`** macro
-    (`src/welder/module.hpp`) hides that one irreducible macro: it expands to the
-    selected backend's entry-point macro + a `build_module<^^ns>` call, with the
-    namespace token doubling as the module name and an optional trailing `{ }` block
-    of post-glue (the module handle in scope as `module`). Different *languages* can
-    coexist in one TU (one `WELDER_MODULE` per backend — `PyInit_<name>` vs
-    `luaopen_<name>` are distinct symbols); two Python backends (pybind11 +
-    nanobind) cannot, as both emit `PyInit_<name>`.
-  - Python type stubs (`.pyi`) generated from a built extension via
-    [pybind11-stubgen](https://github.com/pybind/pybind11-stubgen). This is a
-    *build-time* concern, not C++: the `welder_pybind11_generate_stubs(<target>
-    PYTHON <interp> [MODULE …] [OUTPUT_DIR …] [ARGS …])` CMake helper
-    (`cmake/WelderPybind11Stubgen.cmake`, `include`d from the root) attaches a
-    POST_BUILD step that imports the freshly built module and emits stubs
-    (`--exit-code`, so an unrepresentable stub fails the build). The interpreter
-    passed in `PYTHON` must both *import the extension* (ABI match) and have
-    pybind11-stubgen installed. The welder docstrings reflected into pybind11
-    `__doc__` flow straight through into the stubs (Google `Args:` blocks and all).
-    Gated by `WELDER_BUILD_STUBS` (default ON). Three layers of type-checking in
-    the tests (see `welder-pybind11-stubgen` / `welder-test-harness` memories):
-    `stubcheck.<variant>` runs `mypy --strict` over each generated tree (stubs
-    well-formed?); `typingcases.pybind11` runs **pytest-mypy-testing** cases
-    (`tests/test_types.mypy-testing`, backend-neutral — they import the canonical
-    name `welder_test`, which the CTest puts on `MYPYPATH` pointing at the stubs)
-    that assert revealed types (stubs correct in use?); and `mypy.tests` runs a
-    plain strict mypy over the `.py` specs themselves. The runtime specs reach the
-    module through a `ModuleType` fixture, so they're `Any` to mypy — the
-    type-level cases are where the stubs get exercised. Examples generate stubs
-    opt-in via `-DWELDER_STUBGEN_PYTHON=<interp>`. **pybind11-stubgen
-    is currently sourced from its GitHub `main` branch** (the stub fixes welder
-    relies on aren't on a PyPI release yet) — see `tests/pyproject.toml`
-    `[tool.uv.sources]`.
+- Annotation vocabulary (`weld`, `policy`, `mark`, `doc`, `returns`) +
+  compile-time resolution of which members bind per language (`reflect.hpp`:
+  `welded_for && member_bound`).
+- **pybind11 backend** (`backends/pybind11.hpp`), honoring exclude/include/policy:
+  - public data members (read/write); constructors (default + each public
+    non-copy/move ctor → `pybind11::init<...>`; plus, for a baseless **aggregate**,
+    a synthesized field constructor that brace-inits it, giving Python
+    `T(f0, f1, …)` — only when every field binds, since aggregate init is
+    positional/all-or-nothing); methods, static methods, overloads. Function /
+    method / constructor **parameter names** reach Python as keyword arguments
+    (`py::arg`) when every parameter of that signature is named.
+  - **inheritance from public bases.** `weld` is a *discovery marker* (an
+    independently-registered, module-discoverable entity), not an inheritance
+    directive: the most-derived type's `weld` drives which languages bind, and a
+    base need not be welded. A **welded** base → a native pybind11 base
+    (`class_<T, Base...>`; bind it separately, first), including the nearest welded
+    ancestors reached *through* non-welded ones (deduplicated). A **non-welded**
+    base → a C++ mixin whose eligible members are flattened in recursively
+    (honoring its own marks/policy). Virtual diamonds work; a non-virtual diamond
+    with a shared welded base is a C++ ambiguity (not worked around).
+  - **whole-namespace binding** — `bind_namespace<^^ns>(m)`. `weld` gates *leaf
+    entities only* (class type / free function / namespace-scope variable;
+    namespaces are never welded); the namespace `policy` (default automatic) +
+    member marks then resolve. Binds classes (`bind<T>`), free functions (overloads
+    included), and namespace variables as module attributes — a **value snapshot if
+    const/constexpr, else a live get/set property** over the C++ global (via a
+    `ModuleType` `__class__` swap). A **nested namespace** resolves under the
+    *parent's* policy (no weld; automatic recurses unless excluded, opt_in only if
+    included — keeps `detail`/`impl` out) and becomes a submodule when it holds
+    bound content. Declaration order.
+  - **docstrings** (`doc.hpp`, backend-agnostic) — `[[=welder::doc("…")]]` on a
+    class/namespace/function/parameter, `[[=welder::returns("…")]]` on a function.
+    A return value isn't a reflectable entity, so its doc rides on the function as
+    a *distinct* spec type (`return_doc_spec`), told apart from the summary by spec
+    type. `function_docstring<^^Fn, Style>()` folds summary + param docs + return
+    doc (via a `function_doc` parts struct, extensible to future `Raises:`/`Note:`
+    without re-breaking the style API) under a pluggable style (default
+    `google_style` → `Args:`/`Returns:` blocks); surfaced as Python `__doc__`.
+    Variable docs are intentionally ignored. Doc text is stored *inline*
+    (`fixed_string`) — a `const char*` to a literal isn't a permitted annotation
+    constant on gcc-16.
+  - **whole-module binding** — `build_module<^^ns>(m, pre, post)` fills an
+    *existing* module (pre hook → `bind_namespace` → post hook; namespace `doc` →
+    module doc). The C entry symbol `PyInit_<name>` must be preprocessor-pasted, so
+    the backend-agnostic `WELDER_MODULE(ns, backend)` macro (`module.hpp`) wraps it
+    (namespace token = module name, optional trailing `{ }` post-glue with the
+    module handle in scope as `module`). One `WELDER_MODULE` per backend per TU;
+    two Python backends collide (both emit `PyInit_<name>`).
+  - **`.pyi` stub generation** via [pybind11-stubgen](https://github.com/pybind/pybind11-stubgen)
+    (build-time): `cmake/WelderPybind11Stubgen.cmake` → `welder_pybind11_generate_stubs(<target>
+    PYTHON <interp> …)`, a POST_BUILD step (`--exit-code`); gated by
+    `WELDER_BUILD_STUBS` (default ON). `PYTHON` must import the extension (ABI
+    match) and have stubgen; welder docstrings flow into the stubs. Three test-side
+    mypy gates — `stubcheck` (mypy over each stub tree), `typingcases`
+    (pytest-mypy-testing cases in `tests/test_types.mypy-testing` against the
+    backend-neutral canonical name `welder_test` on `MYPYPATH`), `mypy.tests`
+    (plain mypy over the `.py` specs, which are `Any` to mypy via the `ModuleType`
+    fixture). Examples opt in via `-DWELDER_STUBGEN_PYTHON=<interp>`.
+    pybind11-stubgen is pinned to its GitHub `main` branch (fixes not yet on PyPI;
+    see `tests/pyproject.toml` `[tool.uv.sources]`).
 
-Enums, properties, custom type converters, and additional languages (Lua, …)
-are designed-for but **not yet implemented**.
+Enums, properties, custom type converters, and additional languages (Lua, …) are
+designed-for but **not yet implemented**.
 
 ## The idea / public API
 
@@ -140,22 +97,17 @@ import welder;            // or: #include <welder/welder.hpp>
 #include <pybind11/pybind11.h>
 #include <welder/backends/pybind11.hpp>
 
-struct [[=welder::weld(welder::lang::py, welder::lang::lua)]] // expose to py+lua
-       [[=welder::policy::automatic]]                         // reflect all members
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // expose to py+lua
+       [[=welder::policy::automatic]]                          // reflect all members
 ReflectedStruct {
-    std::uint32_t first;                              // bound everywhere
-
-    [[=welder::mark::exclude]] std::uint32_t second;  // bound nowhere
-
-    [[=welder::mark::exclude(welder::lang::lua)]]
-    std::string third;                                // bound in py, not lua
-
-    [[=welder::mark::include(welder::lang::py)]]
-    std::string last;                                 // opt-in (see policy)
+    std::uint32_t first;                                              // bound everywhere
+    [[=welder::mark::exclude]] std::uint32_t second;                  // bound nowhere
+    [[=welder::mark::exclude(welder::lang::lua)]] std::string third;  // py, not lua
+    [[=welder::mark::include(welder::lang::py)]] std::string last;    // opt-in (see policy)
 };
 
 PYBIND11_MODULE(mymod, m) {
-    welder::pybind11::bind<ReflectedStruct>(m); // name defaults to identifier_of(^^T)
+    welder::pybind11::bind<ReflectedStruct>(m);  // name defaults to identifier_of(^^T)
 }
 ```
 
@@ -232,29 +184,22 @@ CMake targets:
 ### Module-vs-header boundary (important, gcc-16 specific)
 
 The **`welder` module exports only the std-free vocabulary** (`lang`,
-`annotations`). Reflection (`reflect.hpp`) and backends (`backends/pybind11.hpp`)
-are header-only and are **not** part of the module.
-
-Why: on gcc-16, if a module unit pulls *any* standard-library header into its
-purview/GMF (even `<cstdint>`), every consumer that both `import`s it and
-textually `#include`s those std headers gets hard errors like
-`conflicting imported declaration 'std::wstreampos'` / `__mbstate_t`. pybind11
-(and `<meta>`) include the standard library textually, so this fires for any real
-backend TU. Hence: vocabulary modules stay std-free; everything touching `<meta>`
-or pybind11 stays a header. Flattening partitions does **not** help — it is the
-std-in-module-purview that conflicts, not partitioning. (Empirically established;
+`annotations`); reflection (`reflect.hpp`) and backends are header-only and **not**
+part of the module. Why: on gcc-16, any std header in a module unit's purview/GMF
+(even `<cstdint>`) makes every consumer that both `import`s it and textually
+`#include`s std headers fail with `conflicting imported declaration` errors (e.g.
+`std::wstreampos`/`__mbstate_t`) — and `<meta>`/pybind11 include std textually. So
+vocabulary stays std-free; anything touching `<meta>`/pybind11 stays a header.
+Partitioning doesn't help — it's std-in-purview, not partitioning. (Empirical;
 revisit if gcc fixes module/std merging or pybind11 becomes importable.)
+Consequently `reflect.hpp`/backends do **not** include the vocabulary headers
+(that would redeclare what `import welder;` provides): provide the vocabulary first
+(`import welder;` *or* `#include <welder/welder.hpp>`), then the backend header.
 
-`reflect.hpp`/`backends/pybind11.hpp` therefore do **not** include the vocabulary
-headers (that would redeclare what `import welder;` already provides). Provide the
-vocabulary first — `import welder;` *or* `#include <welder/welder.hpp>` — then the
-backend header.
-
-**Backend namespace.** The pybind11 backend lives in `welder::pybind11` (so a
-future nanobind backend can be `welder::nanobind`; both target the `lang::py`
-*language*). Inside `welder::pybind11`, the unqualified name `pybind11` would
-resolve to *that* namespace rather than the library, so the header aliases the
-real one once — `namespace py = ::pybind11;` — and uses `py::` throughout.
+**Backend namespace.** The pybind11 backend is `welder::pybind11` (nanobind →
+`welder::nanobind`; both target `lang::py`). Inside it, unqualified `pybind11`
+would resolve to that namespace, so the header aliases `namespace py = ::pybind11;`
+once and uses `py::` throughout.
 
 Complex/custom type conversions are intended to be registered per-backend via
 pybind11's own mechanisms, separately from core resolution — design pending.
