@@ -62,7 +62,21 @@ Calc {
     }
 };
 
+// --- aggregate initialization -----------------------------------------------
+// A simple aggregate (no user-declared constructors): it cannot be built as
+// Vec2(x, y) in C++, only brace-initialized Vec2{x, y}. welder synthesizes a
+// field constructor so Python still gets Vec2(x, y) (and Vec2(x=..., y=...)),
+// alongside the default Vec2().
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Vec2 {
+    double x{0.0};
+    double y{0.0};
+};
+
 inline void register_methods(pybind11::module_& m) {
     welder::pybind11::bind<Counter>(m);
     welder::pybind11::bind<Calc>(m);
+    welder::pybind11::bind<Vec2>(m);
 }

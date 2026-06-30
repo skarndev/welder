@@ -43,10 +43,121 @@ consteval auto param_types() {
     return types;
 }
 
-// Register py::init<P0, P1, ...>() from reflected parameter types.
-template <class T, auto Params, std::size_t... I>
-void def_init(py::class_<T>& cls, std::index_sequence<I...>) {
-    cls.def(py::init<typename [:Params[I]:]...>());
+// A function's parameter *names*, in order — a static-storage C string per
+// parameter, or nullptr for an unnamed one.
+template <std::meta::info Fn>
+consteval auto param_names() {
+    constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+    std::array<const char*, n> names{};
+    std::size_t i{0};
+    for (auto p : std::meta::parameters_of(Fn))
+        names[i++] = std::meta::has_identifier(p)
+                         ? std::define_static_string(std::meta::identifier_of(p))
+                         : nullptr;
+    return names;
+}
+
+// Whether every parameter of Fn carries an identifier. pybind11's py::arg naming
+// is all-or-nothing, so an unnamed parameter means we fall back to positional.
+template <std::meta::info Fn>
+consteval bool all_params_named() {
+    for (auto p : std::meta::parameters_of(Fn))
+        if (!std::meta::has_identifier(p))
+            return false;
+    return true;
+}
+
+// Register the function/method reflected by Fn onto a pybind11 target. `def_into`
+// adapts the target — `cls.def`, `cls.def_static`, or `m.def`. The folded
+// docstring is passed when non-empty, and `py::arg(name)...` when every parameter
+// is named (so Python callers see real keyword arguments, not arg0/arg1).
+template <std::meta::info Fn, class Def, std::size_t... I>
+void def_function(const char* name, Def def_into, std::index_sequence<I...>) {
+    static constexpr auto names{param_names<Fn>()};
+    const std::string doc{welder::function_docstring<Fn>()};
+    if constexpr (all_params_named<Fn>()) {
+        if (doc.empty())
+            def_into(name, &[:Fn:], py::arg(names[I])...);
+        else
+            def_into(name, &[:Fn:], doc.c_str(), py::arg(names[I])...);
+    } else {
+        if (doc.empty())
+            def_into(name, &[:Fn:]);
+        else
+            def_into(name, &[:Fn:], doc.c_str());
+    }
+}
+
+template <std::meta::info Fn, class Def>
+void def_function(const char* name, Def def_into) {
+    def_function<Fn>(name, def_into,
+                     std::make_index_sequence<
+                         std::meta::parameters_of(Fn).size()>{});
+}
+
+// Register py::init<P0, P1, ...>() for constructor Ctor, naming the parameters
+// (py::arg) when all are named, otherwise positional.
+template <std::meta::info Ctor, std::size_t... I>
+void def_init(auto& cls, std::index_sequence<I...>) {
+    static constexpr auto params{param_types<Ctor>()};
+    static constexpr auto names{param_names<Ctor>()};
+    if constexpr (all_params_named<Ctor>())
+        cls.def(py::init<typename [:params[I]:]...>(), py::arg(names[I])...);
+    else
+        cls.def(py::init<typename [:params[I]:]...>());
+}
+
+// --- aggregate initialization ----------------------------------------------
+//
+// An aggregate (a simple POD-like struct: no user-declared constructors) cannot
+// be constructed as T(a, b) — only brace-initialized T{a, b}. So a plain `weld`ed
+// aggregate would otherwise be default-constructed then assigned field by field.
+// We instead synthesize a constructor that brace-inits it from its fields, giving
+// Python `T(field0, field1, ...)`.
+
+// The fields an aggregate is initialized from: its non-static data members in
+// declaration order (all public, by the aggregate rules).
+template <class T>
+consteval auto aggregate_fields() {
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    constexpr std::size_t n{std::meta::nonstatic_data_members_of(^^T, ctx).size()};
+    std::array<std::meta::info, n> fs{};
+    std::size_t i{0};
+    for (auto m : std::meta::nonstatic_data_members_of(^^T, ctx))
+        fs[i++] = m;
+    return fs;
+}
+
+// Whether to synthesize an aggregate field constructor for T (language L). Only
+// for a baseless aggregate with at least one field, *all* of which bind: a based
+// aggregate's brace-init nests the base (this flat form can't express it), and a
+// partially-excluded one would leak an excluded field as a positional parameter
+// (aggregate init is positional and all-or-nothing). An empty aggregate is already
+// covered by the default constructor.
+template <class T, lang L>
+consteval bool aggregate_initializable() {
+    if (!std::is_aggregate_v<T> || !welder::public_bases(^^T).empty())
+        return false;
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    auto fields{std::meta::nonstatic_data_members_of(^^T, ctx)};
+    if (fields.empty())
+        return false;
+    const policy_kind pol{policy_of(^^T)};
+    for (auto m : fields)
+        if (!member_bound(m, L, pol))
+            return false;
+    return true;
+}
+
+// Synthesize py::init([](F0 f0, ...) { return T{f0, ...}; }, py::arg("f0"), ...).
+template <class T, std::size_t... I>
+void def_aggregate_init(auto& cls, std::index_sequence<I...>) {
+    static constexpr auto fields{aggregate_fields<T>()};
+    cls.def(py::init([](typename [:std::meta::type_of(fields[I]):]... args) {
+                return T{std::move(args)...};
+            }),
+            py::arg(std::define_static_string(
+                std::meta::identifier_of(fields[I])))...);
 }
 
 // A non-default, non-copy/move public constructor we should expose. The default
@@ -174,20 +285,16 @@ void bind_members(Cls& cls) {
         if constexpr (is_bindable_method(fn, L, pol)) {
             constexpr const char* fname{
                 std::define_static_string(std::meta::identifier_of(fn))};
-            // The method's own doc plus its parameter docs, folded into one
-            // docstring; empty (and thus omitted) when wholly undocumented.
-            const std::string fdoc{welder::function_docstring<fn>()};
-            if constexpr (std::meta::is_static_member(fn)) {
-                if (fdoc.empty())
-                    cls.def_static(fname, &[:fn:]);
-                else
-                    cls.def_static(fname, &[:fn:], fdoc.c_str());
-            } else {
-                if (fdoc.empty())
-                    cls.def(fname, &[:fn:]);
-                else
-                    cls.def(fname, &[:fn:], fdoc.c_str());
-            }
+            // def_function folds in the docstring (own doc + parameter docs) and
+            // names the arguments (py::arg); def_into picks instance vs static.
+            if constexpr (std::meta::is_static_member(fn))
+                def_function<fn>(fname, [&cls](auto&&... a) {
+                    cls.def_static(std::forward<decltype(a)>(a)...);
+                });
+            else
+                def_function<fn>(fname, [&cls](auto&&... a) {
+                    cls.def(std::forward<decltype(a)>(a)...);
+                });
         }
     }
 }
@@ -282,11 +389,9 @@ void bind_namespace_member(py::module_& m, py::dict& live) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
             constexpr const char* fname{
                 std::define_static_string(std::meta::identifier_of(M))};
-            const std::string fdoc{welder::function_docstring<M>()};
-            if (fdoc.empty())
-                m.def(fname, &[:M:]);
-            else
-                m.def(fname, &[:M:], fdoc.c_str());
+            def_function<M>(fname, [&m](auto&&... a) {
+                m.def(std::forward<decltype(a)>(a)...);
+            });
         }
     } else if constexpr (std::meta::is_variable(M)) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
@@ -363,11 +468,18 @@ auto bind(py::module_& m, const char* name) {
         cls.def(py::init<>());
     template for (constexpr auto ctor :
                   std::define_static_array(std::meta::members_of(^^T, ctx))) {
-        if constexpr (detail::is_bindable_constructor(ctor)) {
-            constexpr auto params{detail::param_types<ctor>()};
-            detail::def_init<T, params>(cls,
-                                        std::make_index_sequence<params.size()>{});
-        }
+        if constexpr (detail::is_bindable_constructor(ctor))
+            detail::def_init<ctor>(
+                cls, std::make_index_sequence<
+                         std::meta::parameters_of(ctor).size()>{});
+    }
+    // An aggregate has no user constructors, so the loop above binds none; give it
+    // a synthesized field constructor (brace-init) so Python can build it with
+    // values rather than only default-construct + assign.
+    if constexpr (detail::aggregate_initializable<T, L>()) {
+        constexpr auto fields{detail::aggregate_fields<T>()};
+        detail::def_aggregate_init<T>(
+            cls, std::make_index_sequence<fields.size()>{});
     }
 
     // --- data members + methods (T's own, plus flattened non-welded bases) ---

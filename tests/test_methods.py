@@ -43,3 +43,34 @@ def test_overloaded_method_dispatch(
     mod: ModuleType, args: tuple[int, ...], expected: int
 ) -> None:
     assert mod.Calc(10).sum(*args) == expected
+
+
+# --- argument names ---------------------------------------------------------
+def test_method_argument_is_named(mod: ModuleType) -> None:
+    # The C++ parameter name reaches Python (a keyword arg), not arg0.
+    assert mod.Counter(0).add(n=3) is None
+    assert "n: int" in mod.Counter.add.__doc__
+
+
+def test_constructor_argument_is_named(mod: ModuleType) -> None:
+    assert mod.Counter(start=9).value() == 9
+
+
+def test_free_function_arguments_are_named(mod: ModuleType) -> None:
+    assert mod.documented.add(a=2, b=3) == 5
+
+
+# --- aggregate initialization -----------------------------------------------
+def test_aggregate_field_constructor(mod: ModuleType) -> None:
+    v = mod.Vec2(1.5, 2.5)
+    assert (v.x, v.y) == (1.5, 2.5)
+
+
+def test_aggregate_keyword_constructor(mod: ModuleType) -> None:
+    v = mod.Vec2(x=1.0, y=2.0)
+    assert (v.x, v.y) == (1.0, 2.0)
+
+
+def test_aggregate_default_constructor_still_bound(mod: ModuleType) -> None:
+    v = mod.Vec2()
+    assert (v.x, v.y) == (0.0, 0.0)
