@@ -37,6 +37,14 @@ module):
     positional/all-or-nothing); methods, static methods, overloads. Function /
     method / constructor **parameter names** reach Python as keyword arguments
     (`py::arg`) when every parameter of that signature is named.
+  - **overloaded operators** → Python special methods. A *member* operator binds
+    under its dunder (`operator+` → `__add__`, `operator==` → `__eq__`,
+    `operator[]` → `__getitem__`, `operator()` → `__call__`, …), unary vs binary
+    told apart by arity so the two `operator-` forms map to `__neg__` / `__sub__`.
+    Arithmetic / bitwise / comparison / call / subscript are covered; in-place
+    compound assignment (`operator+=`) is intentionally not mapped (Python falls
+    back to `a = a + b` via `__add__`), nor are `<=>`, `&&`, `||`, `++`, `--`,
+    `operator=` (special member). *Free* (non-member) operators aren't bound yet.
   - **inheritance from public bases.** `weld` is a *discovery marker* (an
     independently-registered, module-discoverable entity), not an inheritance
     directive: the most-derived type's `weld` drives which languages bind, and a

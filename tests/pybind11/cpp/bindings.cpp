@@ -31,6 +31,7 @@ import welder;
 #include "inheritance.hpp"
 #include "namespace.hpp"
 #include "doc.hpp"
+#include "operators.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -43,4 +44,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_inheritance(m); // <-> test_inheritance.py
     register_namespace(m);   // <-> test_namespace.py
     register_doc(m);         // <-> test_doc.py
+    register_operators(m);   // <-> test_operators.py
 }

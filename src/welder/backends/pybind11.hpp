@@ -171,13 +171,58 @@ consteval bool is_bindable_constructor(std::meta::info c) {
 
 // A member function we should expose as a method, honoring the same
 // exclude/include/policy resolution as data members. Special members,
-// destructors and operators are skipped.
+// destructors and operators are skipped (operators bind separately, below).
 consteval bool is_bindable_method(std::meta::info f, lang L, policy_kind pol) {
     return std::meta::is_function(f) && !std::meta::is_constructor(f) &&
            !std::meta::is_special_member_function(f) &&
            !std::meta::is_destructor(f) && !std::meta::is_operator_function(f) &&
            std::meta::is_public(f) && !std::meta::is_deleted(f) &&
            member_bound(f, L, pol);
+}
+
+// The Python special-method ("dunder") name for a member operator, or nullptr if
+// welder does not expose that operator. Unary vs binary is told apart by arity (a
+// member operator takes 0 parameters when unary, 1 when binary), disambiguating
+// the operators that have both forms (+, -). In-place compound assignments
+// (operator+=, ...) are intentionally not mapped: Python already falls back to the
+// binary form (a += b -> a = a + b via __add__) with correct value semantics, and
+// binding __iadd__ faithfully would need a reference return policy. Likewise <=>,
+// &&, ||, ++, -- and = have no clean reflection-driven Python mapping yet.
+consteval const char* operator_dunder_of(std::meta::info f) {
+    using std::meta::operators;
+    const bool unary{std::meta::parameters_of(f).empty()};
+    switch (std::meta::operator_of(f)) {
+        case operators::op_plus:    return unary ? "__pos__" : "__add__";
+        case operators::op_minus:   return unary ? "__neg__" : "__sub__";
+        case operators::op_star:    return unary ? nullptr : "__mul__"; // unary * = deref
+        case operators::op_slash:   return "__truediv__";
+        case operators::op_percent: return "__mod__";
+        case operators::op_tilde:   return "__invert__";
+        case operators::op_caret:   return "__xor__";
+        case operators::op_ampersand: return unary ? nullptr : "__and__"; // unary & = address-of
+        case operators::op_pipe:    return "__or__";
+        case operators::op_less_less:       return "__lshift__";
+        case operators::op_greater_greater: return "__rshift__";
+        case operators::op_equals_equals:      return "__eq__";
+        case operators::op_exclamation_equals: return "__ne__";
+        case operators::op_less:           return "__lt__";
+        case operators::op_greater:        return "__gt__";
+        case operators::op_less_equals:    return "__le__";
+        case operators::op_greater_equals: return "__ge__";
+        case operators::op_parentheses:     return "__call__";
+        case operators::op_square_brackets: return "__getitem__";
+        default:                            return nullptr;
+    }
+}
+
+// A member operator we should expose as a Python special method. operator= and the
+// other special members are skipped (Python assignment isn't overloadable), as are
+// operators with no Python mapping (operator_dunder_of == nullptr).
+consteval bool is_bindable_operator(std::meta::info f, lang L, policy_kind pol) {
+    return std::meta::is_function(f) && std::meta::is_operator_function(f) &&
+           !std::meta::is_special_member_function(f) && std::meta::is_public(f) &&
+           !std::meta::is_deleted(f) && member_bound(f, L, pol) &&
+           operator_dunder_of(f) != nullptr;
 }
 
 // --- inheritance ------------------------------------------------------------
@@ -295,6 +340,14 @@ void bind_members(Cls& cls) {
                 def_function<fn>(fname, [&cls](auto&&... a) {
                     cls.def(std::forward<decltype(a)>(a)...);
                 });
+        } else if constexpr (is_bindable_operator(fn, L, pol)) {
+            // A member operator binds like a method, under its Python dunder name
+            // (operator+ -> __add__, ...). The specific overload is spliced, so
+            // unary/binary forms of - never collide.
+            constexpr const char* dunder{operator_dunder_of(fn)};
+            def_function<fn>(dunder, [&cls](auto&&... a) {
+                cls.def(std::forward<decltype(a)>(a)...);
+            });
         }
     }
 }
