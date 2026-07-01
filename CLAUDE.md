@@ -52,21 +52,24 @@ module):
     type) — never a silent skip, since binding such a type yields a dead attribute
     *and* a stub referencing an unimportable type (breaking pybind11-stubgen). The
     fix in the message: weld the type, give it a pybind11 `type_caster`, or
-    `mark::exclude` the member. Mechanism (backend-specific, in `pybind11.hpp`):
-    `needs_registration<T>` — is T's caster the generic `type_caster_base` fallback
-    (a class/enum needing a registered `class_`/`enum_`) vs. a specialized/native
-    caster? — plus a reflection-driven `stl_wrappers` table (`{^^std::vector, 1}`,
-    `{^^std::map, 2}`, `0` = all args for `tuple`/`variant`, …) matched via
+    `mark::exclude` the member. The engine is **backend-agnostic** and lives in the
+    core (`bindable.hpp`): a reflection-driven `stl_wrappers` table (`{^^std::vector,
+    1}`, `{^^std::map, 2}`, `0` = all args for `tuple`/`variant`, …) matched via
     `template_of`, which recurses the value arguments of the STL containers,
     `optional`, `pair`/`tuple`/`variant` and the smart-pointer holders (so
     `std::vector<Unwelded>` is caught, not just a bare `Unwelded`). Reflection can
     enumerate a specialization's arguments but not tell which are value-bearing vs.
     infrastructure (allocator/comparator/hasher/deleter/extent), so the per-wrapper
-    leading-arg *count* is the one thing the table still records. `bindable<T, L>()`
-    folds these: a wrapper binds iff its value args do; a registration-needing
-    class/enum binds iff `welded_for` (a user `type_caster` flips it native, so it's
-    trusted automatically). *Not* exhaustive for a non-STL wrapper with its own
-    caster — its elements aren't recursed (treated as an opaque bindable leaf).
+    leading-arg *count* is the one thing the table still records. `bindable<B, T, L>()`
+    folds these: a wrapper binds iff its value args do; a native/user-caster type
+    binds as-is; otherwise it's a registration-needing class/enum, bound iff
+    `welded_for`. The one **backend-specific** leaf — native-vs-needs-registration —
+    is the backend's `has_native_caster<T>` (`caster_oracle`); pybind11 implements it
+    as `!needs_registration<T>`, i.e. is T's caster the generic `type_caster_base`
+    fallback (needs a `class_`/`enum_`) vs. a specialized/native/user caster? (a user
+    `type_caster` flips it native, so it's trusted automatically). *Not* exhaustive
+    for a non-STL wrapper with its own caster — its elements aren't recursed (treated
+    as an opaque bindable leaf).
     Negative-compile cases live in `tests/pybind11/cpp/neg/` (`negcompile.*` CTests,
     `WILL_FAIL`). Two deferred escape hatches for types welder can't see are welded
     (e.g. hand-registered with pybind11): a `mark::trust_bindable` opt-out, and a
@@ -175,9 +178,16 @@ spec is the sentinel for "all languages".
 
 ## Architecture
 
-Language-agnostic **core** + pluggable **backends**. Adding a language = adding a
-backend header that consumes the same resolution API; the core never depends on a
-backend.
+Language-agnostic **core** + pluggable **backends**, joined by **static
+polymorphism**. The core owns *all* the reflection work — deciding **what** binds
+(`bind_traits.hpp`), whether each type is representable (`bindable.hpp`), and
+walking types/namespaces/bases to drive a binding (`backend.hpp`'s generic
+driver). A **backend** is a stateless policy struct satisfying the `welder::backend`
+concept: it supplies only the *emission primitives* (how to register a class /
+method / property / module attribute in its framework) and never re-implements
+the traversal or annotation semantics. Adding a language = writing one backend
+struct + thin public wrappers; the core is reused verbatim. The core never depends
+on a backend.
 
 `src/` is the include root, so every public include starts from `welder/`.
 
@@ -188,11 +198,14 @@ src/welder/
   annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary
   reflect.hpp           welded_for / policy_of / member_bound / public_bases — uses <meta>
   doc.hpp               doc_of / return_doc_of / param_docs / doc styles / function_docstring — uses <meta>
+  bind_traits.hpp       backend-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
+  bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>
+  backend.hpp           the `welder::backend` concept (emission contract) + generic driver (bind_type / bind_namespace_driver / build_module_driver)
   module.hpp            WELDER_MODULE(ns, backend) entry-point dispatch macro
   welder.hpp            header-only umbrella: lang+annotations+reflect+doc
   welder.cppm           the single `export module welder;` (exports vocabulary only)
   backends/
-    pybind11.hpp        pybind11 backend: bind<T> / bind_namespace / build_module
+    pybind11.hpp        pybind11 backend: struct detail::backend (emission primitives) + public bind<T> / bind_namespace / build_module wrappers over the driver
     CMakeLists.txt      target: welder::pybind11  (nanobind / lua planned here)
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
@@ -203,11 +216,42 @@ examples/
   welder_module/          whole-module binding via WELDER_MODULE
 ```
 
-`doc.hpp` is part of the reflection layer (like `reflect.hpp`): it uses `<meta>`
-and is header-only, so it is **not** part of the `welder` module and does not
-include `annotations.hpp` (the vocabulary arrives first via `import welder;` or
-`welder.hpp`). `module.hpp` is macro-only and backend-agnostic; each backend
-header defines its `WELDER_DETAIL_MODULE_ENTRY_<backend>` expansion.
+`bind_traits.hpp`, `bindable.hpp` and `backend.hpp` are part of the reflection
+layer (like `reflect.hpp`/`doc.hpp`): header-only, `<meta>`-using, **not** part of
+the `welder` module, and they do **not** include `annotations.hpp` (the vocabulary
+arrives first via `import welder;` or `welder.hpp`). `doc.hpp` follows the same
+rule. `module.hpp` is macro-only and backend-agnostic; each backend header defines
+its `WELDER_DETAIL_MODULE_ENTRY_<backend>` expansion.
+
+### The backend interface (static polymorphism)
+
+A backend is a stateless struct `B` satisfying `welder::backend` (`backend.hpp`).
+The core's generic driver (`welder::detail::bind_type` / `bind_namespace_driver` /
+`build_module_driver`) is templated on `B` and calls its members; the public
+`welder::pybind11::bind` / `bind_namespace` / `build_module` are one-line wrappers
+that plug in `pybind11::detail::backend`. `B` provides:
+
+- **Associated:** `static constexpr lang language;` the target language;
+  `using module_type = …;` the module handle; `template<class T> static constexpr
+  bool has_native_caster;` — the `caster_oracle` leaf: is `T` convertible *without*
+  welder registering a class for it? (false ⇒ welder requires `T` welded). This is
+  the one bindability fact the core can't know; the STL-wrapper recursion in
+  `bindable.hpp` is shared.
+- **Type binding:** `make_class<T, Bases…>`, `add_default_ctor`, `add_constructor<Ctor>`,
+  `add_aggregate_constructor<T>`, `add_field<Mem>`, `add_method<Fn>`,
+  `add_static_method<Fn>`, `add_operator<Fn>`, and `consteval special_method_name(op)`
+  (the operator→target-name map, e.g. pybind's `operator+`→`__add__`; nullptr =
+  not exposed, which also gates operator eligibility in the driver).
+- **Namespace/module binding:** `open_module`→ a per-(sub)module *session* (backend
+  scratch state — pybind uses it to batch live variable properties), `set_module_doc`,
+  `add_function<Fn>`, `add_variable<Var>` (const→snapshot, else a live property),
+  `add_submodule`, `close_module` (finalize the session).
+
+The concept statically checks the associated types and the module machinery; the
+class/per-member hooks are templated on a reflection, so they are
+contract-by-documentation, enforced when the driver instantiates. A nanobind
+backend is nearly a copy of the pybind11 one (same class-handle model); a Lua
+backend implements the same ~16 primitives against Lua's C API.
 
 CMake targets:
 - **`welder::headers`** — INTERFACE, the header-only core (include path + flags).

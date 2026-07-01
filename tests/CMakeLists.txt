@@ -46,6 +46,19 @@ if(WELDER_TEST_VENV_PYTHON)
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()
 
+# Backend-abstraction probe (backend-agnostic): a minimal in-file backend that
+# satisfies welder::backend using ONLY the core headers (no pybind11), driven
+# through all three generic drivers. Proves the core stays decoupled from any
+# concrete backend. Built as an EXCLUDE_FROM_ALL object library that must SUCCEED
+# to compile; the CTest builds just that target (no WILL_FAIL). Needs only the
+# compiler — no Python — so it is registered before the uv-env gate.
+add_library(welder_backend_probe OBJECT EXCLUDE_FROM_ALL core/backend_probe.cpp)
+target_compile_features(welder_backend_probe PRIVATE cxx_std_26)
+target_link_libraries(welder_backend_probe PRIVATE welder::headers)
+add_test(NAME compile.backend_probe
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_backend_probe --config $<CONFIG>)
+
 # Per-backend test trees (each builds its extensions + registers CTest).
 if(WELDER_BUILD_PYBIND11)
   add_subdirectory(pybind11)
