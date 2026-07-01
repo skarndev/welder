@@ -89,7 +89,16 @@ module):
     (trusts T everywhere, folded into `bindable()` so it also clears `T*` / `const
     T&` / `std::vector<T>`). Tested in `tests/pybind11/cpp/trust.hpp` +
     `test_trust.py`. A richer future point could map T to a stub type name
-    (`bindable_as<T>`); still TODO.
+    (`bindable_as<T>`); still TODO. **A self-contained pybind11 `type_caster<T>`**
+    (not deriving from `type_caster_base`, e.g. via `PYBIND11_TYPE_CASTER`) needs
+    *neither* weld nor trust: it displaces the fallback, so `needs_registration` is
+    false and the gate passes automatically, and the caster's `const_name` stubs the
+    member/parameter cleanly (e.g. as `float`). The one requirement (standard
+    pybind11, not welder-specific): the caster must be visible **before** welder
+    binds any type using T — gcc-16 defers the point of instantiation to end-of-TU
+    so a later caster in the *same* TU also works, but that is ill-formed-NDR to
+    rely on; keep the caster ahead of the bind. Tested in
+    `tests/pybind11/cpp/caster.hpp` + `test_caster.py`.
   - **inheritance from public bases.** `weld` is a *discovery marker* (an
     independently-registered, module-discoverable entity), not an inheritance
     directive: the most-derived type's `weld` drives which languages bind, and a

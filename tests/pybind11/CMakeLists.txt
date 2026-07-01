@@ -12,7 +12,7 @@ function(welder_add_pybind11_test_module tgt)
   Python_add_library(${tgt} MODULE WITH_SOABI
     cpp/bindings.cpp
     cpp/resolution.hpp cpp/methods.hpp cpp/inheritance.hpp cpp/namespace.hpp
-    cpp/doc.hpp cpp/operators.hpp cpp/trust.hpp)
+    cpp/doc.hpp cpp/operators.hpp cpp/trust.hpp cpp/caster.hpp)
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
   if(A_HEADER_ONLY)
