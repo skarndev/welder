@@ -63,97 +63,93 @@ inline constexpr bool needs_registration =
     std::is_base_of_v<py::detail::type_caster_base<py::detail::intrinsic_t<T>>,
                       py::detail::make_caster<T>>;
 
-// bindable is mutually recursive with wrapper_traits: a container is bindable iff
-// its elements are.
+// bindable recurses through a container's element types (below), so forward it.
 template <class T, lang L>
 consteval bool bindable();
 
-template <lang L, class... Es>
-consteval bool all_bindable() {
-    return (bindable<Es, L>() && ...);
+// The STL templates whose Python conversion is *element-wise* — the stl.h
+// containers, std::optional, pair/tuple/variant and the smart-pointer holders —
+// each paired with how many of its *leading* template arguments are value-bearing
+// (recursed): a sequence/optional/holder exposes 1, a map or pair exposes 2 (key
+// and value). A count of 0 is the sentinel for "all arguments" (tuple, variant).
+// Everything after those leading args — allocators, comparators, hashers,
+// deleters, the std::array extent — is infrastructure pybind11 never converts, so
+// it is ignored. Reflection can enumerate a specialization's arguments but cannot
+// tell which are value-bearing, so this count is the one bit of per-template
+// knowledge we record; add a row to teach welder a further wrapper. A template
+// *absent* from the table is an opaque bindable leaf (its elements are not
+// recursed) — e.g. a third-party container carrying its own caster.
+struct wrapper_spec {
+    std::meta::info tmpl;  // the class template, e.g. ^^std::vector
+    std::size_t values;    // leading arguments to recurse; 0 = all
+};
+
+consteval std::array<wrapper_spec, 18> stl_wrappers() {
+    return {{
+        {^^std::vector, 1},        {^^std::list, 1},
+        {^^std::deque, 1},         {^^std::set, 1},
+        {^^std::multiset, 1},      {^^std::unordered_set, 1},
+        {^^std::unordered_multiset, 1},
+        {^^std::map, 2},           {^^std::multimap, 2},
+        {^^std::unordered_map, 2}, {^^std::unordered_multimap, 2},
+        {^^std::optional, 1},      {^^std::shared_ptr, 1},
+        {^^std::unique_ptr, 1},    {^^std::pair, 2},
+        {^^std::array, 1},         {^^std::tuple, 0},
+        {^^std::variant, 0},
+    }};
 }
 
-// The STL templates whose Python conversion is *element-wise*: the stl.h
-// containers, std::optional, pair/tuple/variant, and the smart-pointer holders.
-// Each specialization derives from element_wrapper<Es...>, naming the
-// value-bearing type arguments to recurse (a map needs both key and value;
-// allocators, comparators, hashers and deleters are not converted, so they are
-// left out). The primary template marks a non-wrapper. A wrapper welder does not
-// list here (a third-party container with its own caster) is treated as an opaque
-// bindable leaf via needs_registration — its element types are not recursed.
-// Extend this list to teach welder about further element-wise convertible
-// templates.
-template <class T>
-struct wrapper_traits {
-    static constexpr bool is_wrapper = false;
-};
+// If `type` is a listed element-wise wrapper, the number of its leading arguments
+// to recurse (a 0 count in the table expands to all of them); otherwise -1.
+consteval long wrapper_value_count(std::meta::info type) {
+    if (!std::meta::has_template_arguments(type))
+        return -1;
+    const std::meta::info tmpl{std::meta::template_of(type)};
+    for (const wrapper_spec& w : stl_wrappers())
+        if (w.tmpl == tmpl)
+            return w.values != 0 ? static_cast<long>(w.values)
+                                 : static_cast<long>(
+                                       std::meta::template_arguments_of(type).size());
+    return -1;
+}
 
-// Shared trait body: a wrapper whose Python-relevant contents are exactly Es...,
-// hence bindable iff every one of them is. Specializations below just pick the
-// Es... for each template; the commas in their heads are ordinary C++ (no macro,
-// so no paren-escaping needed).
-template <class... Es>
-struct element_wrapper {
-    static constexpr bool is_wrapper = true;
-    template <lang L>
-    static consteval bool elems() {
-        return all_bindable<L, Es...>();
+// The first N template arguments of Type, as a splice-ready static array.
+template <std::meta::info Type, std::size_t N>
+consteval std::array<std::meta::info, N> leading_args() {
+    std::array<std::meta::info, N> out{};
+    std::size_t i{0};
+    for (auto arg : std::meta::template_arguments_of(Type)) {
+        if (i == N)
+            break;
+        out[i++] = arg;
     }
-};
+    return out;
+}
 
-template <class E, class A>
-struct wrapper_traits<std::vector<E, A>> : element_wrapper<E> {};
-template <class E, class A>
-struct wrapper_traits<std::list<E, A>> : element_wrapper<E> {};
-template <class E, class A>
-struct wrapper_traits<std::deque<E, A>> : element_wrapper<E> {};
-template <class E, class C, class A>
-struct wrapper_traits<std::set<E, C, A>> : element_wrapper<E> {};
-template <class E, class C, class A>
-struct wrapper_traits<std::multiset<E, C, A>> : element_wrapper<E> {};
-template <class E, class H, class Q, class A>
-struct wrapper_traits<std::unordered_set<E, H, Q, A>> : element_wrapper<E> {};
-template <class E, class H, class Q, class A>
-struct wrapper_traits<std::unordered_multiset<E, H, Q, A>> : element_wrapper<E> {};
-template <class K, class V, class C, class A>
-struct wrapper_traits<std::map<K, V, C, A>> : element_wrapper<K, V> {};
-template <class K, class V, class C, class A>
-struct wrapper_traits<std::multimap<K, V, C, A>> : element_wrapper<K, V> {};
-template <class K, class V, class H, class Q, class A>
-struct wrapper_traits<std::unordered_map<K, V, H, Q, A>> : element_wrapper<K, V> {};
-template <class K, class V, class H, class Q, class A>
-struct wrapper_traits<std::unordered_multimap<K, V, H, Q, A>>
-    : element_wrapper<K, V> {};
-template <class E>
-struct wrapper_traits<std::optional<E>> : element_wrapper<E> {};
-template <class E>
-struct wrapper_traits<std::shared_ptr<E>> : element_wrapper<E> {};
-template <class E, class D>
-struct wrapper_traits<std::unique_ptr<E, D>> : element_wrapper<E> {};
-template <class A, class B>
-struct wrapper_traits<std::pair<A, B>> : element_wrapper<A, B> {};
-template <class... E>
-struct wrapper_traits<std::tuple<E...>> : element_wrapper<E...> {};
-template <class... E>
-struct wrapper_traits<std::variant<E...>> : element_wrapper<E...> {};
-template <class E, std::size_t N>
-struct wrapper_traits<std::array<E, N>> : element_wrapper<E> {};
+// Every one of a wrapper's value arguments (spliced back to types) must bind.
+template <lang L, auto Args, std::size_t... I>
+consteval bool args_bindable(std::index_sequence<I...>) {
+    return (bindable<typename [:Args[I]:], L>() && ...);
+}
 
 // Can pybind11 convert T — stripped of cv/ref/pointer — to a meaningful Python
-// value? A wrapper is bindable iff its elements are; a class/enum that needs
-// registration is bindable iff it is welded for L (a class_/enum_ will exist);
-// everything else has a native or user-provided caster and binds as-is.
+// value? A listed wrapper is bindable iff its value arguments are; a class/enum
+// that needs registration is bindable iff it is welded for L (a class_/enum_ will
+// exist); everything else has a native or user-provided caster and binds as-is.
 template <class T, lang L>
 consteval bool bindable() {
-    using U = py::detail::intrinsic_t<T>;
-    if constexpr (wrapper_traits<U>::is_wrapper)
-        return wrapper_traits<U>::template elems<L>();
-    else if constexpr (needs_registration<U>)
-        // dealias: ^^U reflects the local alias, whose annotations are empty; the
-        // weld lives on the underlying type.
-        return welder::welded_for(std::meta::dealias(^^U), L);
-    else
+    // dealias: intrinsic_t<T> is a local alias whose reflection carries neither
+    // template arguments nor annotations — the underlying type does.
+    constexpr std::meta::info u{std::meta::dealias(^^py::detail::intrinsic_t<T>)};
+    constexpr long values{wrapper_value_count(u)};
+    if constexpr (values >= 0) {
+        constexpr auto args{leading_args<u, static_cast<std::size_t>(values)>()};
+        return args_bindable<L, args>(std::make_index_sequence<args.size()>{});
+    } else if constexpr (needs_registration<typename [:u:]>) {
+        return welder::welded_for(u, L);
+    } else {
         return true;
+    }
 }
 
 // Hard error the instant welder would bind an unbindable type. The offending type

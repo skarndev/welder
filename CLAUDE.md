@@ -55,10 +55,15 @@ module):
     `mark::exclude` the member. Mechanism (backend-specific, in `pybind11.hpp`):
     `needs_registration<T>` — is T's caster the generic `type_caster_base` fallback
     (a class/enum needing a registered `class_`/`enum_`) vs. a specialized/native
-    caster? — plus `wrapper_traits<T>`, which recurses the value types of the STL
-    containers, `optional`, `pair`/`tuple`/`variant` and the smart-pointer holders
-    (so `std::vector<Unwelded>` is caught, not just a bare `Unwelded`). `bindable<T,
-    L>()` folds these: a wrapper binds iff its elements do; a registration-needing
+    caster? — plus a reflection-driven `stl_wrappers` table (`{^^std::vector, 1}`,
+    `{^^std::map, 2}`, `0` = all args for `tuple`/`variant`, …) matched via
+    `template_of`, which recurses the value arguments of the STL containers,
+    `optional`, `pair`/`tuple`/`variant` and the smart-pointer holders (so
+    `std::vector<Unwelded>` is caught, not just a bare `Unwelded`). Reflection can
+    enumerate a specialization's arguments but not tell which are value-bearing vs.
+    infrastructure (allocator/comparator/hasher/deleter/extent), so the per-wrapper
+    leading-arg *count* is the one thing the table still records. `bindable<T, L>()`
+    folds these: a wrapper binds iff its value args do; a registration-needing
     class/enum binds iff `welded_for` (a user `type_caster` flips it native, so it's
     trusted automatically). *Not* exhaustive for a non-STL wrapper with its own
     caster — its elements aren't recursed (treated as an opaque bindable leaf).
