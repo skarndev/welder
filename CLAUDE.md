@@ -66,10 +66,18 @@ module):
     `welded_for`. The one **backend-specific** leaf — native-vs-needs-registration —
     is the backend's `has_native_caster<T>` (`caster_oracle`); pybind11 implements it
     as `!needs_registration<T>`, i.e. is T's caster the generic `type_caster_base`
-    fallback (needs a `class_`/`enum_`) vs. a specialized/native/user caster? (a user
-    `type_caster` flips it native, so it's trusted automatically). *Not* exhaustive
-    for a non-STL wrapper with its own caster — its elements aren't recursed (treated
-    as an opaque bindable leaf).
+    fallback (needs a `class_`/`enum_`) vs. native/self-contained? It is
+    *conservative*: a compile-time read of T's caster type, so it reports whether T
+    *needs* registration, never whether one will exist — a hand-registered
+    (`py::class_`) but non-welded type still reads needs-registration and is rejected
+    (the `trust_bindable` escape hatch below is the fix). Only a *self-contained*
+    user `type_caster` (not derived from `type_caster_base`, e.g. via
+    `PYBIND11_TYPE_CASTER`) flips native; a `type_caster_base`-derived caster still
+    needs its class registered. "Native" is also relative to the TU's includes —
+    `std::complex`/`function`/`chrono`/`filesystem::path` are native only with their
+    converter header (`<pybind11/complex.h>`, …). *Not* exhaustive for a non-STL
+    wrapper with its own caster — its elements aren't recursed (an opaque bindable
+    leaf).
     Negative-compile cases live in `tests/pybind11/cpp/neg/` (`negcompile.*` CTests,
     `WILL_FAIL`). Two deferred escape hatches for types welder can't see are welded
     (e.g. hand-registered with pybind11): a `mark::trust_bindable` opt-out, and a

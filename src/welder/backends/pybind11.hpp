@@ -41,13 +41,31 @@ namespace py = ::pybind11;
 
 namespace detail {
 
-// Whether pybind11 handles T only via *runtime class registration* — i.e. its
-// caster is the generic type_caster_base fallback rather than a specialized one.
-// True for program-defined classes and unregistered enums; false for scalars,
-// strings, the STL containers (with <pybind11/stl.h>), and — crucially — any type
-// the user gave a bespoke pybind11 type_caster (that specialization displaces the
-// fallback, so welder automatically trusts it). This is the one bindability fact
-// welder's core cannot know on its own; it drives caster_oracle below.
+// Whether pybind11 can only convert T via *runtime class registration* — i.e. its
+// caster is (or derives from) the generic type_caster_base fallback, which looks T
+// up in pybind11's registered-types map. True for program-defined classes and
+// enums; false for scalars, strings and the pybind11 wrapper types (py::object,
+// py::dict, ...). This is the one bindability fact welder's core cannot know on its
+// own; it drives caster_oracle below.
+//
+// Two things it deliberately does NOT see through — both making it *conservative*
+// (it may over-report needs-registration, never under-report):
+//   * It reads T's *caster type* at compile time, so it reports whether T *needs*
+//     a class_/enum_ — never whether one will actually exist at runtime. A class
+//     the user hand-registers with py::class_ (or a third-party library registers)
+//     but does not weld still reads true, so welder requires welded_for and rejects
+//     it: a false positive, resolved by the deferred trust_bindable escape hatch,
+//     since the out-of-band registration is invisible here.
+//   * "native" is relative to the TU's includes: std::complex / std::function /
+//     std::chrono / std::filesystem::path are native only when their converter
+//     header (<pybind11/complex.h>, functional.h, chrono.h, stl/filesystem.h) is
+//     included; otherwise they fall to the class-registration fallback. That is
+//     correct — without the header pybind11 genuinely cannot convert them.
+//
+// A user type_caster is trusted (reads false) only when it is *self-contained* —
+// it does not itself derive from type_caster_base (e.g. a PYBIND11_TYPE_CASTER
+// caster). One that derives from type_caster_base still needs T registered, so it
+// correctly still reads true.
 template <class T>
 inline constexpr bool needs_registration =
     std::is_base_of_v<py::detail::type_caster_base<py::detail::intrinsic_t<T>>,
