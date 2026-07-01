@@ -12,9 +12,20 @@
 //   PYBIND11_MODULE(mymod, m) { welder::pybind11::bind<MyType>(m); }
 //
 #include <array>
+#include <deque>
+#include <list>
+#include <map>
+#include <memory>
+#include <optional>
+#include <set>
 #include <string>
+#include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include <welder/reflect.hpp> // <meta> + resolution (welded_for, member_bound)
 #include <welder/doc.hpp>     // doc_of / function_docstring (docstring layer)
@@ -30,6 +41,133 @@ namespace welder::pybind11 {
 namespace py = ::pybind11;
 
 namespace detail {
+
+// --- bindability ("pybind11-convertible") -----------------------------------
+//
+// Before welder emits a binding for any surface (a data member, a parameter, a
+// return type, a namespace variable), it checks that pybind11 can actually turn
+// that C++ type into a *meaningful* Python value. Binding one it cannot is never
+// useful: the attribute would be uncallable from Python AND its generated .pyi
+// would reference an unimportable type, breaking pybind11-stubgen. So welder
+// makes it a hard compile error (see assert_bindable), whose remedy is to weld
+// the type, give it a pybind11 type_caster, or mark::exclude the member.
+
+// Whether pybind11 handles T only via *runtime class registration* — i.e. its
+// caster is the generic type_caster_base fallback rather than a specialized one.
+// True for program-defined classes and unregistered enums; false for scalars,
+// strings, the STL containers (with <pybind11/stl.h>), and — crucially — any type
+// the user gave a bespoke pybind11 type_caster (that specialization displaces the
+// fallback, so welder automatically trusts it).
+template <class T>
+inline constexpr bool needs_registration =
+    std::is_base_of_v<py::detail::type_caster_base<py::detail::intrinsic_t<T>>,
+                      py::detail::make_caster<T>>;
+
+// bindable is mutually recursive with wrapper_traits: a container is bindable iff
+// its elements are.
+template <class T, lang L>
+consteval bool bindable();
+
+template <lang L, class... Es>
+consteval bool all_bindable() {
+    return (bindable<Es, L>() && ...);
+}
+
+// The STL templates whose Python conversion is *element-wise*: the stl.h
+// containers, std::optional, pair/tuple/variant, and the smart-pointer holders.
+// Each specialization derives from element_wrapper<Es...>, naming the
+// value-bearing type arguments to recurse (a map needs both key and value;
+// allocators, comparators, hashers and deleters are not converted, so they are
+// left out). The primary template marks a non-wrapper. A wrapper welder does not
+// list here (a third-party container with its own caster) is treated as an opaque
+// bindable leaf via needs_registration — its element types are not recursed.
+// Extend this list to teach welder about further element-wise convertible
+// templates.
+template <class T>
+struct wrapper_traits {
+    static constexpr bool is_wrapper = false;
+};
+
+// Shared trait body: a wrapper whose Python-relevant contents are exactly Es...,
+// hence bindable iff every one of them is. Specializations below just pick the
+// Es... for each template; the commas in their heads are ordinary C++ (no macro,
+// so no paren-escaping needed).
+template <class... Es>
+struct element_wrapper {
+    static constexpr bool is_wrapper = true;
+    template <lang L>
+    static consteval bool elems() {
+        return all_bindable<L, Es...>();
+    }
+};
+
+template <class E, class A>
+struct wrapper_traits<std::vector<E, A>> : element_wrapper<E> {};
+template <class E, class A>
+struct wrapper_traits<std::list<E, A>> : element_wrapper<E> {};
+template <class E, class A>
+struct wrapper_traits<std::deque<E, A>> : element_wrapper<E> {};
+template <class E, class C, class A>
+struct wrapper_traits<std::set<E, C, A>> : element_wrapper<E> {};
+template <class E, class C, class A>
+struct wrapper_traits<std::multiset<E, C, A>> : element_wrapper<E> {};
+template <class E, class H, class Q, class A>
+struct wrapper_traits<std::unordered_set<E, H, Q, A>> : element_wrapper<E> {};
+template <class E, class H, class Q, class A>
+struct wrapper_traits<std::unordered_multiset<E, H, Q, A>> : element_wrapper<E> {};
+template <class K, class V, class C, class A>
+struct wrapper_traits<std::map<K, V, C, A>> : element_wrapper<K, V> {};
+template <class K, class V, class C, class A>
+struct wrapper_traits<std::multimap<K, V, C, A>> : element_wrapper<K, V> {};
+template <class K, class V, class H, class Q, class A>
+struct wrapper_traits<std::unordered_map<K, V, H, Q, A>> : element_wrapper<K, V> {};
+template <class K, class V, class H, class Q, class A>
+struct wrapper_traits<std::unordered_multimap<K, V, H, Q, A>>
+    : element_wrapper<K, V> {};
+template <class E>
+struct wrapper_traits<std::optional<E>> : element_wrapper<E> {};
+template <class E>
+struct wrapper_traits<std::shared_ptr<E>> : element_wrapper<E> {};
+template <class E, class D>
+struct wrapper_traits<std::unique_ptr<E, D>> : element_wrapper<E> {};
+template <class A, class B>
+struct wrapper_traits<std::pair<A, B>> : element_wrapper<A, B> {};
+template <class... E>
+struct wrapper_traits<std::tuple<E...>> : element_wrapper<E...> {};
+template <class... E>
+struct wrapper_traits<std::variant<E...>> : element_wrapper<E...> {};
+template <class E, std::size_t N>
+struct wrapper_traits<std::array<E, N>> : element_wrapper<E> {};
+
+// Can pybind11 convert T — stripped of cv/ref/pointer — to a meaningful Python
+// value? A wrapper is bindable iff its elements are; a class/enum that needs
+// registration is bindable iff it is welded for L (a class_/enum_ will exist);
+// everything else has a native or user-provided caster and binds as-is.
+template <class T, lang L>
+consteval bool bindable() {
+    using U = py::detail::intrinsic_t<T>;
+    if constexpr (wrapper_traits<U>::is_wrapper)
+        return wrapper_traits<U>::template elems<L>();
+    else if constexpr (needs_registration<U>)
+        // dealias: ^^U reflects the local alias, whose annotations are empty; the
+        // weld lives on the underlying type.
+        return welder::welded_for(std::meta::dealias(^^U), L);
+    else
+        return true;
+}
+
+// Hard error the instant welder would bind an unbindable type. The offending type
+// is the template argument of the failing instantiation, so it is named in the
+// diagnostic backtrace.
+template <class T, lang L>
+consteval void assert_bindable() {
+    static_assert(
+        bindable<T, L>(),
+        "welder: cannot bind this C++ type to Python. Weld it with "
+        "[[=welder::weld(welder::lang::py)]], or register a pybind11 type_caster "
+        "for it; otherwise mark::exclude the member that uses it. The offending "
+        "type is the template argument of this assert_bindable<T, L> instantiation.");
+}
 
 // A function's parameter *types*, as a static array of reflections (usable as a
 // non-type template argument so it can be spliced back into a pack).
@@ -65,6 +203,31 @@ consteval bool all_params_named() {
         if (!std::meta::has_identifier(p))
             return false;
     return true;
+}
+
+// Assert every parameter type of Fn binds.
+template <std::meta::info Fn, lang L, std::size_t... I>
+consteval void assert_params_bindable(std::index_sequence<I...>) {
+    static constexpr auto params{param_types<Fn>()};
+    (assert_bindable<typename [:params[I]:], L>(), ...);
+}
+
+// Assert every parameter type and the (non-void) return type of Fn binds, so the
+// function/method/operator/constructor can round-trip through Python. A
+// constructor has no return type.
+template <std::meta::info Fn, lang L>
+consteval void assert_signature_bindable() {
+    // Guard n != 0: param_types<Fn> materializes a std::array<info, n>, and
+    // std::array<info, 0>::operator[] is not consteval (it must not be
+    // instantiated for a parameterless function).
+    constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+    if constexpr (n != 0)
+        assert_params_bindable<Fn, L>(std::make_index_sequence<n>{});
+    if constexpr (!std::meta::is_constructor(Fn)) {
+        using R = [:std::meta::return_type_of(Fn):];
+        if constexpr (!std::is_void_v<R>)
+            assert_bindable<R, L>();
+    }
 }
 
 // Register the function/method reflected by Fn onto a pybind11 target. `def_into`
@@ -319,6 +482,7 @@ void bind_members(Cls& cls) {
     template for (constexpr auto mem : std::define_static_array(
                       std::meta::nonstatic_data_members_of(Src, ctx))) {
         if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
+            assert_bindable<typename [:std::meta::type_of(mem):], L>();
             constexpr const char* mname{
                 std::define_static_string(std::meta::identifier_of(mem))};
             cls.def_readwrite(mname, &[:mem:]);
@@ -328,6 +492,7 @@ void bind_members(Cls& cls) {
     template for (constexpr auto fn :
                   std::define_static_array(std::meta::members_of(Src, ctx))) {
         if constexpr (is_bindable_method(fn, L, pol)) {
+            assert_signature_bindable<fn, L>();
             constexpr const char* fname{
                 std::define_static_string(std::meta::identifier_of(fn))};
             // def_function folds in the docstring (own doc + parameter docs) and
@@ -344,6 +509,7 @@ void bind_members(Cls& cls) {
             // A member operator binds like a method, under its Python dunder name
             // (operator+ -> __add__, ...). The specific overload is spliced, so
             // unary/binary forms of - never collide.
+            assert_signature_bindable<fn, L>();
             constexpr const char* dunder{operator_dunder_of(fn)};
             def_function<fn>(dunder, [&cls](auto&&... a) {
                 cls.def(std::forward<decltype(a)>(a)...);
@@ -440,6 +606,7 @@ void bind_namespace_member(py::module_& m, py::dict& live) {
             bind<typename [:M:]>(m);
     } else if constexpr (std::meta::is_function(M)) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
+            assert_signature_bindable<M, L>();
             constexpr const char* fname{
                 std::define_static_string(std::meta::identifier_of(M))};
             def_function<M>(fname, [&m](auto&&... a) {
@@ -448,6 +615,7 @@ void bind_namespace_member(py::module_& m, py::dict& live) {
         }
     } else if constexpr (std::meta::is_variable(M)) {
         if constexpr (welded_for(M, L) && member_bound(M, L, Pol)) {
+            assert_bindable<typename [:std::meta::type_of(M):], L>();
             constexpr const char* vname{
                 std::define_static_string(std::meta::identifier_of(M))};
             if constexpr (std::meta::is_const_type(std::meta::type_of(M))) {
@@ -521,10 +689,12 @@ auto bind(py::module_& m, const char* name) {
         cls.def(py::init<>());
     template for (constexpr auto ctor :
                   std::define_static_array(std::meta::members_of(^^T, ctx))) {
-        if constexpr (detail::is_bindable_constructor(ctor))
+        if constexpr (detail::is_bindable_constructor(ctor)) {
+            detail::assert_signature_bindable<ctor, L>();
             detail::def_init<ctor>(
                 cls, std::make_index_sequence<
                          std::meta::parameters_of(ctor).size()>{});
+        }
     }
     // An aggregate has no user constructors, so the loop above binds none; give it
     // a synthesized field constructor (brace-init) so Python can build it with

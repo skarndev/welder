@@ -31,6 +31,21 @@ if(WELDER_BUILD_MODULE)
   list(APPEND _variants welder_test_pybind11)
 endif()
 
+# Negative-compile cases: welder must *reject*, with a hard compile error, any
+# attempt to bind a type pybind11 cannot convert to a meaningful Python value.
+# Each source is an EXCLUDE_FROM_ALL object library that must FAIL to compile; the
+# CTest builds just that target and is marked WILL_FAIL. These need only the
+# compiler (no Python runtime), so they are registered before the uv-env gate.
+foreach(neg operand_not_welded container_of_unwelded)
+  add_library(welder_neg_${neg} OBJECT EXCLUDE_FROM_ALL cpp/neg/${neg}.cpp)
+  target_compile_features(welder_neg_${neg} PRIVATE cxx_std_26)
+  target_link_libraries(welder_neg_${neg} PRIVATE welder::pybind11)
+  add_test(NAME negcompile.${neg}
+    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+            --target welder_neg_${neg} --config $<CONFIG>)
+  set_tests_properties(negcompile.${neg} PROPERTIES WILL_FAIL TRUE)
+endforeach()
+
 # Everything below needs the uv environment that was prepared at the tests/ root
 # (it carries pytest, mypy, and pybind11-stubgen). Without it, just build the
 # modules — they double as a compile check.

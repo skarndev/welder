@@ -45,6 +45,28 @@ module):
     compound assignment (`operator+=`) is intentionally not mapped (Python falls
     back to `a = a + b` via `__add__`), nor are `<=>`, `&&`, `||`, `++`, `--`,
     `operator=` (special member). *Free* (non-member) operators aren't bound yet.
+  - **bindability gate ("pybind11-convertible").** Every surface welder is about to
+    bind (data member, parameter, return type, namespace variable) must be a type
+    pybind11 can convert to a *meaningful* Python value; otherwise it is a **hard
+    compile error** (`static_assert` in `assert_bindable`, naming the offending
+    type) — never a silent skip, since binding such a type yields a dead attribute
+    *and* a stub referencing an unimportable type (breaking pybind11-stubgen). The
+    fix in the message: weld the type, give it a pybind11 `type_caster`, or
+    `mark::exclude` the member. Mechanism (backend-specific, in `pybind11.hpp`):
+    `needs_registration<T>` — is T's caster the generic `type_caster_base` fallback
+    (a class/enum needing a registered `class_`/`enum_`) vs. a specialized/native
+    caster? — plus `wrapper_traits<T>`, which recurses the value types of the STL
+    containers, `optional`, `pair`/`tuple`/`variant` and the smart-pointer holders
+    (so `std::vector<Unwelded>` is caught, not just a bare `Unwelded`). `bindable<T,
+    L>()` folds these: a wrapper binds iff its elements do; a registration-needing
+    class/enum binds iff `welded_for` (a user `type_caster` flips it native, so it's
+    trusted automatically). *Not* exhaustive for a non-STL wrapper with its own
+    caster — its elements aren't recursed (treated as an opaque bindable leaf).
+    Negative-compile cases live in `tests/pybind11/cpp/neg/` (`negcompile.*` CTests,
+    `WILL_FAIL`). Two deferred escape hatches for types welder can't see are welded
+    (e.g. hand-registered with pybind11): a `mark::trust_bindable` opt-out, and a
+    backend-agnostic `welder::bindable_as<T>` customization point that also feeds
+    stub type names — both TODO.
   - **inheritance from public bases.** `weld` is a *discovery marker* (an
     independently-registered, module-discoverable entity), not an inheritance
     directive: the most-derived type's `weld` drives which languages bind, and a
