@@ -34,6 +34,7 @@ import welder;
 #include "operators.hpp"
 #include "trust.hpp"
 #include "caster.hpp"
+#include "enums.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -49,4 +50,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_operators(m);   // <-> test_operators.py
     register_trust(m);       // <-> test_trust.py
     register_caster(m);      // <-> test_caster.py
+    register_enums(m);       // <-> test_enums.py
 }

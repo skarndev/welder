@@ -141,11 +141,12 @@ consteval bool aggregate_initializable() {
 
 // --- namespace-member eligibility -------------------------------------------
 
-// The member kinds welder can expose from a namespace. is_class_type throws on a
-// non-type reflection, so it is reached only after is_type; the other predicates
-// are total and safe on any reflection.
+// The member kinds welder can expose from a namespace. is_class_type/is_enum_type
+// throw on a non-type reflection, so they are reached only after is_type; the other
+// predicates are total and safe on any reflection.
 consteval bool is_bindable_kind(std::meta::info mem) {
-    return (std::meta::is_type(mem) && std::meta::is_class_type(mem)) ||
+    return (std::meta::is_type(mem) &&
+            (std::meta::is_class_type(mem) || std::meta::is_enum_type(mem))) ||
            std::meta::is_function(mem) || std::meta::is_variable(mem);
 }
 

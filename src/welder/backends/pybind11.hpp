@@ -252,6 +252,30 @@ struct backend {
         });
     }
 
+    // --- enum binding -------------------------------------------------------
+    template <class E>
+    static auto make_enum(module_type& m, const char* name, const char* doc) {
+        // A non-null doc is the enum docstring (a bare const char* extra); nullptr
+        // is branched out rather than passed (pybind11 would strdup it).
+        if (doc)
+            return py::enum_<E>(m, name, doc);
+        return py::enum_<E>(m, name);
+    }
+
+    template <std::meta::info Enum>
+    static void add_enumerator(auto& e) {
+        e.value(std::define_static_string(std::meta::identifier_of(Enum)), [:Enum:]);
+    }
+
+    template <class E>
+    static void finish_enum(auto& e) {
+        // Mirror C++ scope semantics: an unscoped enum's enumerators are visible
+        // unqualified, so export them into the enclosing scope; a scoped enum's
+        // are reached as E.Value, so leave them scoped.
+        if constexpr (!std::is_scoped_enum_v<E>)
+            e.export_values();
+    }
+
     // --- namespace / module binding -----------------------------------------
     // The session is a dict accumulating live (mutable-variable) properties;
     // install_live_properties applies them in one __class__ swap at close.
@@ -298,13 +322,17 @@ struct backend {
 
 } // namespace detail
 
-// Reflect over T and register it as a py::class_ on module `m` (see the driver in
-// <welder/backend.hpp> for the full set of what is bound). `name` defaults to the
-// identifier of T. Returns the class_ so callers can chain further pybind11
-// registrations.
+// Reflect over T and register it on module `m` (see the driver in
+// <welder/backend.hpp> for the full set of what is bound). A class type becomes a
+// py::class_; an enum becomes a py::enum_ (its enumerators resolve like data
+// members, honoring the enum's policy/marks). `name` defaults to the identifier of
+// T. Returns the class_/enum_ handle so callers can chain further registrations.
 template <class T>
 auto bind(py::module_& m, const char* name = nullptr) {
-    return welder::detail::bind_type<detail::backend, T>(m, name);
+    if constexpr (std::is_enum_v<T>)
+        return welder::detail::bind_enum<detail::backend, T>(m, name);
+    else
+        return welder::detail::bind_type<detail::backend, T>(m, name);
 }
 
 // Reflect over a whole namespace and expose its welded members on module `m`

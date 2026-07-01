@@ -45,6 +45,20 @@ module):
     compound assignment (`operator+=`) is intentionally not mapped (Python falls
     back to `a = a + b` via `__add__`), nor are `<=>`, `&&`, `||`, `++`, `--`,
     `operator=` (special member). *Free* (non-member) operators aren't bound yet.
+  - **enums** → `py::enum_`. A welded enum (scoped or unscoped) binds via `bind<E>`
+    (dispatched from the public `bind<T>` by `is_enum_v`) or as a namespace/module
+    member; the driver is `backend.hpp` `bind_enum`, the backend hooks `make_enum` /
+    `add_enumerator` / `finish_enum`. Each **enumerator resolves like a data member**
+    — the enum's `policy` (default automatic) plus per-enumerator `exclude`/`include`
+    marks decide what binds (via the same `member_bound`); NB the C++ grammar puts an
+    enumerator's annotation *after* its name (`South [[=welder::mark::exclude]]`).
+    Excluding an enumerator does not renumber the rest. An **unscoped** enum also
+    `export_values()` (enumerators visible unqualified on the enclosing module,
+    mirroring C++); a **scoped** enum stays `E.Value`. The enum `doc` becomes the
+    Python docstring; per-enumerator docs aren't supported (pybind11 `.value()` takes
+    none). An enum-typed member/parameter binds because the enum is welded (bind the
+    enum first, like a welded base). Tested: `tests/pybind11/cpp/enums.hpp` +
+    `test_enums.py`.
   - **bindability gate ("pybind11-convertible").** Every surface welder is about to
     bind (data member, parameter, return type, namespace variable) must be a type
     pybind11 can convert to a *meaningful* Python value; otherwise it is a **hard
@@ -149,8 +163,8 @@ module):
     pybind11-stubgen is pinned to its GitHub `main` branch (fixes not yet on PyPI;
     see `tests/pyproject.toml` `[tool.uv.sources]`).
 
-Enums, properties, custom type converters, and additional languages (Lua, …) are
-designed-for but **not yet implemented**.
+Properties, and additional languages (Lua, …) are designed-for but **not yet
+implemented**. (Enums and custom type converters now are — see above.)
 
 ## The idea / public API
 
@@ -268,6 +282,8 @@ that plug in `pybind11::detail::backend`. `B` provides:
   `add_static_method<Fn>`, `add_operator<Fn>`, and `consteval special_method_name(op)`
   (the operator→target-name map, e.g. pybind's `operator+`→`__add__`; nullptr =
   not exposed, which also gates operator eligibility in the driver).
+- **Enum binding:** `make_enum<E>`, `add_enumerator<Enum>`, `finish_enum<E>` (the
+  whole-enum finalizer, e.g. pybind's `export_values()` for unscoped enums).
 - **Namespace/module binding:** `open_module`→ a per-(sub)module *session* (backend
   scratch state — pybind uses it to batch live variable properties), `set_module_doc`,
   `add_function<Fn>`, `add_variable<Var>` (const→snapshot, else a live property),

@@ -70,6 +70,16 @@ struct probe_backend {
     template <std::meta::info Fn>
     static void add_operator(auto&) {}
 
+    // --- enum binding -------------------------------------------------------
+    template <class E>
+    static probe_class make_enum(module_type&, const char*, const char*) {
+        return {};
+    }
+    template <std::meta::info Enum>
+    static void add_enumerator(auto&) {}
+    template <class E>
+    static void finish_enum(auto&) {}
+
     // --- namespace / module binding -----------------------------------------
     static probe_session open_module(module_type&) { return {}; }
     static void set_module_doc(module_type&, const char*) {}
@@ -116,6 +126,8 @@ struct [[=welder::weld(welder::lang::py)]] Point { // aggregate
 [[=welder::weld(welder::lang::py)]] inline constexpr int kMax{100}; // const snapshot
 [[=welder::weld(welder::lang::py)]] inline int counter{0};          // live property
 
+enum class [[=welder::weld(welder::lang::py)]] Mode { Fast, Slow };
+
 namespace nested {
 struct [[=welder::weld(welder::lang::py)]] Inner {
     int value{0};
@@ -131,6 +143,7 @@ struct [[=welder::weld(welder::lang::py)]] Inner {
     probe_backend::module_type m{};
     welder::detail::bind_type<probe_backend, probe::Widget>(m, nullptr);
     welder::detail::bind_type<probe_backend, probe::Point>(m, nullptr);
+    welder::detail::bind_enum<probe_backend, probe::Mode>(m, nullptr);
     welder::detail::bind_namespace_driver<probe_backend, ^^probe>(m);
     welder::detail::build_module_driver<probe_backend, ^^probe>(
         m, [](probe_backend::module_type&) {},

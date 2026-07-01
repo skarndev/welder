@@ -44,6 +44,12 @@
 //         // target special-method name for a member operator, or nullptr if the
 //         // backend does not expose it (drives add_operator eligibility)
 //
+//   Enum binding (the enum handle is whatever make_enum returns; deduced):
+//     template <class E> static auto make_enum(module_type&, const char* name,
+//                                              const char* doc);
+//     template <std::meta::info Enum> static void add_enumerator(auto& e);
+//     template <class E> static void finish_enum(auto& e); // e.g. export unscoped
+//
 //   Namespace / module binding (a "session" is backend scratch state — e.g. an
 //   accumulator for deferred, batched attributes — obtained per (sub)module):
 //     static auto open_module(module_type&);              // -> session
@@ -82,8 +88,35 @@ namespace detail {
 // that is a class type binds via bind_type, and a nested namespace recurses.
 template <backend B, class T>
 auto bind_type(typename B::module_type& m, const char* name);
+template <backend B, class E>
+auto bind_enum(typename B::module_type& m, const char* name);
 template <backend B, std::meta::info Ns>
 void bind_namespace_driver(typename B::module_type& m);
+
+// Reflect over enum E and register it via backend B onto module `m`: its
+// docstring, then each enumerator that resolves as bound (an enumerator honors the
+// enum's policy and its own exclude/include marks, exactly like a data member).
+// finish_enum lets the backend apply a whole-enum finalizer — e.g. exporting an
+// unscoped enum's values into the enclosing scope, mirroring C++. `name` defaults
+// to E's identifier. Returns the backend's enum handle.
+template <backend B, class E>
+auto bind_enum(typename B::module_type& m, const char* name) {
+    constexpr lang L{B::language};
+    static_assert(welder::welded_for(^^E, L),
+                  "welder: bind<E>: enum E is not welded for this backend's "
+                  "language; annotate it with [[=welder::weld(...)]]");
+    const char* enum_name{
+        name ? name : std::define_static_string(std::meta::identifier_of(^^E))};
+    auto e{B::template make_enum<E>(m, enum_name, welder::doc_of<^^E>())};
+    constexpr policy_kind pol{policy_of(^^E)};
+    template for (constexpr auto en :
+                  std::define_static_array(std::meta::enumerators_of(^^E))) {
+        if constexpr (member_bound(en, L, pol))
+            B::template add_enumerator<en>(e);
+    }
+    B::template finish_enum<E>(e);
+    return e;
+}
 
 // Flatten the eligible public data members, methods and operators of Src onto the
 // class handle `cls` (a handle for a type deriving from Src). Non-welded (mixin)
@@ -207,6 +240,9 @@ void bind_namespace_driver(typename B::module_type& m) {
         if constexpr (std::meta::is_type(mem) && std::meta::is_class_type(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol))
                 bind_type<B, typename [:mem:]>(m, nullptr);
+        } else if constexpr (std::meta::is_type(mem) && std::meta::is_enum_type(mem)) {
+            if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol))
+                bind_enum<B, typename [:mem:]>(m, nullptr);
         } else if constexpr (std::meta::is_function(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol)) {
                 welder::assert_callable_bindable<B, mem, L>();
