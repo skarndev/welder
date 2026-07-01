@@ -138,14 +138,22 @@ consteval bool bindable() {
     // final remove_cv for a pointee's constness (`const Foo*` -> `Foo`).
     constexpr std::meta::info u{std::meta::dealias(
         ^^std::remove_cv_t<std::remove_pointer_t<std::remove_cvref_t<T>>>)};
-    constexpr long values{wrapper_value_count(u)};
-    if constexpr (values >= 0) {
-        constexpr auto args{leading_args<u, static_cast<std::size_t>(values)>()};
-        return args_bindable<B, L, args>(std::make_index_sequence<args.size()>{});
-    } else if constexpr (B::template has_native_caster<typename [:u:]>) {
+    if constexpr (welder::trust_bindable<typename [:u:]>) {
+        // Type-level escape hatch: the user vouches this type is registered /
+        // convertible outside welder's view. Checked first, and on every recursion
+        // level, so trusting `Foo` also clears `Foo*`, `const Foo&` and
+        // `std::vector<Foo>` (whose element recurses back to a trusted `Foo`).
         return true;
     } else {
-        return welder::welded_for(u, L);
+        constexpr long values{wrapper_value_count(u)};
+        if constexpr (values >= 0) {
+            constexpr auto args{leading_args<u, static_cast<std::size_t>(values)>()};
+            return args_bindable<B, L, args>(std::make_index_sequence<args.size()>{});
+        } else if constexpr (B::template has_native_caster<typename [:u:]>) {
+            return true;
+        } else {
+            return welder::welded_for(u, L);
+        }
     }
 }
 
@@ -197,6 +205,28 @@ consteval void assert_signature_bindable() {
         if constexpr (!std::is_void_v<R>)
             assert_bindable<B, R, L>();
     }
+}
+
+// --- member-aware asserts (honor the trust_bindable member mark) -------------
+//
+// The driver uses these at each emission site: they run the bindability gate on a
+// member's type / a callable's signature *unless* the member carries a
+// [[=welder::mark::trust_bindable]] mark for L, in which case the user has vouched
+// for the type and the gate is skipped. (The type-level trust_bindable<T> point is
+// folded into bindable() itself, above, so it needs no per-site handling.)
+
+// Assert the type of a data member / namespace variable binds, unless trusted.
+template <caster_oracle B, std::meta::info Member, lang L>
+consteval void assert_member_bindable() {
+    if constexpr (!welder::trusted_for(Member, L))
+        assert_bindable<B, typename [:std::meta::type_of(Member):], L>();
+}
+
+// Assert a function/method/operator/constructor signature binds, unless trusted.
+template <caster_oracle B, std::meta::info Fn, lang L>
+consteval void assert_callable_bindable() {
+    if constexpr (!welder::trusted_for(Fn, L))
+        assert_signature_bindable<B, Fn, L>();
 }
 
 } // namespace welder

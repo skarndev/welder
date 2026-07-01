@@ -107,7 +107,7 @@ void bind_members(Cls& cls) {
     template for (constexpr auto mem : std::define_static_array(
                       std::meta::nonstatic_data_members_of(Src, ctx))) {
         if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
-            welder::assert_bindable<B, typename [:std::meta::type_of(mem):], L>();
+            welder::assert_member_bindable<B, mem, L>();
             B::template add_field<mem>(cls);
         }
     }
@@ -115,7 +115,7 @@ void bind_members(Cls& cls) {
     template for (constexpr auto fn :
                   std::define_static_array(std::meta::members_of(Src, ctx))) {
         if constexpr (is_bindable_method(fn, L, pol)) {
-            welder::assert_signature_bindable<B, fn, L>();
+            welder::assert_callable_bindable<B, fn, L>();
             if constexpr (std::meta::is_static_member(fn))
                 B::template add_static_method<fn>(cls);
             else
@@ -125,7 +125,7 @@ void bind_members(Cls& cls) {
             // A member operator binds like a method, under the backend's special-
             // method name for it (operator+ -> __add__, ...). The specific overload
             // is spliced by add_operator, so unary/binary forms never collide.
-            welder::assert_signature_bindable<B, fn, L>();
+            welder::assert_callable_bindable<B, fn, L>();
             B::template add_operator<fn>(cls);
         }
     }
@@ -164,7 +164,7 @@ auto bind_type(typename B::module_type& m, const char* name) {
     template for (constexpr auto ctor :
                   std::define_static_array(std::meta::members_of(^^T, ctx))) {
         if constexpr (is_bindable_constructor(ctor)) {
-            welder::assert_signature_bindable<B, ctor, L>();
+            welder::assert_callable_bindable<B, ctor, L>();
             B::template add_constructor<ctor>(cls);
         }
     }
@@ -209,12 +209,12 @@ void bind_namespace_driver(typename B::module_type& m) {
                 bind_type<B, typename [:mem:]>(m, nullptr);
         } else if constexpr (std::meta::is_function(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol)) {
-                welder::assert_signature_bindable<B, mem, L>();
+                welder::assert_callable_bindable<B, mem, L>();
                 B::template add_function<mem>(m);
             }
         } else if constexpr (std::meta::is_variable(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol)) {
-                welder::assert_bindable<B, typename [:std::meta::type_of(mem):], L>();
+                welder::assert_member_bindable<B, mem, L>();
                 B::template add_variable<mem>(m, session);
             }
         } else if constexpr (std::meta::is_namespace(mem)) {

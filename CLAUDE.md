@@ -79,10 +79,17 @@ module):
     wrapper with its own caster — its elements aren't recursed (an opaque bindable
     leaf).
     Negative-compile cases live in `tests/pybind11/cpp/neg/` (`negcompile.*` CTests,
-    `WILL_FAIL`). Two deferred escape hatches for types welder can't see are welded
-    (e.g. hand-registered with pybind11): a `mark::trust_bindable` opt-out, and a
-    backend-agnostic `welder::bindable_as<T>` customization point that also feeds
-    stub type names — both TODO.
+    `WILL_FAIL`). Two **escape hatches** cover a type welder can't see is
+    registered (hand-written pybind11 `class_`, a third-party library's bindings) —
+    both backend-agnostic, in the core vocabulary, and suppressing the gate so the
+    user then owns the registration: a member mark `[[=welder::mark::trust_bindable]]`
+    (trusts that member's type / a callable's whole signature; `reflect.hpp`
+    `trusted_for`, honored via `bindable.hpp` `assert_member_bindable` /
+    `assert_callable_bindable`), and a type-level `welder::trust_bindable<T> = true`
+    (trusts T everywhere, folded into `bindable()` so it also clears `T*` / `const
+    T&` / `std::vector<T>`). Tested in `tests/pybind11/cpp/trust.hpp` +
+    `test_trust.py`. A richer future point could map T to a stub type name
+    (`bindable_as<T>`); still TODO.
   - **inheritance from public bases.** `weld` is a *discovery marker* (an
     independently-registered, module-discoverable entity), not an inheritance
     directive: the most-derived type's `weld` drives which languages bind, and a
@@ -167,6 +174,8 @@ PYBIND11_MODULE(mymod, m) {
 | `mark::exclude` | Exclude member from **all** welded languages. |
 | `mark::exclude(lang...)` | Exclude member from the listed languages only. |
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
+| `mark::trust_bindable` / `mark::trust_bindable(lang...)` | Vouch that this member's type (or a callable's whole signature) is representable outside welder's view (e.g. hand-registered with pybind11); suppresses the bindability gate. |
+| `trust_bindable<T> = true` | Type-level form of the above: trust `T` everywhere it appears (member, param, return, container element). A specializable `bool` variable template, not an attribute. |
 | `doc("text")` | Docstring for a class, namespace, function, or function parameter. Surfaced as the target language's `__doc__`; ignored on variables. |
 | `returns("text")` | Documents a function's return value (a `Returns:` block in its docstring). Distinct from the function's summary `doc`. |
 
@@ -204,7 +213,7 @@ src/welder/
   detail/config.hpp     WELDER_EXPORT macro (export under the module, else empty)
   lang.hpp              enum class lang                       — std-free vocabulary
   annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary
-  reflect.hpp           welded_for / policy_of / member_bound / public_bases — uses <meta>
+  reflect.hpp           welded_for / policy_of / member_bound / trusted_for / public_bases — uses <meta>
   doc.hpp               doc_of / return_doc_of / param_docs / doc styles / function_docstring — uses <meta>
   bind_traits.hpp       backend-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
   bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>

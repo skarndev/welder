@@ -32,6 +32,7 @@ import welder;
 #include "namespace.hpp"
 #include "doc.hpp"
 #include "operators.hpp"
+#include "trust.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -45,4 +46,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_namespace(m);   // <-> test_namespace.py
     register_doc(m);         // <-> test_doc.py
     register_operators(m);   // <-> test_operators.py
+    register_trust(m);       // <-> test_trust.py
 }

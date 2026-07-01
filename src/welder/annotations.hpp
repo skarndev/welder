@@ -73,9 +73,43 @@ struct include_spec {
     }
 };
 
+// --- trust_bindable: vouch that a type is representable outside welder's view --
+//
+// welder's bindability gate (see <welder/bindable.hpp>) rejects a program-defined
+// type that is not welded, because it cannot see a registration made outside
+// welder — a hand-written pybind11 `class_`, a third-party library's bindings.
+// trust_bindable is the user's vouch that such a registration exists (or that the
+// backend can otherwise convert the type), suppressing the gate. The user then owns
+// that registration; welder emits the binding trusting it will be there.
+//
+// It comes in two granularities:
+//   * member mark  [[=welder::mark::trust_bindable]]         — trust this member's
+//     type(s): the data member's type, or a function's whole signature.
+//   * type level   welder::trust_bindable<T> = true          — trust T *everywhere*
+//     it appears (member, parameter, return, container element, ...).
+// Both are language-scopable like exclude/include (the mark via a mask; the
+// type-level point via `welded_for`-style all-languages semantics — it is a plain
+// bool, so it trusts T for every language at once).
+
+struct trust_bindable_spec {
+    unsigned mask = 0; // 0 == all languages
+
+    template <class... Ls>
+    consteval trust_bindable_spec operator()(Ls... ls) const {
+        return trust_bindable_spec{lang_mask(ls...)};
+    }
+};
+
+// The type-level customization point: specialize to `true` to trust T wherever it
+// appears. Usage (at namespace scope, before binding a type that uses T):
+//   template <> inline constexpr bool welder::trust_bindable<Foo> = true;
+template <class T>
+inline constexpr bool trust_bindable = false;
+
 namespace mark {
 inline constexpr exclude_spec exclude{};
 inline constexpr include_spec include{};
+inline constexpr trust_bindable_spec trust_bindable{};
 } // namespace mark
 
 // --- doc: human-readable documentation --------------------------------------

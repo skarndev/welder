@@ -47,6 +47,18 @@ consteval bool included_for(std::meta::info member, lang L) {
     return false;
 }
 
+// Does `member` carry a trust_bindable mark covering language `L`? (The user's
+// vouch that the member's type is registered/convertible outside welder's view, so
+// the bindability gate should trust it. See <welder/annotations.hpp>.)
+consteval bool trusted_for(std::meta::info member, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(member, ^^trust_bindable_spec)) {
+        auto s{std::meta::extract<trust_bindable_spec>(a)};
+        if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
+            return true;
+    }
+    return false;
+}
+
 // The core decision a backend asks for each member.
 consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
     if (excluded_for(member, L))
