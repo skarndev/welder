@@ -12,13 +12,6 @@ WELDER_EXPORT namespace welder {
 enum class lang : unsigned char {
     py,
     lua,
-    // The C++ *documentation* surface, a pseudo-target consumed by the docs
-    // pipeline (<welder/docs.hpp>) rather than a binding backend. C++ needs no
-    // binding — every public entity is implicitly "welded" to it — so `weld`
-    // never gates it and `policy` does not apply (always automatic); the only
-    // control is mark::exclude(lang::cxx_doc) to hide an entity from the
-    // generated C++ reference.
-    cxx_doc,
 };
 
 } // namespace welder

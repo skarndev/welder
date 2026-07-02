@@ -140,8 +140,9 @@ module):
     doc (via a `function_doc` parts struct, extensible to future `Raises:`/`Note:`
     without re-breaking the style API) under a pluggable style (default
     `google_style` → `Args:`/`Returns:` blocks); surfaced as Python `__doc__`.
-    Variable docs are intentionally ignored *by binding backends* (no attribute
-    `__doc__` in Python; the C++ docs pipeline surfaces them). Doc text is stored *inline*
+    Variable docs are intentionally ignored by binding backends (no attribute
+    `__doc__` in Python); the Doxygen filter surfaces them on the C++ side. Doc
+    text is stored *inline*
     (`fixed_string`) — a `const char*` to a literal isn't a permitted annotation
     constant on gcc-16.
   - **whole-module binding** — `build_module<^^ns>(m, pre, post)` fills an
@@ -163,34 +164,6 @@ module):
     fixture). Examples opt in via `-DWELDER_STUBGEN_PYTHON=<interp>`.
     pybind11-stubgen is pinned to its GitHub `main` branch (fixes not yet on PyPI;
     see `tests/pyproject.toml` `[tool.uv.sources]`).
-  - **C++ docs pipeline** (backend-agnostic core) — documents the *C++ API
-    surface* from the same annotations, as a sibling of the binding driver:
-    `docs.hpp` holds the `doc_emitter` concept + `document_namespace/_class/_enum`
-    walker. C++ is the pseudo-target `lang::cxx_doc` with degenerate resolution:
-    **no `weld` gate** (an unwelded, C++-only entity is still documented — every
-    public entity is implicitly "welded" to C++), **`policy` never applies**
-    (always automatic; `opt_in` narrows a *binding* surface, not the C++ API),
-    and the only control is `mark::exclude(lang::cxx_doc)` — or bare
-    `mark::exclude`, whose all-languages sentinel covers it — e.g. hiding a
-    `detail` namespace. The Doxygen emitter (`docs/doxygen.hpp`) generates a
-    **shadow header**: plain C++ declarations carrying the docs as Doxygen
-    comments (`/** */`; `@param`/`@return` via `doxygen_style`, a second
-    `doc_style`; per-enumerator `///<` — which pybind11 can't express; variable
-    docs, which binding drops, surface here). Doxygen XML is an *output* format
-    (can't be fed back), so the shadow header is the integration point: a user
-    Doxyfile INPUTs the generated tree + hand-written pages and excludes the real
-    sources — the doc build never depends on Doxygen parsing C++26. Signatures
-    are reconstructed via reflection (`return_type_of`, `is_const`/`is_static_member`,
-    `symbol_of` for operator tokens, display strings for types); public bases are
-    listed on the class head, **not** flattened (C++ docs show real inheritance).
-    Entry point: `welder::docs::shadow_header<^^ns>()` → `std::string`. Skipped
-    for now: uninstantiated templates & concepts (P2996 `annotations_of` throws
-    on them — a primary's annotation is only recoverable via an instantiation),
-    free operators, static data members, nested class types. Golden-file tested:
-    `tests/docs/` (`corpus.hpp` → `expected_atelier.hpp`; CTests `docs.generate`
-    + `docs.golden`; core-only, no Python). A `welder_cxx_docs()` CMake helper
-    (stubgen-style) is TODO.
-
   - **template ↔ annotation semantics** (locked in by
     `tests/core/template_annotations.cpp`, compile-only static_asserts):
     annotations on a template *declaration* are readable through every
@@ -198,8 +171,8 @@ module):
     precedence, and including member, parameter and `weld`/mark annotations;
     `substitute()`d function/variable-template instantiations carry them too.
     Only the *uninstantiated* template (or concept) reflection refuses
-    `annotations_of` (P2996 restriction) — so the docs walker skips what it
-    cannot enumerate, but any instantiation handed to welder has full docs, and
+    `annotations_of` (P2996 restriction) — but any instantiation handed to
+    welder has full docs, and
     `weld` on a class template makes `bind<Welded<int>>(m, "name")` legitimate
     today — the explicit name is required (a specialization `has_identifier` ==
     false; the `identifier_of` name default would throw).
@@ -257,12 +230,6 @@ Resolution rule (per language `L`), in `<welder/reflect.hpp>` —
 A `lang` is stored as a bit in an `unsigned` mask; mask `0` on an exclude/include
 spec is the sentinel for "all languages".
 
-**The C++ docs pseudo-target.** `lang::cxx_doc` names the C++ documentation
-surface, consumed by the docs pipeline (`docs.hpp`) and never by a binding
-backend. Its resolution is degenerate: `weld` never gates it, policy is forced
-automatic, and only exclude marks apply (`mark::exclude(lang::cxx_doc)`, or bare
-`mark::exclude` via the all-languages sentinel).
-
 ## Architecture
 
 Language-agnostic **core** + pluggable **backends**, joined by **static
@@ -288,8 +255,6 @@ src/welder/
   bind_traits.hpp       backend-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
   bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>
   backend.hpp           the `welder::backend` concept (emission contract) + generic driver (bind_type / bind_namespace_driver / build_module_driver)
-  docs.hpp              C++-docs walker (lang::cxx_doc resolution): `doc_emitter` concept + document_namespace/_class/_enum — uses <meta>
-  docs/doxygen.hpp      Doxygen shadow-header emitter: doxygen_style + doxygen_emitter + shadow_header<^^ns>()
   module.hpp            WELDER_MODULE(ns, backend) entry-point dispatch macro
   welder.hpp            header-only umbrella: lang+annotations+reflect+doc
   welder.cppm           the single `export module welder;` (exports vocabulary only)
@@ -305,9 +270,8 @@ examples/
   welder_module/          whole-module binding via WELDER_MODULE
 ```
 
-`bind_traits.hpp`, `bindable.hpp`, `backend.hpp` and the docs pipeline
-(`docs.hpp`, `docs/doxygen.hpp`) are part of the reflection layer (like
-`reflect.hpp`/`doc.hpp`): header-only, `<meta>`-using, **not** part of
+`bind_traits.hpp`, `bindable.hpp` and `backend.hpp` are part of the reflection
+layer (like `reflect.hpp`/`doc.hpp`): header-only, `<meta>`-using, **not** part of
 the `welder` module, and they do **not** include `annotations.hpp` (the vocabulary
 arrives first via `import welder;` or `welder.hpp`). `doc.hpp` follows the same
 rule. `module.hpp` is macro-only and backend-agnostic; each backend header defines

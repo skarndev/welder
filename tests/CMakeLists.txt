@@ -72,9 +72,6 @@ add_test(NAME compile.template_annotations
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_template_annotations --config $<CONFIG>)
 
-# C++ docs pipeline (core-only; compiler is enough — no Python involved).
-add_subdirectory(docs)
-
 # Per-backend test trees (each builds its extensions + registers CTest).
 if(WELDER_BUILD_PYBIND11)
   add_subdirectory(pybind11)
