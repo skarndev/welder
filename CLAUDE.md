@@ -191,6 +191,19 @@ module):
     + `docs.golden`; core-only, no Python). A `welder_cxx_docs()` CMake helper
     (stubgen-style) is TODO.
 
+  - **template ↔ annotation semantics** (locked in by
+    `tests/core/template_annotations.cpp`, compile-only static_asserts):
+    annotations on a template *declaration* are readable through every
+    **instantiation** — with primary / partial / explicit-specialization
+    precedence, and including member, parameter and `weld`/mark annotations;
+    `substitute()`d function/variable-template instantiations carry them too.
+    Only the *uninstantiated* template (or concept) reflection refuses
+    `annotations_of` (P2996 restriction) — so the docs walker skips what it
+    cannot enumerate, but any instantiation handed to welder has full docs, and
+    `weld` on a class template makes `bind<Welded<int>>(m, "name")` legitimate
+    today — the explicit name is required (a specialization `has_identifier` ==
+    false; the `identifier_of` name default would throw).
+
 Properties, and additional languages (Lua, …) are designed-for but **not yet
 implemented**. (Enums and custom type converters now are — see above.)
 

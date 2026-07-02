@@ -59,6 +59,19 @@ add_test(NAME compile.backend_probe
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_backend_probe --config $<CONFIG>)
 
+# Template ↔ annotation semantics (compile-only): annotations on a template
+# declaration are readable through every *instantiation* (primary / partial /
+# explicit precedence; member, weld/mark and parameter annotations included) —
+# only the uninstantiated template reflection refuses annotations_of (P2996).
+# static_asserts lock the whole matrix; same compile-to-pass shape as above.
+add_library(welder_template_annotations OBJECT EXCLUDE_FROM_ALL
+  core/template_annotations.cpp)
+target_compile_features(welder_template_annotations PRIVATE cxx_std_26)
+target_link_libraries(welder_template_annotations PRIVATE welder::headers)
+add_test(NAME compile.template_annotations
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_template_annotations --config $<CONFIG>)
+
 # C++ docs pipeline (core-only; compiler is enough — no Python involved).
 add_subdirectory(docs)
 
