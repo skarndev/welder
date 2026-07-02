@@ -17,9 +17,9 @@ import pytest
 
 @pytest.mark.mypy_testing
 def mypy_test_data_members_keep_their_cpp_types() -> None:
-    import welder_test
+    from welder_test import resolution
 
-    v = welder_test.Values()
+    v = resolution.Values()
     reveal_type(v.i)  # R: int
     reveal_type(v.d)  # R: float
     reveal_type(v.s)  # R: str
@@ -27,19 +27,19 @@ def mypy_test_data_members_keep_their_cpp_types() -> None:
 
 @pytest.mark.mypy_testing
 def mypy_test_constructors_methods_and_statics() -> None:
-    import welder_test
+    from welder_test import methods
 
-    reveal_type(welder_test.Counter().value())  # R: int
-    reveal_type(welder_test.Counter(5).value())  # R: int
-    reveal_type(welder_test.Counter.version())  # R: int
+    reveal_type(methods.Counter().value())  # R: int
+    reveal_type(methods.Counter(5).value())  # R: int
+    reveal_type(methods.Counter.version())  # R: int
 
 
 @pytest.mark.mypy_testing
 def mypy_test_overloaded_method_return() -> None:
-    import welder_test
+    from welder_test import methods
 
-    reveal_type(welder_test.Calc(10).sum(5))  # R: int
-    reveal_type(welder_test.Calc(10).sum(5, 5))  # R: int
+    reveal_type(methods.Calc(10).sum(5))  # R: int
+    reveal_type(methods.Calc(10).sum(5, 5))  # R: int
 
 
 @pytest.mark.mypy_testing

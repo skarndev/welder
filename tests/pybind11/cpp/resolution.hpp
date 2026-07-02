@@ -11,6 +11,10 @@
 // the module-form build the vocabulary arrives via `import welder;`).
 #include <string>
 
+// The cases live in namespace `resolution`, bound under a `resolution` submodule
+// via welder::pybind11::bind_namespace so the Python package mirrors this file.
+namespace resolution {
+
 // --- automatic policy: bind everything unless excluded ----------------------
 
 struct
@@ -105,9 +109,9 @@ protected:
     int guarded{0};
 };
 
+} // namespace resolution
+
 inline void register_resolution(pybind11::module_& m) {
-    welder::pybind11::bind<Automatic>(m);
-    welder::pybind11::bind<OptIn>(m);
-    welder::pybind11::bind<Values>(m);
-    welder::pybind11::bind<Access>(m);
+    auto sub{m.def_submodule("resolution")};
+    welder::pybind11::bind_namespace<^^resolution>(sub);
 }

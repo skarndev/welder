@@ -5,8 +5,15 @@ which members are exposed — lives in test_resolution.py).
 from __future__ import annotations
 
 from types import ModuleType
+from typing import cast
 
 import pytest
+
+
+@pytest.fixture()
+def meth(mod: ModuleType) -> ModuleType:
+    # The cases bind under the `methods` submodule (C++ side: namespace `methods`).
+    return cast(ModuleType, mod.methods)
 
 
 @pytest.mark.parametrize(
@@ -16,20 +23,20 @@ import pytest
         pytest.param((5,), 5, id="int-constructor"),
     ],
 )
-def test_constructor(mod: ModuleType, args: tuple[int, ...], expected_value: int) -> None:
-    assert mod.Counter(*args).value() == expected_value
+def test_constructor(meth: ModuleType, args: tuple[int, ...], expected_value: int) -> None:
+    assert meth.Counter(*args).value() == expected_value
 
 
-def test_method_mutation(mod: ModuleType) -> None:
-    c = mod.Counter(0)
+def test_method_mutation(meth: ModuleType) -> None:
+    c = meth.Counter(0)
     c.increment()
     c.increment()
     c.add(10)
     assert c.value() == 12
 
 
-def test_static_method(mod: ModuleType) -> None:
-    assert mod.Counter.version() == 7
+def test_static_method(meth: ModuleType) -> None:
+    assert meth.Counter.version() == 7
 
 
 @pytest.mark.parametrize(
@@ -40,37 +47,39 @@ def test_static_method(mod: ModuleType) -> None:
     ],
 )
 def test_overloaded_method_dispatch(
-    mod: ModuleType, args: tuple[int, ...], expected: int
+    meth: ModuleType, args: tuple[int, ...], expected: int
 ) -> None:
-    assert mod.Calc(10).sum(*args) == expected
+    assert meth.Calc(10).sum(*args) == expected
 
 
 # --- argument names ---------------------------------------------------------
-def test_method_argument_is_named(mod: ModuleType) -> None:
+def test_method_argument_is_named(meth: ModuleType) -> None:
     # The C++ parameter name reaches Python (a keyword arg), not arg0.
-    assert mod.Counter(0).add(n=3) is None
-    assert "n: int" in mod.Counter.add.__doc__
+    assert meth.Counter(0).add(n=3) is None
+    assert "n: int" in meth.Counter.add.__doc__
 
 
-def test_constructor_argument_is_named(mod: ModuleType) -> None:
-    assert mod.Counter(start=9).value() == 9
+def test_constructor_argument_is_named(meth: ModuleType) -> None:
+    assert meth.Counter(start=9).value() == 9
 
 
 def test_free_function_arguments_are_named(mod: ModuleType) -> None:
+    # A free function borrowed from the `documented` submodule: its C++ parameter
+    # names reach Python as keyword arguments.
     assert mod.documented.add(a=2, b=3) == 5
 
 
 # --- aggregate initialization -----------------------------------------------
-def test_aggregate_field_constructor(mod: ModuleType) -> None:
-    v = mod.Vec2(1.5, 2.5)
+def test_aggregate_field_constructor(meth: ModuleType) -> None:
+    v = meth.Vec2(1.5, 2.5)
     assert (v.x, v.y) == (1.5, 2.5)
 
 
-def test_aggregate_keyword_constructor(mod: ModuleType) -> None:
-    v = mod.Vec2(x=1.0, y=2.0)
+def test_aggregate_keyword_constructor(meth: ModuleType) -> None:
+    v = meth.Vec2(x=1.0, y=2.0)
     assert (v.x, v.y) == (1.0, 2.0)
 
 
-def test_aggregate_default_constructor_still_bound(mod: ModuleType) -> None:
-    v = mod.Vec2()
+def test_aggregate_default_constructor_still_bound(meth: ModuleType) -> None:
+    v = meth.Vec2()
     assert (v.x, v.y) == (0.0, 0.0)

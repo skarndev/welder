@@ -10,20 +10,29 @@ caster's Python form (here a ``float``). C++ side: tests/pybind11/cpp/caster.hpp
 from __future__ import annotations
 
 from types import ModuleType
+from typing import cast
+
+import pytest
 
 from conftest import public_attrs
 
 
-def test_custom_caster_member_binds_and_roundtrips(mod: ModuleType) -> None:
-    obj = mod.Sample()
+@pytest.fixture()
+def caster(mod: ModuleType) -> ModuleType:
+    # The cases bind under the `caster` submodule (C++ side: namespace `caster`).
+    return cast(ModuleType, mod.caster)
+
+
+def test_custom_caster_member_binds_and_roundtrips(caster: ModuleType) -> None:
+    obj = caster.Sample()
     assert {"temperature", "sensor"} <= public_attrs(obj)
     # the member reads/writes as a plain float, through the caster
     obj.temperature = 21.5
     assert obj.temperature == 21.5
 
 
-def test_custom_caster_in_method_signature(mod: ModuleType) -> None:
-    obj = mod.Sample()
+def test_custom_caster_in_method_signature(caster: ModuleType) -> None:
+    obj = caster.Sample()
     obj.temperature = 20.0
     # parameter and return both go through the caster (float in, float out)
     assert obj.warmer(1.5) == 21.5

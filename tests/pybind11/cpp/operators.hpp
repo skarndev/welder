@@ -4,7 +4,14 @@
 // binary arithmetic, the unary-vs-binary disambiguation of operator-, comparison,
 // and subscript.
 //
+// The cases live in namespace `operators`, bound under an `operators` submodule
+// via welder::pybind11::bind_namespace so the Python package mirrors this file.
+// (The free operator+ below is non-welded, so bind_namespace skips it — which is
+// exactly the "free operators aren't bound yet" case it documents.)
+//
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+
+namespace operators {
 
 struct
 [[=welder::weld(welder::lang::py)]]
@@ -112,11 +119,10 @@ OpOptIn {
     OpOptIn operator-(const OpOptIn& o) const { return OpOptIn{v - o.v}; } // __sub__ (unmarked -> not bound)
 };
 
+} // namespace operators
+
 inline void register_operators(pybind11::module_& m) {
-    welder::pybind11::bind<Vec>(m);
-    welder::pybind11::bind<Feet>(m);
-    welder::pybind11::bind<Meters>(m);
-    welder::pybind11::bind<Coin>(m);
-    welder::pybind11::bind<OpAutomatic>(m);
-    welder::pybind11::bind<OpOptIn>(m);
+    // Declaration order binds Feet before Meters (Meters::operator+ takes a Feet).
+    auto sub{m.def_submodule("operators")};
+    welder::pybind11::bind_namespace<^^operators>(sub);
 }

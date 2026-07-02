@@ -2,7 +2,12 @@
 // Constructors & methods — mirrors tests/test_methods.py. Also home to `Counter`,
 // which the "methods resolve the same way" cases in test_resolution.py rely on.
 //
+// The cases live in namespace `methods`, bound under a `methods` submodule via
+// welder::pybind11::bind_namespace so the Python package mirrors this file.
+//
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+
+namespace methods {
 
 // --- constructors + methods -------------------------------------------------
 
@@ -75,8 +80,9 @@ Vec2 {
     double y{0.0};
 };
 
+} // namespace methods
+
 inline void register_methods(pybind11::module_& m) {
-    welder::pybind11::bind<Counter>(m);
-    welder::pybind11::bind<Calc>(m);
-    welder::pybind11::bind<Vec2>(m);
+    auto sub{m.def_submodule("methods")};
+    welder::pybind11::bind_namespace<^^methods>(sub);
 }

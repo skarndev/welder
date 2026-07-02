@@ -4,12 +4,18 @@
 // WELDER_TEST_MODNAME so each build produces a distinct importable module.
 //
 // The cases are split into one header per Python test file, in the same order and
-// with section banners that line up with the .py side:
-//   resolution.hpp  <-> tests/test_resolution.py
-//   methods.hpp     <-> tests/test_methods.py
-//   inheritance.hpp <-> tests/test_inheritance.py
-//   namespace.hpp   <-> tests/test_namespace.py
-//   doc.hpp         <-> tests/test_doc.py
+// with section banners that line up with the .py side. Each header wraps its cases
+// in a namespace and binds them under a same-named submodule (via bind_namespace /
+// build_module), so the Python package structure mirrors this file layout:
+//   resolution.hpp  <-> tests/test_resolution.py   (submodule `resolution`)
+//   methods.hpp     <-> tests/test_methods.py       (submodule `methods`)
+//   inheritance.hpp <-> tests/test_inheritance.py   (submodule `inheritance`)
+//   namespace.hpp   <-> tests/test_namespace.py     (submodule `catalog`)
+//   doc.hpp         <-> tests/test_doc.py           (submodule `documented`)
+//   operators.hpp   <-> tests/test_operators.py     (submodule `operators`)
+//   trust.hpp       <-> tests/test_trust.py         (submodule `trust`)
+//   caster.hpp      <-> tests/test_caster.py        (submodule `caster`)
+//   enums.hpp       <-> tests/test_enums.py         (submodule `enums`)
 #include <cstdint>
 #include <string>
 

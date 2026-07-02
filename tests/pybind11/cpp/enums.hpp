@@ -8,7 +8,12 @@
 // E.Value; an unscoped enum also exports its values into the enclosing scope,
 // mirroring C++.
 //
+// The cases live in namespace `enums`, bound under an `enums` submodule via
+// welder::pybind11::bind_namespace so the Python package mirrors this file.
+//
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+
+namespace enums {
 
 // scoped enum, automatic policy: all enumerators bound except the excluded one.
 enum class
@@ -49,9 +54,11 @@ Compass {
     Direction facing;
 };
 
+} // namespace enums
+
 inline void register_enums(pybind11::module_& m) {
-    welder::pybind11::bind<Direction>(m); // bind enums before the struct using them
-    welder::pybind11::bind<Signal>(m);
-    welder::pybind11::bind<Level>(m);
-    welder::pybind11::bind<Compass>(m);
+    // Whole namespace under an `enums` submodule. bind_namespace visits members in
+    // declaration order, so each enum is bound before Compass, which uses one.
+    auto sub{m.def_submodule("enums")};
+    welder::pybind11::bind_namespace<^^enums>(sub);
 }

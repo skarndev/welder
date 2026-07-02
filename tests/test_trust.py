@@ -10,17 +10,26 @@ mark ``[[=welder::mark::trust_bindable]]`` or the type-level customization point
 from __future__ import annotations
 
 from types import ModuleType
+from typing import cast
+
+import pytest
 
 from conftest import public_attrs
 
 
+@pytest.fixture()
+def trust(mod: ModuleType) -> ModuleType:
+    # The cases bind under the `trust` submodule (C++ side: namespace `trust`).
+    return cast(ModuleType, mod.trust)
+
+
 # --- member-mark trust ------------------------------------------------------
-def test_member_mark_binds_a_hand_registered_member(mod: ModuleType) -> None:
-    obj = mod.TrustsMember()
+def test_member_mark_binds_a_hand_registered_member(trust: ModuleType) -> None:
+    obj = trust.TrustsMember()
     # The trusted member is present alongside the ordinary one.
     assert {"item", "count"} <= public_attrs(obj)
     # It round-trips through the hand-registered pybind11 type.
-    handmade = mod.Handmade()
+    handmade = trust.Handmade()
     handmade.n = 7
     obj.item = handmade
     assert obj.item.n == 7
@@ -28,26 +37,26 @@ def test_member_mark_binds_a_hand_registered_member(mod: ModuleType) -> None:
     assert obj.count == 3
 
 
-def test_member_mark_trusts_a_method_signature(mod: ModuleType) -> None:
+def test_member_mark_trusts_a_method_signature(trust: ModuleType) -> None:
     # The mark on a method trusts its whole signature (here the return type).
-    obj = mod.TrustsMember()
+    obj = trust.TrustsMember()
     assert "make" in public_attrs(obj)
     assert obj.make(4).n == 4
 
 
 # --- type-level trust -------------------------------------------------------
-def test_type_level_trust_binds_a_plain_member(mod: ModuleType) -> None:
-    obj = mod.TrustsType()
+def test_type_level_trust_binds_a_plain_member(trust: ModuleType) -> None:
+    obj = trust.TrustsType()
     assert "item" in public_attrs(obj)
-    handmade = mod.Handmade2()
+    handmade = trust.Handmade2()
     handmade.n = 5
     obj.item = handmade
     assert obj.item.n == 5
 
 
-def test_type_level_trust_clears_a_container_of_the_trusted_type(mod: ModuleType) -> None:
+def test_type_level_trust_clears_a_container_of_the_trusted_type(trust: ModuleType) -> None:
     # vector<Handmade2> binds because the wrapper table recurses to the trusted leaf.
-    obj = mod.TrustsType()
+    obj = trust.TrustsType()
     assert "many" in public_attrs(obj)
-    obj.many = [mod.Handmade2(), mod.Handmade2()]
+    obj.many = [trust.Handmade2(), trust.Handmade2()]
     assert len(obj.many) == 2

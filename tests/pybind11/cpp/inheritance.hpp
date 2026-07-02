@@ -4,7 +4,14 @@
 // register_inheritance binds bases before the types that derive from them
 // (pybind11 requires a native base to be registered first).
 //
+// The cases live in namespace `inheritance`, bound under an `inheritance`
+// submodule via welder::pybind11::bind_namespace so the Python package mirrors
+// this file. bind_namespace visits members in declaration order, so each welded
+// base is registered before the types that derive from it.
+//
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+
+namespace inheritance {
 
 // --- native inheritance from a welded base ----------------------------------
 
@@ -121,17 +128,10 @@ Bottom : public Left, public Right {
     int bottom_field{23};
 };
 
+} // namespace inheritance
+
 inline void register_inheritance(pybind11::module_& m) {
-    // Native bases must be registered before the types that derive from them.
-    welder::pybind11::bind<Base>(m);
-    welder::pybind11::bind<Derived>(m);
-    welder::pybind11::bind<Mid>(m);
-    welder::pybind11::bind<Leaf>(m);
-    welder::pybind11::bind<WithMixin>(m);
-    welder::pybind11::bind<Welded>(m);
-    welder::pybind11::bind<Through>(m);
-    welder::pybind11::bind<Apex>(m);
-    welder::pybind11::bind<Left>(m);
-    welder::pybind11::bind<Right>(m);
-    welder::pybind11::bind<Bottom>(m);
+    // Declaration order registers each native base before its derived types.
+    auto sub{m.def_submodule("inheritance")};
+    welder::pybind11::bind_namespace<^^inheritance>(sub);
 }

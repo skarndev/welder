@@ -10,9 +10,14 @@
 // Compile counterpart of the negcompile cases: without trust, using an unregistered
 // type is a hard error (tests/pybind11/cpp/neg/); with it, it compiles and binds.
 //
+// The cases live in namespace `trust`, bound under a `trust` submodule via
+// welder::pybind11::bind_namespace so the Python package mirrors this file.
+//
 // #included by bindings.cpp *after* the welder vocabulary and the pybind11 backend
 // are in scope; this header deliberately does not include them itself.
 #include <vector>
+
+namespace trust {
 
 // A plain type welder never sees welded; register_trust hand-registers it with
 // pybind11 before binding the structs that use it.
@@ -42,9 +47,6 @@ TrustsMember {
 struct Handmade2 {
     int n{0};
 };
-// Vouch for Handmade2 wherever it appears (member, container element, ...).
-template <>
-inline constexpr bool welder::trust_bindable<Handmade2> = true;
 
 struct
 [[=welder::weld(welder::lang::py)]]
@@ -58,16 +60,24 @@ TrustsType {
     int count{0};
 };
 
+} // namespace trust
+
+// Vouch for trust::Handmade2 wherever it appears (member, container element, ...).
+// The specialization of welder::trust_bindable must sit outside namespace `trust`
+// (it specializes a member of namespace `welder`), so it follows the block above.
+template <>
+inline constexpr bool welder::trust_bindable<trust::Handmade2> = true;
+
 inline void register_trust(pybind11::module_& m) {
     namespace py = pybind11;
-    // Hand-register the trusted types BEFORE binding the structs that use them:
-    // pybind11 needs the class registered when welder's def_readwrite runs.
-    py::class_<Handmade>(m, "Handmade")
+    auto sub{m.def_submodule("trust")};
+    // Hand-register the trusted types into the submodule BEFORE binding the structs
+    // that use them: pybind11 needs the class registered when def_readwrite runs.
+    py::class_<trust::Handmade>(sub, "Handmade")
         .def(py::init<>())
-        .def_readwrite("n", &Handmade::n);
-    py::class_<Handmade2>(m, "Handmade2")
+        .def_readwrite("n", &trust::Handmade::n);
+    py::class_<trust::Handmade2>(sub, "Handmade2")
         .def(py::init<>())
-        .def_readwrite("n", &Handmade2::n);
-    welder::pybind11::bind<TrustsMember>(m);
-    welder::pybind11::bind<TrustsType>(m);
+        .def_readwrite("n", &trust::Handmade2::n);
+    welder::pybind11::bind_namespace<^^trust>(sub);
 }
