@@ -164,6 +164,40 @@ module):
     fixture). Examples opt in via `-DWELDER_STUBGEN_PYTHON=<interp>`.
     pybind11-stubgen is pinned to its GitHub `main` branch (fixes not yet on PyPI;
     see `tests/pyproject.toml` `[tool.uv.sources]`).
+  - **C++ docs via a Doxygen INPUT_FILTER** (`tools/welder-doxygen-filter.py`) —
+    the C++ API documents itself from the *real sources*. Background: Doxygen's
+    native parser copes with the C++26 sources but silently discards `[[=…]]`
+    annotations, and it has **no plugin system** — its extension point is
+    `INPUT_FILTER`, a per-file program whose stdout is what Doxygen parses
+    (disk untouched). The filter translates the doc vocabulary into Doxygen
+    comments: `doc` → `/** … */`, `returns` → `@return`, `tparam` → `@tparam`;
+    `weld`/`policy`/`mark`/`trust_bindable` are stripped (doc *scope* control
+    is Doxygen-native — `EXCLUDE_SYMBOLS`). Robustness (a real scanner, not
+    regexes): comments, string/char literals and raw strings are skipped when
+    locating `[[ … ]]` blocks, so annotation-shaped text in a string or a
+    commented-out line is untouched; a block's extent is bracket- and
+    literal-aware (`]]` inside doc text can't end it); mixed blocks are split
+    at top level and the non-welder elements (`[[nodiscard]]`,
+    `[[deprecated("…")]]`, foreign annotations) are re-emitted in place.
+    Placement is positional (probed): keyword-position annotations hoist
+    before `struct`/`class`/`union`/`enum [class]`/`namespace` *and* before
+    `template <…>` head(s); parameter docs become trailing `/**< */` before
+    the parameter's top-level `,`/`)` (angles/braces/strings tracked, so
+    `std::map<K, V> x = {{1, "one"}}` survives); enumerator docs become
+    trailing `/**<`; anything else becomes a preceding `/** */` block, indent
+    preserved. **Templates document naturally** — the filter is textual, so
+    annotations inside templates translate like anywhere else (reflection
+    cannot read an uninstantiated template; the filter doesn't care). That is
+    the dedupe story: one annotation on/in a template feeds the C++ reference
+    *and* — via instantiation reflection — the bound instantiation's runtime
+    docstring. Known limits (documented conventions): annotations must be
+    spelled `welder::`-qualified (no namespace alias); a `<` *expression* in a
+    default argument can confuse the parameter scan. Usage: `INPUT_FILTER =
+    "python3 …/welder-doxygen-filter.py"` (or `FILTER_PATTERNS` per
+    extension). Tested in `tests/doxyfilter/`: a hostile corpus (never
+    compiled) → committed golden (`doxyfilter.golden`, python3-only) plus an
+    attachment e2e asserting every doc text lands in Doxygen XML
+    (`doxyfilter.doxygen`, self-skips without doxygen).
   - **template ↔ annotation semantics** (locked in by
     `tests/core/template_annotations.cpp`, compile-only static_asserts):
     annotations on a template *declaration* are readable through every
@@ -215,6 +249,7 @@ PYBIND11_MODULE(mymod, m) {
 | `trust_bindable<T> = true` | Type-level form of the above: trust `T` everywhere it appears (member, param, return, container element). A specializable `bool` variable template, not an attribute. |
 | `doc("text")` | Docstring for a class, namespace, function, or function parameter. Surfaced as the target language's `__doc__`; ignored on variables. |
 | `returns("text")` | Documents a function's return value (a `Returns:` block in its docstring). Distinct from the function's summary `doc`. |
+| `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). Rides on the *template itself* — template parameters aren't reflectable entities. Becomes `@tparam` in the C++ docs (Doxygen filter); read back via `tparam_docs<Ent>()` off an instantiation for backend docstrings. |
 
 **Naming deviation from the original sketch:** the sketch used
 `welder::policy::auto`, but `auto` is a reserved keyword, so welder spells it
@@ -264,6 +299,8 @@ src/welder/
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
+tools/
+  welder-doxygen-filter.py     Doxygen INPUT_FILTER: welder annotations → Doxygen comments
 examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only
