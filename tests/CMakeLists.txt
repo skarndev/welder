@@ -59,6 +59,9 @@ add_test(NAME compile.backend_probe
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_backend_probe --config $<CONFIG>)
 
+# C++ docs pipeline (core-only; compiler is enough — no Python involved).
+add_subdirectory(docs)
+
 # Per-backend test trees (each builds its extensions + registers CTest).
 if(WELDER_BUILD_PYBIND11)
   add_subdirectory(pybind11)
