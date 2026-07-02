@@ -72,6 +72,9 @@ add_test(NAME compile.template_annotations
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_template_annotations --config $<CONFIG>)
 
+# Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
+add_subdirectory(doxyfilter)
+
 # Per-backend test trees (each builds its extensions + registers CTest).
 if(WELDER_BUILD_PYBIND11)
   add_subdirectory(pybind11)
