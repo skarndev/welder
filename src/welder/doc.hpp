@@ -56,6 +56,51 @@ consteval const char* return_doc_of() {
     return annotation_text_of<Fn, ^^return_doc_spec>();
 }
 
+// One documented template parameter of an entity: the parameter's name (as
+// spelled in the tparam annotation) and its doc text. Both have static storage.
+struct tparam_doc {
+    const char* name{nullptr};
+    const char* text{nullptr};
+};
+
+// How many `tparam` annotations `Ent` carries (they are repeatable and keep
+// declaration order, unlike the single-shot doc/returns specs).
+template <std::meta::info Ent>
+consteval decltype(sizeof(0)) tparam_count() {
+    decltype(sizeof(0)) n{0};
+    for (auto a : std::meta::annotations_of(Ent)) {
+        auto t{std::meta::type_of(a)};
+        if (std::meta::has_template_arguments(t) &&
+            std::meta::template_of(t) == ^^tparam_spec)
+            ++n;
+    }
+    return n;
+}
+
+// The template-parameter docs declared on `Ent` via [[=welder::tparam("T","…")]],
+// in annotation order. NB P2996 refuses annotations_of on an *uninstantiated*
+// template, so on gcc-16 these read off a concrete entity — in practice an
+// instantiation, which inherits the governing declaration's annotations (see
+// tests/core/template_annotations.cpp). The Doxygen filter reads the same
+// annotations textually, so the C++ docs need no instantiation.
+template <std::meta::info Ent>
+consteval auto tparam_docs() {
+    std::array<tparam_doc, tparam_count<Ent>()> out{};
+    decltype(sizeof(0)) i{0};
+    template for (constexpr auto a :
+                  std::define_static_array(std::meta::annotations_of(Ent))) {
+        constexpr std::meta::info t{std::meta::type_of(a)};
+        if constexpr (std::meta::has_template_arguments(t) &&
+                      std::meta::template_of(t) == ^^tparam_spec) {
+            using spec_type = [:t:];
+            constexpr auto spec{std::meta::extract<spec_type>(a)};
+            out[i++] = tparam_doc{std::define_static_string(spec.name.data),
+                                  std::define_static_string(spec.text.data)};
+        }
+    }
+    return out;
+}
+
 // One function parameter's documentation: its identifier (nullptr if unnamed)
 // and its `doc` text (nullptr if undocumented).
 struct param_doc {

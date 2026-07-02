@@ -164,4 +164,31 @@ consteval return_doc_spec<N> returns(const char (&s)[N]) {
     return return_doc_spec<N>{fixed_string<N>{s}};
 }
 
+// A template parameter is not a reflectable entity either (P2996 exposes no
+// template-parameter API), so — like a return value — its documentation rides
+// on the *template itself*, as a repeatable annotation naming the parameter:
+//
+//   template <class K, class V>
+//   struct [[=welder::doc("A dictionary."),
+//            =welder::tparam("K", "the key type"),
+//            =welder::tparam("V", "the mapped type")]] Dict { ... };
+//
+// Consumers: the Doxygen INPUT_FILTER renders each as a `@tparam K text` line
+// in the hoisted comment; reflection reads them back via tparam_docs()
+// (<welder/doc.hpp>) — off an *instantiation*, since P2996 refuses
+// annotations_of on the uninstantiated template — so a binding backend can fold
+// them into a bound instantiation's docstring (not wired up yet).
+//
+// Usage: [[=welder::tparam("T", "what T is")]] on a class/function template.
+template <decltype(sizeof(0)) N, decltype(sizeof(0)) M>
+struct tparam_spec {
+    fixed_string<N> name;
+    fixed_string<M> text;
+};
+
+template <decltype(sizeof(0)) N, decltype(sizeof(0)) M>
+consteval tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M]) {
+    return tparam_spec<N, M>{fixed_string<N>{name}, fixed_string<M>{text}};
+}
+
 } // namespace welder

@@ -67,6 +67,15 @@ T twice([[=welder::doc("the value")]] T x) { return x + x; }
 template <class T>
 [[=welder::doc("The zero of T.")]] constexpr T zero{};
 
+// 9. repeatable tparam docs riding on the template declaration
+template <class K, class V>
+struct [[=welder::doc("A dictionary."),
+         =welder::tparam("K", "the key type"),
+         =welder::tparam("V", "the mapped type")]] Dict {
+    K key;
+    V value;
+};
+
 } // namespace probe
 
 namespace {
@@ -123,6 +132,16 @@ static_assert(streq(twice_params[0].text, "the value"));
 static_assert(streq(
     welder::doc_of<std::meta::substitute(^^probe::zero, {^^double})>(),
     "The zero of T."));
+
+// 9. tparam docs (repeatable, ordered) read through an instantiation
+constexpr auto dict_tparams{welder::tparam_docs<^^probe::Dict<int, double>>()};
+static_assert(dict_tparams.size() == 2);
+static_assert(streq(dict_tparams[0].name, "K"));
+static_assert(streq(dict_tparams[0].text, "the key type"));
+static_assert(streq(dict_tparams[1].name, "V"));
+static_assert(streq(dict_tparams[1].text, "the mapped type"));
+// an entity with no tparam annotations yields an empty array
+static_assert(welder::tparam_docs<^^probe::Box<double>>().size() == 0);
 
 // 8. a specialization has no identifier; the template's is one hop away
 static_assert(!std::meta::has_identifier(^^probe::Box<int>));
