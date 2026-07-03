@@ -21,7 +21,7 @@
     {
       "name": "welder-gcc16",
       "configurePreset": "welder-gcc16",
-      "output": { "verbosity": "verbose" }
+      "output": { "outputOnFailure": true }
     }
   ]
 }

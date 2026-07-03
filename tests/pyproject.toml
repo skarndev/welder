@@ -24,7 +24,6 @@ pybind11-stubgen = { git = "https://github.com/pybind/pybind11-stubgen", branch 
 
 [tool.pytest.ini_options]
 testpaths = ["."]
-addopts = "-v"
 
 [tool.mypy]
 python_version = "3.14"
