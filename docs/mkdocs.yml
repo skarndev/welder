@@ -1,0 +1,111 @@
+site_name: welder
+site_description: >-
+  Generate language bindings for annotated C++ types from C++26 reflection —
+  no external code generator, no parsing step.
+site_author: welder authors
+copyright: Built from the real sources by welder's own Doxygen filter.
+
+# Content lives in content/; the site is assembled by CMake (mkdocs build -d …),
+# which also drops the Doxygen C++ reference into <site>/reference/.
+docs_dir: content
+
+theme:
+  name: material
+  # welder = welding: a spark palette (deep-orange / amber) with a light+dark toggle.
+  palette:
+    # Two entries, each carrying a media query: the initial theme follows the OS,
+    # the toggle flips between them, and both are branded deep-orange (no separate
+    # "system" entry, which Material would force back to indigo).
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep orange
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    logo: material/fire
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - def_list
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.keys
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Guide:
+      - guide/index.md
+      - Getting started: guide/getting-started.md
+      - Annotation vocabulary: guide/annotations.md
+      - Binding a type: guide/binding-types.md
+      - Enums: guide/enums.md
+      - Inheritance: guide/inheritance.md
+      - Namespaces & modules: guide/namespaces-modules.md
+      - Docstrings: guide/docstrings.md
+      - The bindability gate: guide/bindability.md
+      - Trust & type casters: guide/trust-casters.md
+      - Generating C++ docs: guide/cpp-docs.md
+  - Architecture: architecture.md
+  - C++ API Reference: reference.md

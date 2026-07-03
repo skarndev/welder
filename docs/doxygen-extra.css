@@ -1,0 +1,29 @@
+/* welder tweaks over doxygen-awesome-css: retune the accent to the spark palette
+   (deep-orange / amber) so the C++ reference matches the mkdocs-material guide.
+   Loaded last in HTML_EXTRA_STYLESHEET, so these win. */
+
+html {
+    --primary-color:        #e64a19;   /* deep orange 700 */
+    --primary-dark-color:   #bf360c;
+    --primary-light-color:  #ff7043;
+    --primary-lighter-color: #ffab91;
+    --primary-lightest-color: #fbe9e5;
+
+    /* Warm the fragment/keyword highlights a touch. */
+    --fragment-keyword:     #bf360c;
+    --page-secondary-foreground-color: #7a5c50;
+}
+
+html.dark-mode {
+    --primary-color:        #ff7043;
+    --primary-dark-color:   #ff8a65;
+    --primary-light-color:  #e64a19;
+    --primary-lighter-color: #5a2a1a;
+    --primary-lightest-color: #3a1c12;
+}
+
+/* Match the guide's rounded, tactile code blocks. */
+div.fragment,
+pre.fragment {
+    border-radius: 0.5rem;
+}

@@ -243,6 +243,40 @@ module):
     (`doxyfilter.doxygen`, self-skips without doxygen). The `doxyfilter-html`
     target (in ALL when doxygen is present) renders the filtered corpus to
     `build/…/tests/doxyfilter/html/index.html` for eyeballing.
+  - **the documentation site** (`docs/`, gated by `WELDER_BUILD_DOCS`, default
+    **OFF**) — one modern site, two toolchains cleanly separated, wired by
+    `docs/CMakeLists.txt`:
+    - **mkdocs-material** renders the hand-written narrative *guide* (public API
+      with runnable examples, architecture) from `docs/content/*.md` (branded to a
+      deep-orange/amber "spark" palette with a light/dark toggle that follows the
+      OS; `content/stylesheets/extra.css` for the few tweaks Material doesn't own).
+      `docs/mkdocs.yml` is the config (`docs_dir: content`; superfences+mermaid,
+      tabbed, admonitions, code copy/annotate).
+    - **Doxygen** renders the *full C++ reference* — public API **and** `detail/`
+      internals **and** every template/concept (`EXTRACT_ALL`/`EXTRACT_PRIVATE`/
+      `INTERNAL_DOCS`, source browser on) — from the real `src/welder/**.hpp`
+      through the **same INPUT_FILTER** as above, so `[[=welder::doc/returns/
+      tparam]]` come through. `docs/Doxyfile.in` (configured), landing on
+      `docs/api_mainpage.md` (`USE_MDFILE_AS_MAINPAGE`). Themed with
+      **doxygen-awesome-css** (v2.3.4, git-cloned into the build dir at configure
+      time — degrades gracefully to the stock theme on network/`git` failure),
+      sidebar-only layout + a dark-mode toggle wired via a build-time-generated,
+      patched header (`docs/patch_doxygen_header.py`; failure → stock header, still
+      the base awesome theme); `docs/doxygen-extra.css` retunes its accent to the
+      same spark palette. NB the sources are commented with plain `//` today, so
+      the reference is *structurally* complete (every symbol + source) but sparse
+      on per-symbol prose until `///`/annotations are added — which then flow in
+      automatically.
+    - Both run from an **isolated uv env** (`docs/pyproject.toml` → mkdocs-material
+      + lark; `docs/uv.lock` committed like `tests/`), the same interpreter used
+      for the Doxygen filter (the one guaranteed to have `lark`). The Doxygen HTML
+      lands in `<build>/docs/site/api/` next to the mkdocs guide; the guide's
+      `reference.md` links out to it.
+    - **Targets:** `welder-docs` (mkdocs build — which cleans `site/` — *then*
+      Doxygen into `site/api/`; order matters, so both are steps of one target) →
+      `<build>/docs/site/index.html`; `welder-docs-serve` (`mkdocs serve` the guide
+      for live editing, reference is build-only). Both self-skip (with a warning)
+      if `doxygen`/`uv` are absent. Graphviz (`dot`) is optional (class graphs).
   - **template ↔ annotation semantics** (locked in by
     `tests/core/template_annotations.cpp`, compile-only static_asserts):
     annotations on a template *declaration* are readable through every
@@ -351,6 +385,15 @@ examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only
   welder_module/          whole-module binding via WELDER_MODULE
+docs/                     the documentation site (gated by WELDER_BUILD_DOCS, OFF)
+  CMakeLists.txt          targets welder-docs / welder-docs-serve; provisions the uv env, fetches doxygen-awesome, patches the Doxygen header
+  mkdocs.yml              mkdocs-material config (docs_dir: content)
+  content/                the narrative guide (index, guide/*, architecture, reference) + stylesheets/extra.css
+  Doxyfile.in             configured → Doxygen C++ reference (src/welder/** via the INPUT_FILTER) into site/api/
+  api_mainpage.md         the Doxygen landing page (USE_MDFILE_AS_MAINPAGE)
+  doxygen-extra.css       spark-palette retune over doxygen-awesome-css
+  patch_doxygen_header.py injects the doxygen-awesome dark-mode/extension JS into the generated header
+  pyproject.toml/uv.lock  isolated docs env: mkdocs-material + lark
 ```
 
 `bind_traits.hpp`, `bindable.hpp` and `backend.hpp` are part of the reflection
@@ -474,6 +517,15 @@ PYTHONPATH=build/welder-gcc16/examples/python_poc \
   python3 -c "import welder_poc as w; p=w.Point(); p.x=1.5; print(p.x)"
 PYTHONPATH=build/welder-gcc16/examples/python_poc_headeronly \
   python3 -c "import welder_poc_ho as w; print(hasattr(w.Label(), 'cache'))"  # False
+```
+
+The documentation site (needs `doxygen` + `uv`; off by default):
+
+```bash
+cmake --preset welder-gcc16 -DWELDER_BUILD_DOCS=ON   # configure: syncs the uv docs env, fetches doxygen-awesome
+cmake --build --preset welder-gcc16 --target welder-docs
+# open build/welder-gcc16/docs/site/index.html   (guide);  .../site/api/index.html (C++ reference)
+cmake --build --preset welder-gcc16 --target welder-docs-serve   # live-reload the guide while writing prose
 ```
 
 ## Conventions

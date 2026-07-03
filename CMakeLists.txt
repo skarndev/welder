@@ -10,6 +10,7 @@ option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_EXAMPLES "Build examples" ON)
 option(WELDER_BUILD_TESTS "Build tests" ON)
 option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built pybind11 modules" ON)
+option(WELDER_BUILD_DOCS "Build the documentation site (mkdocs + Doxygen reference)" OFF)
 
 # Reusable CMake helpers (e.g. welder_pybind11_generate_stubs).
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
@@ -40,4 +41,11 @@ endif()
 if(WELDER_BUILD_TESTS AND WELDER_BUILD_PYBIND11)
   enable_testing()
   add_subdirectory(tests)
+endif()
+
+# The documentation site. Off by default: it needs doxygen + a Python with mkdocs
+# (provisioned via uv), none of which the library build itself requires. Wholly
+# self-contained under docs/ and never touches the compiler flags above.
+if(WELDER_BUILD_DOCS)
+  add_subdirectory(docs)
 endif()

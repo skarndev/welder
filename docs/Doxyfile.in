@@ -1,0 +1,82 @@
+# Doxyfile for welder's C++ API reference (configured by docs/CMakeLists.txt).
+#
+# Reads the *real* headers under src/welder/ through welder's own INPUT_FILTER
+# (tools/welder_doxygen_filter.py), so the [[=welder::doc/returns/tparam]]
+# annotations become Doxygen comments. Output is themed with doxygen-awesome-css
+# and lands in <site>/api/ next to the mkdocs guide.
+
+PROJECT_NAME           = "welder"
+PROJECT_NUMBER         = "@PROJECT_VERSION@"
+PROJECT_BRIEF          = "Bindings for annotated C++ types, from C++26 reflection"
+
+OUTPUT_DIRECTORY       = @DOXYGEN_OUTPUT_DIR@
+GENERATE_HTML          = YES
+HTML_OUTPUT            = api
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+
+# --- Inputs: the whole library, internals included ---------------------------
+INPUT                  = @WELDER_SRC@ \
+                         @DOXYGEN_MAINPAGE@
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.md
+USE_MDFILE_AS_MAINPAGE = @DOXYGEN_MAINPAGE@
+# The C++20 module unit is not Doxygen-parseable and only re-exports vocabulary.
+EXCLUDE_PATTERNS       = */welder.cppm
+
+# Read welder annotations via the INPUT_FILTER (needs a Python with `lark`).
+INPUT_FILTER           = "@WELDER_FILTER_PYTHON@ @WELDER_FILTER@"
+
+# --- What to extract: everything, including detail/ and templates ------------
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+EXTRACT_ANON_NSPACES   = YES
+INTERNAL_DOCS          = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+SHOW_HEADERFILE        = YES
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# --- C++ / preprocessing -----------------------------------------------------
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+BUILTIN_STL_SUPPORT    = YES
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+# Strip the module-export marker so it doesn't shadow the following declaration.
+PREDEFINED             = "WELDER_EXPORT=" \
+                         "__cpp_reflection=1"
+
+# --- Diagnostics: internals are intentionally under-documented ---------------
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = NO
+
+# --- Graphs (only when Graphviz is present) ----------------------------------
+HAVE_DOT               = @DOXYGEN_HAVE_DOT@
+DOT_IMAGE_FORMAT       = svg
+INTERACTIVE_SVG        = YES
+CLASS_GRAPH            = YES
+COLLABORATION_GRAPH    = NO
+UML_LOOK               = YES
+
+# --- Modern theme: doxygen-awesome-css (sidebar layout) ----------------------
+# doxygen-awesome requires LIGHT here and supplies its own dark-mode toggle.
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+HTML_COLORSTYLE        = LIGHT
+HTML_COLORSTYLE_HUE    = 14
+HTML_COLORSTYLE_SAT    = 90
+HTML_COPY_CLIPBOARD    = NO
+HTML_HEADER            = @DOXYGEN_HTML_HEADER@
+HTML_EXTRA_STYLESHEET  = @DOXYGEN_HTML_EXTRA_STYLESHEET@
+HTML_EXTRA_FILES       = @DOXYGEN_HTML_EXTRA_FILES@

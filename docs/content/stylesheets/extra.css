@@ -1,0 +1,45 @@
+/* welder — spark palette refinements over mkdocs-material.
+   The base hue (deep-orange primary, amber accent) comes from the `palette`
+   entries in mkdocs.yml so Material owns it natively; here we only tighten a few
+   things Material doesn't, so the guide reads like one system with the
+   doxygen-awesome reference. */
+
+/* Slightly larger, calmer landing hero (the h1 on index). */
+.md-typeset h1 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* Cards: a hair of lift + a warm hover border, so the grid feels tactile. */
+.md-typeset .grid.cards > :is(ul, ol) > li,
+.md-typeset .grid > .card {
+  border-radius: 0.5rem;
+  transition: border-color 125ms, box-shadow 125ms, transform 125ms;
+}
+.md-typeset .grid.cards > :is(ul, ol) > li:hover {
+  border-color: var(--md-accent-fg-color);
+  box-shadow: 0 0 0 1px var(--md-accent-fg-color);
+  transform: translateY(-1px);
+}
+
+/* Inline code: a touch of warmth so identifiers stand out in prose. */
+.md-typeset code {
+  border-radius: 0.25rem;
+}
+
+/* Tables read denser and cleaner for the vocabulary/reference matrices. */
+.md-typeset table:not([class]) th {
+  background: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+}
+
+/* Mermaid diagrams: center and give them room. */
+.md-typeset .mermaid {
+  margin: 1.5em auto;
+  text-align: center;
+}
+
+/* A subtle spark on the header title. */
+.md-header__topic .md-ellipsis {
+  font-weight: 700;
+}

@@ -1,0 +1,98 @@
+# Trust & type casters
+
+The [bindability gate](bindability.md) is conservative on purpose: it rejects any
+program-defined type it can't see welded, because a registration made *outside*
+welder (a hand-written pybind11 `class_`, a third-party library's bindings) is
+invisible to a compile-time caster read. There are three ways to satisfy it.
+
+## 1. `mark::trust_bindable` — trust one member
+
+A member mark vouches for **that member's type** (or, on a method, the whole
+signature). welder skips the gate there; you then own the registration.
+
+```cpp
+struct Handmade { int n{0}; };          // welder never sees this welded
+
+struct [[=welder::weld(welder::lang::py)]]
+TrustsMember {
+    [[=welder::mark::trust_bindable]]   // trust this member's type
+    Handmade item;
+
+    int count{0};
+
+    [[=welder::mark::trust_bindable]]   // also trusts a *method's* whole signature
+    Handmade make(int n) const { return Handmade{n}; }
+};
+```
+
+You must register `Handmade` with pybind11 by hand **before** binding the struct
+that uses it.
+
+## 2. `trust_bindable<T> = true` — trust a type everywhere
+
+The type-level form is a specializable `bool` variable template (not an attribute).
+It trusts `T` **everywhere** it appears — member, parameter, return, *and* container
+element, because it folds into `bindable()` itself:
+
+```cpp
+struct Handmade2 { int n{0}; };
+
+template <> constexpr bool welder::trust_bindable<Handmade2> = true;
+
+struct [[=welder::weld(welder::lang::py)]]
+TrustsType {
+    Handmade2 item;                     // trusted → bound
+    std::vector<Handmade2> many;        // also cleared: recursion hits a trusted leaf
+    int count{0};
+};
+```
+
+!!! tip "Which trust to reach for"
+
+    Use the **member mark** for a one-off. Use the **type-level** point when a type
+    appears in many places and is always registered elsewhere — it also clears
+    `T*`, `const T&`, and `std::vector<T>` in one stroke.
+
+## 3. A self-contained `type_caster<T>` — no trust needed
+
+If you give `T` a **self-contained** pybind11 `type_caster` — one that does *not*
+derive from `type_caster_base` (e.g. via `PYBIND11_TYPE_CASTER`) — it displaces the
+fallback caster. Now `needs_registration<T>` is *false*, the gate passes
+**automatically**, and the caster's `const_name` even stubs the member/parameter
+cleanly (e.g. as `float`). No weld, no trust.
+
+```cpp
+struct Celsius { double t; };
+
+namespace pybind11::detail {
+template <> struct type_caster<Celsius> {
+    PYBIND11_TYPE_CASTER(Celsius, const_name("float"));
+    bool load(handle src, bool) { value.t = src.cast<double>(); return true; }
+    static handle cast(const Celsius& c, return_value_policy, handle) {
+        return PyFloat_FromDouble(c.t);
+    }
+};
+}  // namespace pybind11::detail
+```
+
+!!! warning "The caster must be visible before the bind"
+
+    Standard pybind11, not welder-specific: the caster has to be in scope **before**
+    welder binds any type using `T`. (gcc-16 happens to defer instantiation to
+    end-of-TU so a later caster in the *same* TU also works — but relying on that is
+    ill-formed-NDR. Keep the caster ahead of the bind.)
+
+    A caster that *does* derive from `type_caster_base` still needs its class
+    registered — only a self-contained one flips the type to native.
+
+## Summary
+
+| Mechanism | Scope | Who registers `T` |
+|---|---|---|
+| `mark::trust_bindable` | one member / one signature | you (by hand, before the bind) |
+| `trust_bindable<T> = true` | `T` everywhere (incl. `T*`, `T&`, `vector<T>`) | you (by hand, before the bind) |
+| self-contained `type_caster<T>` | `T` everywhere | the caster *is* the conversion |
+
+A future `bindable_as<T>` mapping T to a stub type name is still TODO.
+
+Next: [Generating C++ docs](cpp-docs.md).
