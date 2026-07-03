@@ -260,10 +260,19 @@ module):
       `docs/api_mainpage.md` (`USE_MDFILE_AS_MAINPAGE`). Themed with
       **doxygen-awesome-css** (v2.3.4, git-cloned into the build dir at configure
       time — degrades gracefully to the stock theme on network/`git` failure),
-      sidebar-only layout + a dark-mode toggle wired via a build-time-generated,
-      patched header (`docs/patch_doxygen_header.py`; failure → stock header, still
-      the base awesome theme); `docs/doxygen-extra.css` retunes its accent to the
-      same spark palette. Every `src/welder/**.hpp` now carries `/** */` Doxygen
+      sidebar-only layout. `docs/patch_doxygen_header.py` (build-time; failure →
+      stock header, still the base awesome theme) injects a **top bar** on every
+      reference page: a `← welder docs` backlink to the guide home
+      (`$relpath^../index.html`) and a **visible** light/dark toggle. NB awesome's
+      auto-inserted toggle lands next to `#MSearchBox`, which the sidebar-only
+      layout hides — so we don't call its `.init()`; the toggle script's static
+      constructor still applies the OS/localStorage theme on load (matching the
+      guide's auto mode) and we place + drive the button ourselves. `HTML_COLORSTYLE`
+      stays `LIGHT` with **default HUE/SAT** (custom values bake warm,
+      non-theme-adapting colors like `#EEE1DD`/cyan into doxygen.css/navtree.css);
+      `docs/doxygen-extra.css` retunes the accent to the spark palette, styles
+      `::selection` (unset by doxygen/awesome → else unreadable in dark mode), and
+      tames doxygen's literal-cyan jump-to-anchor `.glow`. Every `src/welder/**.hpp` now carries `/** */` Doxygen
       blocks (first-sentence autobrief, `@param`/`@tparam`/`@return`, trailing
       `/**< */` on members/enumerators; function-body comments stay `//`), so the
       reference renders full prose for the public API *and* internals — a
