@@ -17,7 +17,7 @@ dev = [
     "mypy>=1.13",
     "pytest-mypy-testing>=0.1",
     "pybind11-stubgen",
-    # for tools/welder-doxygen-filter.py (the doxyfilter tests run it with
+    # for tools/welder_doxygen_filter.py (the doxyfilter tests run it with
     # this venv's interpreter)
     "lark>=1.2",
 ]

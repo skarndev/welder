@@ -164,7 +164,7 @@ module):
     fixture). Examples opt in via `-DWELDER_STUBGEN_PYTHON=<interp>`.
     pybind11-stubgen is pinned to its GitHub `main` branch (fixes not yet on PyPI;
     see `tests/pyproject.toml` `[tool.uv.sources]`).
-  - **C++ docs via a Doxygen INPUT_FILTER** (`tools/welder-doxygen-filter.py`) —
+  - **C++ docs via a Doxygen INPUT_FILTER** (`tools/welder_doxygen_filter.py`) —
     the C++ API documents itself from the *real sources*. Background: Doxygen's
     native parser copes with the C++26 sources but silently discards `[[=…]]`
     annotations, and it has **no plugin system** — its extension point is
@@ -173,14 +173,21 @@ module):
     comments: `doc` → `/** … */`, `returns` → `@return`, `tparam` → `@tparam`;
     `weld`/`policy`/`mark`/`trust_bindable` are stripped (doc *scope* control
     is Doxygen-native — `EXCLUDE_SYMBOLS`). The parsing lives in a **Lark
-    grammar** (`tools/welder-doxygen-filter.lark`, needs `pip install lark`),
+    grammar** (`tools/welder_doxygen_filter.lark`, needs `pip install lark`),
     two layers sharing one lexer: layer 1 lexes the *C++ lexical soup* —
     comments, string/char literals, raw strings (delimiter by backreference)
     are single **atomic tokens**, so annotation-shaped text in a string or a
-    commented-out line is invisible downstream, and lexing is **total**
-    (one-char `PUNCT` catch-all: any bytes lex); layer 2 parses one block's
+    commented-out line is invisible downstream; lexing is **total** (one-char
+    `PUNCT` catch-all: any bytes lex); `<<`/`>>`/`<=`/`>=`/`<=>`/`->` are
+    **maximal-munch `OP` tokens** so shifts/comparisons/spaceship/arrow can
+    never be mistaken for template angles (and a `>>` closes *two* angles,
+    the C++11 rule); backslash-newline **line splices** are honored in line
+    comments and string/char literals (and correctly *not* in raw strings);
+    layer 2 parses one block's
     content (`start='attr_list'`): top-level comma split with nested balanced
-    groups, elements classified in the driver — welder docs translated, other
+    groups, elements classified in the driver — welder docs translated
+    (adjacent string literals concatenate, phase-6 style; `=::welder::…`
+    recognized), other
     welder specs stripped, non-welder elements (`[[nodiscard]]`,
     `[[deprecated("…")]]`, foreign annotations) re-emitted in place. Block
     *extents* stay a small token scan in the driver — deliberately not
@@ -194,20 +201,40 @@ module):
     build can never crash on someone's code, worst case it loses welder
     annotations for that file. Placement stays positional in the driver
     (probed): keyword-position annotations hoist before
-    `struct`/`class`/`union`/`enum [class]`/`namespace` *and* before
-    `template <…>` head(s); parameter docs become trailing `/**< */` before
-    the parameter's top-level `,`/`)` (angles/braces/strings tracked, so
-    `std::map<K, V> x = {{1, "one"}}` survives); enumerator docs become
-    trailing `/**<`; anything else becomes a preceding `/** */` block, indent
+    `struct`/`class`/`union`/`enum [class]`/`namespace`, before
+    `template <…>` head(s), *and* before a **requires-clause** between head
+    and keyword (all constraint endings: `)`, a concept-id's `>`/`>>`,
+    `&&`-chains, `requires requires`; conservative bail-out); parameter docs
+    become trailing `/**< */` before
+    the parameter's top-level `,`/`)` — the `<` **template-angle vs
+    less-than ambiguity** is resolved by *tentative matching* (`angle_probe`:
+    a `<` after an identifier counts as angles only when a matching `>`
+    plausibly closes it — rejects on `;`, top-level `=`, or the enclosing
+    construct ending first), so `std::map<K, V> x = {{1, "one"}}` *and*
+    default arguments like `flags = 1 << 4`, `wide = sizeof(int) < 8` all
+    survive; enumerator/member docs become trailing `/**<`, placed **after
+    the initializer** when one follows (`Low [[…]] = 1` → `Low = 1 /**< */`;
+    before the `=` Doxygen mis-parses it for members); anything else becomes
+    a preceding `/** */` block, indent
     preserved. **Templates document naturally** — the filter is textual, so
     annotations inside templates translate like anywhere else (reflection
     cannot read an uninstantiated template; the filter doesn't care). That is
     the dedupe story: one annotation on/in a template feeds the C++ reference
     *and* — via instantiation reflection — the bound instantiation's runtime
     docstring. Known limits (documented conventions): annotations must be
-    spelled `welder::`-qualified (no namespace alias); a `<` *expression* in a
-    default argument can confuse the parameter scan. Usage: `INPUT_FILTER =
-    "python3 …/welder-doxygen-filter.py"` (or `FILTER_PATTERNS` per
+    spelled `welder::`-qualified (`::welder::` works, a namespace *alias*
+    does not); the filter is preprocessor-blind (annotations in macro bodies
+    transform textually; a parameter list split across `#if` branches can
+    misplace a param doc). One *Doxygen*-side limit (probed 1.16/1.17, not a
+    filter defect — the golden proves our output right): a **bare
+    unparenthesized `<` comparison in a default argument** derails Doxygen's
+    own parameter parsing, losing that parameter's doc and the rest of that
+    list — write `(sizeof(T) < 8)`, as the corpus `clash()` does; the corpus
+    `bare()` case tracks the loss (e2e `DOXYGEN_LOSES`, flips visibly if a
+    future Doxygen fixes it). NB Doxygen auto-links doc words matching
+    entity names (`<ref>`) and entity-escapes `&<>`, so the e2e greps a
+    tag-stripped, entity-decoded view of the XML. Usage: `INPUT_FILTER =
+    "python3 …/welder_doxygen_filter.py"` (or `FILTER_PATTERNS` per
     extension). Tested in `tests/doxyfilter/` (run with the uv venv Python,
     which pins `lark`): two byte-exact goldens — `doxyfilter.golden.corpus`
     (placement) and `doxyfilter.golden.hostile` (fail-safety; that corpus
@@ -318,8 +345,8 @@ src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
 tools/
-  welder-doxygen-filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
-  welder-doxygen-filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
+  welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
+  welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
 examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only

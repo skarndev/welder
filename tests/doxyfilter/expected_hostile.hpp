@@ -40,7 +40,7 @@ int unbalanced;
 //     does must be deterministic and crash-free (golded below)
 const char* broken_raw = R"never(closed
 
-int after_broken_raw;
+int after_broken_raw /**< after the broken raw string */;
 
 // (10) unterminated [[ at end of file
-struct [[=welder::weld(welder::lang::py) Dangling {}; /**< after the broken raw string */
+struct [[=welder::weld(welder::lang::py) Dangling {};

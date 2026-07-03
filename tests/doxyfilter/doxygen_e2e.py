@@ -7,7 +7,9 @@ that the filter emitted them — placement is the fragile part).
 usage: doxygen_e2e.py <doxygen> <filter.py> <corpus.hpp> <workdir>
 """
 import glob
+import html
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -59,6 +61,34 @@ MUST = [
     "Reflection-parameterized.",
     "Splice-typed member holder.",
     "spliced-type member",
+    # the `<` ambiguity: shifts/comparisons in default arguments must not
+    # swallow the parameter's comma (each doc attaches to ITS parameter)
+    "Angles, comparisons and shifts, one signature.",
+    "shift, not angles",
+    "comparison, not angles",
+    "real template arguments",
+    "angles closed by >>",
+    "Requires nested-angle struct.",
+    # adjacent string literals concatenate (phase 6)
+    "Concatenated doc text.",
+    # trailing docs on initialized enumerators/members go after the initializer
+    "Levels.",
+    "lowest level",
+    "Defaults holder.",
+    "post-initializer doc",
+    # the bare-comparison function's own brief still attaches...
+    "Bare comparison function.",
+]
+
+# ...but texts here are ones DOXYGEN ITSELF loses (probed, 1.16): a bare,
+# unparenthesized `<` comparison in a default argument derails Doxygen's own
+# parameter parsing — it drops that parameter's doc and the rest of the list
+# (parenthesizing repairs it; see clash() in the corpus). The filter's output
+# for these is still correct and golden-locked; attachment is reported here
+# but not asserted either way, so a Doxygen version that fixes it doesn't
+# break the test — just watch for these flipping to attached.
+DOXYGEN_LOSES = [
+    "bare comparison param",
 ]
 
 
@@ -78,10 +108,17 @@ QUIET = YES
     subprocess.run([doxygen, 'Doxyfile'], cwd=wd, check=True)
     xml = "".join(open(f, encoding='utf-8').read()
                   for f in glob.glob(str(wd / 'xml' / '*.xml')))
-    missing = [m for m in MUST if m not in xml]
+    # Compare against a tag-stripped, entity-decoded view: Doxygen auto-links
+    # words matching entity names (<ref>Defaults</ref> holder.) and escapes
+    # &/</> in doc text, so the raw XML never contains such texts verbatim.
+    plain = html.unescape(re.sub(r'<[^>]+>', '', xml))
+    missing = [m for m in MUST if m not in plain]
     for m in missing:
         print('MISSING from Doxygen XML:', repr(m))
     print(f'{len(MUST) - len(missing)}/{len(MUST)} doc texts attached')
+    for m in DOXYGEN_LOSES:  # informational: known Doxygen-side losses
+        state = 'attached (!)' if m in plain else 'lost, as expected'
+        print(f'known Doxygen limit: {m!r} — {state}')
     return 1 if missing else 0
 
 

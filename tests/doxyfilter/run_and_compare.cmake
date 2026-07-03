@@ -5,7 +5,7 @@ execute_process(
   OUTPUT_FILE ${OUT}
   RESULT_VARIABLE _run)
 if(NOT _run EQUAL 0)
-  message(FATAL_ERROR "welder-doxygen-filter failed (${_run}) on ${IN}")
+  message(FATAL_ERROR "welder_doxygen_filter failed (${_run}) on ${IN}")
 endif()
 execute_process(
   COMMAND ${CMAKE_COMMAND} -E compare_files ${OUT} ${EXPECTED}

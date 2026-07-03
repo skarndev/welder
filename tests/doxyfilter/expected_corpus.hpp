@@ -152,4 +152,47 @@ struct  Spliced {
     /** spliced-type member */ [:^^int:] value;
 };
 
+// --- the `<` ambiguity: angles vs comparisons vs shifts ----------------------
+// tentative matching must tell real template arguments from expressions, so
+// each parameter doc lands before ITS comma, not a swallowed one
+/** Angles, comparisons and shifts, one signature. */
+int clash( int flags = 1 << 4 /**< shift, not angles */,
+           bool wide = (sizeof(int) < 8) /**< comparison, not angles */,
+           std::pair<int, int> p = {} /**< real template arguments */,
+           std::vector<std::pair<int, int>> v = {} /**< angles closed by >> */);
+
+// a requires-clause whose nested angles end in a `>>` token
+/** Requires nested-angle struct. */
+template <class T> requires std::convertible_to<T, std::vector<int>>
+struct  BoxedN { T v; };
+
+// adjacent string literals concatenate (translation phase 6)
+/** Concatenated doc text. */
+struct  Glued {};
+
+// enumerator with initializer: the trailing comment goes after the initializer
+/** Levels. */
+enum class  Level {
+    Low = 1 << 0 /**< lowest level */,
+    High = 10,
+};
+
+// member with a default initializer (comparison in it stays a comparison)
+/** Defaults holder. */
+struct  Defaults {
+    int threshold = 3 < 4 ? 10 : 20 /**< post-initializer doc */;
+};
+
+// a BARE `<` comparison default argument: welder's placement is correct
+// (locked by this golden), but DOXYGEN itself derails on the unparenthesized
+// form — it drops this parameter's doc and the rest of that list (probed,
+// 1.16/1.17; the function's own brief survives). Parenthesize comparisons in
+// real code, as in clash() above. The e2e tracks this one under
+// DOXYGEN_LOSES, not MUST.
+/** Bare comparison function. */
+int bare( bool wide = sizeof(int) < 8 /**< bare comparison param */);
+
+// line splice: the next line continues THIS comment, so it must not transform \
+   [[=welder::doc("inside a spliced comment - must not transform")]]
+
 } // namespace workshop

@@ -1,7 +1,7 @@
 # Doxyfile for the browsable HTML of the doxyfilter corpus (configured by
 # tests/doxyfilter/CMakeLists.txt; built by the doxyfilter-html target).
 PROJECT_NAME     = "welder doxyfilter corpus"
-PROJECT_BRIEF    = "what Doxygen sees through tools/welder-doxygen-filter.py"
+PROJECT_BRIEF    = "what Doxygen sees through tools/welder_doxygen_filter.py"
 INPUT            = @CMAKE_CURRENT_SOURCE_DIR@/corpus.hpp
 INPUT_FILTER     = "@WELDER_FILTER_PYTHON@ @_filter@"
 EXTRACT_ALL      = YES

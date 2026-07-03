@@ -1,4 +1,4 @@
-// welder-doxygen-filter.lark — the grammar for welder-doxygen-filter.py
+// welder_doxygen_filter.lark — the grammar for welder_doxygen_filter.py
 // (Lark, https://github.com/lark-parser/lark).
 //
 // Two layers share one lexer:
@@ -44,7 +44,7 @@ group: "(" inner* ")"
 
 // `?leaf` inlines: an element's children are the tokens themselves.
 ?leaf: RAW_STRING | STRING | CHAR | NUMBER
-     | WELDER | WORD | COLONCOLON | EQUAL | ATTR_OPEN | PUNCT
+     | WELDER | WORD | COLONCOLON | EQUAL | OP | ATTR_OPEN | PUNCT
 
 // ===== layer 1: C++ lexical terminals =======================================
 // Longest match wins; on equal length, literal terminals (WELDER, "[[", "::")
@@ -53,15 +53,27 @@ group: "(" inner* ")"
 // literal or comment simply fails to match and falls through as PUNCT
 // characters — lexing never errors.
 
+// A line comment absorbs backslash-newline splices (phase 2: the spliced
+// next line is still comment). Block comments need no splice handling
+// ([\s\S]*? spans lines already; [\s\S] instead of DOTALL keeps flags local).
 BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
-LINE_COMMENT:  /\/\/[^\n]*/
+LINE_COMMENT:  /\/\/(?:\\\r?\n|[^\n])*/
 
 // R"delim( ... )delim", with the optional encoding prefix; the delimiter is
-// matched by backreference. [\s\S] instead of DOTALL keeps flags local.
+// matched by backreference. NB the standard *reverts* line splices inside
+// raw string literals, so — unlike STRING/CHAR — no splice alternative here.
 RAW_STRING: /(?:u8|[uUL])?R"(?P<_rawdelim>[^()\\\s]{0,16})\([\s\S]*?\)(?P=_rawdelim)"/
-STRING:     /(?:u8|[uUL])?"(?:\\.|[^"\\\n])*"/
-CHAR:       /(?:u8|[uUL])?'(?:\\.|[^'\\\n])+'/
+STRING:     /(?:u8|[uUL])?"(?:\\\r?\n|\\.|[^"\\\n])*"/
+CHAR:       /(?:u8|[uUL])?'(?:\\\r?\n|\\.|[^'\\\n])+'/
 NUMBER:     /\.?\d(?:[eEpP][+-]|'\w|[\w.])*/
+
+// Maximal-munch operators containing '<' or '>' that are never angle
+// brackets: lexed whole, shifts / compound assignment / comparisons /
+// spaceship / arrow cannot disturb template-angle tracking. This mirrors
+// the real lexer (`operator<<int>` IS `operator` `<<` `int` `>` in C++);
+// a template head ending `vector<int>>` yields one `>>` token, which the
+// driver counts as closing two angles — exactly the C++11 rule.
+OP:         /<<=|>>=|<=>|<<|>>|<=|>=|->/
 
 WELDER:     "welder"
 WORD:       /[A-Za-z_]\w*/

@@ -23,14 +23,14 @@ if(NOT WELDER_FILTER_PYTHON)
   return()
 endif()
 
-set(_filter ${CMAKE_SOURCE_DIR}/tools/welder-doxygen-filter.py)
+set(_filter ${CMAKE_SOURCE_DIR}/tools/welder_doxygen_filter.py)
 
 # The goldens: filtered input must match the committed, hand-reviewed
 # expected_*.hpp byte for byte. corpus.hpp locks every comment placement;
 # hostile.hpp locks the fail-safety contract (broken C++, unterminated
 # literals/blocks, non-UTF-8 bytes -> exit 0, deterministic output, code
 # never swallowed). Regenerate after an intentional change:
-#   python3 tools/welder-doxygen-filter.py tests/doxyfilter/corpus.hpp \
+#   python3 tools/welder_doxygen_filter.py tests/doxyfilter/corpus.hpp \
 #     > tests/doxyfilter/expected_corpus.hpp    (same for hostile)
 foreach(case corpus hostile)
   add_test(NAME doxyfilter.golden.${case}
@@ -64,7 +64,7 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/html/index.html
   COMMAND ${WELDER_DOXYGEN} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile.html
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/corpus.hpp ${_filter}
-          ${CMAKE_SOURCE_DIR}/tools/welder-doxygen-filter.lark
+          ${CMAKE_SOURCE_DIR}/tools/welder_doxygen_filter.lark
           ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile.html
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMENT "welder: Doxygen HTML for the doxyfilter corpus -> tests/doxyfilter/html/")
