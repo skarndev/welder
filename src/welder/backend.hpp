@@ -10,62 +10,75 @@
 #include <welder/doc.hpp>         // doc_of (class / namespace docstrings)
 #include <welder/reflect.hpp>     // welded_for / policy_of / member_bound
 
-// The backend interface + the generic binding driver.
-//
-// welder's core walks a reflected type/namespace and decides *what* to bind
-// (bind_traits.hpp) and *whether each type can be represented* (bindable.hpp).
-// Everything language-specific — *how* to register a class, method, property or
-// module attribute — is delegated to a **backend**: a stateless policy type
-// (pybind11 today; nanobind / lua later) supplying a fixed set of emission
-// primitives. The driver below is written once against the `backend` concept and
-// reused verbatim by every backend, so a new backend implements only its
-// primitives, never the traversal/resolution logic.
-//
-// ── The backend contract ────────────────────────────────────────────────────
-// A backend `B` is a struct providing (nothing is inherited; all are static):
-//
-//   Associated:
-//     static constexpr lang language;   // the target language B binds to
-//     using  module_type = ...;         // B's module handle (passed by ref)
-//     template <class T> static constexpr bool has_native_caster;  // caster_oracle
-//
-//   Type binding (the class handle is whatever make_class returns; deduced):
-//     template <class T, auto Bases, std::size_t... I>
-//       static auto make_class(module_type&, const char* name, const char* doc,
-//                              std::index_sequence<I...>);   // Bases[I] spliced
-//     static void add_default_ctor(auto& cls);
-//     template <std::meta::info Ctor> static void add_constructor(auto& cls);
-//     template <class T>              static void add_aggregate_constructor(auto& cls);
-//     template <std::meta::info Mem>  static void add_field(auto& cls);
-//     template <std::meta::info Fn>   static void add_method(auto& cls);
-//     template <std::meta::info Fn>   static void add_static_method(auto& cls);
-//     template <std::meta::info Fn>   static void add_operator(auto& cls);
-//     static consteval const char* special_method_name(std::meta::info op_fn);
-//         // target special-method name for a member operator, or nullptr if the
-//         // backend does not expose it (drives add_operator eligibility)
-//
-//   Enum binding (the enum handle is whatever make_enum returns; deduced):
-//     template <class E> static auto make_enum(module_type&, const char* name,
-//                                              const char* doc);
-//     template <std::meta::info Enum> static void add_enumerator(auto& e);
-//     template <class E> static void finish_enum(auto& e); // e.g. export unscoped
-//
-//   Namespace / module binding (a "session" is backend scratch state — e.g. an
-//   accumulator for deferred, batched attributes — obtained per (sub)module):
-//     static auto open_module(module_type&);              // -> session
-//     static void set_module_doc(module_type&, const char* doc);
-//     template <std::meta::info Fn>  static void add_function(module_type&);
-//     template <std::meta::info Var> static void add_variable(module_type&, session&);
-//     static module_type add_submodule(module_type&, const char* name);
-//     static void close_module(module_type&, session&);   // finalize the session
-//
-// The concept below checks the statically-checkable surface (associated types,
-// the module machinery); the class-level and per-member hooks are templated on a
-// reflection/type, so they are contract-by-documentation and enforced at the
-// driver's instantiation.
+/** @file
+    The backend interface (the @ref welder::backend concept) + the generic binding
+    driver.
+
+    welder's core walks a reflected type/namespace and decides *what* to bind
+    (`bind_traits.hpp`) and *whether each type can be represented* (`bindable.hpp`).
+    Everything language-specific — *how* to register a class, method, property or
+    module attribute — is delegated to a **backend**: a stateless policy type
+    (pybind11 today; nanobind / lua later) supplying a fixed set of emission
+    primitives. The driver here is written once against the @ref welder::backend
+    concept and reused verbatim by every backend, so a new backend implements only
+    its primitives, never the traversal/resolution logic.
+*/
 
 namespace welder {
 
+/** The contract a backend must satisfy to plug into the generic driver.
+
+    A backend `B` is a stateless struct; nothing is inherited, and every member is
+    static. The concept statically checks the associated types and the module
+    machinery; the class-level and per-member hooks are templated on a
+    reflection/type, so they are contract-by-documentation, enforced at the
+    driver's instantiation.
+
+    **Associated:**
+    @code
+    static constexpr lang language;   // the target language B binds to
+    using  module_type = ...;         // B's module handle (passed by ref)
+    template <class T> static constexpr bool has_native_caster;  // caster_oracle
+    @endcode
+
+    **Type binding** (the class handle is whatever `make_class` returns; deduced):
+    @code
+    template <class T, auto Bases, std::size_t... I>
+      static auto make_class(module_type&, const char* name, const char* doc,
+                             std::index_sequence<I...>);   // Bases[I] spliced
+    static void add_default_ctor(auto& cls);
+    template <std::meta::info Ctor> static void add_constructor(auto& cls);
+    template <class T>              static void add_aggregate_constructor(auto& cls);
+    template <std::meta::info Mem>  static void add_field(auto& cls);
+    template <std::meta::info Fn>   static void add_method(auto& cls);
+    template <std::meta::info Fn>   static void add_static_method(auto& cls);
+    template <std::meta::info Fn>   static void add_operator(auto& cls);
+    static consteval const char* special_method_name(std::meta::info op_fn);
+        // target special-method name for a member operator, or nullptr if the
+        // backend does not expose it (drives add_operator eligibility)
+    @endcode
+
+    **Enum binding** (the enum handle is whatever `make_enum` returns; deduced):
+    @code
+    template <class E> static auto make_enum(module_type&, const char* name,
+                                             const char* doc);
+    template <std::meta::info Enum> static void add_enumerator(auto& e);
+    template <class E> static void finish_enum(auto& e); // e.g. export unscoped
+    @endcode
+
+    **Namespace / module binding** (a "session" is backend scratch state — e.g. an
+    accumulator for deferred, batched attributes — obtained per (sub)module):
+    @code
+    static auto open_module(module_type&);              // -> session
+    static void set_module_doc(module_type&, const char* doc);
+    template <std::meta::info Fn>  static void add_function(module_type&);
+    template <std::meta::info Var> static void add_variable(module_type&, session&);
+    static module_type add_submodule(module_type&, const char* name);
+    static void close_module(module_type&, session&);   // finalize the session
+    @endcode
+
+    @tparam B the candidate backend type.
+*/
 template <class B>
 concept backend =
     caster_oracle<B> &&
@@ -93,12 +106,19 @@ auto bind_enum(typename B::module_type& m, const char* name);
 template <backend B, std::meta::info Ns>
 void bind_namespace_driver(typename B::module_type& m);
 
-// Reflect over enum E and register it via backend B onto module `m`: its
-// docstring, then each enumerator that resolves as bound (an enumerator honors the
-// enum's policy and its own exclude/include marks, exactly like a data member).
-// finish_enum lets the backend apply a whole-enum finalizer — e.g. exporting an
-// unscoped enum's values into the enclosing scope, mirroring C++. `name` defaults
-// to E's identifier. Returns the backend's enum handle.
+/** Reflect over enum @a E and register it via backend @a B onto module @a m.
+
+    Emits its docstring, then each enumerator that resolves as bound (an enumerator
+    honors the enum's policy and its own exclude/include marks, exactly like a data
+    member). `finish_enum` lets the backend apply a whole-enum finalizer — e.g.
+    exporting an unscoped enum's values into the enclosing scope, mirroring C++.
+
+    @tparam B the backend.
+    @tparam E the enum type.
+    @param m    the module handle to register onto.
+    @param name the target name, or `nullptr` to default to @a E's identifier.
+    @return the backend's enum handle.
+*/
 template <backend B, class E>
 auto bind_enum(typename B::module_type& m, const char* name) {
     constexpr lang L{B::language};
@@ -118,12 +138,19 @@ auto bind_enum(typename B::module_type& m, const char* name) {
     return e;
 }
 
-// Flatten the eligible public data members, methods and operators of Src onto the
-// class handle `cls` (a handle for a type deriving from Src). Non-welded (mixin)
-// bases are recursed *first* so that, on a name clash, the member declared closer
-// to the derived type wins. Constructors are never flattened (the derived type
-// provides its own). A welded base is skipped here — it binds natively, as a base
-// of the class handle (see native_base_types).
+/** Flatten the eligible public data members, methods and operators of @a Src onto
+    the class handle @a cls (a handle for a type deriving from @a Src).
+
+    Non-welded (mixin) bases are recursed *first* so that, on a name clash, the
+    member declared closer to the derived type wins. Constructors are never
+    flattened (the derived type provides its own). A welded base is skipped here —
+    it binds natively, as a base of the class handle (see `native_base_types`).
+
+    @tparam B   the backend.
+    @tparam Src a reflection of the (base or derived) type whose members to flatten.
+    @tparam Cls the backend's class-handle type.
+    @param cls the class handle to register onto.
+*/
 template <backend B, std::meta::info Src, class Cls>
 void bind_members(Cls& cls) {
     constexpr lang L{B::language};
@@ -164,16 +191,23 @@ void bind_members(Cls& cls) {
     }
 }
 
-// Reflect over T and register it via backend B onto module `m`:
-//   * native inheritance from T's nearest welded ancestors (each a base of the
-//     class handle; bind those bases separately, before T);
-//   * the default constructor (if any), each public non-copy/move constructor,
-//     and — for a baseless aggregate whose fields all bind — a synthesized field
-//     constructor;
-//   * public data members / methods / operators that resolve as bound, plus the
-//     eligible members of every non-welded public base, flattened in.
-// `name` defaults to T's identifier. Returns the backend's class handle so callers
-// can chain further registrations.
+/** Reflect over @a T and register it via backend @a B onto module @a m.
+
+    Emits:
+    - native inheritance from @a T's nearest welded ancestors (each a base of the
+      class handle; bind those bases separately, before @a T);
+    - the default constructor (if any), each public non-copy/move constructor, and
+      — for a baseless aggregate whose fields all bind — a synthesized field
+      constructor;
+    - public data members / methods / operators that resolve as bound, plus the
+      eligible members of every non-welded public base, flattened in.
+
+    @tparam B the backend.
+    @tparam T the type to bind.
+    @param m    the module handle to register onto.
+    @param name the target name, or `nullptr` to default to @a T's identifier.
+    @return the backend's class handle, so callers can chain further registrations.
+*/
 template <backend B, class T>
 auto bind_type(typename B::module_type& m, const char* name) {
     constexpr lang L{B::language};
@@ -212,12 +246,18 @@ auto bind_type(typename B::module_type& m, const char* name) {
     return cls;
 }
 
-// Reflect over a whole namespace and expose its members on module `m`. `weld`
-// makes an entity a candidate; the namespace `policy` (default automatic) and
-// per-member marks then resolve what binds. Classes bind via bind_type, free
-// functions and namespace variables become module attributes, and a nested
-// namespace holding bound content becomes a submodule (recursed under its own
-// policy). Members are visited in declaration order.
+/** Reflect over a whole namespace @a Ns and expose its members on module @a m.
+
+    `weld` makes an entity a candidate; the namespace `policy` (default automatic)
+    and per-member marks then resolve what binds. Classes bind via bind_type(), free
+    functions and namespace variables become module attributes, and a nested
+    namespace holding bound content becomes a submodule (recursed under its own
+    policy). Members are visited in declaration order.
+
+    @tparam B  the backend.
+    @tparam Ns a reflection of the namespace.
+    @param m the module handle to fill.
+*/
 template <backend B, std::meta::info Ns>
 void bind_namespace_driver(typename B::module_type& m) {
     static_assert(std::meta::is_namespace(Ns),
@@ -269,8 +309,18 @@ void bind_namespace_driver(typename B::module_type& m) {
     B::close_module(m, session);
 }
 
-// Fill an existing module out of top-level namespace `Ns`: pre hook, bind the
-// namespace, post hook. `Ns` is asserted top-level (its name is the module name).
+/** Fill an existing module out of top-level namespace @a Ns: pre hook, bind the
+    namespace, post hook.
+
+    @tparam B    the backend.
+    @tparam Ns   a reflection of the (asserted top-level) namespace; its name is
+                 meant to be the module name.
+    @tparam Pre  the pre-hook callable type.
+    @tparam Post the post-hook callable type.
+    @param m    the module handle to fill.
+    @param pre  invoked with @a m before the namespace is bound.
+    @param post invoked with @a m after the namespace is bound.
+*/
 template <backend B, std::meta::info Ns, class Pre, class Post>
 void build_module_driver(typename B::module_type& m, Pre pre, Post post) {
     static_assert(std::meta::is_namespace(Ns),
