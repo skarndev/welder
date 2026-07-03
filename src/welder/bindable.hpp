@@ -38,7 +38,7 @@
     Only ONE thing is backend-specific here: the leaf test — "does the backend
     natively convert this scalar/string/user-registered type, or does it need
     welder to register a class/enum for it?". A backend supplies that via the
-    #caster_oracle concept; the STL-wrapper recursion below is shared, so a new
+    `caster_oracle` concept; the STL-wrapper recursion below is shared, so a new
     backend inherits container/optional/variant/smart-pointer handling for free.
 */
 

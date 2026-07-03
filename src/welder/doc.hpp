@@ -160,7 +160,7 @@ consteval auto param_docs() {
 /** The raw documentation pieces of a function, handed to a style to assemble.
 
     A struct (rather than a growing argument list) so adding future sections — a
-    `Raises:`, a `Note:` — does not re-break the #doc_style concept. Any member may
+    `Raises:`, a `Note:` — does not re-break the @ref doc_style concept. Any member may
     be empty/null: a function with only a `returns` and no summary is valid.
 */
 struct function_doc {
