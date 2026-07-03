@@ -1,0 +1,82 @@
+// welder-doxygen-filter.lark — the grammar for welder-doxygen-filter.py
+// (Lark, https://github.com/lark-parser/lark).
+//
+// Two layers share one lexer:
+//
+//   layer 1 (terminals) — the C++ *lexical* soup. Full C++ cannot be parsed
+//     without a compiler (it is context-dependent), but its lexical shapes —
+//     comments, string/char literals, raw strings — are context-free and
+//     regular. Each becomes ONE atomic token, so annotation-shaped text
+//     inside a string or a commented-out line is invisible to everything
+//     downstream. The driver uses this layer lex-only (Lark.lex()); the
+//     token stream is total: PUNCT is a one-character catch-all, so any
+//     byte sequence lexes.
+//
+//   layer 2 (rules) — the inside of one [[ ... ]] attribute block, parsed
+//     per block with start rule `attr_list`. This is the only *parsing*:
+//     top-level comma splitting with arbitrarily nested balanced groups
+//     (attribute arguments may contain almost any C++ expression tokens).
+//     The driver classifies each `element` from its children: `=welder::…`
+//     doc annotations become Doxygen comments, other welder annotations are
+//     stripped, anything else ([[nodiscard]], [[=other::thing]]) is kept.
+//
+// The `]]` closing an attribute is deliberately NOT a terminal: in
+// `a[b[0]]` the same characters are two subscript closers — which one it is
+// depends on context, so the driver finds block extents by bracket depth in
+// the token stream instead. (`[[` IS always an attribute opener in C++ —
+// that's why a lambda in a subscript needs a space, `a[ []{...}() ]`.)
+
+// ===== layer 2: one attribute block's content ===============================
+
+attr_list: element ("," element)*
+
+// An element may be empty (`[[a, ]]`) and is otherwise a run of leaves and
+// balanced groups; commas nested inside groups don't split elements.
+element: piece*
+
+?piece: group | leaf
+
+group: "(" inner* ")"
+     | "[" inner* "]"
+     | "{" inner* "}"
+
+?inner: group | leaf | ","
+
+// `?leaf` inlines: an element's children are the tokens themselves.
+?leaf: RAW_STRING | STRING | CHAR | NUMBER
+     | WELDER | WORD | COLONCOLON | EQUAL | ATTR_OPEN | PUNCT
+
+// ===== layer 1: C++ lexical terminals =======================================
+// Longest match wins; on equal length, literal terminals (WELDER, "[[", "::")
+// beat regex ones (WORD, PUNCT). NUMBER follows the pp-number shape, so a
+// digit separator (1'000'000) can never open a char literal. An unterminated
+// literal or comment simply fails to match and falls through as PUNCT
+// characters — lexing never errors.
+
+BLOCK_COMMENT: /\/\*[\s\S]*?\*\//
+LINE_COMMENT:  /\/\/[^\n]*/
+
+// R"delim( ... )delim", with the optional encoding prefix; the delimiter is
+// matched by backreference. [\s\S] instead of DOTALL keeps flags local.
+RAW_STRING: /(?:u8|[uUL])?R"(?P<_rawdelim>[^()\\\s]{0,16})\([\s\S]*?\)(?P=_rawdelim)"/
+STRING:     /(?:u8|[uUL])?"(?:\\.|[^"\\\n])*"/
+CHAR:       /(?:u8|[uUL])?'(?:\\.|[^'\\\n])+'/
+NUMBER:     /\.?\d(?:[eEpP][+-]|'\w|[\w.])*/
+
+WELDER:     "welder"
+WORD:       /[A-Za-z_]\w*/
+ATTR_OPEN:  "[["
+COLONCOLON: "::"
+EQUAL:      "="
+PUNCT:      /[\s\S]/
+WS:         /\s+/
+
+// Ignored by the layer-2 parser; the driver lexes with dont_ignore=True, so
+// they still appear (atomically) in the layer-1 token stream.
+%ignore WS
+%ignore BLOCK_COMMENT
+%ignore LINE_COMMENT
+
+// Lex-only entry point for layer 1: never parsed, it just anchors every
+// terminal (including the ones layer 2 doesn't mention) into the grammar.
+unit: (piece | "," | WS | BLOCK_COMMENT | LINE_COMMENT)*

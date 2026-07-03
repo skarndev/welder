@@ -3,258 +3,187 @@
 annotations into Doxygen comments, on the fly.
 
 Doxygen has no plugin system; INPUT_FILTER is its extension point — a program
-run per input file whose stdout is what Doxygen parses. The sources on disk are
-never modified. Configure:
+run per input file whose stdout is what Doxygen parses. The sources on disk
+are never modified. Requires the `lark` package (pip install lark). Configure:
 
     INPUT_FILTER    = "python3 /path/to/welder-doxygen-filter.py"
     # or per extension:
     FILTER_PATTERNS = *.hpp="python3 /path/to/welder-doxygen-filter.py"
 
-How it recognizes annotations (the robustness rules)
------------------------------------------------------
-* [[ ... ]] blocks are located by a scanner that skips // and /* */ comments,
-  string literals (with escapes), raw strings (R"delim( ... )delim") and char
-  literals — an annotation-shaped sequence inside a string or a commented-out
-  line is never touched.
-* A block's extent is found bracket-aware and literal-aware, so doc text
-  containing "]]", quotes or brackets cannot end it early.
-* Within a block, the top-level comma-separated attribute list is split
-  (commas inside parens/brackets/strings don't split) and each element is
-  classified:
-    =welder::doc("text")          -> comment summary
-    =welder::returns("text")      -> @return text
-    =welder::tparam("T", "text")  -> @tparam T text
-    any other =welder::...        -> stripped (weld/policy/mark/trust are
-                                     binding controls; doc *scope* control is
-                                     Doxygen-native — use EXCLUDE_SYMBOLS)
-    everything else               -> kept: standard attributes ([[nodiscard]],
-                                     [[deprecated("...")]]) and non-welder
-                                     annotations ([[=other::thing]]) are
-                                     re-emitted in place in a rebuilt block.
-  A block with no welder elements passes through byte-identical.
-* Annotations must be spelled welder::-qualified (no namespace alias); text
-  must be inline string literals — which the annotation design already forces
-  (fixed_string; a const char* is not a permitted annotation constant).
+How it works
+------------
+All lexing and parsing lives in the grammar next to this script
+(welder-doxygen-filter.lark, see its header comment): layer 1 lexes the file
+into a total token stream whose comments and string/char/raw literals are
+single atomic tokens (annotation-shaped text inside them is invisible);
+layer 2 parses one [[ ... ]] block's content into comma-separated elements
+with nested balanced groups. This script is only the driver:
 
-Comment placement (Doxygen attaches comments positionally; probed rules)
-------------------------------------------------------------------------
-* keyword position — `struct [[...]] Name` (also class/union/enum [class|
-  struct]/namespace): the comment hoists BEFORE the keyword, and before the
-  `template <...>` head(s) if the declaration is a template — inline comments
-  between keyword and name do not attach.
-* parameter position — `f([[...]] std::map<int,int> m = {})`: a trailing
-  `/**< ... */` is placed before the next top-level `,` or `)`; template
-  angle brackets, nested parens, braces (default args) and strings are
-  tracked so their commas don't split the parameter.
-* trailing position — `Enumerator [[...]]` followed by `,` `}` or `;`:
-  a trailing `/**< ... */` in place.
-* otherwise (own-line annotation before a member/function/variable): a
-  `/** ... */` block in place, indentation preserved.
+  * find each [[ ... ]] block's extent in the token stream (`]]` is
+    context-dependent in C++ — see the grammar header — so this is a small
+    bracket-depth scan, not grammar work);
+  * classify each parsed element:
+      =welder::doc("text")          -> comment summary
+      =welder::returns("text")      -> @return text
+      =welder::tparam("T", "text")  -> @tparam T text
+      any other =welder::...        -> stripped (weld/policy/mark/trust are
+                                       binding controls; doc *scope* control
+                                       is Doxygen-native — EXCLUDE_SYMBOLS)
+      everything else               -> kept: standard attributes
+                                       ([[nodiscard]], [[deprecated("...")]])
+                                       and foreign annotations
+                                       ([[=other::thing]]) are re-emitted in
+                                       place in a rebuilt block.
+    A block with no welder elements passes through byte-identical.
+  * place the Doxygen comment (probed rules — Doxygen attaches positionally):
+      - keyword position: `struct [[...]] Name` (also class/union/enum
+        [class|struct]/namespace) hoists the comment BEFORE the keyword and
+        before any `template <...>` head(s) — a comment between keyword and
+        name does not attach;
+      - parameter position (inside parens): a trailing `/**< ... */` before
+        the parameter's ending top-level `,` or `)`, tracking template
+        angles, nested parens and brace default arguments;
+      - trailing position (`Enumerator [[...]]` before `,` `}` `;`):
+        a trailing `/**< ... */` in place;
+      - otherwise: a `/** ... */` block in place, indentation preserved.
 
-Known limits: annotations spelled through a namespace alias are not
-recognized; a `<`-containing *expression* in a default argument (e.g.
-`int n = a < b`) can confuse the parameter scan; both are documented
-conventions rather than expected shapes.
+Fail-safety contract
+--------------------
+The filter must never break a doc build, whatever the input:
+  * lexing is total (grammar layer 1) — arbitrary bytes, unterminated
+    literals and non-UTF-8 (surrogateescape in, byte-exact stdout) all lex;
+  * each block is handled in its own try/except — one the grammar cannot
+    parse is left verbatim (Doxygen ignores [[...]] blocks natively);
+  * a last-resort try/except emits the whole file unchanged on any error
+    (missing lark included), with a note on stderr: the file is still
+    documented, only its welder annotations are lost;
+  * exit status is 0 in all of these cases; 2 only for wrong usage.
+
+Known limits: annotations must be spelled welder::-qualified (no namespace
+alias); doc text must be inline string literals — which the annotation design
+already forces (fixed_string; a const char* is not a permitted annotation
+constant); a `<`-containing *expression* in a default argument (e.g.
+`int n = a < b`) can confuse the parameter-end scan.
 """
 
+import pathlib
 import sys
+from typing import NamedTuple
 
-DOC_KIND = {'doc', 'returns', 'tparam'}
+DOC_KINDS = frozenset({'doc', 'returns', 'tparam'})
+CLASS_KEYWORDS = frozenset({'struct', 'class', 'union', 'enum', 'namespace'})
+SKIP = frozenset({'WS', 'BLOCK_COMMENT', 'LINE_COMMENT'})  # non-significant
 PREFIX = 'welder::'
-KEYWORD_RE = None  # built lazily (keep import cost minimal for Doxygen)
+
+_parser = None
 
 
-# --- lexical helpers ---------------------------------------------------------
-
-def skip_string(text, i):
-    """i at opening '"' (raw strings handled by caller); return index past the
-    closing quote."""
-    n = len(text)
-    i += 1
-    while i < n:
-        c = text[i]
-        if c == '\\':
-            i += 2
-        elif c == '"':
-            return i + 1
-        else:
-            i += 1
-    return n
+def parser():
+    global _parser
+    if _parser is None:
+        import lark
+        grammar = pathlib.Path(__file__).resolve().with_suffix('.lark')
+        _parser = lark.Lark(grammar.read_text(encoding='utf-8'),
+                            start=['unit', 'attr_list'],
+                            parser='earley', lexer='basic',
+                            keep_all_tokens=True, propagate_positions=True)
+    return _parser
 
 
-def skip_raw_string(text, i):
-    """i at the '"' of R"delim( ; return index past the closing )delim"."""
-    n = len(text)
-    j = text.find('(', i + 1)
-    if j < 0:
-        return n
-    delim = text[i + 1:j]
-    end = text.find(')' + delim + '"', j + 1)
-    return n if end < 0 else end + len(delim) + 2
+# =============================================================================
+# Annotation blocks: locate in the token stream, classify parsed elements
+# =============================================================================
+
+class Block(NamedTuple):
+    open_ti: int      # token index of the [[
+    close_ti: int     # one past the block's last token (the second ])
+    start: int        # char offset of the [[
+    end: int          # char offset one past the ]]
+    paren_depth: int  # ( )-nesting at the block: >0 = in a parameter list
 
 
-def skip_char(text, i):
-    """i at "'". Distinguishes a char literal from a digit separator (1'000):
-    a quote sandwiched between alphanumerics is a separator, skip just it."""
-    n = len(text)
-    prev = text[i - 1] if i > 0 else ''
-    nxt = text[i + 1] if i + 1 < n else ''
-    if (prev.isalnum() or prev == '_') and (nxt.isalnum() or nxt == '_'):
-        return i + 1
-    i += 1
-    while i < n:
-        c = text[i]
-        if c == '\\':
-            i += 2
-        elif c == "'":
-            return i + 1
-        else:
-            i += 1
-    return n
-
-
-def is_raw_prefix(text, i):
-    """Is the '"' at i the start of a raw string (R / uR / u8R / LR prefix)?"""
-    return i > 0 and text[i - 1] == 'R' and \
-        (i == 1 or not (text[i - 2].isalnum() or text[i - 2] == '_') or
-         text[max(0, i - 3):i - 1] in ('u8', ' uR', ' LR') or
-         text[i - 2] in 'uUL')
-
-
-# --- pass 1: locate annotation-bearing [[ ... ]] blocks in code ---------------
-
-def find_blocks(text):
-    """Yield (start, end, paren_depth) for every [[ ... ]] block that sits in
-    code (not in a comment or literal). end is one past the closing ]]."""
-    n = len(text)
-    i = 0
+def find_blocks(toks):
+    """Every *terminated* [[ ... ]] block, in order. Comments and literals
+    are atomic tokens, so blocks inside them are never seen; an unterminated
+    [[ (broken input) yields no block — it must stay verbatim, an edit around
+    it could swallow code."""
+    blocks = []
     paren = 0
-    out = []
-    while i < n:
-        c = text[i]
-        nxt = text[i + 1] if i + 1 < n else ''
-        if c == '/' and nxt == '/':
-            j = text.find('\n', i)
-            i = n if j < 0 else j
-        elif c == '/' and nxt == '*':
-            j = text.find('*/', i + 2)
-            i = n if j < 0 else j + 2
-        elif c == '"':
-            i = skip_raw_string(text, i) if is_raw_prefix(text, i) \
-                else skip_string(text, i)
-        elif c == "'":
-            i = skip_char(text, i)
-        elif c == '(':
-            paren += 1
-            i += 1
-        elif c == ')':
-            paren = max(0, paren - 1)
-            i += 1
-        elif c == '[' and nxt == '[':
-            end = block_end(text, i)
-            out.append((i, end, paren))
-            i = end
-        else:
-            i += 1
-    return out
-
-
-def block_end(text, i):
-    """i at '[['; return one past the matching ']]', literal- and
-    bracket-aware (a ']]' inside a string argument does not close it)."""
-    n = len(text)
-    j = i + 2
-    depth = 0
-    while j < n:
-        c = text[j]
-        if c == '"':
-            j = skip_raw_string(text, j) if is_raw_prefix(text, j) \
-                else skip_string(text, j)
-        elif c == "'":
-            j = skip_char(text, j)
-        elif c == '[':
-            depth += 1
-            j += 1
-        elif c == ']':
-            if depth:
-                depth -= 1
-                j += 1
-            elif j + 1 < n and text[j + 1] == ']':
-                return j + 2
-            else:
-                j += 1
-        else:
-            j += 1
-    return n
-
-
-# --- pass 2: parse a block's attribute list -----------------------------------
-
-def split_top_level(s):
-    """Split the inside of a [[ ... ]] block on top-level commas."""
-    parts = []
-    depth = 0
-    start = 0
     i = 0
-    n = len(s)
-    while i < n:
-        c = s[i]
-        if c == '"':
-            i = skip_raw_string(s, i) if is_raw_prefix(s, i) else skip_string(s, i)
-            continue
-        if c == "'":
-            i = skip_char(s, i)
-            continue
-        if c in '([{':
-            depth += 1
-        elif c in ')]}':
-            depth = max(0, depth - 1)
-        elif c == ',' and depth == 0:
-            parts.append(s[start:i])
-            start = i + 1
-        i += 1
-    parts.append(s[start:])
-    return parts
-
-
-def string_args(s):
-    """The string-literal arguments inside an element, unescaped."""
-    out = []
-    i = 0
-    n = len(s)
-    while i < n:
-        if s[i] == '"' and not is_raw_prefix(s, i):
-            j = skip_string(s, i)
-            raw = s[i + 1:j - 1]
-            out.append(raw.replace('\\n', '\n').replace('\\t', '\t')
-                          .replace('\\"', '"').replace('\\\\', '\\'))
+    while i < len(toks):
+        t = toks[i]
+        if t.type == 'ATTR_OPEN':
+            closed = block_close(toks, i)
+            if closed is None:
+                break  # unterminated: nothing after it can be a block either
+            j, end = closed
+            blocks.append(Block(i, j, t.start_pos, end, paren))
             i = j
         else:
+            if t == '(':
+                paren += 1
+            elif t == ')':
+                paren = max(0, paren - 1)
             i += 1
-    return out
+    return blocks
 
 
-def classify(element):
-    """-> ('keep', text) | ('strip', None) | ('doc'|'returns'|'tparam', args)"""
-    e = element.strip()
-    if not e.startswith('='):
-        return ('keep', e)  # standard attribute
-    expr = e[1:].lstrip()
-    if not expr.startswith(PREFIX):
-        return ('keep', e)  # foreign annotation
-    body = expr[len(PREFIX):]
-    kind = ''
-    for ch in body:
-        if ch.isalnum() or ch == '_':
-            kind += ch
-        else:
-            break
-    if kind in DOC_KIND:
-        return (kind, string_args(body))
-    return ('strip', None)  # weld / policy / mark / trust_bindable / future
+def block_close(toks, i):
+    """i at the [[ token; find the matching ]] — two *adjacent* ] at bracket
+    depth 0 (a ] inside a nested group or a string argument cannot close the
+    block). Returns (one past the ]] tokens, one past the ]] char offset),
+    or None for an unterminated block."""
+    depth = 0
+    j = i + 1
+    while j < len(toks):
+        t = toks[j]
+        if t.type == 'ATTR_OPEN':
+            depth += 2
+        elif t == '[':
+            depth += 1
+        elif t == ']':
+            if depth:
+                depth -= 1
+            elif (j + 1 < len(toks) and toks[j + 1] == ']'
+                  and toks[j + 1].start_pos == t.end_pos):
+                return j + 2, toks[j + 1].end_pos
+        j += 1
+    return None
 
 
-# --- comment rendering ---------------------------------------------------------
+def classify(element, inner):
+    """One parsed attribute element (a layer-2 `element` tree; `inner` is the
+    text it was parsed from) ->
+    ('keep', source-text) | ('strip', None) | (doc-kind, [string args])."""
+    from lark import Token
+    kids = element.children
+    if not kids:
+        return ('keep', '')
+    kept = ('keep', inner[element.meta.start_pos:element.meta.end_pos])
+    lead = [k.type if isinstance(k, Token) else 'group' for k in kids[:4]]
+    if lead[:1] != ['EQUAL']:
+        return kept                      # standard attribute
+    if lead != ['EQUAL', 'WELDER', 'COLONCOLON', 'WORD']:
+        return kept                      # foreign annotation
+    kind = str(kids[3])
+    if kind not in DOC_KINDS:
+        return ('strip', None)  # weld / policy / mark / trust_bindable / ...
+    args = [unescape(t) for t in element.scan_values(
+        lambda v: isinstance(v, Token) and v.type == 'STRING')]
+    return (kind, args)
+
+
+def unescape(string_token):
+    """A STRING token's value with the common escapes decoded."""
+    body = str(string_token)
+    body = body[body.index('"') + 1:-1]  # drop quotes and encoding prefix
+    return (body.replace('\\n', '\n').replace('\\t', '\t')
+                .replace('\\"', '"').replace('\\\\', '\\'))
+
+
+# =============================================================================
+# Comment rendering
+# =============================================================================
 
 def comment_lines(parts):
     """parts: {'doc': [[text]...], 'tparam': [[name,text]...], 'returns': ...}
@@ -283,7 +212,92 @@ def inline_comment(lines):
     return '/**< ' + ' '.join(lines) + ' */'
 
 
-# --- placement -----------------------------------------------------------------
+# =============================================================================
+# Placement
+# =============================================================================
+
+def prev_sig(toks, i):
+    """Index of the significant (non-ws, non-comment) token before i, or None."""
+    i -= 1
+    while i >= 0 and toks[i].type in SKIP:
+        i -= 1
+    return i if i >= 0 else None
+
+
+def keyword_hoist(text, toks, bi):
+    """If the block at token bi directly follows struct/class/union/enum
+    [class|struct]/namespace, the hoist point: the keyword's char offset,
+    extended back over `template <...>` head(s). None otherwise."""
+    p = prev_sig(toks, bi)
+    if p is None or toks[p] not in CLASS_KEYWORDS:
+        return None
+    if toks[p] in ('class', 'struct'):  # enum class / enum struct
+        q = prev_sig(toks, p)
+        if q is not None and toks[q] == 'enum':
+            p = q
+    while True:  # `template <...>` head(s) directly above
+        q = prev_sig(toks, p)
+        if q is None or toks[q] != '>':
+            return toks[p].start_pos
+        lt = angle_open(text, toks, q)
+        if lt is None:
+            return toks[p].start_pos
+        tm = prev_sig(toks, lt)
+        if tm is None or toks[tm] != 'template':
+            return toks[p].start_pos
+        p = tm
+
+
+def angle_open(text, toks, j):
+    """toks[j] is '>'; token index of the matching '<', or None."""
+    depth = 1
+    j -= 1
+    while j >= 0:
+        t = toks[j]
+        if t == '>' and (t.start_pos == 0 or text[t.start_pos - 1] != '-'):
+            depth += 1
+        elif t == '<':
+            depth -= 1
+            if depth == 0:
+                return j
+        j -= 1
+    return None
+
+
+def param_end(text, toks, i):
+    """From token i (just past the block, inside a parameter list): the char
+    offset of the parameter's ending top-level ',' or ')'. Template angles,
+    nested parens and brace/bracket default arguments are tracked; literals
+    are atomic tokens, so their contents never count."""
+    paren = angle = brace = square = 0
+    while i < len(toks):
+        t = toks[i]
+        prev = text[t.start_pos - 1] if t.start_pos else ''
+        if t.type == 'ATTR_OPEN':
+            square += 2
+        elif t == '(':
+            paren += 1
+        elif t == ')':
+            if paren == 0:
+                return t.start_pos
+            paren -= 1
+        elif t == ',' and paren == angle == brace == square == 0:
+            return t.start_pos
+        elif t == '<' and (prev.isalnum() or prev == '_' or prev in '>:'):
+            angle += 1  # heuristically a template angle, not a comparison
+        elif t == '>' and angle and prev != '-':
+            angle -= 1
+        elif t == '{':
+            brace += 1
+        elif t == '}':
+            brace = max(0, brace - 1)
+        elif t == '[':
+            square += 1
+        elif t == ']':
+            square = max(0, square - 1)
+        i += 1
+    return len(text)
+
 
 def line_indent(text, pos):
     """The whitespace prefix of pos's line if pos sits in it, else ''."""
@@ -292,98 +306,9 @@ def line_indent(text, pos):
     return prefix if prefix.strip() == '' else ''
 
 
-def keyword_start(text, s):
-    """If the annotation at s sits right after struct/class/union/enum
-    [class|struct]/namespace, the hoist point: the keyword's start, extended
-    back over `template <...>` head(s). None otherwise."""
-    import re
-    global KEYWORD_RE
-    if KEYWORD_RE is None:
-        KEYWORD_RE = re.compile(
-            r'\b(enum\s+(?:class|struct)|struct|class|union|enum|namespace)\s*$')
-    m = KEYWORD_RE.search(text, 0, s)
-    if not m:
-        return None
-    ins = m.start(1)
-    while True:  # `template <...>` (possibly several) directly above
-        head = text[:ins].rstrip()
-        if not head.endswith('>'):
-            return ins
-        k = angle_open(text, len(head) - 1)
-        if k is None:
-            return ins
-        t = text[:k].rstrip()
-        if not t.endswith('template'):
-            return ins
-        ins = len(t) - len('template')
-
-
-def angle_open(text, j):
-    """text[j] == '>'; index of the matching '<', or None."""
-    depth = 1
-    j -= 1
-    while j >= 0:
-        c = text[j]
-        if c == '>' and text[j - 1] != '-':
-            depth += 1
-        elif c == '<':
-            depth -= 1
-            if depth == 0:
-                return j
-        j -= 1
-    return None
-
-
-def param_end(text, i):
-    """From i (just past the annotation, inside a parameter list): the index of
-    the parameter's ending top-level ',' or ')'. Angle brackets, nested parens,
-    braces/brackets (default arguments) and literals are tracked."""
-    n = len(text)
-    paren = angle = brace = square = 0
-    while i < n:
-        c = text[i]
-        if c == '"':
-            i = skip_raw_string(text, i) if is_raw_prefix(text, i) \
-                else skip_string(text, i)
-            continue
-        if c == "'":
-            i = skip_char(text, i)
-            continue
-        if c == '(':
-            paren += 1
-        elif c == ')':
-            if paren == 0:
-                return i
-            paren -= 1
-        elif c == ',' and paren == angle == brace == square == 0:
-            return i
-        elif c == '<':
-            prev = text[i - 1] if i else ''
-            if prev.isalnum() or prev == '_' or prev in '>:':
-                angle += 1
-        elif c == '>' and angle and text[i - 1] != '-':
-            angle -= 1
-        elif c == '{':
-            brace += 1
-        elif c == '}':
-            brace = max(0, brace - 1)
-        elif c == '[':
-            square += 1
-        elif c == ']':
-            square = max(0, square - 1)
-        i += 1
-    return n
-
-
-def next_sig(text, i):
-    while i < len(text) and text[i].isspace():
-        i += 1
-    return text[i] if i < len(text) else ''
-
-
 def whole_lines(text, s, e):
-    """Widen (s, e) to swallow the full line(s) when the annotation is alone on
-    them (deleting it should not leave blank lines)."""
+    """Widen (s, e) to swallow the full line(s) when the annotation is alone
+    on them (deleting it should not leave blank lines)."""
     ls = text.rfind('\n', 0, s) + 1
     if text[ls:s].strip():
         return s, e
@@ -395,82 +320,111 @@ def whole_lines(text, s, e):
     return ls, le + 1
 
 
-# --- the transform ---------------------------------------------------------------
+def next_code_char(text, i):
+    while i < len(text) and text[i].isspace():
+        i += 1
+    return text[i] if i < len(text) else ''
+
+
+# =============================================================================
+# The transform
+# =============================================================================
+
+def block_edits(text, toks, blk):
+    """The (start, end, replacement) edits for one annotation block."""
+    inner = text[blk.start + 2:blk.end - 2]
+    if PREFIX not in inner:
+        return []
+    kept = []
+    parts = {'doc': [], 'tparam': [], 'returns': []}
+    saw_welder = False
+    tree = parser().parse(inner, start='attr_list')
+    for element in tree.find_data('element'):
+        kind, val = classify(element, inner)
+        if kind == 'keep':
+            kept.append(val)
+        else:
+            saw_welder = True
+            if kind != 'strip':
+                parts[kind].append(val)
+    if not saw_welder:
+        return []
+    kept_block = '[[' + ', '.join(kept) + ']]' if kept else ''
+    lines = comment_lines(parts)
+    s, e = blk.start, blk.end
+    edits = []
+
+    kw = keyword_hoist(text, toks, blk.open_ti)
+    prev_ch = text[:s].rstrip()[-1:]
+
+    if kw is not None:
+        if lines:
+            indent = line_indent(text, kw)
+            edits.append((kw, kw, block_comment(lines, indent) + '\n' + indent))
+        if kept_block:
+            edits.append((s, e, kept_block))
+        else:
+            edits.append(whole_lines(text, s, e) + ('',))
+    elif blk.paren_depth > 0:
+        edits.append((s, e, kept_block))
+        if lines:
+            stop = param_end(text, toks, blk.close_ti)
+            ins = e + len(text[e:stop].rstrip())
+            edits.append((ins, ins, ' ' + inline_comment(lines)))
+    elif (prev_ch.isalnum() or prev_ch == '_') and \
+            next_code_char(text, e) in (',', '}', ';'):
+        repl = kept_block + (' ' if kept_block and lines else '') + \
+            (inline_comment(lines) if lines else '')
+        if repl:
+            edits.append((s, e, repl))
+        else:  # nothing left: also eat the space before the annotation
+            ns = len(text[:s].rstrip())
+            edits.append((ns, e, ''))
+    else:
+        indent = line_indent(text, s)
+        repl = block_comment(lines, indent) if lines else ''
+        if kept_block:
+            repl += ('\n' + indent if repl else '') + kept_block
+        if repl:
+            edits.append((s, e, repl))
+        else:
+            edits.append(whole_lines(text, s, e) + ('',))
+    return edits
+
 
 def transform(text):
-    if 'welder::' not in text or '[[' not in text:
+    if PREFIX not in text or '[[' not in text:
         return text
-    edits = []  # (start, end, replacement)
-    for s, e, paren_depth in find_blocks(text):
-        inner = text[s + 2:e - 2]
-        if PREFIX not in inner:
+    toks = list(parser().lex(text, dont_ignore=True))
+    edits = []
+    for blk in find_blocks(toks):
+        try:
+            edits.extend(block_edits(text, toks, blk))
+        except Exception as exc:  # fail-safe: an unhandled block stays verbatim
+            sys.stderr.write('welder-doxygen-filter: [[...]] block at offset '
+                             '%d left verbatim: %r\n' % (blk.start, exc))
             continue
-        kept = []
-        parts = {'doc': [], 'tparam': [], 'returns': []}
-        saw_welder = False
-        for el in split_top_level(inner):
-            kind, val = classify(el)
-            if kind == 'keep':
-                kept.append(val)
-            else:
-                saw_welder = True
-                if kind != 'strip':
-                    parts[kind].append(val)
-        if not saw_welder:
-            continue
-        kept_block = '[[' + ', '.join(kept) + ']]' if kept else ''
-        lines = comment_lines(parts)
-
-        kw = keyword_start(text, s)
-        prev_ch = text[:s].rstrip()[-1:]
-
-        if kw is not None:
-            if lines:
-                indent = line_indent(text, kw)
-                edits.append((kw, kw, block_comment(lines, indent) + '\n' + indent))
-            if kept_block:
-                edits.append((s, e, kept_block))
-            else:
-                edits.append(whole_lines(text, s, e) + ('',))
-        elif paren_depth > 0:
-            repl = kept_block
-            edits.append((s, e, repl))
-            if lines:
-                stop = param_end(text, e)
-                seg = text[e:stop]
-                ins = e + len(seg) - len(seg.lstrip()) + len(seg.strip())
-                edits.append((ins, ins, ' ' + inline_comment(lines)))
-        elif (prev_ch.isalnum() or prev_ch == '_') and next_sig(text, e) in ',};':
-            repl = kept_block + (' ' if kept_block and lines else '') + \
-                (inline_comment(lines) if lines else '')
-            if repl:
-                edits.append((s, e, repl))
-            else:  # nothing left: also eat the space before the annotation
-                ns = len(text[:s].rstrip())
-                edits.append((ns, e, ''))
-        else:
-            indent = line_indent(text, s)
-            repl = block_comment(lines, indent) if lines else ''
-            if kept_block:
-                repl += ('\n' + indent if repl else '') + kept_block
-            if repl:
-                edits.append((s, e, repl))
-            else:
-                edits.append(whole_lines(text, s, e) + ('',))
-
     for start, end, repl in sorted(edits, key=lambda t: t[0], reverse=True):
         text = text[:start] + repl + text[end:]
     return text
 
 
-def main():
-    if len(sys.argv) != 2:
+def main(argv):
+    if len(argv) != 2:
         sys.stderr.write('usage: welder-doxygen-filter.py <source-file>\n')
         return 2
-    with open(sys.argv[1], encoding='utf-8', errors='surrogateescape') as f:
-        sys.stdout.write(transform(f.read()))
+    with open(argv[1], 'rb') as f:
+        text = f.read().decode('utf-8', errors='surrogateescape')
+    try:
+        out = transform(text)
+    except Exception as exc:  # fail-safe: never break the doc build
+        hint = ' (pip install lark?)' if isinstance(exc, ImportError) else ''
+        sys.stderr.write('welder-doxygen-filter: %s: %r%s — passing the file '
+                         'through unfiltered\n' % (argv[1], exc, hint))
+        out = text
+    sys.stdout.buffer.write(out.encode('utf-8', errors='surrogateescape'))
     return 0
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    sys.exit(main(sys.argv))

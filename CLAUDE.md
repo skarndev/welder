@@ -172,15 +172,29 @@ module):
     (disk untouched). The filter translates the doc vocabulary into Doxygen
     comments: `doc` → `/** … */`, `returns` → `@return`, `tparam` → `@tparam`;
     `weld`/`policy`/`mark`/`trust_bindable` are stripped (doc *scope* control
-    is Doxygen-native — `EXCLUDE_SYMBOLS`). Robustness (a real scanner, not
-    regexes): comments, string/char literals and raw strings are skipped when
-    locating `[[ … ]]` blocks, so annotation-shaped text in a string or a
-    commented-out line is untouched; a block's extent is bracket- and
-    literal-aware (`]]` inside doc text can't end it); mixed blocks are split
-    at top level and the non-welder elements (`[[nodiscard]]`,
-    `[[deprecated("…")]]`, foreign annotations) are re-emitted in place.
-    Placement is positional (probed): keyword-position annotations hoist
-    before `struct`/`class`/`union`/`enum [class]`/`namespace` *and* before
+    is Doxygen-native — `EXCLUDE_SYMBOLS`). The parsing lives in a **Lark
+    grammar** (`tools/welder-doxygen-filter.lark`, needs `pip install lark`),
+    two layers sharing one lexer: layer 1 lexes the *C++ lexical soup* —
+    comments, string/char literals, raw strings (delimiter by backreference)
+    are single **atomic tokens**, so annotation-shaped text in a string or a
+    commented-out line is invisible downstream, and lexing is **total**
+    (one-char `PUNCT` catch-all: any bytes lex); layer 2 parses one block's
+    content (`start='attr_list'`): top-level comma split with nested balanced
+    groups, elements classified in the driver — welder docs translated, other
+    welder specs stripped, non-welder elements (`[[nodiscard]]`,
+    `[[deprecated("…")]]`, foreign annotations) re-emitted in place. Block
+    *extents* stay a small token scan in the driver — deliberately not
+    grammar work, since `]]` is context-dependent in C++ (`a[b[0]]`); an
+    unterminated `[[` yields no block (editing around it could swallow code).
+    **Fail-safety contract** (locked by the `hostile.hpp` golden): lexing is
+    total; each block transforms in its own try/except — an unparseable block
+    stays verbatim (stderr note); a last-resort try/except (missing `lark`
+    included) emits the whole file unchanged; non-UTF-8 survives via
+    surrogateescape + byte-exact stdout; exit 0 in all these cases — a doc
+    build can never crash on someone's code, worst case it loses welder
+    annotations for that file. Placement stays positional in the driver
+    (probed): keyword-position annotations hoist before
+    `struct`/`class`/`union`/`enum [class]`/`namespace` *and* before
     `template <…>` head(s); parameter docs become trailing `/**< */` before
     the parameter's top-level `,`/`)` (angles/braces/strings tracked, so
     `std::map<K, V> x = {{1, "one"}}` survives); enumerator docs become
@@ -194,10 +208,14 @@ module):
     spelled `welder::`-qualified (no namespace alias); a `<` *expression* in a
     default argument can confuse the parameter scan. Usage: `INPUT_FILTER =
     "python3 …/welder-doxygen-filter.py"` (or `FILTER_PATTERNS` per
-    extension). Tested in `tests/doxyfilter/`: a hostile corpus (never
-    compiled) → committed golden (`doxyfilter.golden`, python3-only) plus an
-    attachment e2e asserting every doc text lands in Doxygen XML
-    (`doxyfilter.doxygen`, self-skips without doxygen).
+    extension). Tested in `tests/doxyfilter/` (run with the uv venv Python,
+    which pins `lark`): two byte-exact goldens — `doxyfilter.golden.corpus`
+    (placement) and `doxyfilter.golden.hostile` (fail-safety; that corpus
+    contains raw non-UTF-8, so it's written/regenerated programmatically) —
+    plus an attachment e2e asserting every doc text lands in Doxygen XML
+    (`doxyfilter.doxygen`, self-skips without doxygen). The `doxyfilter-html`
+    target (in ALL when doxygen is present) renders the filtered corpus to
+    `build/…/tests/doxyfilter/html/index.html` for eyeballing.
   - **template ↔ annotation semantics** (locked in by
     `tests/core/template_annotations.cpp`, compile-only static_asserts):
     annotations on a template *declaration* are readable through every
@@ -300,7 +318,8 @@ src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
 tools/
-  welder-doxygen-filter.py     Doxygen INPUT_FILTER: welder annotations → Doxygen comments
+  welder-doxygen-filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
+  welder-doxygen-filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
 examples/
   python_poc/             consumes `import welder;`
   python_poc_headeronly/  consumes welder header-only
