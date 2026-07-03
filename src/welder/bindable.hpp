@@ -24,29 +24,36 @@
 #include <welder/bind_traits.hpp> // param_types (for signature asserts)
 #include <welder/reflect.hpp>     // welded_for
 
-// Backend-agnostic bindability ("can the target language represent this type?").
-//
-// Before welder emits a binding for any surface (a data member, a parameter, a
-// return type, a namespace variable), it checks that the backend can actually
-// turn that C++ type into a *meaningful* target value. Binding one it cannot is
-// never useful: the attribute would be unusable AND generated stubs would
-// reference an unimportable type. So welder makes it a hard compile error (see
-// assert_bindable), whose remedy is to weld the type, give it a backend type
-// converter, or mark::exclude the member.
-//
-// Only ONE thing is backend-specific here: the leaf test — "does the backend
-// natively convert this scalar/string/user-registered type, or does it need
-// welder to register a class/enum for it?". A backend supplies that via the
-// `caster_oracle` concept; the STL-wrapper recursion below is shared, so a new
-// backend inherits container/optional/variant/smart-pointer handling for free.
+/** @file
+    Backend-agnostic bindability ("can the target language represent this type?").
+
+    Before welder emits a binding for any surface (a data member, a parameter, a
+    return type, a namespace variable), it checks that the backend can actually
+    turn that C++ type into a *meaningful* target value. Binding one it cannot is
+    never useful: the attribute would be unusable AND generated stubs would
+    reference an unimportable type. So welder makes it a hard compile error (see
+    assert_bindable()), whose remedy is to weld the type, give it a backend type
+    converter, or `mark::exclude` the member.
+
+    Only ONE thing is backend-specific here: the leaf test — "does the backend
+    natively convert this scalar/string/user-registered type, or does it need
+    welder to register a class/enum for it?". A backend supplies that via the
+    #caster_oracle concept; the STL-wrapper recursion below is shared, so a new
+    backend inherits container/optional/variant/smart-pointer handling for free.
+*/
 
 namespace welder {
 
-// The one bindability fact a backend must provide: is T a type the backend can
-// convert to/from the target language *without* welder registering it — a native
-// scalar/string/STL type, or one the user gave a bespoke backend converter? False
-// means T is a program-defined class/enum the backend can only handle once welder
-// has registered it (so welder then requires it to be welded).
+/** The one bindability fact a backend must provide: can it natively convert a
+    type *without* welder registering it?
+
+    `has_native_caster<T>` is `true` for a native scalar/string/STL type, or one
+    the user gave a bespoke backend converter; `false` means @a T is a
+    program-defined class/enum the backend can only handle once welder has
+    registered it (so welder then requires @a T to be welded).
+
+    @tparam B the backend type.
+*/
 template <class B>
 concept caster_oracle = requires {
     { B::template has_native_caster<int> } -> std::convertible_to<bool>;
@@ -55,27 +62,33 @@ concept caster_oracle = requires {
 
 namespace detail {
 
-// bindable recurses through a container's element types (below), so forward it.
+/** Forward declaration: bindable() recurses through a container's element types. */
 template <caster_oracle B, class T, lang L>
 consteval bool bindable();
 
-// The STL templates whose target conversion is *element-wise* — the standard
-// containers, std::optional, pair/tuple/variant and the smart-pointer holders —
-// each paired with how many of its *leading* template arguments are value-bearing
-// (recursed): a sequence/optional/holder exposes 1, a map or pair exposes 2 (key
-// and value). A count of 0 is the sentinel for "all arguments" (tuple, variant).
-// Everything after those leading args — allocators, comparators, hashers,
-// deleters, the std::array extent — is infrastructure the backend never converts,
-// so it is ignored. Reflection can enumerate a specialization's arguments but
-// cannot tell which are value-bearing, so this count is the one bit of per-
-// template knowledge we record; add a row to teach welder a further wrapper. A
-// template *absent* from the table is an opaque bindable leaf (its elements are
-// not recursed) — e.g. a third-party container carrying its own converter.
+/** One row of the element-wise STL-wrapper table.
+
+    The STL templates whose target conversion is *element-wise* — the standard
+    containers, `std::optional`, `pair`/`tuple`/`variant` and the smart-pointer
+    holders — each paired with how many of its *leading* template arguments are
+    value-bearing (recursed): a sequence/optional/holder exposes 1, a map or pair
+    exposes 2 (key and value). A count of 0 is the sentinel for "all arguments"
+    (tuple, variant). Everything after those leading args — allocators,
+    comparators, hashers, deleters, the `std::array` extent — is infrastructure the
+    backend never converts, so it is ignored.
+
+    Reflection can enumerate a specialization's arguments but cannot tell which are
+    value-bearing, so this count is the one bit of per-template knowledge welder
+    records; add a row to teach it a further wrapper. A template *absent* from the
+    table is an opaque bindable leaf (its elements are not recursed) — e.g. a
+    third-party container carrying its own converter.
+*/
 struct wrapper_spec {
-    std::meta::info tmpl;  // the class template, e.g. ^^std::vector
-    std::size_t values;    // leading arguments to recurse; 0 = all
+    std::meta::info tmpl;  /**< The class template, e.g. `^^std::vector`. */
+    std::size_t values;    /**< Leading arguments to recurse; `0` = all. */
 };
 
+/** The element-wise STL-wrapper table welder recurses into. @see wrapper_spec */
 consteval std::array<wrapper_spec, 18> stl_wrappers() {
     return {{
         {^^std::vector, 1},        {^^std::list, 1},
@@ -91,8 +104,12 @@ consteval std::array<wrapper_spec, 18> stl_wrappers() {
     }};
 }
 
-// If `type` is a listed element-wise wrapper, the number of its leading arguments
-// to recurse (a 0 count in the table expands to all of them); otherwise -1.
+/** How many leading arguments of @a type to recurse if it is a listed wrapper.
+
+    @param type a reflection of the (possibly wrapped) type.
+    @return the number of leading value arguments (a `0` count in the table expands
+            to all of them); `-1` if @a type is not a listed element-wise wrapper.
+*/
 consteval long wrapper_value_count(std::meta::info type) {
     if (!std::meta::has_template_arguments(type))
         return -1;
@@ -105,7 +122,10 @@ consteval long wrapper_value_count(std::meta::info type) {
     return -1;
 }
 
-// The first N template arguments of Type, as a splice-ready static array.
+/** The first @a N template arguments of @a Type, as a splice-ready static array.
+    @tparam Type the specialization to read.
+    @tparam N    how many leading arguments to take.
+*/
 template <std::meta::info Type, std::size_t N>
 consteval std::array<std::meta::info, N> leading_args() {
     std::array<std::meta::info, N> out{};
@@ -118,16 +138,27 @@ consteval std::array<std::meta::info, N> leading_args() {
     return out;
 }
 
-// Every one of a wrapper's value arguments (spliced back to types) must bind.
+/** Whether every one of a wrapper's value arguments (spliced back to types) binds.
+    @tparam B    the backend.
+    @tparam L    the target language.
+    @tparam Args the static array of value-argument reflections.
+    @tparam I    the index pack over @a Args.
+*/
 template <caster_oracle B, lang L, auto Args, std::size_t... I>
 consteval bool args_bindable(std::index_sequence<I...>) {
     return (bindable<B, typename [:Args[I]:], L>() && ...);
 }
 
-// Can the backend convert T — stripped of cv/ref/pointer — to a meaningful target
-// value? A listed wrapper is bindable iff its value arguments are; a type with a
-// native/user converter binds as-is; otherwise it is a program-defined class/enum
-// the backend must register, so it binds iff it is welded for L.
+/** Can the backend convert @a T — stripped of cv/ref/pointer — to a meaningful
+    target value?
+
+    A listed wrapper is bindable iff its value arguments are; a type with a
+    native/user converter binds as-is; otherwise it is a program-defined class/enum
+    the backend must register, so it binds iff it is welded for @a L.
+    @tparam B the backend.
+    @tparam T the type to test.
+    @tparam L the target language.
+*/
 template <caster_oracle B, class T, lang L>
 consteval bool bindable() {
     // Strip cv/ref/pointer so the STL-wrapper table below sees the bare
@@ -159,15 +190,24 @@ consteval bool bindable() {
 
 } // namespace detail
 
-// Is T bindable to language L under backend B? (public spelling of the above.)
+/** Is @a T bindable to language @a L under backend @a B? (public spelling.)
+    @tparam B the backend.
+    @tparam T the type to test.
+    @tparam L the target language.
+*/
 template <caster_oracle B, class T, lang L>
 consteval bool bindable() {
     return detail::bindable<B, T, L>();
 }
 
-// Hard error the instant welder would bind an unbindable type. The offending type
-// is the template argument of the failing instantiation, so it is named in the
-// diagnostic backtrace.
+/** Hard error the instant welder would bind an unbindable type.
+
+    The offending type is the template argument of the failing instantiation, so it
+    is named in the diagnostic backtrace.
+    @tparam B the backend.
+    @tparam T the type being bound.
+    @tparam L the target language.
+*/
 template <caster_oracle B, class T, lang L>
 consteval void assert_bindable() {
     static_assert(
@@ -180,7 +220,12 @@ consteval void assert_bindable() {
 
 namespace detail {
 
-// Assert every parameter type of Fn binds.
+/** Assert every parameter type of @a Fn binds.
+    @tparam B  the backend.
+    @tparam Fn a reflection of the function.
+    @tparam L  the target language.
+    @tparam I  the index pack over the parameters.
+*/
 template <caster_oracle B, std::meta::info Fn, lang L, std::size_t... I>
 consteval void assert_params_bindable(std::index_sequence<I...>) {
     static constexpr auto params{param_types<Fn>()};
@@ -189,9 +234,14 @@ consteval void assert_params_bindable(std::index_sequence<I...>) {
 
 } // namespace detail
 
-// Assert every parameter type and the (non-void) return type of Fn binds, so the
-// function/method/operator/constructor can round-trip through the target language.
-// A constructor has no return type.
+/** Assert every parameter type and the (non-void) return type of @a Fn binds.
+
+    So the function/method/operator/constructor can round-trip through the target
+    language. A constructor has no return type.
+    @tparam B  the backend.
+    @tparam Fn a reflection of the callable.
+    @tparam L  the target language.
+*/
 template <caster_oracle B, std::meta::info Fn, lang L>
 consteval void assert_signature_bindable() {
     // Guard n != 0: param_types<Fn> materializes a std::array<info, n>, and
@@ -215,14 +265,22 @@ consteval void assert_signature_bindable() {
 // for the type and the gate is skipped. (The type-level trust_bindable<T> point is
 // folded into bindable() itself, above, so it needs no per-site handling.)
 
-// Assert the type of a data member / namespace variable binds, unless trusted.
+/** Assert the type of a data member / namespace variable binds, unless trusted.
+    @tparam B      the backend.
+    @tparam Member a reflection of the data member or variable.
+    @tparam L      the target language.
+*/
 template <caster_oracle B, std::meta::info Member, lang L>
 consteval void assert_member_bindable() {
     if constexpr (!welder::trusted_for(Member, L))
         assert_bindable<B, typename [:std::meta::type_of(Member):], L>();
 }
 
-// Assert a function/method/operator/constructor signature binds, unless trusted.
+/** Assert a function/method/operator/constructor signature binds, unless trusted.
+    @tparam B  the backend.
+    @tparam Fn a reflection of the callable.
+    @tparam L  the target language.
+*/
 template <caster_oracle B, std::meta::info Fn, lang L>
 consteval void assert_callable_bindable() {
     if constexpr (!welder::trusted_for(Fn, L))
