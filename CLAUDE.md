@@ -271,14 +271,22 @@ module):
       is `/** */` not `///` (less noise) — see [[welder-doc-comment-style]].
     - Both run from an **isolated uv env** (`docs/pyproject.toml` → mkdocs-material
       + lark; `docs/uv.lock` committed like `tests/`), the same interpreter used
-      for the Doxygen filter (the one guaranteed to have `lark`). The Doxygen HTML
-      lands in `<build>/docs/site/api/` next to the mkdocs guide; the guide's
-      `reference.md` links out to it.
-    - **Targets:** `welder-docs` (mkdocs build — which cleans `site/` — *then*
-      Doxygen into `site/api/`; order matters, so both are steps of one target) →
-      `<build>/docs/site/index.html`; `welder-docs-serve` (`mkdocs serve` the guide
-      for live editing, reference is build-only). Both self-skip (with a warning)
-      if `doxygen`/`uv` are absent. Graphviz (`dot`) is optional (class graphs).
+      for the Doxygen filter (the one guaranteed to have `lark`). Doxygen writes the
+      reference into `docs/content/api/` (**inside** mkdocs' `docs_dir`, generated +
+      gitignored), so mkdocs copies it into the site as static files for *both*
+      `build` and `serve` — hence Doxygen runs **before** mkdocs. The guide's
+      `reference.md` links to `../api/index.html` (a raw `<a>` so mkdocs doesn't
+      warn).
+    - **Targets:** `welder-docs` (Doxygen → `content/api`, *then* `mkdocs build`
+      copies it alongside the guide → `<build>/docs/site/index.html`; order matters,
+      so both are steps of one target); `welder-docs-serve` (Doxygen once, then
+      `mkdocs serve` — the guide live-reloads, the reference is a static snapshot
+      that *is* served, no 404). Both self-skip (with a warning) if `doxygen`/`uv`
+      are absent. Graphviz (`dot`) is optional (class graphs). NB mkdocs mermaid
+      diagrams: don't hardcode node `fill`/`color` (Material flips the label color
+      per theme and htmlLabels ignore per-node `color`, giving unreadable text in
+      dark mode) — use `stroke` accents and let Material's amber-accent default fill
+      stand.
   - **template ↔ annotation semantics** (locked in by
     `tests/core/template_annotations.cpp`, compile-only static_asserts):
     annotations on a template *declaration* are readable through every
@@ -391,7 +399,7 @@ docs/                     the documentation site (gated by WELDER_BUILD_DOCS, OF
   CMakeLists.txt          targets welder-docs / welder-docs-serve; provisions the uv env, fetches doxygen-awesome, patches the Doxygen header
   mkdocs.yml              mkdocs-material config (docs_dir: content)
   content/                the narrative guide (index, guide/*, architecture, reference) + stylesheets/extra.css
-  Doxyfile.in             configured → Doxygen C++ reference (src/welder/** via the INPUT_FILTER) into site/api/
+  Doxyfile.in             configured → Doxygen C++ reference (src/welder/** via the INPUT_FILTER) into content/api/ (gitignored; mkdocs copies to site/api)
   api_mainpage.md         the Doxygen landing page (USE_MDFILE_AS_MAINPAGE)
   doxygen-extra.css       spark-palette retune over doxygen-awesome-css
   patch_doxygen_header.py injects the doxygen-awesome dark-mode/extension JS into the generated header
