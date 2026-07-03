@@ -9,9 +9,9 @@ flowchart TD
     D["Derived<br/>(welded)"] --> Q{"is the base welded?"}
     Q -- yes --> W["native pybind11 base<br/><code>class_&lt;T, Base&gt;</code><br/>(bind Base separately, first)"]
     Q -- no --> M["C++ mixin<br/>eligible members flattened in<br/>(honoring its own marks/policy)"]
-    style D fill:#ff5722,stroke:#bf360c,color:#fff
-    style W fill:#ffc107,stroke:#ff8f00,color:#000
-    style M fill:#ffc107,stroke:#ff8f00,color:#000
+    style D stroke:#e64a19,stroke-width:3px
+    style W stroke:#e64a19,stroke-width:3px
+    style M stroke:#e64a19,stroke-width:3px
 ```
 
 ## Welded base → native base

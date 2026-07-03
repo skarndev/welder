@@ -95,9 +95,9 @@ flowchart LR
     C --> D["importable module"]
     A -.same annotations.-> E["Doxygen filter"]
     E --> F["C++ API reference"]
-    style A fill:#ff5722,stroke:#bf360c,color:#fff
-    style D fill:#ffc107,stroke:#ff8f00,color:#000
-    style F fill:#ffc107,stroke:#ff8f00,color:#000
+    style A stroke:#e64a19,stroke-width:3px
+    style D stroke:#e64a19,stroke-width:3px
+    style F stroke:#e64a19,stroke-width:3px
 ```
 
 A language-agnostic **core** owns all the reflection work — deciding *what* binds,

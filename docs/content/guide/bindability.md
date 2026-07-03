@@ -41,8 +41,8 @@ flowchart TD
     C -- no --> N{"welded?"}
     N -- yes --> OK
     N -- no --> ERR["hard compile error"]
-    style OK fill:#ffc107,stroke:#ff8f00,color:#000
-    style ERR fill:#ffcdd2,stroke:#c62828,color:#000
+    style OK stroke:#2e7d32,stroke-width:3px
+    style ERR stroke:#c62828,stroke-width:3px
 ```
 
 So `std::vector<Unwelded>` is caught, not just a bare `Unwelded` — the recursion

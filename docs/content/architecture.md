@@ -24,9 +24,8 @@ flowchart TB
     end
     voc --> core
     core --> be
-    style voc fill:#ff5722,stroke:#bf360c,color:#fff
-    style core fill:#fff3e0,stroke:#ff8f00,color:#000
-    style be fill:#ffc107,stroke:#ff8f00,color:#000
+    style voc stroke:#e64a19,stroke-width:3px
+    style be stroke:#e64a19,stroke-width:3px
 ```
 
 ## Core vs. backend
@@ -91,9 +90,9 @@ flowchart LR
     MD["docs/content/*.md"] --> MK["mkdocs-material"]
     MK --> SITE["site/ (this guide)"]
     REF -.linked from.-> SITE
-    style SRC fill:#ff5722,stroke:#bf360c,color:#fff
-    style SITE fill:#ffc107,stroke:#ff8f00,color:#000
-    style REF fill:#ffc107,stroke:#ff8f00,color:#000
+    style SRC stroke:#e64a19,stroke-width:3px
+    style SITE stroke:#e64a19,stroke-width:3px
+    style REF stroke:#e64a19,stroke-width:3px
 ```
 
 - **mkdocs-material** renders this narrative guide from `docs/content/`.

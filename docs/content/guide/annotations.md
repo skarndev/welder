@@ -91,8 +91,8 @@ flowchart TD
     P -- opt_in --> I{included for L?}
     I -- yes --> T
     I -- no --> N
-    style T fill:#ffc107,stroke:#ff8f00,color:#000
-    style N fill:#eee,stroke:#999,color:#000
+    style T stroke:#2e7d32,stroke-width:3px
+    style N stroke:#999,stroke-width:2px
 ```
 
 - Excluded for `L` → **false**.

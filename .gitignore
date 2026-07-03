@@ -20,3 +20,6 @@ temp_*
 
 # uv / virtualenv
 .venv/
+
+# Generated Doxygen reference (built into mkdocs' docs_dir by docs/CMakeLists.txt)
+/docs/content/api/

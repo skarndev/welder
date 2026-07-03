@@ -1,16 +1,18 @@
 # The documentation site: a mkdocs-material guide + a Doxygen C++ reference,
 # presented as one site. Two toolchains, cleanly separated:
 #
-#   * mkdocs-material renders docs/content/*.md         -> <bin>/site/
-#   * Doxygen renders src/welder/** (through welder's    -> <bin>/site/api/
-#     own INPUT_FILTER, themed with doxygen-awesome-css)
+#   * Doxygen renders src/welder/** (through welder's    -> docs/content/api/
+#     own INPUT_FILTER, themed with doxygen-awesome-css)   (generated; gitignored)
+#   * mkdocs-material renders docs/content/*.md + copies -> <bin>/site/
+#     the reference above as static files                    (guide + /api/)
 #
-# Both run out of an isolated uv environment (docs/pyproject.toml), mirroring
-# tests/. Everything is opt-in behind WELDER_BUILD_DOCS and never touches the
-# library build. Targets:
+# Doxygen writes into content/api (inside docs_dir) so mkdocs serves the reference
+# in both `build` and `serve` — hence it runs before mkdocs. Both run out of an
+# isolated uv environment (docs/pyproject.toml), mirroring tests/. Everything is
+# opt-in behind WELDER_BUILD_DOCS and never touches the library build. Targets:
 #
 #   welder-docs        build the whole site (guide + reference) into <bin>/site
-#   welder-docs-serve  `mkdocs serve` the guide for live editing (no reference)
+#   welder-docs-serve  serve the docs (guide live-reloads; reference is a snapshot)
 
 find_program(WELDER_DOXYGEN doxygen)
 find_program(WELDER_DOCS_UV uv)
@@ -117,28 +119,38 @@ else()
 endif()
 
 # --- 5. Configure the Doxyfile ----------------------------------------------
-set(DOXYGEN_OUTPUT_DIR ${_site})
+# Doxygen writes into content/api (inside mkdocs' docs_dir), so mkdocs picks the
+# reference up as static files in *both* `build` and `serve` — no dead link when
+# serving. content/api is generated (gitignored); Doxygen must therefore run
+# *before* mkdocs so those files exist to copy.
+set(_docs_content ${_docs_src}/content)
+set(DOXYGEN_OUTPUT_DIR ${_docs_content})   # HTML_OUTPUT = api -> content/api
 set(DOXYGEN_MAINPAGE ${_docs_src}/api_mainpage.md)
 configure_file(${_docs_src}/Doxyfile.in ${_docs_bin}/Doxyfile @ONLY)
 
 # --- 6. Targets --------------------------------------------------------------
-# welder-docs builds the guide first (mkdocs cleans the site dir), *then* the
-# Doxygen reference into site/api — order matters, so both are steps of one target.
+# welder-docs: Doxygen reference into content/api *first*, then mkdocs build,
+# which copies content/api into the site alongside the guide (order matters, so
+# both are steps of one target).
 add_custom_target(welder-docs
-  COMMAND ${CMAKE_COMMAND} -E echo "welder: building mkdocs guide -> ${_site}"
+  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_docs_content}/api"
+  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
+  COMMAND ${CMAKE_COMMAND} -E echo "welder: building mkdocs site (guide + reference) -> ${_site}"
   COMMAND ${WELDER_DOCS_PYTHON} -m mkdocs build
           --config-file ${_docs_src}/mkdocs.yml --site-dir ${_site} --clean
-  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_site}/api"
-  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
   WORKING_DIRECTORY ${_docs_bin}
   COMMENT "welder: documentation site -> ${_site}/index.html"
   USES_TERMINAL VERBATIM)
 
-# Live-reload the guide while writing prose (the Doxygen reference is build-only).
+# Live-reload the guide while writing prose. The Doxygen reference is built once
+# up front (into content/api) so its link resolves while serving; it is a static
+# snapshot (rerun the target to refresh it).
 add_custom_target(welder-docs-serve
+  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_docs_content}/api"
+  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
   COMMAND ${WELDER_DOCS_PYTHON} -m mkdocs serve --config-file ${_docs_src}/mkdocs.yml
-  WORKING_DIRECTORY ${_docs_src}
-  COMMENT "welder: serving the mkdocs guide at http://127.0.0.1:8000/"
+  WORKING_DIRECTORY ${_docs_bin}
+  COMMENT "welder: serving the docs at http://127.0.0.1:8000/ (guide live-reloads)"
   USES_TERMINAL VERBATIM)
 
 message(STATUS "welder: docs targets ready — build 'welder-docs' (theme: "
