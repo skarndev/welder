@@ -263,10 +263,12 @@ module):
       sidebar-only layout + a dark-mode toggle wired via a build-time-generated,
       patched header (`docs/patch_doxygen_header.py`; failure → stock header, still
       the base awesome theme); `docs/doxygen-extra.css` retunes its accent to the
-      same spark palette. NB the sources are commented with plain `//` today, so
-      the reference is *structurally* complete (every symbol + source) but sparse
-      on per-symbol prose until `///`/annotations are added — which then flow in
-      automatically.
+      same spark palette. Every `src/welder/**.hpp` now carries `/** */` Doxygen
+      blocks (first-sentence autobrief, `@param`/`@tparam`/`@return`, trailing
+      `/**< */` on members/enumerators; function-body comments stay `//`), so the
+      reference renders full prose for the public API *and* internals — a
+      warning-free Doxygen run (verified file-by-file). The house doc-comment style
+      is `/** */` not `///` (less noise) — see [[welder-doc-comment-style]].
     - Both run from an **isolated uv env** (`docs/pyproject.toml` → mkdocs-material
       + lark; `docs/uv.lock` committed like `tests/`), the same interpreter used
       for the Doxygen filter (the one guaranteed to have `lark`). The Doxygen HTML
