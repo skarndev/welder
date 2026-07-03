@@ -73,9 +73,11 @@ UML_LOOK               = YES
 GENERATE_TREEVIEW      = YES
 DISABLE_INDEX          = NO
 FULL_SIDEBAR           = NO
+# doxygen-awesome themes all colors via CSS vars and asks that HUE/SAT stay at
+# their defaults — custom values bake warm hardcoded colors into doxygen.css /
+# navtree.css that don't adapt to dark mode. The spark accent is applied in
+# doxygen-extra.css instead.
 HTML_COLORSTYLE        = LIGHT
-HTML_COLORSTYLE_HUE    = 14
-HTML_COLORSTYLE_SAT    = 90
 HTML_COPY_CLIPBOARD    = NO
 HTML_HEADER            = @DOXYGEN_HTML_HEADER@
 HTML_EXTRA_STYLESHEET  = @DOXYGEN_HTML_EXTRA_STYLESHEET@

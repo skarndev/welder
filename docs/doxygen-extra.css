@@ -27,3 +27,53 @@ div.fragment,
 pre.fragment {
     border-radius: 0.5rem;
 }
+
+/* --- Top bar: backlink to the mkdocs guide + the light/dark toggle ----------
+   Injected by patch_doxygen_header.py at the top of every reference page, so the
+   C++ reference always links back to the user-facing guide and carries its own
+   theme switch (the auto-inserted one lands in the hidden sidebar-only top bar). */
+#welder-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem clamp(1rem, 4vw, 2rem);
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--separator-color);
+    font-size: 0.9rem;
+}
+#welder-guide-link {
+    font-weight: 600;
+    color: var(--primary-color);
+    text-decoration: none;
+    white-space: nowrap;
+}
+#welder-guide-link:hover {
+    color: var(--primary-dark-color);
+    text-decoration: underline;
+}
+#welder-dark-toggle {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    user-select: none;
+}
+
+/* Readable text selection in both themes (doxygen-awesome leaves it to the
+   browser, which can render an unreadable near-white highlight in dark mode). */
+::selection {
+    background: var(--primary-color);
+    color: #ffffff;
+}
+
+/* Tame doxygen's default *cyan* jump-to-anchor glow (unreadable, and off-brand)
+   to the spark accent, and use a theme-aware background so text stays legible in
+   dark mode. */
+.memitem.glow,
+.memdoc.glow,
+.memberdecls td.glow,
+.fieldtable tr.glow,
+div.line.glow {
+    background-color: var(--primary-lightest-color) !important;
+    box-shadow: 0 0 12px var(--primary-light-color) !important;
+}
