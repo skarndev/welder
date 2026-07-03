@@ -7,23 +7,32 @@
 
 #include <welder/reflect.hpp> // resolution: welded_for / member_bound / public_bases
 
-// Backend-agnostic *selection* layer: the reflection predicates and selectors
-// that decide **what** participates in a binding — which constructors, methods,
-// operators, data members, namespace entities and base classes are eligible, and
-// what their parameter names/types are. It answers "what", never "how": no
-// backend API appears here, so every backend (pybind11 today; nanobind / lua
-// later) shares this vocabulary and only supplies the emission primitives.
-//
-// Like <welder/reflect.hpp>, this depends on the welder vocabulary (lang,
-// policy_kind, ...) but does NOT include <welder/annotations.hpp>: provide the
-// vocabulary first (`import welder;` or `#include <welder/welder.hpp>`), then this.
+/** @file
+    Backend-agnostic *selection* layer: the reflection predicates and selectors
+    that decide **what** participates in a binding — which constructors, methods,
+    operators, data members, namespace entities and base classes are eligible, and
+    what their parameter names/types are.
+
+    It answers "what", never "how": no backend API appears here, so every backend
+    (pybind11 today; nanobind / lua later) shares this vocabulary and only supplies
+    the emission primitives.
+
+    @note Like `<welder/reflect.hpp>`, this depends on the welder vocabulary
+    (`lang`, `policy_kind`, …) but does NOT include `<welder/annotations.hpp>`:
+    provide the vocabulary first (`import welder;` or `#include
+    <welder/welder.hpp>`), then this.
+*/
 
 namespace welder::detail {
 
 // --- function / parameter introspection -------------------------------------
 
-// A function's parameter *types*, as a static array of reflections (usable as a
-// non-type template argument so it can be spliced back into a pack).
+/** A function's parameter *types*, as a static array of reflections.
+
+    Usable as a non-type template argument so it can be spliced back into a pack.
+    @tparam Fn a reflection of the function.
+    @return an array of the parameter type reflections, in order.
+*/
 template <std::meta::info Fn>
 consteval auto param_types() {
     constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
@@ -34,8 +43,12 @@ consteval auto param_types() {
     return types;
 }
 
-// A function's parameter *names*, in order — a static-storage C string per
-// parameter, or nullptr for an unnamed one.
+/** A function's parameter *names*, in order.
+
+    @tparam Fn a reflection of the function.
+    @return an array of static-storage C strings, one per parameter, or `nullptr`
+            for an unnamed one.
+*/
 template <std::meta::info Fn>
 consteval auto param_names() {
     constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
@@ -48,8 +61,13 @@ consteval auto param_names() {
     return names;
 }
 
-// Whether every parameter of Fn carries an identifier. Keyword-argument naming
-// is all-or-nothing across backends, so an unnamed parameter means positional.
+/** Whether every parameter of @a Fn carries an identifier.
+
+    Keyword-argument naming is all-or-nothing across backends, so an unnamed
+    parameter means positional.
+    @tparam Fn a reflection of the function.
+    @return `true` iff all parameters are named.
+*/
 template <std::meta::info Fn>
 consteval bool all_params_named() {
     for (auto p : std::meta::parameters_of(Fn))
@@ -60,9 +78,14 @@ consteval bool all_params_named() {
 
 // --- constructor / method / operator eligibility ----------------------------
 
-// A non-default, non-copy/move public constructor a backend should expose. The
-// default constructor is handled separately (it may be implicit, hence not a
-// member).
+/** A non-default, non-copy/move public constructor a backend should expose.
+
+    The default constructor is handled separately (it may be implicit, hence not a
+    member).
+    @param c a reflection of the constructor.
+    @return `true` iff @a c is public, non-deleted, not copy/move, and takes at
+            least one parameter.
+*/
 consteval bool is_bindable_constructor(std::meta::info c) {
     return std::meta::is_constructor(c) && std::meta::is_public(c) &&
            !std::meta::is_deleted(c) && !std::meta::is_copy_constructor(c) &&
@@ -70,9 +93,16 @@ consteval bool is_bindable_constructor(std::meta::info c) {
            !std::meta::parameters_of(c).empty();
 }
 
-// A member function a backend should expose as a method, honoring the same
-// exclude/include/policy resolution as data members. Special members,
-// destructors and operators are skipped (operators are classified separately).
+/** A member function a backend should expose as a method.
+
+    Honors the same exclude/include/policy resolution as data members. Special
+    members, destructors and operators are skipped (operators are classified
+    separately).
+    @param f   a reflection of the member function.
+    @param L   the target language.
+    @param pol the enclosing type's policy.
+    @return `true` iff @a f is an eligible, bound public method.
+*/
 consteval bool is_bindable_method(std::meta::info f, lang L, policy_kind pol) {
     return std::meta::is_function(f) && !std::meta::is_constructor(f) &&
            !std::meta::is_special_member_function(f) &&
@@ -81,19 +111,29 @@ consteval bool is_bindable_method(std::meta::info f, lang L, policy_kind pol) {
            member_bound(f, L, pol);
 }
 
-// A member operator that *resolves* as bound (public, non-deleted, not a special
-// member, member_bound). Whether it maps to something in the target language —
-// and under what name — is a backend decision (see backend::special_method_name);
-// this is the language-agnostic half of the test.
+/** A member operator that *resolves* as bound.
+
+    Public, non-deleted, not a special member, `member_bound`. Whether it maps to
+    something in the target language — and under what name — is a backend decision
+    (see `backend::special_method_name`); this is the language-agnostic half.
+    @param f   a reflection of the operator function.
+    @param L   the target language.
+    @param pol the enclosing type's policy.
+    @return `true` iff @a f is an eligible, bound operator candidate.
+*/
 consteval bool is_operator_candidate(std::meta::info f, lang L, policy_kind pol) {
     return std::meta::is_function(f) && std::meta::is_operator_function(f) &&
            !std::meta::is_special_member_function(f) && std::meta::is_public(f) &&
            !std::meta::is_deleted(f) && member_bound(f, L, pol);
 }
 
-// Whether a member operator is unary (0 parameters) vs binary (1 parameter),
-// told apart by arity — this disambiguates the operators with both forms (+, -).
-// Backends use it to pick, e.g., __neg__ vs __sub__.
+/** Whether a member operator is unary (0 parameters) vs binary (1 parameter).
+
+    Told apart by arity — this disambiguates the operators with both forms
+    (`+`, `-`); backends use it to pick, e.g., `__neg__` vs `__sub__`.
+    @param f a reflection of the operator function.
+    @return `true` iff @a f is unary.
+*/
 consteval bool is_unary_operator(std::meta::info f) {
     return std::meta::parameters_of(f).empty();
 }
@@ -105,8 +145,12 @@ consteval bool is_unary_operator(std::meta::info f) {
 // to synthesize a field constructor so the target language can build it with
 // values; these helpers decide when that is valid and expose the fields.
 
-// The fields an aggregate is initialized from: its non-static data members in
-// declaration order (all public, by the aggregate rules).
+/** The fields an aggregate is initialized from: its non-static data members in
+    declaration order (all public, by the aggregate rules).
+
+    @tparam T the aggregate type.
+    @return an array of the field reflections, in declaration order.
+*/
 template <class T>
 consteval auto aggregate_fields() {
     constexpr auto ctx{std::meta::access_context::unchecked()};
@@ -118,12 +162,17 @@ consteval auto aggregate_fields() {
     return fs;
 }
 
-// Whether to synthesize an aggregate field constructor for T (language L). Only
-// for a baseless aggregate with at least one field, *all* of which bind: a based
-// aggregate's brace-init nests the base (a flat field ctor can't express it), and
-// a partially-excluded one would leak an excluded field as a positional parameter
-// (aggregate init is positional and all-or-nothing). An empty aggregate is already
-// covered by the default constructor.
+/** Whether to synthesize an aggregate field constructor for @a T (language @a L).
+
+    Only for a baseless aggregate with at least one field, *all* of which bind: a
+    based aggregate's brace-init nests the base (a flat field ctor can't express
+    it), and a partially-excluded one would leak an excluded field as a positional
+    parameter (aggregate init is positional and all-or-nothing). An empty aggregate
+    is already covered by the default constructor.
+    @tparam T the aggregate type.
+    @tparam L the target language.
+    @return `true` iff a field constructor should be synthesized.
+*/
 template <class T, lang L>
 consteval bool aggregate_initializable() {
     if (!std::is_aggregate_v<T> || !welder::public_bases(^^T).empty())
@@ -141,26 +190,42 @@ consteval bool aggregate_initializable() {
 
 // --- namespace-member eligibility -------------------------------------------
 
-// The member kinds welder can expose from a namespace. is_class_type/is_enum_type
-// throw on a non-type reflection, so they are reached only after is_type; the other
-// predicates are total and safe on any reflection.
+/** The member kinds welder can expose from a namespace.
+
+    `is_class_type`/`is_enum_type` throw on a non-type reflection, so they are
+    reached only after `is_type`; the other predicates are total and safe on any
+    reflection.
+    @param mem a reflection of the namespace member.
+    @return `true` iff @a mem is a class/enum type, a function, or a variable.
+*/
 consteval bool is_bindable_kind(std::meta::info mem) {
     return (std::meta::is_type(mem) &&
             (std::meta::is_class_type(mem) || std::meta::is_enum_type(mem))) ||
            std::meta::is_function(mem) || std::meta::is_variable(mem);
 }
 
-// A leaf entity binds iff it is a welded candidate that also resolves as bound
-// under namespace policy `pol` and its own marks.
+/** Whether a leaf entity binds: a welded candidate that also resolves as bound.
+
+    @param mem a reflection of the namespace member.
+    @param L   the target language.
+    @param pol the namespace's policy.
+    @return `true` iff @a mem is a bindable kind, welded for @a L, and bound under
+            @a pol and its own marks.
+*/
 consteval bool entity_bound(std::meta::info mem, lang L, policy_kind pol) {
     return is_bindable_kind(mem) && welded_for(mem, L) && member_bound(mem, L, pol);
 }
 
-// Whether `ns` holds anything that would bind, directly or nested — i.e. whether
-// exposing it would yield a non-empty (sub)module. Each namespace contributes
-// under its own policy; a nested namespace is recursed by the same rule as the
-// dispatch (member_bound under ns's policy: automatic unless excluded, opt_in
-// only if included).
+/** Whether @a ns holds anything that would bind, directly or nested.
+
+    I.e. whether exposing it would yield a non-empty (sub)module. Each namespace
+    contributes under its own policy; a nested namespace is recursed by the same
+    rule as the dispatch (`member_bound` under the namespace's policy: automatic
+    unless excluded, opt_in only if included).
+    @param ns a reflection of the namespace.
+    @param L  the target language.
+    @return `true` iff some member (possibly nested) binds.
+*/
 consteval bool namespace_has_bound(std::meta::info ns, lang L) {
     constexpr auto ctx{std::meta::access_context::unchecked()};
     const policy_kind pol{policy_of(ns)};
@@ -186,10 +251,16 @@ consteval bool namespace_has_bound(std::meta::info ns, lang L) {
 //   * a non-welded base -> a plain C++ mixin with no standalone type, whose
 //     eligible members are flattened onto the derived binding.
 
-// The native bases of Type for L: its nearest welded ancestors, found by looking
-// *past* non-welded bases (whose members are flattened instead). So a welded base
-// reachable only through a non-welded one is still linked. A virtual diamond can
-// reach the same welded base by several paths, so the list is deduplicated.
+/** Collect the native bases of @a type for @a L: its nearest welded ancestors.
+
+    Found by looking *past* non-welded bases (whose members are flattened instead),
+    so a welded base reachable only through a non-welded one is still linked. A
+    virtual diamond can reach the same welded base by several paths, so the list is
+    deduplicated.
+    @param type a reflection of the derived type.
+    @param L    the target language.
+    @param[out] out accumulates the deduplicated native base reflections.
+*/
 consteval void collect_native_bases(std::meta::info type, lang L,
                                     std::vector<std::meta::info>& out) {
     for (auto base : welder::public_bases(type)) {
@@ -208,8 +279,14 @@ consteval void collect_native_bases(std::meta::info type, lang L,
     }
 }
 
-// The same set as a static array of type reflections usable as a non-type
-// template argument (spliced into the backend's class handle template).
+/** The native bases of @a Type for @a L as a static array of type reflections.
+
+    Usable as a non-type template argument (spliced into the backend's class handle
+    template). Same set as collect_native_bases().
+    @tparam Type the derived type reflection.
+    @tparam L    the target language.
+    @return an array of the native base type reflections.
+*/
 template <std::meta::info Type, lang L>
 consteval auto native_base_types() {
     constexpr std::size_t n{[] {
