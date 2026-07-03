@@ -59,8 +59,9 @@ The filter must never break a doc build, whatever the input:
     documented, only its welder annotations are lost;
   * exit status is 0 in all of these cases; 2 only for wrong usage.
 
-Known limits: annotations must be spelled welder::-qualified (no namespace
-alias); doc text must be inline string literals — which the annotation design
+Known limits: annotations must be spelled welder::-qualified (`::welder::…`
+also works; a namespace *alias* does not); doc text must be inline string
+literals — which the annotation design
 already forces (fixed_string; a const char* is not a permitted annotation
 constant); a `<`-containing *expression* in a default argument (e.g.
 `int n = a < b`) can confuse the parameter-end scan.
@@ -160,12 +161,13 @@ def classify(element, inner):
     if not kids:
         return ('keep', '')
     kept = ('keep', inner[element.meta.start_pos:element.meta.end_pos])
-    lead = [k.type if isinstance(k, Token) else 'group' for k in kids[:4]]
+    lead = [k.type if isinstance(k, Token) else 'group' for k in kids[:5]]
     if lead[:1] != ['EQUAL']:
         return kept                      # standard attribute
-    if lead != ['EQUAL', 'WELDER', 'COLONCOLON', 'WORD']:
+    w = 2 if lead[1:2] == ['COLONCOLON'] else 1  # =::welder::… also welds
+    if lead[w:w + 3] != ['WELDER', 'COLONCOLON', 'WORD']:
         return kept                      # foreign annotation
-    kind = str(kids[3])
+    kind = str(kids[w + 2])
     if kind not in DOC_KINDS:
         return ('strip', None)  # weld / policy / mark / trust_bindable / ...
     args = [unescape(t) for t in element.scan_values(
@@ -235,17 +237,100 @@ def keyword_hoist(text, toks, bi):
         q = prev_sig(toks, p)
         if q is not None and toks[q] == 'enum':
             p = q
-    while True:  # `template <...>` head(s) directly above
-        q = prev_sig(toks, p)
-        if q is None or toks[q] != '>':
-            return toks[p].start_pos
-        lt = angle_open(text, toks, q)
-        if lt is None:
-            return toks[p].start_pos
-        tm = prev_sig(toks, lt)
-        if tm is None or toks[tm] != 'template':
+    while True:  # `template <...>` head(s) — and requires-clauses — above
+        tm = head_start_above(text, toks, p)
+        if tm is None:
             return toks[p].start_pos
         p = tm
+
+
+def head_start_above(text, toks, p):
+    """Token index of the `template` introducing the head directly above
+    token p, or None. Handles both a plain head (`template <...>`) and one
+    with a trailing requires-CLAUSE (`template <...> requires C<T> && (...)`)
+    — the comment must hoist above the whole thing to attach."""
+    q = prev_sig(toks, p)
+    if q is None:
+        return None
+    if toks[q] == '>':  # plain `template <...>` directly above?
+        tm = template_of_angle(text, toks, q)
+        if tm is not None:
+            return tm
+    # Otherwise q may end a requires-clause; verify the full shape
+    # `template <...> requires <constraint>` before trusting it.
+    rq = requires_clause_start(text, toks, q)
+    if rq is None:
+        return None
+    q = prev_sig(toks, rq)
+    if q is None or toks[q] != '>':
+        return None
+    return template_of_angle(text, toks, q)
+
+
+def template_of_angle(text, toks, q):
+    """toks[q] is the '>' of a candidate template head: the index of its
+    `template` keyword, or None."""
+    lt = angle_open(text, toks, q)
+    if lt is None:
+        return None
+    tm = prev_sig(toks, lt)
+    return tm if tm is not None and toks[tm] == 'template' else None
+
+
+def requires_clause_start(text, toks, j, limit=512):
+    """toks[j] ends a candidate requires-clause: the index of its `requires`
+    keyword, or None if the shape isn't conservatively constraint-like.
+    Walks back over balanced (...)/{...}/<...> groups and the tokens a
+    constraint-expression may contain; anything else bails (the caller then
+    falls back to not hoisting — never worse than before)."""
+    steps = 0
+    while j >= 0 and steps < limit:
+        steps += 1
+        t = toks[j]
+        if t.type in SKIP:
+            j -= 1
+        elif t.type == 'WORD' and t == 'requires':
+            # `requires requires(T t) {...}`: the inner keyword is part of
+            # the constraint — keep walking to the clause-introducing one.
+            p = prev_sig(toks, j)
+            if p is not None and toks[p] == 'requires':
+                j = p
+            else:
+                return j
+        elif t in (')', '}'):
+            k = group_open(toks, j)
+            if k is None:
+                return None
+            j = k - 1
+        elif t == '>':
+            k = angle_open(text, toks, j)
+            if k is None:
+                return None
+            j = k - 1
+        elif t.type in ('WORD', 'WELDER', 'NUMBER', 'COLONCOLON') \
+                or t in ('&', '|', '!', ',', '.'):
+            j -= 1
+        else:
+            return None
+    return None
+
+
+def group_open(toks, j):
+    """toks[j] is ')' or '}': token index of its matching opener, or None."""
+    close = str(toks[j])
+    open_ = {')': '(', '}': '{'}[close]
+    depth = 1
+    j -= 1
+    while j >= 0:
+        t = toks[j]
+        if t == close:
+            depth += 1
+        elif t == open_:
+            depth -= 1
+            if depth == 0:
+                return j
+        j -= 1
+    return None
 
 
 def angle_open(text, toks, j):

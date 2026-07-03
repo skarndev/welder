@@ -92,4 +92,46 @@ inline int helper() { return 1; }
 // weld-only annotation in keyword position: block vanishes, no comment
 struct [[=welder::weld(welder::lang::py)]] Quiet {};
 
+// --- C++20/26 shapes: requires clauses, constraints, reflection, splices -----
+// the comment must hoist over the whole `template <...> requires ...` head,
+// whatever the constraint-expression ends with: `)` ...
+template <class T> requires (sizeof(T) > 2)
+struct [[=welder::weld(welder::lang::py), =welder::doc("Requires-paren struct.")]] BoxedP { T v; };
+
+// ... a concept-id's `>` ...
+template <class T> requires std::three_way_comparable<T>
+struct [[=welder::doc("Requires-concept struct.")]] BoxedC { T v; };
+
+// ... a `&&`-chain ...
+template <class T> requires std::copyable<T> && (sizeof(T) < 64)
+struct [[=welder::doc("Requires-chain struct.")]] BoxedA { T v; };
+
+// ... or a whole requires-EXPRESSION (requires requires)
+template <class T> requires requires(T t) { t.size(); }
+struct [[=welder::doc("Requires-requires struct.")]] BoxedR { T v; };
+
+// constrained template parameter: a plain template head to hoist over
+template <std::integral T>
+struct [[=welder::doc("Constrained-parameter struct.")]] Num { T v; };
+
+// trailing requires on a function: param scan must stop at the `)` before it
+template <class T>
+[[=welder::doc("Function with a trailing requires."), =welder::returns("the same value")]]
+T passthrough([[=welder::doc("input value")]] T v) requires (sizeof(T) > 1);
+
+// root-qualified annotation spelling is recognized too
+struct [[=::welder::doc("Root-qualified spelling.")]] Rooted {};
+
+// the reflection operator near annotations: initializer and default argument
+[[=welder::doc("A reflection constant.")]]
+constexpr std::meta::info int_refl = ^^int;
+
+template <std::meta::info R = ^^int>
+struct [[=welder::doc("Reflection-parameterized.")]] Holder {};
+
+// splice as a member type (Doxygen documents the member, type comes out empty)
+struct [[=welder::doc("Splice-typed member holder.")]] Spliced {
+    [[=welder::doc("spliced-type member")]] [:^^int:] value;
+};
+
 } // namespace workshop

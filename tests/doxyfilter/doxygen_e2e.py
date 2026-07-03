@@ -43,6 +43,22 @@ MUST = [
     "the merged map",
     "the base map",
     "overrides, win on clash",
+    # C++20/26 shapes: the comment hoists over `template <...> requires ...`
+    # whatever the constraint ends with; Doxygen must still attach it
+    "Requires-paren struct.",
+    "Requires-concept struct.",
+    "Requires-chain struct.",
+    "Requires-requires struct.",
+    "Constrained-parameter struct.",
+    "Function with a trailing requires.",
+    "input value",
+    "Root-qualified spelling.",
+    # reflection operator (^^) in initializers / default template arguments,
+    # splice ([: :]) as a member type — Doxygen parses past both
+    "A reflection constant.",
+    "Reflection-parameterized.",
+    "Splice-typed member holder.",
+    "spliced-type member",
 ]
 
 

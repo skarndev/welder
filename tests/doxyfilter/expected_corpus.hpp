@@ -99,4 +99,57 @@ inline int helper() { return 1; }
 // weld-only annotation in keyword position: block vanishes, no comment
 struct  Quiet {};
 
+// --- C++20/26 shapes: requires clauses, constraints, reflection, splices -----
+// the comment must hoist over the whole `template <...> requires ...` head,
+// whatever the constraint-expression ends with: `)` ...
+/** Requires-paren struct. */
+template <class T> requires (sizeof(T) > 2)
+struct  BoxedP { T v; };
+
+// ... a concept-id's `>` ...
+/** Requires-concept struct. */
+template <class T> requires std::three_way_comparable<T>
+struct  BoxedC { T v; };
+
+// ... a `&&`-chain ...
+/** Requires-chain struct. */
+template <class T> requires std::copyable<T> && (sizeof(T) < 64)
+struct  BoxedA { T v; };
+
+// ... or a whole requires-EXPRESSION (requires requires)
+/** Requires-requires struct. */
+template <class T> requires requires(T t) { t.size(); }
+struct  BoxedR { T v; };
+
+// constrained template parameter: a plain template head to hoist over
+/** Constrained-parameter struct. */
+template <std::integral T>
+struct  Num { T v; };
+
+// trailing requires on a function: param scan must stop at the `)` before it
+template <class T>
+/**
+ * Function with a trailing requires.
+ * @return the same value
+ */
+T passthrough( T v /**< input value */) requires (sizeof(T) > 1);
+
+// root-qualified annotation spelling is recognized too
+/** Root-qualified spelling. */
+struct  Rooted {};
+
+// the reflection operator near annotations: initializer and default argument
+/** A reflection constant. */
+constexpr std::meta::info int_refl = ^^int;
+
+/** Reflection-parameterized. */
+template <std::meta::info R = ^^int>
+struct  Holder {};
+
+// splice as a member type (Doxygen documents the member, type comes out empty)
+/** Splice-typed member holder. */
+struct  Spliced {
+    /** spliced-type member */ [:^^int:] value;
+};
+
 } // namespace workshop
