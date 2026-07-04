@@ -267,17 +267,20 @@ module):
       theme only** (no `sidebar-only` add-on: page-nav is already a sidebar, and
       sidebar-only targets the legacy tree + was cropping the search box).
       **Doxygen 1.17 ships no jQuery**, so *all* of doxygen-awesome's `init()`-based
-      extensions (dark-mode toggle button, fragment-copy, paragraph-link, tabs)
-      silently fail — they call `$(function(){…})`. The theme's *static* dark-mode
-      loader is jQuery-free, so the color scheme still applies on load (matching the
-      guide's auto mode); only the visible controls are missing. So
-      `docs/patch_doxygen_header.py` (build-time; failure → stock header, still the
-      base theme) injects **our own** controls in plain JS: a light/dark
-      **`<button>` toggle** built next to the search box in the header (reusing
-      `DoxygenAwesomeDarkModeToggle` for persistence when present), and the
-      **project title linked back to the guide** (`$relpath^../index.html`). Only
-      `doxygen-awesome-darkmode-toggle.js` is loaded (for its class + static
-      loader); the other jQuery-only extension scripts are dropped. A welder
+      extensions (dark-mode toggle, fragment-copy, paragraph-link, tabs) silently
+      fail — they call `$(function(){…})`. So `docs/patch_doxygen_header.py`
+      (build-time; failure → stock header, still the base theme) injects **our own**
+      controls in plain, self-contained JS — **no doxygen-awesome JS is loaded at
+      all**. The theme keys dark mode purely on `html.dark-mode` (+
+      `prefers-color-scheme`), so we manage that class ourselves: apply an explicit
+      `dark-mode`/`light-mode` on load (saved key `welder-color-scheme`, else the OS
+      pref — *always* explicit, so our accent overrides win over awesome's
+      higher-specificity `@media(prefers-color-scheme:dark) html:not(.light-mode)`
+      dark accent, which `docs/doxygen-extra.css` therefore also overrides in that
+      media form), a `<button>` toggle placed inline next to the search box with a
+      **delegated** document-level click (a direct listener didn't fire reliably in
+      the search container), and the **project title linked back to the guide**
+      (`$relpath^../index.html`). A welder
       **spark logo** (`docs/welder-logo.svg`, matching the mkdocs fire mark) is set
       via `PROJECT_LOGO`. `HTML_COLORSTYLE` stays
       `LIGHT` with **default HUE/SAT** (custom values bake warm, non-theme-adapting
