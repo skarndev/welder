@@ -54,9 +54,12 @@ compiles the nanobind runtime in) and stubbed with its own **bundled** stubgen
 (`nanobind_add_stub`, `RECURSIVE` → a package tree per variant; no extra pip
 package — `stubgen.py` is stdlib-only on Python ≥3.11, run via the build's
 `Python_EXECUTABLE`, which loads the extension by dynamic lookup), then
-`stubcheck.*` runs mypy over it. The `typingcases` type-level gate stays pybind11
--only (it exposes module-form stubs under the canonical `welder_test` name). Key
-locations by feature:
+`stubcheck.*` runs mypy over it. The `typingcases.*` type-level gate
+(`test_types.mypy-testing`, run via pytest-mypy-testing) now runs against **both**
+backends: each copies its module-form stub tree to the canonical name `welder_test`
+on `MYPYPATH` and asserts the same revealed types — rename-safe because both stub
+trees use only relative imports. (nanobind's copy hangs off its stub *target*'s
+POST_BUILD, since its stubs are a separate custom target.) Key locations by feature:
 - `tests/common/cpp/enums.hpp` + `test_enums.py` — enums
 - `tests/{pybind11,nanobind}/cpp/trust.hpp` + `test_trust.py` — trust hatches
 - `tests/{pybind11,nanobind}/cpp/caster.hpp` + `test_caster.py` — self-contained type casters

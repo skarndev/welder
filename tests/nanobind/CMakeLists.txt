@@ -113,3 +113,29 @@ foreach(variant IN LISTS _variants)
       WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
   endif()
 endforeach()
+
+# Type-level cases: tests/test_types.mypy-testing imports the backend-neutral name
+# `welder_test` and asserts revealed types, so a wrong stub type fails. Expose the
+# module-form stubs under that canonical name (rename-safe — nanobind's stub tree
+# uses only relative imports, `from . import ...`) and run the shared cases against
+# them via pytest-mypy-testing. Skip when only the header-only variant is built (no
+# module-form stubs). The copy is attached to the stub *target*'s POST_BUILD (not
+# the extension's): nanobind generates stubs in a separate custom target that only
+# DEPENDS on the extension, so copying from the extension's POST_BUILD could race
+# ahead of stub generation.
+if(WELDER_BUILD_STUBS AND WELDER_BUILD_MODULE)
+  set(_canon_stubs ${CMAKE_CURRENT_BINARY_DIR}/typing-stubs)
+  add_custom_command(TARGET welder_test_nanobind_stub POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${_canon_stubs}/welder_test
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${_stubs_dir}/welder_test_nanobind ${_canon_stubs}/welder_test
+    VERBATIM
+    COMMENT "welder: exposing nanobind stubs as `welder_test` for shared typing cases")
+
+  add_test(
+    NAME typingcases.nanobind
+    COMMAND ${WELDER_TEST_VENV_PYTHON} -m pytest ${WELDER_TEST_PYDIR}/test_types.mypy-testing
+    WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
+  set_tests_properties(typingcases.nanobind PROPERTIES
+    ENVIRONMENT "MYPYPATH=${_canon_stubs}")
+endif()
