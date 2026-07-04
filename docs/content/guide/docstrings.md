@@ -7,7 +7,7 @@ the binding backend) and the C++ API reference (via the
 
 | Annotation | Applies to | Becomes |
 |---|---|---|
-| `doc("text")` | class, namespace, function, parameter | the summary docstring |
+| `doc("text")` | class, namespace, function, parameter, data member | the summary docstring |
 | `returns("text")` | function | a `Returns:` block |
 | `tparam("T", "text")` | template (repeatable, ordered) | template-parameter docs |
 
@@ -105,6 +105,30 @@ prose — survives.
 Continuation lines of a **parameter** or **return** doc are likewise kept indented
 under their `Args:` / `Returns:` block, so a multiline entry reads as one.
 
+## Data members
+
+A `doc` on a **data member** rides onto its Python attribute. pybind11 binds
+members as *properties* (data descriptors on the class), so the doc becomes the
+property's `__doc__` — and flows into the `.pyi` [stubs](#stubs):
+
+```cpp
+struct
+[[=welder::weld(welder::lang::py), =welder::doc("A circle.")]]
+Circle {
+    [[=welder::doc("The radius.")]] double r{0.0};
+    [[=welder::doc("The immutable id.")]] const int id{0};  // read-only
+};
+```
+
+```pycon
+>>> Circle.r.__doc__
+'The radius.'
+```
+
+A `const` member is bound read-only (get, no set); a mutable one is read/write.
+Only the getter's doc is surfaced — a Python `property` has a single `__doc__` —
+so there is no separate setter docstring.
+
 ## `tparam` — documenting templates
 
 Template parameters aren't reflectable entities either, so their docs ride on the
@@ -125,8 +149,10 @@ Box { T value; };
 
 ## What backends ignore
 
-- **Variable docs** are ignored by binding backends — Python has no attribute
-  `__doc__`. (The Doxygen filter *does* surface them on the C++ side.)
+- **Namespace variable docs** are ignored by binding backends — a bound module
+  attribute has no `__doc__`. (Class *data members* do carry docs, via properties —
+  see [Data members](#data-members) above; and the Doxygen filter surfaces variable
+  docs on the C++ side.)
 - **Per-enumerator docs** aren't supported by pybind11's `.value()`.
 
 !!! note "Docs are stored inline"

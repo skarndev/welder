@@ -52,6 +52,28 @@ def test_undocumented_method_has_no_welder_doc(doc: ModuleType) -> None:
     assert "Args:" not in (doc.Circle.circumference.__doc__ or "")
 
 
+# --- field docstrings --------------------------------------------------------
+def test_field_docstring(doc: ModuleType) -> None:
+    # A data member is a pybind11 property; its welder doc is the property __doc__
+    # verbatim (no signature line, unlike methods).
+    assert doc.Circle.r.__doc__ == "The radius."
+
+
+def test_mutable_field_is_readwrite_with_doc(doc: ModuleType) -> None:
+    m = doc.Marker()
+    assert doc.Marker.note.__doc__ == "A mutable note."
+    m.note = "hi"  # read/write
+    assert m.note == "hi"
+
+
+def test_const_field_is_readonly_with_doc(doc: ModuleType) -> None:
+    m = doc.Marker()
+    assert doc.Marker.id.__doc__ == "The immutable id."
+    assert m.id == 7
+    with pytest.raises(AttributeError):
+        m.id = 9  # const member -> read-only property
+
+
 # --- free function + parameter docstrings -----------------------------------
 def test_function_docstring_with_google_style_args(doc: ModuleType) -> None:
     text = doc.add.__doc__

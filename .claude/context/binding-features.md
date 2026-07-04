@@ -8,7 +8,10 @@ guide has the user-facing walkthrough, this has driver hooks + test files.
 All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 
 ## Data members & constructors
-Public data members (read/write); constructors (default + each public
+Public data members (a mutable member read/write via `def_readwrite`; a **const**
+member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on
+const); a member's `[[=welder::doc]]` becomes its property `__doc__` (see
+`docs-and-doxygen.md`). Constructors (default + each public
 non-copy/move ctor → `pybind11::init<...>`; plus, for a baseless **aggregate**,
 a synthesized field constructor that brace-inits it, giving Python `T(f0, f1, …)`
 — only when every field binds, since aggregate init is positional/all-or-nothing);

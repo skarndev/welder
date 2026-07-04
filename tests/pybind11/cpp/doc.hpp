@@ -22,7 +22,8 @@ struct
   =welder::doc("A circle.")
 ]]
 Circle {
-    double r{0.0};
+    // A data member's doc rides on its pybind11 property (`Circle.r.__doc__`).
+    [[=welder::doc("The radius.")]] double r{0.0};
 
     Circle() = default;
     Circle(double radius) : r{radius} {}
@@ -44,6 +45,22 @@ Circle {
     double circumference() const {
         return 2 * 3.14159 * r;
     }
+};
+
+// --- const vs mutable field docs --------------------------------------------
+// A const data member is bound read-only (def_readonly) — def_readwrite's setter
+// would not compile — while a mutable one is read/write (def_readwrite). Both
+// carry their field doc onto the property's __doc__.
+struct
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("A labelled marker.")
+]]
+Marker {
+    [[=welder::doc("The immutable id.")]] const int id{7};
+    [[=welder::doc("A mutable note.")]] std::string note{};
+
+    Marker() = default;
 };
 
 // --- free function + parameter docstrings -----------------------------------

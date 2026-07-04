@@ -50,7 +50,7 @@ PYBIND11_MODULE(mymod, m) {
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
 | `mark::trust_bindable` / `mark::trust_bindable(lang...)` | Vouch that this member's type (or a callable's whole signature) is representable outside welder's view (e.g. hand-registered with pybind11); suppresses the bindability gate. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. A specializable `bool` variable template, not an attribute. |
-| `doc("text")` | Docstring for a class, namespace, function, or function parameter. Surfaced as `__doc__`; ignored on variables. |
+| `doc("text")` | Docstring for a class, namespace, function, function parameter, or data member. Surfaced as `__doc__` (a data member's rides on its pybind11 property; const → read-only); ignored on namespace variables. |
 | `returns("text")` | Documents a function's return value (a `Returns:` block). Distinct from the summary `doc`. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). Rides on the template itself; becomes `@tparam` in C++ docs, read back via `tparam_docs<Ent>()`. |
 

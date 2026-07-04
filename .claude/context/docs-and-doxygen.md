@@ -28,10 +28,19 @@ indented to match the source without that indentation leaking; tabs are not
 expanded (indent with spaces). `google_style` then indents each param/returns
 block's *continuation* lines so multiline entries stay readable (tested: `doc.hpp`
 `Gadget`/`combine` + `test_doc.py`). NB the Doxygen filter path (C++ docs) is
-textual and does not dedent — Doxygen does its own. Variable docs are intentionally
-ignored by binding backends (no attribute `__doc__` in Python); the Doxygen filter
-surfaces them on the C++ side. Doc text is stored *inline* (`fixed_string`) — a
-`const char*` to a literal isn't a permitted annotation constant on gcc-16.
+textual and does not dedent — Doxygen does its own.
+
+**Data-member docs** land on the member's Python attribute: pybind11 binds members
+as *properties* (data descriptors), and `add_field` (`backends/pybind11.hpp`) passes
+`doc_of<Mem>()` as the property docstring — so it reaches `__doc__` and the `.pyi`
+stubs. A **const** member is bound read-only (`def_readonly`; `def_readwrite`'s
+setter would not compile), a mutable one read/write (`def_readwrite`); only the
+getter's doc is surfaced (a Python `property` has one `__doc__`), so no setter
+docstring is emitted. Tested via `Circle.r` / `Marker` in `doc.hpp` + `test_doc.py`.
+**Namespace-variable** docs remain intentionally ignored by binding backends (a bound
+module attribute has no `__doc__`); the Doxygen filter surfaces them on the C++ side.
+Doc text is stored *inline* (`fixed_string`) — a `const char*` to a literal isn't a
+permitted annotation constant on gcc-16.
 
 ## C++ docs via a Doxygen INPUT_FILTER (`tools/welder_doxygen_filter.py`)
 The C++ API documents itself from the *real sources*. Doxygen's native parser

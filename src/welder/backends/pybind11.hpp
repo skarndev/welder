@@ -274,11 +274,32 @@ struct backend {
         def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
     }
 
-    /** Bind data member @a Mem as a read/write attribute. */
+    /** Bind data member @a Mem as an attribute.
+
+        pybind11 data members are already Python properties (data descriptors on the
+        class), so a `[[=welder::doc]]` on the member rides along as the property's
+        `__doc__` — and thus reaches `.pyi` stubs. A const member is read-only
+        (`def_readonly`); a mutable one is read/write (`def_readwrite`). The doc,
+        when present, is passed as the property docstring. There is deliberately no
+        setter docstring: a Python `property` surfaces only the getter's `__doc__`,
+        so one would be pure overhead. */
     template <std::meta::info Mem>
     static void add_field(auto& cls) {
-        cls.def_readwrite(
-            std::define_static_string(std::meta::identifier_of(Mem)), &[:Mem:]);
+        constexpr const char* name{
+            std::define_static_string(std::meta::identifier_of(Mem))};
+        constexpr const char* doc{welder::doc_of<Mem>()};
+        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+            // const member: read-only (def_readwrite's setter would not compile).
+            if constexpr (doc)
+                cls.def_readonly(name, &[:Mem:], doc);
+            else
+                cls.def_readonly(name, &[:Mem:]);
+        } else {
+            if constexpr (doc)
+                cls.def_readwrite(name, &[:Mem:], doc);
+            else
+                cls.def_readwrite(name, &[:Mem:]);
+        }
     }
 
     /** Bind member function @a Fn as a method. */
