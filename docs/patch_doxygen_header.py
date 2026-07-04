@@ -1,67 +1,87 @@
 #!/usr/bin/env python3
-"""Inject the doxygen-awesome-css extensions into a generated Doxygen header.
+"""Inject welder's header customizations into a generated Doxygen header.
 
-doxygen-awesome's *base* theme needs no header changes (just HTML_EXTRA_STYLESHEET),
-but the nice-to-have extensions — dark-mode toggle, fragment copy buttons,
-paragraph links, interactive ToC, tabs — are JavaScript that must be wired into the
-HTML <head>. Doxygen generates a default header (`doxygen -w html …`); this patches
-it in place.
+Doxygen 1.17 ships **no jQuery**, so doxygen-awesome's `init()`-based extensions
+(dark-mode toggle, copy buttons, …) silently fail — they call `$(function(){…})`.
+The theme's *static* dark-mode loader still runs (no jQuery), so the theme applies
+the OS/localStorage color scheme on load; only the visible controls are missing.
+
+So we wire our own, in plain JS:
+  * a light/dark toggle button placed next to the search box in the header
+    (it reuses doxygen-awesome's DoxygenAwesomeDarkModeToggle for persistence when
+    present, else toggles the html class directly),
+  * the project title linked back to the mkdocs guide.
 
 Usage: patch_doxygen_header.py <generated-header.html> <patched-header.html>
 
-Fail-safe: if the marker can't be found the header is copied through unchanged (the
-base theme still applies), and we exit 0 — a docs build must never break on this.
+Fail-safe: on any error the header is copied through unchanged and we exit 0 — a
+docs build must never break here.
 """
 import sys
 
-# Loaded in <head>. We deliberately do NOT call DoxygenAwesomeDarkModeToggle.init()
-# — it auto-inserts the toggle button next to #MSearchBox, which the sidebar-only
-# layout hides. The script's static constructor still runs on load (applying dark
-# mode from the OS/localStorage preference); we place a *visible* toggle ourselves
-# in the top bar below (TOPBAR) and drive its icon there.
-# The interactive-toc extension is deliberately NOT enabled: it turns a page's
-# table of contents into a full-height floating panel on the right, which occupies
-# the whole right edge (colliding with any other right-side control) and isn't
-# dark-themed. Left off, the TOC renders as a normal inline block (themed by
-# doxygen-extra.css).
-SCRIPTS = """\
-<!-- doxygen-awesome-css extensions (injected by welder docs build) -->
+# Only the dark-mode script is loaded: its class + static loader are jQuery-free
+# and we reuse them. The other awesome extensions need jQuery (absent in 1.17).
+HEAD = """\
+<!-- welder: doxygen-awesome dark-mode class + static loader (jQuery-free) -->
 <script type="text/javascript" src="$relpath^doxygen-awesome-darkmode-toggle.js"></script>
-<script type="text/javascript" src="$relpath^doxygen-awesome-fragment-copy-button.js"></script>
-<script type="text/javascript" src="$relpath^doxygen-awesome-paragraph-link.js"></script>
-<script type="text/javascript" src="$relpath^doxygen-awesome-tabs.js"></script>
-<script type="text/javascript">
-  DoxygenAwesomeFragmentCopyButton.init();
-  DoxygenAwesomeParagraphLink.init();
-  DoxygenAwesomeTabs.init();
-</script>
 """
 
-# A top bar injected at the end of the header: a backlink to the mkdocs guide and a
-# reliably-placed light/dark toggle. `$relpath^../index.html` resolves from any
-# api/ page up to the site root (the guide home). The toggle element upgrades from
-# doxygen-awesome-darkmode-toggle.js; we call updateIcon() ourselves since we don't
-# use its auto-inserting init().
-TOPBAR = """\
-<div id="welder-topbar">
-  <a id="welder-guide-link" href="$relpath^../index.html" title="Back to the welder documentation">&#8592;&#160;welder&#160;docs</a>
-  <doxygen-awesome-dark-mode-toggle id="welder-dark-toggle" title="Toggle light / dark mode"></doxygen-awesome-dark-mode-toggle>
-</div>
+# A sun/moon icon set (fill: currentColor) + the controls builder. Runs on
+# DOMContentLoaded; `$relpath^../index.html` resolves from any api/ page to the
+# guide home.
+CONTROLS = """\
+<!-- welder: header controls (dark-mode toggle + guide backlink) -->
 <script type="text/javascript">
-  (function () {
-    function upd() {
-      var t = document.getElementById("welder-dark-toggle");
-      if (t && t.updateIcon) { t.updateIcon(); }
-    }
-    if (document.readyState !== "loading") { upd(); }
-    else { document.addEventListener("DOMContentLoaded", upd); }
+(function () {
+  var GUIDE_URL = "$relpath^../index.html";
+  var SUN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm0 17a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM4 12a1 1 0 01-1 1H2a1 1 0 110-2h1a1 1 0 011 1zm18 0a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.99 5.99a1 1 0 01-1.41 0l-.71-.71a1 1 0 011.41-1.41l.71.71a1 1 0 010 1.41zm14.02 14.02a1 1 0 01-1.41 0l-.71-.71a1 1 0 011.41-1.41l.71.71a1 1 0 010 1.41zM18.01 5.99a1 1 0 010-1.41l.71-.71a1 1 0 011.41 1.41l-.71.71a1 1 0 01-1.41 0zM3.99 20.01a1 1 0 010-1.41l.71-.71a1 1 0 011.41 1.41l-.71.71a1 1 0 01-1.41 0z"/></svg>';
+  var MOON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 108.99 9.36A7.002 7.002 0 0112 3z"/></svg>';
+  function isDark() { return document.documentElement.classList.contains("dark-mode"); }
+  function setIcon() {
+    var b = document.getElementById("welder-dark-toggle");
+    if (b) { b.innerHTML = isDark() ? MOON : SUN; }
+  }
+  function toggle() {
     try {
-      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", upd);
+      if (window.DoxygenAwesomeDarkModeToggle) {
+        DoxygenAwesomeDarkModeToggle.userPreference = !DoxygenAwesomeDarkModeToggle.userPreference;
+      } else {
+        var h = document.documentElement;
+        h.classList.toggle("dark-mode");
+        h.classList.toggle("light-mode");
+      }
     } catch (e) {}
-    document.addEventListener("visibilitychange", function () {
-      if (document.visibilityState === "visible") { upd(); }
-    });
-  })();
+    setIcon();
+  }
+  function build() {
+    var box = document.getElementById("MSearchBox");
+    if (box && box.parentNode && !document.getElementById("welder-dark-toggle")) {
+      var btn = document.createElement("button");
+      btn.id = "welder-dark-toggle";
+      btn.type = "button";
+      btn.title = "Toggle light / dark mode";
+      btn.setAttribute("aria-label", "Toggle light / dark mode");
+      btn.addEventListener("click", toggle);
+      box.parentNode.appendChild(btn);
+    }
+    setIcon();
+    var pn = document.getElementById("projectname");
+    if (pn && !pn.querySelector("a.welder-guide-link")) {
+      var a = document.createElement("a");
+      a.href = GUIDE_URL;
+      a.className = "welder-guide-link";
+      a.title = "Back to the welder documentation";
+      while (pn.firstChild) { a.appendChild(pn.firstChild); }
+      pn.appendChild(a);
+    }
+  }
+  if (document.readyState !== "loading") { build(); }
+  else { document.addEventListener("DOMContentLoaded", build); }
+  try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", setIcon); } catch (e) {}
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { setIcon(); }
+  });
+})();
 </script>
 """
 
@@ -71,23 +91,13 @@ def main() -> int:
     try:
         with open(src, "r", encoding="utf-8") as f:
             html = f.read()
-        if "doxygen-awesome-darkmode-toggle.js" not in html:
-            head_marker = "</head>"
-            if head_marker in html:
-                html = html.replace(head_marker, SCRIPTS + head_marker, 1)
-            # Place the top bar as a <body> child *before* #top. In the sidebar-only
-            # layout #top is a narrow, fixed-height, overflow:hidden sidebar header
-            # (it holds the search box); injecting into it clips the bar and crowds
-            # search out. As a sibling before #top the bar can float (position:fixed)
-            # without disturbing that layout.
-            bar_marker = '<div id="top">'
-            if bar_marker in html:
-                html = html.replace(bar_marker, TOPBAR + bar_marker, 1)
+        if "welder-dark-toggle" not in html:
+            marker = "</head>"
+            if marker in html:
+                html = html.replace(marker, HEAD + CONTROLS + marker, 1)
         with open(dst, "w", encoding="utf-8") as f:
             f.write(html)
     except OSError as e:
-        # Last resort: emit nothing special; the caller falls back to the default
-        # header. Never fail the docs build over the theme extensions.
         sys.stderr.write(f"patch_doxygen_header: {e}\n")
         return 0
     return 0

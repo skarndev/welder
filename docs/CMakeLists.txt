@@ -86,13 +86,12 @@ if(_awesome_ok)
   set(DOXYGEN_HTML_EXTRA_STYLESHEET
       "${_awesome_dir}/doxygen-awesome.css \
 ${_docs_src}/doxygen-extra.css")
-  # The extension JS the patched header wires up (interactive-toc intentionally
-  # left out — it makes a full-height right panel that fights the layout).
+  # Only the dark-mode script: its class + static loader are jQuery-free, and we
+  # reuse them from our own header controls. The other awesome extensions
+  # (fragment-copy, paragraph-link, tabs, interactive-toc) are init()-based and
+  # need jQuery, which Doxygen 1.17 no longer ships — so they'd be dead weight.
   set(DOXYGEN_HTML_EXTRA_FILES
-      "${_awesome_dir}/doxygen-awesome-darkmode-toggle.js \
-${_awesome_dir}/doxygen-awesome-fragment-copy-button.js \
-${_awesome_dir}/doxygen-awesome-paragraph-link.js \
-${_awesome_dir}/doxygen-awesome-tabs.js")
+      "${_awesome_dir}/doxygen-awesome-darkmode-toggle.js")
 
   # Generate Doxygen's default header, then inject the extension scripts. Any
   # failure here leaves DOXYGEN_HTML_HEADER empty -> stock header + base theme.
@@ -130,6 +129,7 @@ endif()
 set(_docs_content ${_docs_src}/content)
 set(DOXYGEN_OUTPUT_DIR ${_docs_content})   # HTML_OUTPUT = api -> content/api
 set(DOXYGEN_MAINPAGE ${_docs_src}/api_mainpage.md)
+set(WELDER_LOGO ${_docs_src}/welder-logo.svg)
 configure_file(${_docs_src}/Doxyfile.in ${_docs_bin}/Doxyfile @ONLY)
 
 # --- 6. Targets --------------------------------------------------------------

@@ -31,42 +31,36 @@ pre.fragment {
     border-radius: 0.5rem;
 }
 
-/* --- Top bar: a backlink to the mkdocs guide + a light/dark toggle -----------
-   Injected by patch_doxygen_header.py and floated in the bottom-right corner, so
-   it is always visible and never overlaps the nav sidebar or page content. (We
-   place our own toggle so it is guaranteed visible; the theme's static loader
-   still applies the OS/localStorage theme.) */
-#welder-topbar {
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-    padding: 0.35rem 0.9rem;
-    background: var(--page-background-color);
-    border-top: 1px solid var(--separator-color);
-    border-left: 1px solid var(--separator-color);
-    border-top-left-radius: var(--border-radius-medium);
-    box-shadow: var(--box-shadow);
-    font-size: 0.85rem;
-}
-#welder-guide-link {
-    font-weight: 600;
-    color: var(--primary-color);
-    text-decoration: none;
-    white-space: nowrap;
-}
-#welder-guide-link:hover {
-    color: var(--primary-dark-color);
-    text-decoration: underline;
-}
+/* --- Header controls (injected by patch_doxygen_header.py) -------------------
+   A light/dark toggle placed next to the search box (Doxygen 1.17 drops jQuery,
+   so doxygen-awesome's own toggle never inserts), and the project title linked
+   back to the mkdocs guide. */
 #welder-dark-toggle {
     cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0 6px;
+    margin-left: var(--spacing-small);
+    height: var(--searchbar-height);
     display: inline-flex;
     align-items: center;
-    user-select: none;
+    justify-content: center;
+    vertical-align: middle;
+    color: var(--primary-color);
+    border-radius: var(--searchbar-border-radius);
+}
+#welder-dark-toggle:hover {
+    color: var(--primary-dark-color);
+    background-color: var(--page-secondary-background-color);
+}
+/* The project title becomes a backlink to the guide but should still look like
+   the title (doxygen-awesome styles #projectname). */
+#projectname a.welder-guide-link {
+    color: inherit;
+    text-decoration: none;
+}
+#projectname a.welder-guide-link:hover {
+    color: var(--primary-color);
 }
 
 /* Readable text selection in both themes (the theme leaves it to the browser,

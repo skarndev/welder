@@ -8,6 +8,7 @@
 PROJECT_NAME           = "welder"
 PROJECT_NUMBER         = "@PROJECT_VERSION@"
 PROJECT_BRIEF          = "Bindings for annotated C++ types, from C++26 reflection"
+PROJECT_LOGO           = @WELDER_LOGO@
 
 OUTPUT_DIRECTORY       = @DOXYGEN_OUTPUT_DIR@
 GENERATE_HTML          = YES
