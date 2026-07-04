@@ -266,13 +266,20 @@ module):
       **unstyled and white in dark mode** — v2.4.x is required. We use the **base
       theme only** (no `sidebar-only` add-on: page-nav is already a sidebar, and
       sidebar-only targets the legacy tree + was cropping the search box).
+      **Doxygen 1.17 ships no jQuery**, so *all* of doxygen-awesome's `init()`-based
+      extensions (dark-mode toggle button, fragment-copy, paragraph-link, tabs)
+      silently fail — they call `$(function(){…})`. The theme's *static* dark-mode
+      loader is jQuery-free, so the color scheme still applies on load (matching the
+      guide's auto mode); only the visible controls are missing. So
       `docs/patch_doxygen_header.py` (build-time; failure → stock header, still the
-      base theme) injects a **bottom-right bar** on every reference page: a
-      `← welder docs` backlink to the guide home (`$relpath^../index.html`) and a
-      **visible** light/dark toggle. We place our own toggle (guaranteed visible)
-      rather than awesome's auto-inserted one; the toggle script's static
-      constructor still applies the OS/localStorage theme on load (matching the
-      guide's auto mode) and we drive the button's icon. `HTML_COLORSTYLE` stays
+      base theme) injects **our own** controls in plain JS: a light/dark
+      **`<button>` toggle** built next to the search box in the header (reusing
+      `DoxygenAwesomeDarkModeToggle` for persistence when present), and the
+      **project title linked back to the guide** (`$relpath^../index.html`). Only
+      `doxygen-awesome-darkmode-toggle.js` is loaded (for its class + static
+      loader); the other jQuery-only extension scripts are dropped. A welder
+      **spark logo** (`docs/welder-logo.svg`, matching the mkdocs fire mark) is set
+      via `PROJECT_LOGO`. `HTML_COLORSTYLE` stays
       `LIGHT` with **default HUE/SAT** (custom values bake warm, non-theme-adapting
       colors into doxygen's own CSS). The interactive-toc extension is left **off**
       (it makes a full-height right panel that fights the layout). `docs/doxygen-extra.css`
