@@ -53,19 +53,8 @@ TOPBAR = """\
       var t = document.getElementById("welder-dark-toggle");
       if (t && t.updateIcon) { t.updateIcon(); }
     }
-    // Relocate the bar into doxygen's bottom breadcrumb bar (#nav-path) so it never
-    // overlaps the left nav tree or page content. Until then (and if #nav-path is
-    // absent) the CSS floats it in a corner as a fallback.
-    function place() {
-      var bar = document.getElementById("welder-topbar");
-      var navpath = document.getElementById("nav-path");
-      if (bar && navpath && bar.parentNode !== navpath) {
-        navpath.appendChild(bar);
-      }
-      upd();
-    }
-    if (document.readyState !== "loading") { place(); }
-    else { document.addEventListener("DOMContentLoaded", place); }
+    if (document.readyState !== "loading") { upd(); }
+    else { document.addEventListener("DOMContentLoaded", upd); }
     try {
       window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", upd);
     } catch (e) {}

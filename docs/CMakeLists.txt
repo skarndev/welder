@@ -53,12 +53,16 @@ set(WELDER_SRC ${CMAKE_SOURCE_DIR}/src/welder)
 # --- 2. Fetch doxygen-awesome-css (the modern theme), gracefully optional -----
 # A plain asset repo; we clone it ourselves (rather than FetchContent) so a
 # network failure degrades to Doxygen's stock theme instead of aborting configure.
-set(_awesome_dir ${_docs_bin}/doxygen-awesome-css)
+# v2.4.2 supports Doxygen's new page-nav navigation (Doxygen 1.11+); older tags
+# style only the legacy #nav-tree and leave the real 1.17 sidebar unthemed. The
+# version is in the dir name so a bump re-clones into a fresh directory.
+set(_awesome_ver v2.4.2)
+set(_awesome_dir ${_docs_bin}/doxygen-awesome-css-${_awesome_ver})
 set(_awesome_ok FALSE)
 if(NOT EXISTS ${_awesome_dir}/doxygen-awesome.css AND WELDER_DOCS_GIT)
-  message(STATUS "welder: fetching doxygen-awesome-css...")
+  message(STATUS "welder: fetching doxygen-awesome-css ${_awesome_ver}...")
   execute_process(
-    COMMAND ${WELDER_DOCS_GIT} clone --depth 1 --branch v2.3.4
+    COMMAND ${WELDER_DOCS_GIT} clone --depth 1 --branch ${_awesome_ver}
             https://github.com/jothepro/doxygen-awesome-css.git ${_awesome_dir}
     RESULT_VARIABLE _awesome_res OUTPUT_QUIET ERROR_VARIABLE _awesome_err)
   if(NOT _awesome_res EQUAL 0)
@@ -75,19 +79,19 @@ set(DOXYGEN_HTML_HEADER "")
 set(DOXYGEN_HTML_EXTRA_STYLESHEET "")
 set(DOXYGEN_HTML_EXTRA_FILES "")
 if(_awesome_ok)
-  # Base + sidebar-only layout + our spark-palette tweaks (loaded last, so it wins).
+  # Base theme + our spark-palette tweaks (loaded last, so it wins). We do NOT use
+  # the sidebar-only add-on: with Doxygen's new page-nav the base theme already is
+  # a sidebar layout, and sidebar-only targets the legacy #nav-tree.
   # Doxygen accepts a space-separated list on one line (paths have no spaces here).
   set(DOXYGEN_HTML_EXTRA_STYLESHEET
       "${_awesome_dir}/doxygen-awesome.css \
-${_awesome_dir}/doxygen-awesome-sidebar-only.css \
-${_awesome_dir}/doxygen-awesome-sidebar-only-darkmode-toggle.css \
 ${_docs_src}/doxygen-extra.css")
-  # The extension JS the patched header wires up.
+  # The extension JS the patched header wires up (interactive-toc intentionally
+  # left out — it makes a full-height right panel that fights the layout).
   set(DOXYGEN_HTML_EXTRA_FILES
       "${_awesome_dir}/doxygen-awesome-darkmode-toggle.js \
 ${_awesome_dir}/doxygen-awesome-fragment-copy-button.js \
 ${_awesome_dir}/doxygen-awesome-paragraph-link.js \
-${_awesome_dir}/doxygen-awesome-interactive-toc.js \
 ${_awesome_dir}/doxygen-awesome-tabs.js")
 
   # Generate Doxygen's default header, then inject the extension scripts. Any
