@@ -258,21 +258,28 @@ module):
       through the **same INPUT_FILTER** as above, so `[[=welder::doc/returns/
       tparam]]` come through. `docs/Doxyfile.in` (configured), landing on
       `docs/api_mainpage.md` (`USE_MDFILE_AS_MAINPAGE`). Themed with
-      **doxygen-awesome-css** (v2.3.4, git-cloned into the build dir at configure
-      time — degrades gracefully to the stock theme on network/`git` failure),
-      sidebar-only layout. `docs/patch_doxygen_header.py` (build-time; failure →
-      stock header, still the base awesome theme) injects a **top bar** on every
-      reference page: a `← welder docs` backlink to the guide home
-      (`$relpath^../index.html`) and a **visible** light/dark toggle. NB awesome's
-      auto-inserted toggle lands next to `#MSearchBox`, which the sidebar-only
-      layout hides — so we don't call its `.init()`; the toggle script's static
+      **doxygen-awesome-css** (**v2.4.2**, git-cloned into a version-named build dir
+      at configure time — degrades gracefully to the stock theme on network/`git`
+      failure). **Version matters:** Doxygen 1.11+ rewrote its navigation to a
+      `#page-nav-*` sidebar; doxygen-awesome < 2.4 styles only the legacy
+      `#nav-tree`, leaving Doxygen 1.17's real sidebar/tree/resize-handle/search
+      **unstyled and white in dark mode** — v2.4.x is required. We use the **base
+      theme only** (no `sidebar-only` add-on: page-nav is already a sidebar, and
+      sidebar-only targets the legacy tree + was cropping the search box).
+      `docs/patch_doxygen_header.py` (build-time; failure → stock header, still the
+      base theme) injects a **bottom-right bar** on every reference page: a
+      `← welder docs` backlink to the guide home (`$relpath^../index.html`) and a
+      **visible** light/dark toggle. We place our own toggle (guaranteed visible)
+      rather than awesome's auto-inserted one; the toggle script's static
       constructor still applies the OS/localStorage theme on load (matching the
-      guide's auto mode) and we place + drive the button ourselves. `HTML_COLORSTYLE`
-      stays `LIGHT` with **default HUE/SAT** (custom values bake warm,
-      non-theme-adapting colors like `#EEE1DD`/cyan into doxygen.css/navtree.css);
-      `docs/doxygen-extra.css` retunes the accent to the spark palette, styles
-      `::selection` (unset by doxygen/awesome → else unreadable in dark mode), and
-      tames doxygen's literal-cyan jump-to-anchor `.glow`. Every `src/welder/**.hpp` now carries `/** */` Doxygen
+      guide's auto mode) and we drive the button's icon. `HTML_COLORSTYLE` stays
+      `LIGHT` with **default HUE/SAT** (custom values bake warm, non-theme-adapting
+      colors into doxygen's own CSS). The interactive-toc extension is left **off**
+      (it makes a full-height right panel that fights the layout). `docs/doxygen-extra.css`
+      only retunes the accent to the spark palette, styles `::selection` (unset by
+      the theme → else unreadable in dark mode), and tames doxygen's literal-cyan
+      jump-to-anchor `.glow` — the theme handles nav/inline-code/TOC/member boxes.
+      Every `src/welder/**.hpp` now carries `/** */` Doxygen
       blocks (first-sentence autobrief, `@param`/`@tparam`/`@return`, trailing
       `/**< */` on members/enumerators; function-body comments stay `//`), so the
       reference renders full prose for the public API *and* internals — a
