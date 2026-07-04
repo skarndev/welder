@@ -19,17 +19,20 @@ import sys
 # layout hides. The script's static constructor still runs on load (applying dark
 # mode from the OS/localStorage preference); we place a *visible* toggle ourselves
 # in the top bar below (TOPBAR) and drive its icon there.
+# The interactive-toc extension is deliberately NOT enabled: it turns a page's
+# table of contents into a full-height floating panel on the right, which occupies
+# the whole right edge (colliding with any other right-side control) and isn't
+# dark-themed. Left off, the TOC renders as a normal inline block (themed by
+# doxygen-extra.css).
 SCRIPTS = """\
 <!-- doxygen-awesome-css extensions (injected by welder docs build) -->
 <script type="text/javascript" src="$relpath^doxygen-awesome-darkmode-toggle.js"></script>
 <script type="text/javascript" src="$relpath^doxygen-awesome-fragment-copy-button.js"></script>
 <script type="text/javascript" src="$relpath^doxygen-awesome-paragraph-link.js"></script>
-<script type="text/javascript" src="$relpath^doxygen-awesome-interactive-toc.js"></script>
 <script type="text/javascript" src="$relpath^doxygen-awesome-tabs.js"></script>
 <script type="text/javascript">
   DoxygenAwesomeFragmentCopyButton.init();
   DoxygenAwesomeParagraphLink.init();
-  DoxygenAwesomeInteractiveToc.init();
   DoxygenAwesomeTabs.init();
 </script>
 """
@@ -50,8 +53,19 @@ TOPBAR = """\
       var t = document.getElementById("welder-dark-toggle");
       if (t && t.updateIcon) { t.updateIcon(); }
     }
-    if (document.readyState !== "loading") { upd(); }
-    else { document.addEventListener("DOMContentLoaded", upd); }
+    // Relocate the bar into doxygen's bottom breadcrumb bar (#nav-path) so it never
+    // overlaps the left nav tree or page content. Until then (and if #nav-path is
+    // absent) the CSS floats it in a corner as a fallback.
+    function place() {
+      var bar = document.getElementById("welder-topbar");
+      var navpath = document.getElementById("nav-path");
+      if (bar && navpath && bar.parentNode !== navpath) {
+        navpath.appendChild(bar);
+      }
+      upd();
+    }
+    if (document.readyState !== "loading") { place(); }
+    else { document.addEventListener("DOMContentLoaded", place); }
     try {
       window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", upd);
     } catch (e) {}
@@ -72,8 +86,12 @@ def main() -> int:
             head_marker = "</head>"
             if head_marker in html:
                 html = html.replace(head_marker, SCRIPTS + head_marker, 1)
-            # Place the top bar at the very end of the header (start of page body).
-            bar_marker = "<!-- end header part -->"
+            # Place the top bar as a <body> child *before* #top. In the sidebar-only
+            # layout #top is a narrow, fixed-height, overflow:hidden sidebar header
+            # (it holds the search box); injecting into it clips the bar and crowds
+            # search out. As a sibling before #top the bar can float (position:fixed)
+            # without disturbing that layout.
+            bar_marker = '<div id="top">'
             if bar_marker in html:
                 html = html.replace(bar_marker, TOPBAR + bar_marker, 1)
         with open(dst, "w", encoding="utf-8") as f:

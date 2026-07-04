@@ -29,18 +29,39 @@ pre.fragment {
 }
 
 /* --- Top bar: backlink to the mkdocs guide + the light/dark toggle ----------
-   Injected by patch_doxygen_header.py at the top of every reference page, so the
-   C++ reference always links back to the user-facing guide and carries its own
-   theme switch (the auto-inserted one lands in the hidden sidebar-only top bar). */
+   Injected by patch_doxygen_header.py, then relocated by its script into doxygen's
+   bottom breadcrumb bar (#nav-path) so it never overlaps the left nav tree or the
+   page content. Until relocated (or if #nav-path is absent) it floats in the
+   bottom-right corner as a fallback. (We place our own toggle because
+   doxygen-awesome auto-inserts its one into the clipped sidebar-only header.) */
 #welder-topbar {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    z-index: 100;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.5rem clamp(1rem, 4vw, 2rem);
-    margin-bottom: 0.5rem;
-    border-bottom: 1px solid var(--separator-color);
-    font-size: 0.9rem;
+    gap: 0.9rem;
+    padding: 0.35rem 0.9rem;
+    background: var(--page-background-color);
+    border-top: 1px solid var(--separator-color);
+    border-left: 1px solid var(--separator-color);
+    border-top-left-radius: var(--border-radius-medium);
+    box-shadow: var(--box-shadow);
+    font-size: 0.85rem;
+}
+/* Once relocated into the breadcrumb bar, sit at its right edge, flush and flat. */
+#nav-path #welder-topbar {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: var(--spacing-medium);
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    z-index: 1;
 }
 #welder-guide-link {
     font-weight: 600;
@@ -65,6 +86,10 @@ pre.fragment {
     background: var(--primary-color);
     color: #ffffff;
 }
+::-moz-selection {
+    background: var(--primary-color);
+    color: #ffffff;
+}
 
 /* Tame doxygen's default *cyan* jump-to-anchor glow (unreadable, and off-brand)
    to the spark accent, and use a theme-aware background so text stays legible in
@@ -76,4 +101,39 @@ pre.fragment {
 div.line.glow {
     background-color: var(--primary-lightest-color) !important;
     box-shadow: 0 0 12px var(--primary-light-color) !important;
+}
+
+/* --- Dark-mode: theme the elements doxygen hard-codes light and awesome misses.
+   doxygen-awesome themes the sidebar container but not the tree's own background,
+   and leaves a few reflist/param/field headers at doxygen's light defaults, which
+   read as blinding-white blocks in dark mode. Scope to dark mode so light mode is
+   untouched. */
+html.dark-mode #nav-tree,
+html.dark-mode #side-nav,
+html.dark-mode #nav-tree #nav-tree-contents {
+    background-color: var(--side-nav-background) !important;
+}
+/* Inline `\c` code (span.tt) is hardcoded #FBFCFD by doxygen and not re-themed —
+   a white block around words like `mark`, `policy`, `nullptr` in dark mode. */
+html.dark-mode span.tt,
+html.dark-mode code.tt,
+html.dark-mode .tt {
+    background-color: var(--code-background) !important;
+    color: var(--code-foreground) !important;
+}
+/* The page's table of contents (doxygen hardcodes #F4F6FA); rendered inline now
+   that the floating interactive-toc is off. */
+html.dark-mode div.toc,
+html.dark-mode div.contents > .toc {
+    background-color: var(--side-nav-background) !important;
+    border-color: var(--separator-color) !important;
+}
+html.dark-mode dl.reflist dt,
+html.dark-mode .fieldtable th,
+html.dark-mode .fieldtable td,
+html.dark-mode .memname,
+html.dark-mode table.memberdecls .mdescLeft {
+    background-color: var(--fragment-background) !important;
+    color: var(--page-foreground-color);
+    border-color: var(--separator-color);
 }
