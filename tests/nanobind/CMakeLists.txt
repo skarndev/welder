@@ -60,10 +60,30 @@ foreach(neg operand_not_welded container_of_unwelded)
   set_tests_properties(negcompile.nanobind.${neg} PROPERTIES WILL_FAIL TRUE)
 endforeach()
 
-# Everything below needs the uv environment prepared at the tests/ root (pytest).
-# Without it, just build the modules — they double as a compile check. Stub
-# generation is pybind11-specific (pybind11-stubgen); nanobind has its own stubgen,
-# not yet wired here, so the nanobind tree runs the behavioral specs only.
+# .pyi stubs, via nanobind's *bundled* stubgen (nanobind_add_stub from
+# nanobind-config.cmake). Unlike the pybind11 tree — which needs pybind11-stubgen
+# from the uv env — this needs no extra package: stubgen.py is stdlib-only on
+# Python >= 3.11, run through the build's Python_EXECUTABLE, which loads the
+# extension by dynamic symbol lookup. So stubs build independently of the uv env
+# (gated only by WELDER_BUILD_STUBS). RECURSIVE walks the submodules welder created
+# (one per case group), writing a package tree ${_stubs_dir}/<variant>/; the py.typed
+# marker doubles as the build-time output CMake tracks. welder docstrings (class,
+# property, function Args:/Returns:) flow into the stubs.
+set(_stubs_dir ${CMAKE_CURRENT_BINARY_DIR}/stubs)
+if(WELDER_BUILD_STUBS)
+  foreach(variant IN LISTS _variants)
+    nanobind_add_stub(${variant}_stub
+      MODULE ${variant}
+      RECURSIVE
+      OUTPUT_PATH ${_stubs_dir}
+      MARKER_FILE ${_stubs_dir}/${variant}/py.typed
+      PYTHON_PATH $<TARGET_FILE_DIR:${variant}>
+      DEPENDS ${variant})
+  endforeach()
+endif()
+
+# Everything below needs the uv environment prepared at the tests/ root (pytest,
+# mypy). Without it, just build the modules + stubs — they double as a compile check.
 if(NOT WELDER_TEST_VENV_PYTHON)
   return()
 endif()
@@ -78,4 +98,18 @@ foreach(variant IN LISTS _variants)
   set_tests_properties(pytest.${variant} PROPERTIES
     ENVIRONMENT
       "WELDER_TEST_MODULE=${variant};PYTHONPATH=$<TARGET_FILE_DIR:${variant}>")
+
+  if(WELDER_BUILD_STUBS)
+    # ...and type-check the generated stub package: mypy --strict proves it is
+    # internally consistent and well-typed. Two error codes are disabled for the
+    # same accepted artifacts of binding a type with comparison operators as in the
+    # pybind11 tree: `override` (operator== narrows object.__eq__) and `assignment`
+    # (defining __eq__ sets __hash__ = None vs object's Callable).
+    add_test(
+      NAME stubcheck.${variant}
+      COMMAND ${WELDER_TEST_VENV_PYTHON} -m mypy
+              --disable-error-code=override --disable-error-code=assignment
+              ${_stubs_dir}/${variant}
+      WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
+  endif()
 endforeach()

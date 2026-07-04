@@ -50,9 +50,13 @@ backend-specific case files (`trust.hpp` hand-registration, `caster.hpp`
 type_caster) are per-backend, under `tests/pybind11/cpp/` and `tests/nanobind/cpp/`.
 
 nanobind extensions are built with nanobind's own `nanobind_add_module` (it
-compiles the nanobind runtime in). Stub generation + the mypy stub/typing gates are
-**pybind11-only** (they use pybind11-stubgen); nanobind has its own stubgen, not yet
-wired — the nanobind tree runs the behavioral specs only. Key locations by feature:
+compiles the nanobind runtime in) and stubbed with its own **bundled** stubgen
+(`nanobind_add_stub`, `RECURSIVE` → a package tree per variant; no extra pip
+package — `stubgen.py` is stdlib-only on Python ≥3.11, run via the build's
+`Python_EXECUTABLE`, which loads the extension by dynamic lookup), then
+`stubcheck.*` runs mypy over it. The `typingcases` type-level gate stays pybind11
+-only (it exposes module-form stubs under the canonical `welder_test` name). Key
+locations by feature:
 - `tests/common/cpp/enums.hpp` + `test_enums.py` — enums
 - `tests/{pybind11,nanobind}/cpp/trust.hpp` + `test_trust.py` — trust hatches
 - `tests/{pybind11,nanobind}/cpp/caster.hpp` + `test_caster.py` — self-contained type casters

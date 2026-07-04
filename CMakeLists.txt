@@ -10,7 +10,7 @@ option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_NANOBIND "Build the nanobind Python backend" ON)
 option(WELDER_BUILD_EXAMPLES "Build examples" ON)
 option(WELDER_BUILD_TESTS "Build tests" ON)
-option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built pybind11 modules" ON)
+option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ON)
 option(WELDER_BUILD_DOCS "Build the documentation site (mkdocs + Doxygen reference)" OFF)
 
 # Reusable CMake helpers (e.g. welder_pybind11_generate_stubs).
