@@ -36,6 +36,9 @@ import welder;
 #define WELDER_TEST_BE welder::pybind11
 #define WELDER_TEST_MODULE_T ::pybind11::module_
 #define WELDER_TEST_MULTIPLE_INHERITANCE 1
+// The one module-handle op the shared register_* helpers need; the Lua backend,
+// whose handle is a sol::table with no def_submodule, defines it differently.
+#define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)
 
 // Case groups. These must come after the vocabulary + backend above: they use
 // both and deliberately do not re-include them (in the module build the

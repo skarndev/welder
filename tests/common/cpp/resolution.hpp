@@ -18,7 +18,7 @@ namespace resolution {
 // --- automatic policy: bind everything unless excluded ----------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Automatic {
     // bound
     int kept{0};
@@ -44,7 +44,7 @@ Automatic {
 
 struct
 [[
-  =welder::weld(welder::lang::py),
+  =welder::weld(welder::lang::py, welder::lang::lua),
   =welder::policy::opt_in
 ]]
 OptIn {
@@ -74,7 +74,7 @@ OptIn {
 // --- read/write roundtrip (and the exact bound set) -------------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Values {
     int i{0};
     double d{0.0};
@@ -87,7 +87,7 @@ Values {
 // --- access control: only public members are bound --------------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Access {
     // public data -> bound
     int visible{0};
@@ -112,6 +112,6 @@ protected:
 } // namespace resolution
 
 inline void register_resolution(WELDER_TEST_MODULE_T& m) {
-    auto sub{m.def_submodule("resolution")};
+    auto sub{WELDER_TEST_SUBMODULE(m, "resolution")};
     WELDER_TEST_BE::bind_namespace<^^resolution>(sub);
 }

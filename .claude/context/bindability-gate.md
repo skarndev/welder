@@ -49,8 +49,19 @@ conservative semantics; a self-contained caster is one written with `NB_TYPE_CAS
 `<nanobind/stl/*>` converter headers the TU includes. Everything above the leaf —
 the STL-wrapper recursion, the trust hatches, the assert messages — is shared.
 
-Negative-compile cases live in `tests/pybind11/cpp/neg/` and `tests/nanobind/cpp/neg/`
-(`negcompile.*` / `negcompile.nanobind.*` CTests, `WILL_FAIL`).
+**sol2** reads sol2's compile-time classification: `needs_registration<T>` is
+`std::is_enum_v<T> || sol::lua_type_of<T>::value == sol::type::userdata`. sol2 maps
+every type to a `sol::type` (number / boolean / string / table / poly / userdata);
+`userdata` is the "needs a usertype registered" bucket, and scalars / `bool` /
+strings (`std::string` is native without extra includes, unlike pybind's `stl.h`) /
+the sol wrapper types are native. Enums are folded into needs-registration even
+though sol2 would convert them as numbers, so a welded enum's name→value table is
+required and enum-typed members are gated on it — matching the Python backends. The
+STL-wrapper recursion, trust hatches and assert messages are shared as usual.
+
+Negative-compile cases live in `tests/pybind11/cpp/neg/`, `tests/nanobind/cpp/neg/`
+and `tests/sol2/cpp/neg/` (`negcompile.*` / `negcompile.nanobind.*` /
+`negcompile.sol2_unwelded` CTests, `WILL_FAIL`).
 
 ## Escape hatches (trust)
 Two hatches cover a type welder can't see is registered (hand-written pybind11

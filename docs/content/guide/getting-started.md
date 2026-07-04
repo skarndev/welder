@@ -9,8 +9,9 @@ gcc extensions, but today only one compiler implements the papers it needs:
 |---|---|
 | Compiler (P2996 + P3394) | **gcc-16** — the only one so far (`g++-16`, Homebrew GCC 16.1.0) |
 | Build system | CMake ≥ 3.28 (for `FILE_SET CXX_MODULES`) + **Ninja** (modules need it) |
-| Packages | Conan 2 (`conanfile.py`) → pybind11 |
-| Python | a `python3` with development headers (for the pybind11 module) |
+| Packages | Conan 2 (`conanfile.py`) → pybind11 / nanobind (Python); sol2 + Lua (Lua) |
+| Python | a `python3` with development headers (for the Python modules) |
+| Lua | headers via conan `sol2` (pulls Lua); a Lua interpreter to load the module |
 
 Reflection/module flags are isolated in the `welder_flags` CMake target and gated
 on the compiler id, so nothing gcc-specific leaks into the public targets. As
@@ -117,3 +118,8 @@ provide the vocabulary before the backend header:
     ```
 
 Backends are *always* header-only. Next: the [annotation vocabulary](annotations.md).
+
+!!! note "Binding to Lua instead?"
+
+    The same annotated `Point` binds to Lua — add `welder::lang::lua` to its `weld`
+    and use the sol2 backend. See [The Lua backend (sol2)](lua.md).

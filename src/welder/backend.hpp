@@ -18,8 +18,7 @@
     (`bind_traits.hpp`) and *whether each type can be represented* (`bindable.hpp`).
     Everything language-specific — *how* to register a class, method, property or
     module attribute — is delegated to a **backend**: a stateless policy type
-    (pybind11 today; nanobind / lua later) supplying a fixed set of emission
-    primitives. The driver here is written once against the @ref welder::backend
+    (pybind11, nanobind, sol2) supplying a fixed set of emission primitives. The driver here is written once against the @ref welder::backend
     concept and reused verbatim by every backend, so a new backend implements only
     its primitives, never the traversal/resolution logic.
 */

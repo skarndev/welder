@@ -17,7 +17,7 @@ namespace enums {
 
 // scoped enum, automatic policy: all enumerators bound except the excluded one.
 enum class
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Direction {
     North,
     East,
@@ -27,7 +27,7 @@ Direction {
 
 // unscoped enum: its values are also exported unqualified into the module scope.
 enum
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Signal {
     Green,
     Yellow,
@@ -37,7 +37,7 @@ Signal {
 // scoped enum, opt_in policy: only explicitly included enumerators bind.
 enum class
 [[
-  =welder::weld(welder::lang::py),
+  =welder::weld(welder::lang::py, welder::lang::lua),
   =welder::policy::opt_in
 ]]
 Level {
@@ -49,7 +49,7 @@ Level {
 // an enum used as a struct member: welder's gate passes because Direction is
 // welded, and register_enums binds the enum before the struct that uses it.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Compass {
     Direction facing;
 };
@@ -59,6 +59,6 @@ Compass {
 inline void register_enums(WELDER_TEST_MODULE_T& m) {
     // Whole namespace under an `enums` submodule. bind_namespace visits members in
     // declaration order, so each enum is bound before Compass, which uses one.
-    auto sub{m.def_submodule("enums")};
+    auto sub{WELDER_TEST_SUBMODULE(m, "enums")};
     WELDER_TEST_BE::bind_namespace<^^enums>(sub);
 }

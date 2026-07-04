@@ -36,10 +36,13 @@ src/welder/
       doc_style.hpp         Python docstring styles shared by both backends — welder::python::google_style (moved out of doc.hpp, which keeps only the neutral doc_style concept + function_docstring)
       pybind11/backend.hpp  pybind11 backend: struct detail::backend (emission primitives) + public bind<T> / bind_namespace / build_module wrappers over the driver
       nanobind/backend.hpp  nanobind backend: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
-    CMakeLists.txt      targets: welder::pybind11, welder::nanobind  (lua planned here)
+    lua/
+      sol2/backend.hpp      sol2 Lua backend: the same, against sol2's API (module_type = sol::table; usertype/new_usertype; metamethod operator map; enums as name→value tables; luaopen_ entry macro)
+    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
+  WelderSol2Module.cmake       welder_sol2_add_module() — build a loadable Lua .so (bare name, host-symbol link model, module-scan OFF)
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
@@ -105,14 +108,45 @@ placement-`__init__` aggregate factory, module docstrings via `__doc__`, the
 `is_base_caster` bindability probe, and `is_arithmetic` enums (Python `IntEnum`, to
 match pybind11's int-convertible enums). Its one gap is multiple inheritance:
 nanobind binds a single base per class, so a multi-base diamond binds under
-pybind11 but not nanobind. A Lua backend would implement the same ~16 primitives
-against Lua's C API.
+pybind11 but not nanobind.
+
+The **sol2 (Lua)** backend implements the same ~16 primitives against sol2, and is
+where the emission contract stretches furthest from Python — the divergences are
+the interesting part:
+- **`module_type = sol::table`** (a Lua module is a table); the borrowed
+  `lua_State*` is viewed with `sol::state_view`. `open_module`/`close_module` are
+  no-ops (empty session) — namespace variables bind eagerly as snapshots.
+- **caster oracle** reads `sol::lua_type_of<T>` (a `userdata` classification ⇒
+  needs registration); enums are forced needs-registration so a welded enum's
+  name→value table is required, matching the Python backends.
+- **operators → Lua metamethods**, a *smaller, asymmetric* map (`special_method_name`
+  returns the `__name`, `add_operator` the `sol::meta_function`): no `__ne`/`__gt`/
+  `__ge` (Lua derives `~=`/`>`/`>=` from `__eq`/`__lt`/`__le`), `^`→`__bxor` not
+  `__pow`, and bitwise metamethods `#if`-gated to Lua ≥ 5.3.
+- **constructors registered up front** in `make_class` from reflection
+  (`sol::constructors<…>` built via `substitute`), because sol2 wants the whole set
+  at once — so `add_default_ctor`/`add_constructor`/`add_aggregate_constructor` are
+  no-ops. Aggregates ride C++26 parenthesized aggregate init.
+- **full welded-base closure**: sol2's `sol::bases<…>` must list *every* welded
+  ancestor (it doesn't chain through an intermediate usertype's bases), so the
+  backend recomputes the transitive set itself rather than using the core's
+  *nearest*-ancestor `native_base_types`. It supports multiple + virtual bases (the
+  diamond binds, unlike nanobind).
+- **enums are name→value tables** (Lua has no enum type); an unscoped enum's names
+  are also mirrored onto the enclosing module.
+- **no runtime docstrings** (`doc`/`returns` ignored — their home is a future
+  LuaCATS stub) and **overloaded methods collapse** to the last (sol2 stores one
+  value per name; grouping into `sol::overload` is a planned enhancement).
+- entry point: `WELDER_MODULE(ns, sol2)` emits `extern "C" luaopen_<ns>` returning
+  the module table.
 
 **Backend namespace.** The pybind11 backend is `welder::pybind11`, the nanobind one
-`welder::nanobind` (both target `lang::py`). Inside each, unqualified `pybind11` /
-`nanobind` would resolve to that namespace, so the header aliases
-`namespace py = ::pybind11;` / `namespace nb = ::nanobind;` once and uses `py::` /
-`nb::` throughout.
+`welder::nanobind` (both target `lang::py`); the sol2 backend is `welder::sol2`
+(target `lang::lua`). Inside the Python backends, unqualified `pybind11` /
+`nanobind` would resolve to that namespace, so each aliases `namespace py =
+::pybind11;` / `namespace nb = ::nanobind;` and uses `py::` / `nb::` throughout.
+`welder::sol2` does *not* shadow the library's `::sol` namespace, so it uses `sol::`
+directly (no alias).
 
 Complex/custom type conversions are intended to be registered per-backend via each
 framework's own mechanisms, separately from core resolution — design pending.
@@ -126,8 +160,16 @@ framework's own mechanisms, separately from core resolution — design pending.
 - **`welder::nanobind`** — INTERFACE, the nanobind backend. nanobind compiles its
   runtime *into* each extension via its own `nanobind_add_module()`, so this target
   only surfaces the welder + nanobind headers; an extension is still created with
-  `nanobind_add_module`. Gated by `WELDER_BUILD_NANOBIND`. A future Lua backend gets
-  its own `welder::<backend>` target alongside these.
+  `nanobind_add_module`. Gated by `WELDER_BUILD_NANOBIND`.
+- **`welder::sol2`** — INTERFACE, the sol2 Lua backend. A loadable Lua C module must
+  resolve `lua_*` from the *host* interpreter and not bundle its own runtime, so this
+  target surfaces only the sol2 + Lua *headers* (it does not link `lua::lua`). Create
+  an extension with `welder_sol2_add_module()` (cmake/WelderSol2Module.cmake), which
+  sets the bare `<name>.so`, the host-symbol link model (`-undefined dynamic_lookup`
+  on macOS), and `CXX_SCAN_FOR_MODULES OFF` (sol2's `<luaconf.h>` can't see
+  `LLONG_MAX` under p1689 module scanning — a header-unit macro-visibility issue, so
+  a Lua binding TU is header-only, never `import welder;`). Gated by
+  `WELDER_BUILD_SOL2`; needs `sol2` + `lua` (conan `with_sol2`).
 
 Reflection/module flags are isolated in the `welder_flags` INTERFACE target and
 gated on compiler id, so nothing gcc-specific leaks into the public targets.

@@ -112,7 +112,7 @@ one backend struct; the core is reused verbatim.
 !!! warning "Early proof-of-concept"
 
     welder targets **C++26 and newer only**, and today **gcc-16 is the only
-    compiler** that implements P2996 + P3394. Two Python backends — **pybind11** and
-    **nanobind** — are verified end-to-end (the shared specs run against both);
-    properties and additional languages (Lua, …) are designed-for but not yet
-    implemented.
+    compiler** that implements P2996 + P3394. Three backends — **pybind11** and
+    **nanobind** (Python) and **sol2** (Lua) — are verified end-to-end against the
+    *same* shared C++ cases; properties and further languages are designed-for but
+    not yet implemented.

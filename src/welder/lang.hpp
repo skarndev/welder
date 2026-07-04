@@ -15,11 +15,11 @@ WELDER_EXPORT namespace welder {
 /** The set of target languages welder can generate bindings for.
 
     Stored as a bit index in an `unsigned` mask by the annotation vocabulary.
-    Today only `py` has a backend.
+    Both values have backends today (`py`: pybind11 + nanobind; `lua`: sol2).
 */
 enum class lang : unsigned char {
-    py,   /**< Python (via the pybind11 backend). */
-    lua,  /**< Lua (designed-for; no backend yet). */
+    py,   /**< Python (via the pybind11 and nanobind backends). */
+    lua,  /**< Lua (via the sol2 backend). */
 };
 
 } // namespace welder

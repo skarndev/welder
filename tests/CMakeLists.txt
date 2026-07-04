@@ -98,3 +98,8 @@ endif()
 if(WELDER_BUILD_NANOBIND)
   add_subdirectory(nanobind)
 endif()
+# The sol2 (Lua) tree reuses the same shared C++ cases, asserted from Lua rather
+# than pytest — it needs no uv/Python env, so it registers independently.
+if(WELDER_BUILD_SOL2)
+  add_subdirectory(sol2)
+endif()

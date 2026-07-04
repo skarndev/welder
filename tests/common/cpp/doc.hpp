@@ -154,7 +154,7 @@ inline void register_doc(WELDER_TEST_MODULE_T& m) {
     // Bind the whole namespace as a submodule via build_module, exercising the
     // pre/post hooks and the namespace -> module docstring adoption. The hooks
     // drop marker attributes the Python side checks for.
-    auto sub{m.def_submodule("documented")};
+    auto sub{WELDER_TEST_SUBMODULE(m, "documented")};
     WELDER_TEST_BE::build_module<^^documented>(
         sub,
         [](WELDER_TEST_MODULE_T& mm) { mm.attr("pre_marker") = 1; },

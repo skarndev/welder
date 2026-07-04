@@ -12,7 +12,7 @@ namespace methods {
 // --- constructors + methods -------------------------------------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Counter {
     int count{0};
 
@@ -49,7 +49,7 @@ Counter {
 // --- overloaded methods -----------------------------------------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Calc {
     int base{0};
 
@@ -74,7 +74,7 @@ Calc {
 // alongside the default Vec2().
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Vec2 {
     double x{0.0};
     double y{0.0};
@@ -83,6 +83,6 @@ Vec2 {
 } // namespace methods
 
 inline void register_methods(WELDER_TEST_MODULE_T& m) {
-    auto sub{m.def_submodule("methods")};
+    auto sub{WELDER_TEST_SUBMODULE(m, "methods")};
     WELDER_TEST_BE::bind_namespace<^^methods>(sub);
 }

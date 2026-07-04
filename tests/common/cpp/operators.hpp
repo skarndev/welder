@@ -14,7 +14,7 @@
 namespace operators {
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Vec {
     double x{0.0};
     double y{0.0};
@@ -46,7 +46,7 @@ Vec {
 // Case 1: the other operand is itself welded. Its member operator takes a Feet,
 // and because Feet is registered with pybind11 the dunder converts it and works.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Feet {
     double value{0.0};
     Feet() = default;
@@ -54,7 +54,7 @@ Feet {
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Meters {
     double value{0.0};
     Meters() = default;
@@ -71,7 +71,7 @@ Meters {
 // (tests/pybind11/cpp/neg/operand_not_welded.cpp). Shown here for context:
 //
 //   struct RawTag { int id{0}; };                        // no weld
-//   struct [[=welder::weld(welder::lang::py)]] Tagged {
+//   struct [[=welder::weld(welder::lang::py, welder::lang::lua)]] Tagged {
 //       int id{0};
 //       Tagged operator+(const RawTag&) const;           // -> hard compile error
 //   };
@@ -81,7 +81,7 @@ Meters {
 // free operator is not discovered and __add__ never appears. Documents the
 // current "free operators aren't bound yet" limitation.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Coin {
     int cents{0};
     Coin() = default;
@@ -96,7 +96,7 @@ inline Coin operator+(const Coin& a, const Coin& b) { return Coin{a.cents + b.ce
 // and under opt_in an operator binds only when explicitly included.
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 [[=welder::policy::automatic]]
 OpAutomatic {
     int v{0};
@@ -108,7 +108,7 @@ OpAutomatic {
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 [[=welder::policy::opt_in]]
 OpOptIn {
     [[=welder::mark::include]] int v{0};  // included so the test can read a result
@@ -123,6 +123,6 @@ OpOptIn {
 
 inline void register_operators(WELDER_TEST_MODULE_T& m) {
     // Declaration order binds Feet before Meters (Meters::operator+ takes a Feet).
-    auto sub{m.def_submodule("operators")};
+    auto sub{WELDER_TEST_SUBMODULE(m, "operators")};
     WELDER_TEST_BE::bind_namespace<^^operators>(sub);
 }

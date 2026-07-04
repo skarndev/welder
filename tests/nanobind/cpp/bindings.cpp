@@ -38,6 +38,9 @@ import welder;
 // undefined — the diamond case is skipped here and its Python spec skips too.
 #define WELDER_TEST_BE welder::nanobind
 #define WELDER_TEST_MODULE_T ::nanobind::module_
+// The one module-handle op the shared register_* helpers need; the Lua backend,
+// whose handle is a sol::table with no def_submodule, defines it differently.
+#define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)
 
 // Case groups. These must come after the vocabulary + backend above: they use
 // both and deliberately do not re-include them (in the module build the vocabulary

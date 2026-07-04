@@ -45,6 +45,14 @@ module attribute has no `__doc__`); the Doxygen filter surfaces them on the C++ 
 Doc text is stored *inline* (`fixed_string`) — a `const char*` to a literal isn't a
 permitted annotation constant on gcc-16.
 
+**Lua (sol2):** Lua has no runtime docstring slot, so the sol2 backend ignores
+`doc`/`returns` at runtime (the same `doc_of` extraction still runs; there is just
+no sink). Their intended Lua home is a **generated LuaCATS (`---@meta`) definition
+file** — the `.pyi` analogue — but *reflection-emitted at build time*, not scraped
+from a loaded module (a loaded sol2 usertype exposes nothing introspectable). Not
+implemented yet; it would reuse the same generic driver with a text-emitting
+"backend". See `binding-features.md` (Lua specifics).
+
 ## C++ docs via a Doxygen INPUT_FILTER (`tools/welder_doxygen_filter.py`)
 The C++ API documents itself from the *real sources*. Doxygen's native parser
 copes with the C++26 sources but silently discards `[[=…]]` annotations, and it has

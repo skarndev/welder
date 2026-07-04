@@ -87,12 +87,32 @@ required (a specialization `has_identifier` == false; the `identifier_of` name
 default would throw).
 
 ## Backends
-Two Python backends implement every feature above from the same driver: **pybind11**
-(`welder::pybind11`) and **nanobind** (`welder::nanobind`). The one behavioral gap is
-multiple inheritance — nanobind binds a single base per class, so a multi-base
-diamond binds under pybind11 only. Enums bind as `py::enum_` (pybind11) or an
-`is_arithmetic` `nb::enum_` (nanobind → Python `IntEnum`), both int-convertible.
+Three backends implement every feature above from the same driver: **pybind11**
+(`welder::pybind11`), **nanobind** (`welder::nanobind`) — both `lang::py` — and
+**sol2** (`welder::sol2`, `lang::lua`). nanobind's one behavioral gap is multiple
+inheritance (single base per class), so a multi-base diamond binds under pybind11 +
+sol2 but not nanobind. Enums bind as `py::enum_` (pybind11) / an `is_arithmetic`
+`nb::enum_` (nanobind → Python `IntEnum`) / a name→value **table** (sol2 — Lua has no
+enum type).
+
+## Lua specifics (sol2)
+The same annotated cases bind for `lang::lua`; the Lua-only differences (see
+`architecture.md` for the full list):
+- **Operators → Lua metamethods**, a smaller/asymmetric map: `+`/`-`(binary/unary)/
+  `*`/`/`/`%` → `__add`/`__sub`/`__unm`/`__mul`/`__div`/`__mod`; `==`→`__eq`,
+  `<`→`__lt`, `<=`→`__le`; **`!=`, `>`, `>=` map to *nothing*** — Lua derives `~=`,
+  `>`, `>=` from `__eq`/`__lt`/`__le`. `^`(XOR)→`__bxor`, `&`/`|`/`~`/`<<`/`>>` →
+  the bitwise metamethods, all `#if LUA_VERSION_NUM >= 503`. `[]`→`__index` (a sol2
+  fallback that coexists with member/method access), `()`→`__call`.
+- **Overloaded methods/functions collapse** to the last registered (sol2 stores one
+  value per name; `sol::overload` grouping is a planned enhancement).
+- **Namespace variables snapshot** at load time (const and mutable alike); live
+  get/set over a C++ global is a planned enhancement.
+- **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`).
+Tested by the shared cases bound for `lua`, asserted in `tests/sol2/test.lua`.
 
 ## Not yet implemented
-Properties and additional languages (Lua, …) are designed-for but not yet
-implemented. (Enums and custom type converters now are.)
+Properties (getter/setter pairs) are designed-for but not yet implemented; so are
+further languages. (Enums, custom type converters, and the Lua/sol2 backend now
+are.) sol2 backend enhancements noted above: overload grouping, live namespace
+variables, LuaCATS stub generation.

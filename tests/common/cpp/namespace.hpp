@@ -11,7 +11,7 @@ namespace catalog {
 // --- classes ----------------------------------------------------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Item {
     int id{0};
 
@@ -31,26 +31,26 @@ struct Hidden {
 // A welded base declared before its welded derived (C++ requires this order),
 // so namespace binding registers the base first and native inheritance works.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Animal2 {
     int legs{4};
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Cat : public Animal2 {
     int whiskers{12};
 };
 
 // --- free functions ---------------------------------------------------------
 
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 int total(int a, int b) {
     return a + b;
 }
 
 // overload
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 int total(int a) {
     return a;
 }
@@ -62,7 +62,7 @@ int internal_helper(int x) {
 
 // Welded candidate, but excluded for Python -> resolved out, like a struct member.
 [[
-  =welder::weld(welder::lang::py),
+  =welder::weld(welder::lang::py, welder::lang::lua),
   =welder::mark::exclude(welder::lang::py)
 ]]
 int suppressed() {
@@ -71,10 +71,10 @@ int suppressed() {
 
 // --- variables become module attributes -------------------------------------
 
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 inline constexpr int LIMIT{100};
 
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 inline const std::string TAG{"catalog"};
 
 // no weld -> not exposed
@@ -82,11 +82,11 @@ inline constexpr int PRIVATE_LIMIT{7};
 
 // --- mutable variables become live properties -------------------------------
 
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 inline int counter{0};
 
 // mutate the global from C++
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 void bump() {
     ++counter;
 }
@@ -97,7 +97,7 @@ void bump() {
 namespace sub {
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Nested {
     int v{5};
 };
@@ -120,14 +120,14 @@ namespace
 strict {
 
 // welded, but not included -> skipped
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 int candidate() {
     return 1;
 }
 
 // welded + included -> bound
 [[
-  =welder::weld(welder::lang::py),
+  =welder::weld(welder::lang::py, welder::lang::lua),
   =welder::mark::include(welder::lang::py)
 ]]
 int chosen() {
@@ -140,7 +140,7 @@ namespace
 shown {
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Gizmo {
     int g{9};
 };
@@ -151,7 +151,7 @@ Gizmo {
 namespace omitted {
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Ghost {
     int x{0};
 };
@@ -166,7 +166,7 @@ namespace
 secret {
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Spy {
     int s{0};
 };
@@ -178,6 +178,6 @@ Spy {
 inline void register_namespace(WELDER_TEST_MODULE_T& m) {
     // A whole namespace, bound under a submodule to keep names tidy. (The local
     // must not be named `catalog`, or it would shadow the namespace in `^^`.)
-    auto catalog_mod{m.def_submodule("catalog")};
+    auto catalog_mod{WELDER_TEST_SUBMODULE(m, "catalog")};
     WELDER_TEST_BE::bind_namespace<^^catalog>(catalog_mod);
 }

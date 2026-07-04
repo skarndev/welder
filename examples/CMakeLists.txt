@@ -11,3 +11,7 @@ if(WELDER_BUILD_PYBIND11)
   add_subdirectory(python_poc_headeronly) # consumes welder header-only
   add_subdirectory(welder_module)         # whole-module binding via WELDER_MODULE
 endif()
+
+if(WELDER_BUILD_SOL2)
+  add_subdirectory(lua_poc) # whole-module Lua binding via WELDER_MODULE(_, sol2)
+endif()

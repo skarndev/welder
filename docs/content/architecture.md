@@ -21,7 +21,7 @@ flowchart TB
         P["backends/python/pybind11/backend.hpp"]
         N["backends/python/nanobind/backend.hpp"]
         DS["backends/python/doc_style.hpp — shared"]
-        LU["backends/lua.hpp — planned"]
+        LU["backends/lua/sol2/backend.hpp"]
     end
     voc --> core
     core --> be

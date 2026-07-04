@@ -16,7 +16,7 @@ namespace inheritance {
 // --- native inheritance from a welded base ----------------------------------
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Base {
     int base_field{1};
 
@@ -31,7 +31,7 @@ Base {
 
 // issubclass(Derived, Base)
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Derived : public Base {
     int derived_field{2};
 
@@ -43,13 +43,13 @@ Derived : public Base {
 // A multi-level welded chain (Leaf -> Mid -> Base): every level stays a Python
 // superclass and contributes its members through the MRO.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Mid : public Base {
     int mid_field{5};
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Leaf : public Mid {
     int leaf_field{6};
 };
@@ -70,7 +70,7 @@ struct Mixin {
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 WithMixin : public Mixin {
     int own_field{4};
 };
@@ -80,7 +80,7 @@ WithMixin : public Mixin {
 // survive the non-welded bridge.
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Welded {
     int welded_field{10};
 
@@ -95,7 +95,7 @@ struct Bridge : public Welded {
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Through : public Bridge {
     int through_field{12};
 };
@@ -113,25 +113,25 @@ Through : public Bridge {
 #ifdef WELDER_TEST_MULTIPLE_INHERITANCE
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Apex {
     int apex_field{20};
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Left : public virtual Apex {
     int left_field{21};
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Right : public virtual Apex {
     int right_field{22};
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Bottom : public Left, public Right {
     int bottom_field{23};
 };
@@ -142,6 +142,6 @@ Bottom : public Left, public Right {
 
 inline void register_inheritance(WELDER_TEST_MODULE_T& m) {
     // Declaration order registers each native base before its derived types.
-    auto sub{m.def_submodule("inheritance")};
+    auto sub{WELDER_TEST_SUBMODULE(m, "inheritance")};
     WELDER_TEST_BE::bind_namespace<^^inheritance>(sub);
 }

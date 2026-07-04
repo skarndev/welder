@@ -14,8 +14,8 @@
     what their parameter names/types are.
 
     It answers "what", never "how": no backend API appears here, so every backend
-    (pybind11 today; nanobind / lua later) shares this vocabulary and only supplies
-    the emission primitives.
+    (pybind11, nanobind, sol2) shares this vocabulary and only supplies the emission
+    primitives.
 
     @note Like `<welder/reflect.hpp>`, this depends on the welder vocabulary
     (`lang`, `policy_kind`, …) but does NOT include `<welder/annotations.hpp>`:
