@@ -50,7 +50,7 @@ import welder;                          // annotation vocabulary (module form)
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>              // std::string conversion (1)
-#include <welder/backends/pybind11.hpp>
+#include <welder/backends/python/pybind11/backend.hpp>
 
 struct
 [[=welder::weld(welder::lang::py)]]    // (2)
@@ -106,14 +106,14 @@ provide the vocabulary before the backend header:
 
     ```cpp
     import welder;
-    #include <welder/backends/pybind11.hpp>
+    #include <welder/backends/python/pybind11/backend.hpp>
     ```
 
 === "Header-only"
 
     ```cpp
     #include <welder/welder.hpp>
-    #include <welder/backends/pybind11.hpp>
+    #include <welder/backends/python/pybind11/backend.hpp>
     ```
 
 Backends are *always* header-only. Next: the [annotation vocabulary](annotations.md).

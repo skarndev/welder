@@ -9,9 +9,9 @@
 // mirroring C++.
 //
 // The cases live in namespace `enums`, bound under an `enums` submodule via
-// welder::pybind11::bind_namespace so the Python package mirrors this file.
+// WELDER_TEST_BE::bind_namespace so the Python package mirrors this file.
 //
-// #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+// #included by bindings.cpp after the welder vocabulary + the active Python backend.
 
 namespace enums {
 
@@ -56,9 +56,9 @@ Compass {
 
 } // namespace enums
 
-inline void register_enums(pybind11::module_& m) {
+inline void register_enums(WELDER_TEST_MODULE_T& m) {
     // Whole namespace under an `enums` submodule. bind_namespace visits members in
     // declaration order, so each enum is bound before Compass, which uses one.
     auto sub{m.def_submodule("enums")};
-    welder::pybind11::bind_namespace<^^enums>(sub);
+    WELDER_TEST_BE::bind_namespace<^^enums>(sub);
 }

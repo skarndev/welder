@@ -91,6 +91,14 @@ def test_through_sees_welded_base_and_flattened_bridge(inh: ModuleType) -> None:
 
 
 # --- a virtual diamond, all welded ------------------------------------------
+# A diamond needs two native base classes. Backends that bind only single
+# inheritance (e.g. nanobind) omit the diamond types entirely, so these cases skip
+# when `Bottom` is absent rather than asserting a backend name.
+def _require_diamond(inh: ModuleType) -> None:
+    if not hasattr(inh, "Bottom"):
+        pytest.skip("backend does not bind multiple inheritance")
+
+
 @pytest.mark.parametrize(
     ("superclass",),
     [
@@ -100,9 +108,11 @@ def test_through_sees_welded_base_and_flattened_bridge(inh: ModuleType) -> None:
     ],
 )
 def test_diamond_subclassing(inh: ModuleType, superclass: str) -> None:
+    _require_diamond(inh)
     assert issubclass(inh.Bottom, getattr(inh, superclass))
 
 
 def test_diamond_exposes_every_field_once(inh: ModuleType) -> None:
+    _require_diamond(inh)
     b = inh.Bottom()
     assert (b.apex_field, b.left_field, b.right_field, b.bottom_field) == (20, 21, 22, 23)

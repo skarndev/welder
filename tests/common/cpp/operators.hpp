@@ -5,11 +5,11 @@
 // and subscript.
 //
 // The cases live in namespace `operators`, bound under an `operators` submodule
-// via welder::pybind11::bind_namespace so the Python package mirrors this file.
+// via WELDER_TEST_BE::bind_namespace so the Python package mirrors this file.
 // (The free operator+ below is non-welded, so bind_namespace skips it — which is
 // exactly the "free operators aren't bound yet" case it documents.)
 //
-// #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+// #included by bindings.cpp after the welder vocabulary + the active Python backend.
 
 namespace operators {
 
@@ -121,8 +121,8 @@ OpOptIn {
 
 } // namespace operators
 
-inline void register_operators(pybind11::module_& m) {
+inline void register_operators(WELDER_TEST_MODULE_T& m) {
     // Declaration order binds Feet before Meters (Meters::operator+ takes a Feet).
     auto sub{m.def_submodule("operators")};
-    welder::pybind11::bind_namespace<^^operators>(sub);
+    WELDER_TEST_BE::bind_namespace<^^operators>(sub);
 }

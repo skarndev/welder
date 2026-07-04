@@ -30,7 +30,7 @@ Consequently `reflect.hpp`/backends do **not** include the vocabulary headers
 This is also why welder does **not** modularize internally (no partitions, no
 per-component units): header-only is the source of truth and the fallback. The core
 has two equivalent forms — `import welder;` *or* `#include <welder/welder.hpp>`;
-backends are always header-only (e.g. `#include <welder/backends/pybind11.hpp>`).
+backends are always header-only (e.g. `#include <welder/backends/python/pybind11/backend.hpp>`).
 
 ## Toolchain gotchas
 

@@ -57,7 +57,7 @@ module docstring.
 #include <welder/welder.hpp>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <welder/backends/pybind11.hpp>
+#include <welder/backends/python/pybind11/backend.hpp>
 
 namespace
 [[=welder::doc("A small shapes module built by welder.")]]

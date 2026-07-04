@@ -12,7 +12,7 @@
 
 #include <pybind11/pybind11.h>
 
-#include <welder/backends/pybind11.hpp>
+#include <welder/backends/python/pybind11/backend.hpp>
 
 struct Unwelded {  // deliberately not welded
     int v{0};

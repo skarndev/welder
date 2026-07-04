@@ -19,7 +19,7 @@ annotations come through.
   gate), `doc.hpp` (docstring folding).
 - **The vocabulary** — `lang.hpp`, `annotations.hpp` (std-free; the `welder` module
   exports exactly these).
-- **The pybind11 backend** — `backends/pybind11.hpp`.
+- **The pybind11 backend** — `backends/python/pybind11/backend.hpp`.
 
 ## How this reference is built
 

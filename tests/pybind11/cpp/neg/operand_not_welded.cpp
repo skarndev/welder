@@ -11,7 +11,7 @@
 
 #include <pybind11/pybind11.h>
 
-#include <welder/backends/pybind11.hpp>
+#include <welder/backends/python/pybind11/backend.hpp>
 
 struct RawTag {  // deliberately not welded
     int id{0};

@@ -5,7 +5,7 @@
 # --- welder::headers : the header-only core (source of truth) ----------------
 add_library(welder_headers INTERFACE)
 add_library(welder::headers ALIAS welder_headers)
-# src/ is the include root, so <welder/welder.hpp>, <welder/backends/pybind11.hpp>
+# src/ is the include root, so <welder/welder.hpp>, <welder/backends/python/pybind11/backend.hpp>
 # and friends all resolve from here.
 target_include_directories(welder_headers INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

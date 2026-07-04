@@ -35,14 +35,30 @@ Three test-side mypy gates:
   `ModuleType` fixture).
 
 ## Test layout & harness
-The harness is uv + pytest + CTest; the bindings test is dual-variant (module +
-header-only). Key test locations by feature:
-- `tests/pybind11/cpp/enums.hpp` + `test_enums.py` — enums
-- `tests/pybind11/cpp/trust.hpp` + `test_trust.py` — trust hatches
-- `tests/pybind11/cpp/caster.hpp` + `test_caster.py` — self-contained type casters
-- `tests/pybind11/cpp/neg/` — bindability negative-compile (`negcompile.*` CTests, `WILL_FAIL`)
+The harness is uv + pytest + CTest; each bindings extension is dual-variant (module
++ header-only). The behavioral specs (`tests/test_*.py` + `conftest.py`) are
+**backend-agnostic** and shared: each backend tree builds its extension(s) and
+registers CTest entries that select the module at runtime via `WELDER_TEST_MODULE`,
+so the same specs run against pybind11 *and* nanobind (a cross-backend consistency
+check). The **C++ case tree is shared too**: the backend-neutral case headers live
+in `tests/common/cpp/` and reach the backend only through two macros each
+`bindings.cpp` defines — `WELDER_TEST_BE` (backend namespace) and
+`WELDER_TEST_MODULE_T` (module handle type); `WELDER_TEST_MULTIPLE_INHERITANCE`
+gates the diamond case (pybind11 only — nanobind is single-inheritance, and the
+Python spec skips the diamond when `Bottom` is absent). Only the genuinely
+backend-specific case files (`trust.hpp` hand-registration, `caster.hpp`
+type_caster) are per-backend, under `tests/pybind11/cpp/` and `tests/nanobind/cpp/`.
+
+nanobind extensions are built with nanobind's own `nanobind_add_module` (it
+compiles the nanobind runtime in). Stub generation + the mypy stub/typing gates are
+**pybind11-only** (they use pybind11-stubgen); nanobind has its own stubgen, not yet
+wired — the nanobind tree runs the behavioral specs only. Key locations by feature:
+- `tests/common/cpp/enums.hpp` + `test_enums.py` — enums
+- `tests/{pybind11,nanobind}/cpp/trust.hpp` + `test_trust.py` — trust hatches
+- `tests/{pybind11,nanobind}/cpp/caster.hpp` + `test_caster.py` — self-contained type casters
+- `tests/{pybind11,nanobind}/cpp/neg/` — bindability negative-compile (`negcompile.*` CTests, `WILL_FAIL`)
 - `tests/core/template_annotations.cpp` — template↔annotation semantics (compile-only)
-- `doc.hpp` `Gadget`/`combine` + `test_doc.py` — docstrings (multiline/dedent)
+- `tests/common/cpp/doc.hpp` `Gadget`/`combine` + `test_doc.py` — docstrings (multiline/dedent)
 - `tests/doxyfilter/` — Doxygen filter goldens + e2e (run with the uv venv Python, pins `lark`)
 
 Gotcha: uv rejects the Homebrew python for some operations — see the test-harness

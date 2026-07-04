@@ -18,7 +18,7 @@ emits the backend registration code (e.g. pybind11 `class_<T>` calls) directly.
 ```cpp
 import welder;                              // annotation vocabulary
 #include <pybind11/pybind11.h>
-#include <welder/backends/pybind11.hpp>     // the pybind11 backend
+#include <welder/backends/python/pybind11/backend.hpp>     // the pybind11 backend
 
 struct [[=welder::weld(welder::lang::py)]]  // expose to Python
 Point {
@@ -112,6 +112,7 @@ one backend struct; the core is reused verbatim.
 !!! warning "Early proof-of-concept"
 
     welder targets **C++26 and newer only**, and today **gcc-16 is the only
-    compiler** that implements P2996 + P3394. The pybind11 backend is verified
-    end-to-end; properties and additional languages (Lua, …) are designed-for but
-    not yet implemented.
+    compiler** that implements P2996 + P3394. Two Python backends — **pybind11** and
+    **nanobind** — are verified end-to-end (the shared specs run against both);
+    properties and additional languages (Lua, …) are designed-for but not yet
+    implemented.

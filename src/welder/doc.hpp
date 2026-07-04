@@ -251,7 +251,9 @@ struct function_doc {
 
     It is the customization point for how documentation reads in the target
     language; swap it to emit Google-, NumPy-, or any house style. Any type with
-    `static std::string format(const function_doc&)` qualifies.
+    `static std::string format(const function_doc&)` qualifies. Concrete styles
+    live with the backends that share them (e.g. `welder::python::google_style` in
+    `<welder/backends/python/doc_style.hpp>`), keeping this core layer neutral.
 
     @tparam S the candidate style type.
 */
@@ -260,85 +262,18 @@ concept doc_style = requires(const function_doc& d) {
     { S::format(d) } -> std::same_as<std::string>;
 };
 
-/** Google-style docstring assembly.
-
-    The summary, then an `Args:` block listing each *documented* parameter
-    (`    name: text`), then a `Returns:` block. Undocumented parameters are
-    omitted; the `Args:`/`Returns:` blocks are dropped entirely when empty, and
-    blocks are separated from preceding content by a blank line. A multiline
-    param/returns doc keeps its continuation lines indented under the block, so
-    docstrings carrying multiline examples stay readable.
-*/
-struct google_style {
-    /** Assemble @a d into a Google-style docstring.
-        @param d the documentation pieces.
-        @return the formatted docstring (possibly empty). */
-    static std::string format(const function_doc& d) {
-        std::string out{};
-        // Separate a new block from preceding content by exactly one blank line,
-        // whether or not that content already ended in a newline (the Args block
-        // leaves a trailing one per parameter line; the summary does not).
-        auto blank_line = [&out]() {
-            if (!out.empty()) {
-                if (out.back() != '\n')
-                    out += '\n';
-                out += '\n';
-            }
-        };
-        // Append `text`, indenting every continuation line by `indent` so a
-        // multiline param/returns doc stays under its block (docs often carry
-        // examples spanning lines). A trailing newline gets no indent (no
-        // dangling whitespace line).
-        auto append_indented = [&out](const char* text, const char* indent) {
-            for (const char* c{text}; *c; ++c) {
-                out += *c;
-                if (*c == '\n' && c[1] != '\0')
-                    out += indent;
-            }
-        };
-
-        if (d.summary)
-            out += d.summary;
-
-        bool any_param_doc{false};
-        for (const auto& p : d.params)
-            if (p.text) {
-                any_param_doc = true;
-                break;
-            }
-        if (any_param_doc) {
-            blank_line();
-            out += "Args:\n";
-            for (const auto& p : d.params)
-                if (p.text) {
-                    out += "    ";
-                    out += p.name ? p.name : "?";
-                    out += ": ";
-                    append_indented(p.text, "        ");
-                    out += '\n';
-                }
-        }
-
-        if (d.returns) {
-            blank_line();
-            out += "Returns:\n    ";
-            append_indented(d.returns, "    ");
-        }
-        return out;
-    }
-};
-
-/** The complete docstring for function @a Fn under @a Style (Google by default).
+/** The complete docstring for function @a Fn under @a Style.
 
     Its own `doc` summary with its parameter docs and `returns` folded in. Empty
     when the function carries no documentation at all, so a backend can skip
     emitting it.
 
     @tparam Fn    a reflection of the function.
-    @tparam Style the docstring style (defaults to google_style).
+    @tparam Style the docstring style (a @ref doc_style); the caller picks one that
+                  fits its target language.
     @return the assembled docstring, or empty if undocumented.
 */
-template <std::meta::info Fn, doc_style Style = google_style>
+template <std::meta::info Fn, doc_style Style>
 std::string function_docstring() {
     static constexpr auto pds{param_docs<Fn>()};
     return Style::format(function_doc{doc_of<Fn>(),

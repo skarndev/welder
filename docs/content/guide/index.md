@@ -37,7 +37,7 @@ equivalent:
     ```cpp
     import welder;
     #include <pybind11/pybind11.h>
-    #include <welder/backends/pybind11.hpp>
+    #include <welder/backends/python/pybind11/backend.hpp>
     ```
 
 === "Header-only"
@@ -45,7 +45,7 @@ equivalent:
     ```cpp
     #include <welder/welder.hpp>
     #include <pybind11/pybind11.h>
-    #include <welder/backends/pybind11.hpp>
+    #include <welder/backends/python/pybind11/backend.hpp>
     ```
 
 !!! note "Order matters"

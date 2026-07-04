@@ -13,8 +13,11 @@ entity, so its doc rides on the function as a *distinct* spec type
 (`return_doc_spec`), told apart from the summary by spec type.
 `function_docstring<^^Fn, Style>()` folds summary + param docs + return doc (via a
 `function_doc` parts struct, extensible to future `Raises:`/`Note:` without
-re-breaking the style API) under a pluggable style (default `google_style` →
-`Args:`/`Returns:` blocks); surfaced as Python `__doc__`.
+re-breaking the style API) under a pluggable style; surfaced as Python `__doc__`.
+`doc.hpp` keeps only the neutral `doc_style` concept + `function_docstring` (no
+default style); the concrete `google_style` (→ `Args:`/`Returns:` blocks) lives in
+`<welder/backends/python/doc_style.hpp>` under `welder::python`, shared by both
+Python backends, which pass it explicitly.
 
 **Multiline docs work** — a `doc`/`returns`/param text is just a `const char[N]`,
 so a raw string literal (`R"(…)"`) with newlines/blank lines/quotes/backslashes
@@ -31,7 +34,7 @@ block's *continuation* lines so multiline entries stay readable (tested: `doc.hp
 textual and does not dedent — Doxygen does its own.
 
 **Data-member docs** land on the member's Python attribute: pybind11 binds members
-as *properties* (data descriptors), and `add_field` (`backends/pybind11.hpp`) passes
+as *properties* (data descriptors), and `add_field` (`backends/python/pybind11/backend.hpp`) passes
 `doc_of<Mem>()` as the property docstring — so it reaches `__doc__` and the `.pyi`
 stubs. A **const** member is bound read-only (`def_readonly`; `def_readwrite`'s
 setter would not compile), a mutable one read/write (`def_readwrite`); only the

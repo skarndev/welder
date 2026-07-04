@@ -32,8 +32,11 @@ src/welder/
   welder.hpp            header-only umbrella: lang+annotations+reflect+doc
   welder.cppm           the single `export module welder;` (exports vocabulary only)
   backends/
-    pybind11.hpp        pybind11 backend: struct detail::backend (emission primitives) + public bind<T> / bind_namespace / build_module wrappers over the driver
-    CMakeLists.txt      target: welder::pybind11  (nanobind / lua planned here)
+    python/
+      doc_style.hpp         Python docstring styles shared by both backends — welder::python::google_style (moved out of doc.hpp, which keeps only the neutral doc_style concept + function_docstring)
+      pybind11/backend.hpp  pybind11 backend: struct detail::backend (emission primitives) + public bind<T> / bind_namespace / build_module wrappers over the driver
+      nanobind/backend.hpp  nanobind backend: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
+    CMakeLists.txt      targets: welder::pybind11, welder::nanobind  (lua planned here)
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
@@ -95,25 +98,36 @@ that plug in `pybind11::detail::backend`. `B` provides:
 
 The concept statically checks the associated types and the module machinery; the
 class/per-member hooks are templated on a reflection, so they are
-contract-by-documentation, enforced when the driver instantiates. A nanobind
-backend is nearly a copy of the pybind11 one (same class-handle model); a Lua
-backend implements the same ~16 primitives against Lua's C API.
+contract-by-documentation, enforced when the driver instantiates. The nanobind
+backend is nearly a copy of the pybind11 one (same class-handle model), diverging
+only where nanobind's API does — `def_rw`/`def_ro`, `nb::init`, a
+placement-`__init__` aggregate factory, module docstrings via `__doc__`, the
+`is_base_caster` bindability probe, and `is_arithmetic` enums (Python `IntEnum`, to
+match pybind11's int-convertible enums). Its one gap is multiple inheritance:
+nanobind binds a single base per class, so a multi-base diamond binds under
+pybind11 but not nanobind. A Lua backend would implement the same ~16 primitives
+against Lua's C API.
 
-**Backend namespace.** The pybind11 backend is `welder::pybind11` (nanobind →
-`welder::nanobind`; both target `lang::py`). Inside it, unqualified `pybind11`
-would resolve to that namespace, so the header aliases `namespace py = ::pybind11;`
-once and uses `py::` throughout.
+**Backend namespace.** The pybind11 backend is `welder::pybind11`, the nanobind one
+`welder::nanobind` (both target `lang::py`). Inside each, unqualified `pybind11` /
+`nanobind` would resolve to that namespace, so the header aliases
+`namespace py = ::pybind11;` / `namespace nb = ::nanobind;` once and uses `py::` /
+`nb::` throughout.
 
-Complex/custom type conversions are intended to be registered per-backend via
-pybind11's own mechanisms, separately from core resolution — design pending.
+Complex/custom type conversions are intended to be registered per-backend via each
+framework's own mechanisms, separately from core resolution — design pending.
 
 ## CMake targets
 
 - **`welder::headers`** — INTERFACE, the header-only core (include path + flags).
 - **`welder::module`** — STATIC, builds `src/welder/welder.cppm`; provides `import welder;`.
 - **`welder::pybind11`** — INTERFACE, the pybind11 backend (links headers + pybind11 + Python).
-  Gated by `WELDER_BUILD_PYBIND11`. Future Python (nanobind) / Lua backends get
-  their own `welder::<backend>` target alongside it.
+  Gated by `WELDER_BUILD_PYBIND11`.
+- **`welder::nanobind`** — INTERFACE, the nanobind backend. nanobind compiles its
+  runtime *into* each extension via its own `nanobind_add_module()`, so this target
+  only surfaces the welder + nanobind headers; an extension is still created with
+  `nanobind_add_module`. Gated by `WELDER_BUILD_NANOBIND`. A future Lua backend gets
+  its own `welder::<backend>` target alongside these.
 
 Reflection/module flags are isolated in the `welder_flags` INTERFACE target and
 gated on compiler id, so nothing gcc-specific leaks into the public targets.

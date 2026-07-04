@@ -10,20 +10,22 @@ no external code generator, no parsing step. Targets **C++26 and newer only**.
 **Delivery model (Boost-style):** header-only (`src/welder/…`), with one optional
 C++20 module wrapper (`src/welder/welder.cppm`). Two equivalent core forms —
 `import welder;` *or* `#include <welder/welder.hpp>`; backends are always
-header-only (`#include <welder/backends/pybind11.hpp>`). We deliberately do *not*
+header-only (`#include <welder/backends/python/pybind11/backend.hpp>`). We deliberately do *not*
 modularize internally — see `.claude/context/gcc16-toolchain.md` for why.
 
 **Status:** early POC, verified end-to-end (both consumption forms → an importable
-Python module). The **pybind11 backend** is the implemented one. Properties and
-additional languages (Lua, …) are designed-for but not yet implemented. For the
-feature-by-feature detail and test locations, see the context files below.
+Python module). Two **Python backends** are implemented — **pybind11** and
+**nanobind** — sharing the core and the Python docstring styles; the shared test
+specs run against both as a cross-backend consistency check. Additional languages
+(Lua, …) are designed-for but not yet implemented. For the feature-by-feature
+detail and test locations, see the context files below.
 
 ## The idea / public API
 
 ```cpp
 import welder;            // or: #include <welder/welder.hpp>
 #include <pybind11/pybind11.h>
-#include <welder/backends/pybind11.hpp>
+#include <welder/backends/python/pybind11/backend.hpp>
 
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // expose to py+lua
        [[=welder::policy::automatic]]                          // reflect all members

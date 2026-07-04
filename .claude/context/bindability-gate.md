@@ -41,8 +41,16 @@ converter header (`<pybind11/complex.h>`, …). *Not* exhaustive for a non-STL
 wrapper with its own caster — its elements aren't recursed (an opaque bindable
 leaf).
 
-Negative-compile cases live in `tests/pybind11/cpp/neg/` (`negcompile.*` CTests,
-`WILL_FAIL`).
+**nanobind** implements the same leaf against its own casters:
+`needs_registration<T>` is `nb::detail::is_base_caster_v<nb::detail::make_caster<T>>`
+(is_base_caster = "this caster derives from nanobind's `type_caster_base`"). Same
+conservative semantics; a self-contained caster is one written with `NB_TYPE_CASTER`
+(not deriving from `type_caster_base`), and "native" is relative to which
+`<nanobind/stl/*>` converter headers the TU includes. Everything above the leaf —
+the STL-wrapper recursion, the trust hatches, the assert messages — is shared.
+
+Negative-compile cases live in `tests/pybind11/cpp/neg/` and `tests/nanobind/cpp/neg/`
+(`negcompile.*` / `negcompile.nanobind.*` CTests, `WILL_FAIL`).
 
 ## Escape hatches (trust)
 Two hatches cover a type welder can't see is registered (hand-written pybind11

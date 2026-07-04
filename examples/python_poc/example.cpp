@@ -5,7 +5,7 @@ import welder; // annotation vocabulary (module form)
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>                  // std::string conversion
-#include <welder/backends/pybind11.hpp>    // pybind11 backend (needs the vocabulary above)
+#include <welder/backends/python/pybind11/backend.hpp>    // pybind11 backend (needs the vocabulary above)
 
 // A struct welded for Python. Default policy (automatic) reflects every member
 // unless excluded.

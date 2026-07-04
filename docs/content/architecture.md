@@ -18,8 +18,9 @@ flowchart TB
         A["annotations.hpp"]
     end
     subgraph be["backends (header-only)"]
-        P["backends/pybind11.hpp"]
-        N["backends/nanobind.hpp — planned"]
+        P["backends/python/pybind11/backend.hpp"]
+        N["backends/python/nanobind/backend.hpp"]
+        DS["backends/python/doc_style.hpp — shared"]
         LU["backends/lua.hpp — planned"]
     end
     voc --> core
@@ -55,9 +56,10 @@ wrappers that plug `pybind11::detail::backend` into the generic driver.
 
 !!! quote "Adding a language"
 
-    …is writing one backend struct plus thin public wrappers. A nanobind backend is
-    nearly a copy of the pybind11 one (same class-handle model); a Lua backend
-    implements the same primitives against Lua's C API. The core is reused verbatim.
+    …is writing one backend struct plus thin public wrappers. The nanobind backend
+    is nearly a copy of the pybind11 one (same class-handle model, sharing the
+    Python docstring styles); a Lua backend implements the same primitives against
+    Lua's C API. The core is reused verbatim.
 
 ## The module-vs-header boundary
 

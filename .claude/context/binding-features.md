@@ -86,6 +86,13 @@ makes `bind<Welded<int>>(m, "name")` legitimate today — the explicit name is
 required (a specialization `has_identifier` == false; the `identifier_of` name
 default would throw).
 
+## Backends
+Two Python backends implement every feature above from the same driver: **pybind11**
+(`welder::pybind11`) and **nanobind** (`welder::nanobind`). The one behavioral gap is
+multiple inheritance — nanobind binds a single base per class, so a multi-base
+diamond binds under pybind11 only. Enums bind as `py::enum_` (pybind11) or an
+`is_arithmetic` `nb::enum_` (nanobind → Python `IntEnum`), both int-convertible.
+
 ## Not yet implemented
 Properties and additional languages (Lua, …) are designed-for but not yet
 implemented. (Enums and custom type converters now are.)

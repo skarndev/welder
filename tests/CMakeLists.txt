@@ -10,8 +10,10 @@ find_program(UV_EXECUTABLE uv)
 
 # Handed down to the backend subdirectories. WELDER_TEST_VENV_PYTHON stays empty
 # if the uv env can't be prepared: backends then still *build* their extensions
-# (a compile check) but skip registering CTest entries.
+# (a compile check) but skip registering CTest entries. WELDER_TEST_COMMON_CPP is
+# the backend-neutral C++ case tree, shared by every backend's bindings.cpp.
 set(WELDER_TEST_PYDIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(WELDER_TEST_COMMON_CPP ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp)
 set(WELDER_TEST_VENV_PYTHON "")
 
 if(NOT UV_EXECUTABLE)
@@ -86,7 +88,13 @@ add_test(NAME compile.doc_cleandoc
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 
-# Per-backend test trees (each builds its extensions + registers CTest).
+# Per-backend test trees (each builds its extensions + registers CTest). Both
+# consume the shared specs (tests/test_*.py) and the shared C++ case tree
+# (tests/common/cpp), so once both are built the specs double as a cross-backend
+# consistency check.
 if(WELDER_BUILD_PYBIND11)
   add_subdirectory(pybind11)
+endif()
+if(WELDER_BUILD_NANOBIND)
+  add_subdirectory(nanobind)
 endif()

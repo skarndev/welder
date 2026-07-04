@@ -7,7 +7,7 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <welder/backends/pybind11.hpp> // pybind11 backend
+#include <welder/backends/python/pybind11/backend.hpp> // pybind11 backend
 
 struct
 [[=welder::weld(welder::lang::py)]]

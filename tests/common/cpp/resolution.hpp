@@ -6,13 +6,13 @@
 // resolve the same way as data members" section of test_resolution.py exercises
 // `Counter`, which lives in methods.hpp — nothing to declare for it here.
 //
-// #included by bindings.cpp *after* the welder vocabulary and the pybind11
+// #included by bindings.cpp *after* the welder vocabulary and the active Python
 // backend are in scope; this header deliberately does not include them itself (in
 // the module-form build the vocabulary arrives via `import welder;`).
 #include <string>
 
 // The cases live in namespace `resolution`, bound under a `resolution` submodule
-// via welder::pybind11::bind_namespace so the Python package mirrors this file.
+// via WELDER_TEST_BE::bind_namespace so the Python package mirrors this file.
 namespace resolution {
 
 // --- automatic policy: bind everything unless excluded ----------------------
@@ -111,7 +111,7 @@ protected:
 
 } // namespace resolution
 
-inline void register_resolution(pybind11::module_& m) {
+inline void register_resolution(WELDER_TEST_MODULE_T& m) {
     auto sub{m.def_submodule("resolution")};
-    welder::pybind11::bind_namespace<^^resolution>(sub);
+    WELDER_TEST_BE::bind_namespace<^^resolution>(sub);
 }

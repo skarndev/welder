@@ -9,10 +9,15 @@ function(welder_add_pybind11_test_module tgt)
   cmake_parse_arguments(A "HEADER_ONLY" "" "" ${ARGN})
   # bindings.cpp is the only TU; the per-spec-file case headers it #includes are
   # listed so they show in IDEs (header deps are tracked via compiler depfiles).
+  # The backend-neutral groups live in ../common/cpp (shared with nanobind); trust
+  # and caster are pybind11-specific and live alongside bindings.cpp.
   Python_add_library(${tgt} MODULE WITH_SOABI
-    cpp/bindings.cpp
-    cpp/resolution.hpp cpp/methods.hpp cpp/inheritance.hpp cpp/namespace.hpp
-    cpp/doc.hpp cpp/operators.hpp cpp/trust.hpp cpp/caster.hpp cpp/enums.hpp)
+    cpp/bindings.cpp cpp/trust.hpp cpp/caster.hpp
+    ${WELDER_TEST_COMMON_CPP}/resolution.hpp ${WELDER_TEST_COMMON_CPP}/methods.hpp
+    ${WELDER_TEST_COMMON_CPP}/inheritance.hpp ${WELDER_TEST_COMMON_CPP}/namespace.hpp
+    ${WELDER_TEST_COMMON_CPP}/doc.hpp ${WELDER_TEST_COMMON_CPP}/operators.hpp
+    ${WELDER_TEST_COMMON_CPP}/enums.hpp)
+  target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
   if(A_HEADER_ONLY)

@@ -3,9 +3,9 @@
 // which the "methods resolve the same way" cases in test_resolution.py rely on.
 //
 // The cases live in namespace `methods`, bound under a `methods` submodule via
-// welder::pybind11::bind_namespace so the Python package mirrors this file.
+// WELDER_TEST_BE::bind_namespace so the Python package mirrors this file.
 //
-// #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+// #included by bindings.cpp after the welder vocabulary + the active Python backend.
 
 namespace methods {
 
@@ -82,7 +82,7 @@ Vec2 {
 
 } // namespace methods
 
-inline void register_methods(pybind11::module_& m) {
+inline void register_methods(WELDER_TEST_MODULE_T& m) {
     auto sub{m.def_submodule("methods")};
-    welder::pybind11::bind_namespace<^^methods>(sub);
+    WELDER_TEST_BE::bind_namespace<^^methods>(sub);
 }

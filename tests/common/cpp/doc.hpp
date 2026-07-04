@@ -2,13 +2,13 @@
 // Documentation — mirrors tests/test_doc.py (same sections, same order). Exercises
 // the [[=welder::doc]] annotation across a class, its methods, free functions and
 // their parameters, and a namespace docstring, plus the whole-module entry point
-// welder::pybind11::build_module (pre/post hooks + namespace-doc adoption).
+// WELDER_TEST_BE::build_module (pre/post hooks + namespace-doc adoption).
 //
 // Everything lives in the top-level namespace `documented` so it can be bound as
 // one module via build_module (which requires a top-level namespace). It is bound
 // into a `documented` submodule of the test module.
 //
-// #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+// #included by bindings.cpp after the welder vocabulary + the active Python backend.
 #include <string>
 
 namespace
@@ -150,13 +150,13 @@ inline constexpr int ANSWER{42};
 
 } // namespace documented
 
-inline void register_doc(pybind11::module_& m) {
+inline void register_doc(WELDER_TEST_MODULE_T& m) {
     // Bind the whole namespace as a submodule via build_module, exercising the
     // pre/post hooks and the namespace -> module docstring adoption. The hooks
     // drop marker attributes the Python side checks for.
     auto sub{m.def_submodule("documented")};
-    welder::pybind11::build_module<^^documented>(
+    WELDER_TEST_BE::build_module<^^documented>(
         sub,
-        [](pybind11::module_& mm) { mm.attr("pre_marker") = 1; },
-        [](pybind11::module_& mm) { mm.attr("post_marker") = 2; });
+        [](WELDER_TEST_MODULE_T& mm) { mm.attr("pre_marker") = 1; },
+        [](WELDER_TEST_MODULE_T& mm) { mm.attr("post_marker") = 2; });
 }

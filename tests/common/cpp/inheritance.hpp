@@ -5,11 +5,11 @@
 // (pybind11 requires a native base to be registered first).
 //
 // The cases live in namespace `inheritance`, bound under an `inheritance`
-// submodule via welder::pybind11::bind_namespace so the Python package mirrors
+// submodule via WELDER_TEST_BE::bind_namespace so the Python package mirrors
 // this file. bind_namespace visits members in declaration order, so each welded
 // base is registered before the types that derive from it.
 //
-// #included by bindings.cpp after the welder vocabulary + pybind11 backend.
+// #included by bindings.cpp after the welder vocabulary + the active Python backend.
 
 namespace inheritance {
 
@@ -103,6 +103,14 @@ Through : public Bridge {
 // --- a virtual diamond, all welded ------------------------------------------
 // Apex <- (virtual) Left, Right <- Bottom. The shared virtual base is listed
 // once; every level stays reachable.
+//
+// Guarded by WELDER_TEST_MULTIPLE_INHERITANCE: Bottom has two welded bases, which
+// welder maps to two native base classes. pybind11 supports that; nanobind binds
+// only single inheritance, so its backend defines this macro to nothing and the
+// diamond is skipped (the Python spec skips its diamond cases when Bottom is
+// absent). The single-base levels are guarded along with it, as they exist only to
+// form the diamond.
+#ifdef WELDER_TEST_MULTIPLE_INHERITANCE
 
 struct
 [[=welder::weld(welder::lang::py)]]
@@ -128,10 +136,12 @@ Bottom : public Left, public Right {
     int bottom_field{23};
 };
 
+#endif // WELDER_TEST_MULTIPLE_INHERITANCE
+
 } // namespace inheritance
 
-inline void register_inheritance(pybind11::module_& m) {
+inline void register_inheritance(WELDER_TEST_MODULE_T& m) {
     // Declaration order registers each native base before its derived types.
     auto sub{m.def_submodule("inheritance")};
-    welder::pybind11::bind_namespace<^^inheritance>(sub);
+    WELDER_TEST_BE::bind_namespace<^^inheritance>(sub);
 }

@@ -37,7 +37,7 @@
 
     @a backend selects the expansion `WELDER_DETAIL_MODULE_ENTRY_<backend>`, which
     the corresponding backend header defines (e.g.
-    `<welder/backends/pybind11.hpp>`). Selecting a backend whose header you did not
+    `<welder/backends/python/pybind11/backend.hpp>`). Selecting a backend whose header you did not
     include is a preprocessor error.
 */
 #define WELDER_MODULE(ns, backend) WELDER_DETAIL_MODULE_ENTRY_##backend(ns)
