@@ -47,11 +47,12 @@ CONTROLS = """\
     c.toggle("dark-mode", dark);
     c.toggle("light-mode", !dark);
   }
-  // Apply the saved choice as early as possible (this runs in <head>); with no
-  // saved choice we leave the class off and let prefers-color-scheme decide.
+  // Apply an explicit class as early as possible (this runs in <head>): the saved
+  // choice, else the OS preference. Always setting a class keeps our accent
+  // overrides winning (awesome's dark accent lives under a higher-specificity
+  // `html:not(.light-mode)` media rule).
   var s = saved();
-  if (s === "dark") { apply(true); }
-  else if (s === "light") { apply(false); }
+  apply(s === "dark" ? true : (s === "light" ? false : prefersDark()));
   function setIcon() {
     var b = document.getElementById("welder-dark-toggle");
     if (b) { b.innerHTML = isDark() ? MOON : SUN; }
@@ -63,15 +64,17 @@ CONTROLS = """\
     setIcon();
   }
   function build() {
-    var box = document.getElementById("MSearchBox");
-    if (box && box.parentNode && !document.getElementById("welder-dark-toggle")) {
+    // Place the toggle inline next to the search box; clicks are handled by the
+    // delegated listener below, so it works even inside the search container.
+    if (!document.getElementById("welder-dark-toggle")) {
       var btn = document.createElement("button");
       btn.id = "welder-dark-toggle";
       btn.type = "button";
       btn.title = "Toggle light / dark mode";
       btn.setAttribute("aria-label", "Toggle light / dark mode");
-      btn.addEventListener("click", toggle);
-      box.parentNode.appendChild(btn);
+      var box = document.getElementById("MSearchBox");
+      var host = (box && box.parentNode) ? box.parentNode : (document.body || document.documentElement);
+      host.appendChild(btn);
     }
     setIcon();
     var pn = document.getElementById("projectname");
@@ -84,6 +87,11 @@ CONTROLS = """\
       pn.appendChild(a);
     }
   }
+  // Delegated click, so it fires no matter how/when the button was added.
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (t && t.closest && t.closest("#welder-dark-toggle")) { toggle(); }
+  });
   if (document.readyState !== "loading") { build(); }
   else { document.addEventListener("DOMContentLoaded", build); }
   try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", setIcon); } catch (e) {}
