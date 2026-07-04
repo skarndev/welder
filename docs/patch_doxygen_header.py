@@ -2,15 +2,15 @@
 """Inject welder's header customizations into a generated Doxygen header.
 
 Doxygen 1.17 ships **no jQuery**, so doxygen-awesome's `init()`-based extensions
-(dark-mode toggle, copy buttons, …) silently fail — they call `$(function(){…})`.
-The theme's *static* dark-mode loader still runs (no jQuery), so the theme applies
-the OS/localStorage color scheme on load; only the visible controls are missing.
+(dark-mode toggle, copy buttons, …) silently fail. And its dark-mode *class* is a
+top-level `class` in a classic script — a global lexical binding, not a `window`
+property — which makes it awkward and brittle to drive from another script.
 
-So we wire our own, in plain JS:
-  * a light/dark toggle button placed next to the search box in the header
-    (it reuses doxygen-awesome's DoxygenAwesomeDarkModeToggle for persistence when
-    present, else toggles the html class directly),
-  * the project title linked back to the mkdocs guide.
+So we do it ourselves, fully self-contained: doxygen-awesome's CSS keys dark mode
+purely on `html.dark-mode` (+ `prefers-color-scheme`), so we just manage that class
+directly and persist the choice in localStorage — no doxygen-awesome JS at all.
+We also place a light/dark toggle button next to the search box and link the
+project title back to the mkdocs guide.
 
 Usage: patch_doxygen_header.py <generated-header.html> <patched-header.html>
 
@@ -19,56 +19,47 @@ docs build must never break here.
 """
 import sys
 
-# Only the dark-mode script is loaded: its class + static loader are jQuery-free
-# and we reuse them. The other awesome extensions need jQuery (absent in 1.17).
-HEAD = """\
-<!-- welder: doxygen-awesome dark-mode class + static loader (jQuery-free) -->
-<script type="text/javascript" src="$relpath^doxygen-awesome-darkmode-toggle.js"></script>
-"""
-
-# A sun/moon icon set (fill: currentColor) + the controls builder. Runs on
-# DOMContentLoaded; `$relpath^../index.html` resolves from any api/ page to the
-# guide home.
+# `$relpath^../index.html` resolves from any api/ page to the guide home. The saved
+# preference is applied immediately (this runs in <head>, before first paint); the
+# button + title link are built on DOMContentLoaded.
 CONTROLS = """\
-<!-- welder: header controls (dark-mode toggle + guide backlink) -->
+<!-- welder: self-contained dark-mode toggle + guide backlink (no jQuery / no awesome JS) -->
 <script type="text/javascript">
 (function () {
   var GUIDE_URL = "$relpath^../index.html";
+  var KEY = "welder-color-scheme";
   var SUN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm0 17a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM4 12a1 1 0 01-1 1H2a1 1 0 110-2h1a1 1 0 011 1zm18 0a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.99 5.99a1 1 0 01-1.41 0l-.71-.71a1 1 0 011.41-1.41l.71.71a1 1 0 010 1.41zm14.02 14.02a1 1 0 01-1.41 0l-.71-.71a1 1 0 011.41-1.41l.71.71a1 1 0 010 1.41zM18.01 5.99a1 1 0 010-1.41l.71-.71a1 1 0 011.41 1.41l-.71.71a1 1 0 01-1.41 0zM3.99 20.01a1 1 0 010-1.41l.71-.71a1 1 0 011.41 1.41l-.71.71a1 1 0 01-1.41 0z"/></svg>';
   var MOON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 108.99 9.36A7.002 7.002 0 0112 3z"/></svg>';
-  // A top-level `class` in a classic script is a global *lexical* binding, not a
-  // property of window — so reference DoxygenAwesomeDarkModeToggle by bare name
-  // (guarded with typeof), never as window.DoxygenAwesomeDarkModeToggle.
-  function toggleApi() {
-    return (typeof DoxygenAwesomeDarkModeToggle !== "undefined")
-      ? DoxygenAwesomeDarkModeToggle : null;
-  }
-  // The *effective* dark state: an explicit class wins; otherwise the OS setting
-  // decides (doxygen-awesome's dark styles also apply via prefers-color-scheme).
-  function isDark() {
-    var h = document.documentElement;
-    if (h.classList.contains("dark-mode")) { return true; }
-    if (h.classList.contains("light-mode")) { return false; }
+  function prefersDark() {
     return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
+  function saved() {
+    try { return localStorage.getItem(KEY); } catch (e) { return null; }
+  }
+  function isDark() {
+    var c = document.documentElement.classList;
+    if (c.contains("dark-mode")) { return true; }
+    if (c.contains("light-mode")) { return false; }
+    return prefersDark();
+  }
+  function apply(dark) {
+    var c = document.documentElement.classList;
+    c.toggle("dark-mode", dark);
+    c.toggle("light-mode", !dark);
+  }
+  // Apply the saved choice as early as possible (this runs in <head>); with no
+  // saved choice we leave the class off and let prefers-color-scheme decide.
+  var s = saved();
+  if (s === "dark") { apply(true); }
+  else if (s === "light") { apply(false); }
   function setIcon() {
     var b = document.getElementById("welder-dark-toggle");
     if (b) { b.innerHTML = isDark() ? MOON : SUN; }
   }
   function toggle() {
-    try {
-      var api = toggleApi();
-      if (api) {
-        // Reuse the theme's own toggle (handles persistence + the media logic).
-        api.userPreference = !api.userPreference;
-      } else {
-        // Fallback: set an explicit class both ways (toggling both is wrong when
-        // the OS is dark and no class is present yet).
-        var h = document.documentElement, dark = !isDark();
-        h.classList.toggle("dark-mode", dark);
-        h.classList.toggle("light-mode", !dark);
-      }
-    } catch (e) {}
+    var dark = !isDark();
+    apply(dark);
+    try { localStorage.setItem(KEY, dark ? "dark" : "light"); } catch (e) {}
     setIcon();
   }
   function build() {
@@ -96,9 +87,6 @@ CONTROLS = """\
   if (document.readyState !== "loading") { build(); }
   else { document.addEventListener("DOMContentLoaded", build); }
   try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", setIcon); } catch (e) {}
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible") { setIcon(); }
-  });
 })();
 </script>
 """
@@ -112,7 +100,7 @@ def main() -> int:
         if "welder-dark-toggle" not in html:
             marker = "</head>"
             if marker in html:
-                html = html.replace(marker, HEAD + CONTROLS + marker, 1)
+                html = html.replace(marker, CONTROLS + marker, 1)
         with open(dst, "w", encoding="utf-8") as f:
             f.write(html)
     except OSError as e:

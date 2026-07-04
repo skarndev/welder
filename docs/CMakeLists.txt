@@ -86,12 +86,10 @@ if(_awesome_ok)
   set(DOXYGEN_HTML_EXTRA_STYLESHEET
       "${_awesome_dir}/doxygen-awesome.css \
 ${_docs_src}/doxygen-extra.css")
-  # Only the dark-mode script: its class + static loader are jQuery-free, and we
-  # reuse them from our own header controls. The other awesome extensions
-  # (fragment-copy, paragraph-link, tabs, interactive-toc) are init()-based and
-  # need jQuery, which Doxygen 1.17 no longer ships — so they'd be dead weight.
-  set(DOXYGEN_HTML_EXTRA_FILES
-      "${_awesome_dir}/doxygen-awesome-darkmode-toggle.js")
+  # No doxygen-awesome JS: all its extensions are init()-based and need jQuery,
+  # which Doxygen 1.17 no longer ships. We manage dark mode ourselves in the header
+  # (patch_doxygen_header.py) against the theme's `html.dark-mode` CSS.
+  set(DOXYGEN_HTML_EXTRA_FILES "")
 
   # Generate Doxygen's default header, then inject the extension scripts. Any
   # failure here leaves DOXYGEN_HTML_HEADER empty -> stock header + base theme.
