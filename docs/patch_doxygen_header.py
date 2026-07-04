@@ -36,19 +36,37 @@ CONTROLS = """\
   var GUIDE_URL = "$relpath^../index.html";
   var SUN = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 7a5 5 0 100 10 5 5 0 000-10zm0-5a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm0 17a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM4 12a1 1 0 01-1 1H2a1 1 0 110-2h1a1 1 0 011 1zm18 0a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.99 5.99a1 1 0 01-1.41 0l-.71-.71a1 1 0 011.41-1.41l.71.71a1 1 0 010 1.41zm14.02 14.02a1 1 0 01-1.41 0l-.71-.71a1 1 0 011.41-1.41l.71.71a1 1 0 010 1.41zM18.01 5.99a1 1 0 010-1.41l.71-.71a1 1 0 011.41 1.41l-.71.71a1 1 0 01-1.41 0zM3.99 20.01a1 1 0 010-1.41l.71-.71a1 1 0 011.41 1.41l-.71.71a1 1 0 01-1.41 0z"/></svg>';
   var MOON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 108.99 9.36A7.002 7.002 0 0112 3z"/></svg>';
-  function isDark() { return document.documentElement.classList.contains("dark-mode"); }
+  // A top-level `class` in a classic script is a global *lexical* binding, not a
+  // property of window — so reference DoxygenAwesomeDarkModeToggle by bare name
+  // (guarded with typeof), never as window.DoxygenAwesomeDarkModeToggle.
+  function toggleApi() {
+    return (typeof DoxygenAwesomeDarkModeToggle !== "undefined")
+      ? DoxygenAwesomeDarkModeToggle : null;
+  }
+  // The *effective* dark state: an explicit class wins; otherwise the OS setting
+  // decides (doxygen-awesome's dark styles also apply via prefers-color-scheme).
+  function isDark() {
+    var h = document.documentElement;
+    if (h.classList.contains("dark-mode")) { return true; }
+    if (h.classList.contains("light-mode")) { return false; }
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
   function setIcon() {
     var b = document.getElementById("welder-dark-toggle");
     if (b) { b.innerHTML = isDark() ? MOON : SUN; }
   }
   function toggle() {
     try {
-      if (window.DoxygenAwesomeDarkModeToggle) {
-        DoxygenAwesomeDarkModeToggle.userPreference = !DoxygenAwesomeDarkModeToggle.userPreference;
+      var api = toggleApi();
+      if (api) {
+        // Reuse the theme's own toggle (handles persistence + the media logic).
+        api.userPreference = !api.userPreference;
       } else {
-        var h = document.documentElement;
-        h.classList.toggle("dark-mode");
-        h.classList.toggle("light-mode");
+        // Fallback: set an explicit class both ways (toggling both is wrong when
+        // the OS is dark and no class is present yet).
+        var h = document.documentElement, dark = !isDark();
+        h.classList.toggle("dark-mode", dark);
+        h.classList.toggle("light-mode", !dark);
       }
     } catch (e) {}
     setIcon();
