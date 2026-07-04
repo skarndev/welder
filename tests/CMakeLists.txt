@@ -72,6 +72,17 @@ add_test(NAME compile.template_annotations
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_template_annotations --config $<CONFIG>)
 
+# Docstring dedent semantics (compile-only): welder::cleandoc (doc.hpp) mirrors
+# Python inspect.cleandoc / PEP 257 so multiline docs can be indented to match the
+# source without the indentation leaking into __doc__. static_asserts lock the
+# exact cases; same compile-to-pass shape as above (no Python needed).
+add_library(welder_doc_cleandoc OBJECT EXCLUDE_FROM_ALL core/doc_cleandoc.cpp)
+target_compile_features(welder_doc_cleandoc PRIVATE cxx_std_26)
+target_link_libraries(welder_doc_cleandoc PRIVATE welder::headers)
+add_test(NAME compile.doc_cleandoc
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_doc_cleandoc --config $<CONFIG>)
+
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 

@@ -23,3 +23,6 @@ temp_*
 
 # Generated Doxygen reference (built into mkdocs' docs_dir by docs/CMakeLists.txt)
 /docs/content/api/
+
+# Stray CTest run artifacts (created if ctest is invoked in the source tree)
+Testing/

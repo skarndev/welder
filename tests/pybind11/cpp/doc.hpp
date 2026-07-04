@@ -78,6 +78,52 @@ int twice(int x) {
     return 2 * x;
 }
 
+// --- multiline / raw-string docstrings --------------------------------------
+// A raw string literal is still a const char[N], so it flows through
+// welder::doc verbatim: newlines, blank lines, quotes and backslashes all reach
+// the Python __doc__. Function docs commonly carry multiline examples, so this
+// path is load-bearing.
+//
+// The doc text is written indented to line up with the surrounding source; welder
+// dedents it (PEP 257 / cleandoc semantics) so the indentation does NOT leak into
+// __doc__ — while an example block's *relative* extra indentation is preserved.
+struct
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc(R"(
+      A gadget.
+
+      Example:
+          >>> Gadget().tag
+          0
+  )")
+]]
+Gadget {
+    int tag{0};
+};
+
+// Multiline summary, plus a multiline parameter doc and a multiline return doc,
+// all indented for readability (dedented by welder): google_style then keeps each
+// block's continuation lines indented under it.
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc(R"(
+      Combine two values.
+
+      Detailed multiline
+      description.)"),
+  =welder::returns(R"(
+      the combined result,
+      described over two lines)")
+]]
+int combine(
+    [[=welder::doc(R"(
+        the first operand,
+        spanning two lines)")]] int a,
+    [[=welder::doc("the second operand")]] int b) {
+    return a + b;
+}
+
 // --- variable doc is ignored (no module/attr __doc__ in Python) -------------
 [[
   =welder::weld(welder::lang::py),

@@ -140,6 +140,19 @@ module):
     doc (via a `function_doc` parts struct, extensible to future `Raises:`/`Note:`
     without re-breaking the style API) under a pluggable style (default
     `google_style` → `Args:`/`Returns:` blocks); surfaced as Python `__doc__`.
+    **Multiline docs work** — a `doc`/`returns`/param text is just a `const
+    char[N]`, so a raw string literal (`R"(…)"`) with newlines/blank lines/quotes/
+    backslashes flows through `fixed_string` to `__doc__` (the common case: function
+    docs carrying `>>> `-style examples). Such text is **dedented** at read time by
+    `doc.hpp` `cleandoc` (Python `inspect.cleandoc`/PEP 257 semantics: strip the
+    first line, remove the indentation common to the rest, trim leading/trailing
+    blank lines — relative indentation of an example block is kept), applied
+    centrally in `annotation_text_of` so class/namespace/function/param/returns docs
+    can all be indented to match the source without that indentation leaking; tabs
+    are not expanded (indent with spaces). `google_style` then indents each
+    param/returns block's *continuation* lines so multiline entries stay readable
+    (tested: `doc.hpp` `Gadget`/`combine` + `test_doc.py`). NB the Doxygen filter
+    path (C++ docs) is textual and does not dedent — Doxygen does its own.
     Variable docs are intentionally ignored by binding backends (no attribute
     `__doc__` in Python); the Doxygen filter surfaces them on the C++ side. Doc
     text is stored *inline*

@@ -86,6 +86,32 @@ def test_returns_only_function_has_just_a_returns_block(doc: ModuleType) -> None
     assert doc.twice(21) == 42
 
 
+# --- multiline / raw-string + dedent -----------------------------------------
+def test_class_multiline_docstring_is_dedented(doc: ModuleType) -> None:
+    # The C++ doc is indented to match the source; welder dedents it (PEP 257) so
+    # the common indentation is gone, blank/trailing lines are trimmed, and the
+    # example block keeps its *relative* extra indentation.
+    assert doc.Gadget.__doc__ == (
+        "A gadget.\n"
+        "\n"
+        "Example:\n"
+        "    >>> Gadget().tag\n"
+        "    0"
+    )
+
+
+def test_function_multiline_summary_param_and_return_docs(doc: ModuleType) -> None:
+    text = doc.combine.__doc__
+    # multiline summary, dedented (leading source indentation stripped)
+    assert "Combine two values.\n\nDetailed multiline\ndescription." in text
+    # a multiline parameter doc: continuation lines indented under the Args block
+    assert "    a: the first operand,\n        spanning two lines" in text
+    assert "    b: the second operand" in text
+    # a multiline return doc: continuation lines indented under Returns
+    assert "Returns:\n    the combined result,\n    described over two lines" in text
+    assert doc.combine(2, 3) == 5
+
+
 # --- namespace docstring (adopted as the module docstring) -------------------
 def test_namespace_docstring_becomes_module_doc(doc: ModuleType) -> None:
     assert doc.__doc__ == "The documented sample namespace."

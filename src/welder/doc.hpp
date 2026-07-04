@@ -4,6 +4,8 @@
 #include <meta>
 #include <span>
 #include <string>
+#include <string_view>
+#include <vector>
 
 /** @file
     Language-agnostic documentation layer: read `[[=welder::doc(...)]]`
@@ -22,6 +24,82 @@
 
 namespace welder {
 
+/** Normalize a docstring the way Python's `inspect.cleandoc` (PEP 257) does, so a
+    multiline `doc`/`returns` can be indented to line up with the surrounding C++
+    source without that indentation reaching the target language's docstring.
+
+    Three steps, matching the Python convention users of the bindings expect:
+    - strip leading whitespace from the *first* line (it typically abuts the
+      opening `R"(` or the annotation call);
+    - remove the whitespace **common** to every subsequent non-blank line (relative
+      indentation — an indented example block — is preserved);
+    - drop leading and trailing blank lines.
+
+    A single-line docstring is returned unchanged. Tabs are treated as single
+    characters (not expanded to tab stops): indent doc text with spaces, as C++
+    source is indented generally.
+
+    @param text the raw docstring text.
+    @return the cleaned text (may be empty if the input was all whitespace).
+*/
+consteval std::string cleandoc(std::string_view text) {
+    std::vector<std::string> lines{};
+    std::string cur{};
+    for (char c : text) {
+        if (c == '\n') {
+            lines.push_back(cur);
+            cur.clear();
+        } else
+            cur.push_back(c);
+    }
+    lines.push_back(cur);
+
+    auto leading = [](const std::string& s) {
+        std::string::size_type n{0};
+        while (n < s.size() && (s[n] == ' ' || s[n] == '\t'))
+            ++n;
+        return n;
+    };
+    auto blank = [](const std::string& s) {
+        for (char c : s)
+            if (c != ' ' && c != '\t' && c != '\r')
+                return false;
+        return true;
+    };
+
+    // Common leading whitespace of the lines *after* the first (blank lines don't
+    // constrain it), which is what gets removed from those lines.
+    bool have_margin{false};
+    std::string::size_type margin{0};
+    for (std::string::size_type i{1}; i < lines.size(); ++i)
+        if (!blank(lines[i])) {
+            const auto ind{leading(lines[i])};
+            if (!have_margin || ind < margin) {
+                margin = ind;
+                have_margin = true;
+            }
+        }
+
+    if (!lines.empty())
+        lines[0].erase(0, leading(lines[0]));
+    if (have_margin)
+        for (std::string::size_type i{1}; i < lines.size(); ++i)
+            lines[i].erase(0, margin); // over-erasing a short blank line is fine
+
+    while (!lines.empty() && blank(lines.back()))
+        lines.pop_back();
+    while (!lines.empty() && blank(lines.front()))
+        lines.erase(lines.begin());
+
+    std::string out{};
+    for (std::string::size_type i{0}; i < lines.size(); ++i) {
+        if (i)
+            out.push_back('\n');
+        out += lines[i];
+    }
+    return out;
+}
+
 /** The text of the annotation on @a Ent whose class template is @a SpecTmpl, or
     `nullptr` if it carries none.
 
@@ -32,8 +110,8 @@ namespace welder {
     @tparam Ent      a reflection of the entity to read.
     @tparam SpecTmpl a class template whose specialization has a `.text` member
                      convertible to a C string (`doc_spec`, `return_doc_spec`).
-    @return the annotation text with static storage (`define_static_string`, so
-            usable at runtime), or `nullptr`.
+    @return the annotation text, @ref cleandoc "dedented" and with static storage
+            (`define_static_string`, so usable at runtime), or `nullptr`.
 */
 template <std::meta::info Ent, std::meta::info SpecTmpl>
 consteval const char* annotation_text_of() {
@@ -44,7 +122,7 @@ consteval const char* annotation_text_of() {
                       std::meta::template_of(t) == SpecTmpl) {
             using spec_type = [:t:];
             constexpr auto spec{std::meta::extract<spec_type>(a)};
-            return std::define_static_string(spec.text.data);
+            return std::define_static_string(cleandoc(spec.text.data));
         }
     }
     return nullptr;
@@ -187,7 +265,9 @@ concept doc_style = requires(const function_doc& d) {
     The summary, then an `Args:` block listing each *documented* parameter
     (`    name: text`), then a `Returns:` block. Undocumented parameters are
     omitted; the `Args:`/`Returns:` blocks are dropped entirely when empty, and
-    blocks are separated from preceding content by a blank line.
+    blocks are separated from preceding content by a blank line. A multiline
+    param/returns doc keeps its continuation lines indented under the block, so
+    docstrings carrying multiline examples stay readable.
 */
 struct google_style {
     /** Assemble @a d into a Google-style docstring.
@@ -203,6 +283,17 @@ struct google_style {
                 if (out.back() != '\n')
                     out += '\n';
                 out += '\n';
+            }
+        };
+        // Append `text`, indenting every continuation line by `indent` so a
+        // multiline param/returns doc stays under its block (docs often carry
+        // examples spanning lines). A trailing newline gets no indent (no
+        // dangling whitespace line).
+        auto append_indented = [&out](const char* text, const char* indent) {
+            for (const char* c{text}; *c; ++c) {
+                out += *c;
+                if (*c == '\n' && c[1] != '\0')
+                    out += indent;
             }
         };
 
@@ -223,7 +314,7 @@ struct google_style {
                     out += "    ";
                     out += p.name ? p.name : "?";
                     out += ": ";
-                    out += p.text;
+                    append_indented(p.text, "        ");
                     out += '\n';
                 }
         }
@@ -231,7 +322,7 @@ struct google_style {
         if (d.returns) {
             blank_line();
             out += "Returns:\n    ";
-            out += d.returns;
+            append_indented(d.returns, "    ");
         }
         return out;
     }

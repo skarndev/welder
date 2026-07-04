@@ -58,6 +58,53 @@ Returns:
     from the summary by spec type — which also keeps the door open for future
     `Raises:` / `Note:` blocks without re-breaking the style API.
 
+## Multiline docstrings
+
+Function docs often carry examples that span several lines, so use a **raw string
+literal** — it's still a `const char[N]`, so newlines, blank lines, quotes and
+backslashes all flow through `doc` to `__doc__`.
+
+You can indent the text to line up with the surrounding source: welder **dedents**
+it the way Python's [`inspect.cleandoc`](https://docs.python.org/3/library/inspect.html#inspect.cleandoc)
+(PEP 257) does. The common leading indentation is stripped, leading/trailing blank
+lines are trimmed, and an example block's *relative* extra indentation is kept.
+
+```cpp
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc(R"(
+      Parse an integer.
+
+      Example:
+          >>> parse("42")
+          42
+  )")
+]]
+int parse(const std::string& text);
+```
+
+```pycon
+>>> print(parse.__doc__)
+Parse an integer.
+
+Example:
+    >>> parse("42")
+    42
+```
+
+The source indentation is gone; the four-space example indent — relative to the
+prose — survives.
+
+!!! tip "Dedent details"
+
+    Only the whitespace **common** to every line (after the first) is removed, so
+    relative structure is preserved. The first line is stripped separately, so both
+    `doc(R"(First line here …` and a doc that opens on its own line work. Indent
+    with **spaces** — tabs are treated as single characters, not expanded.
+
+Continuation lines of a **parameter** or **return** doc are likewise kept indented
+under their `Args:` / `Returns:` block, so a multiline entry reads as one.
+
 ## `tparam` — documenting templates
 
 Template parameters aren't reflectable entities either, so their docs ride on the
