@@ -101,8 +101,28 @@ documented `function` + `---@overload fun(…)` lines (the first overload with a
 the primary, keeping its `@param`/summary text; the others carry signature only, all
 LuaCATS records). A **const** data member gets a `(read-only)` description note —
 LuaCATS has no read-only field tag (an open lua-language-server request), so it is
-documented, not enforced. **Remaining limit:** no lua-language-server
-validate-if-present step yet (the golden is the gate).
+documented, not enforced.
+
+**Stub `---@operator` vs runtime metamethods:** `operator_luacats` (type_map.hpp)
+only emits the operators lua-language-server actually models (`vm.OP_*_MAP`:
+arithmetic/bitwise + `call`/`len`/`concat`/`unm`/`bnot`). **Comparison (`==`/`<`/
+`<=`) and subscript (`[]`) are dropped** — they have no `---@operator` spelling, so
+the sol2 runtime binds them (`__eq`/`__lt`/`__le`/`__index`) but the stub can't type
+them; emitting `---@operator eq/lt/le/index` makes the language server reject the
+stub with `unknown-operator`.
+
+**LuaCATS stubcheck (the Lua analogue of `stubcheck.<variant>` mypy).** The
+generated stub is validate-if-present linted by **lua-language-server**: the
+`stubcheck.luacats` CTest runs `lua-language-server --check` over it and gates on its
+exit code (0 = clean), gated on `find_program(lua-language-server)` — a missing
+server only *skips* the lint (the byte-exact golden still gates), exactly like the
+uv/luarocks gates. The stub is emitted into an isolated workspace dir
+(`<bindir>/tests/luacats/stub/`) with a `.luarc.json` copied beside it: a `---@meta`
+file *defines* but never *uses* its types, so the type/annotation diagnostics that
+matter (`undefined-doc-name`/`-class`, `unknown-operator`) are forced on via
+`neededFileStatus: Any!` — which only fires in a *workspace* check, so it must be a
+directory check with the config co-located (a single-file `--check` ignores it).
+This lint is what caught the invalid `---@operator eq/lt/le/index` emissions.
 
 ## Test-side type gates (mypy)
 Three test-side mypy gates:
@@ -117,11 +137,13 @@ Tests split by target language under `tests/`: the backend-neutral C++ case tree
 (`common/cpp/`) and compile-only core checks (`core/`) live at the top; the Python
 backends + their pytest specs under `python/`, the Lua backend + its busted specs
 under `lua/`. The LuaCATS stub backend has its own top-level tree `tests/luacats/`
-(compile + run + byte-exact golden, needing only the compiler — it depends on
-neither sol2 nor Lua): `welder_luacats_generate_stub` builds `cpp/stub_gen.cpp` (a
-*dedicated doc-rich case*, since the shared cases are behavior-focused and mostly
-carry no `doc` — same reason `doc.hpp` is its own Python case) and the
-`luacats.stub_golden` CTest compares its output to `stub.golden.lua`. The **C++ case tree is shared across all three backends**
+(compile + run + byte-exact golden + optional lint, needing only the compiler to
+build — it depends on neither sol2 nor Lua): `welder_luacats_generate_stub` builds
+`cpp/stub_gen.cpp` (a *dedicated doc-rich case*, since the shared cases are
+behavior-focused and mostly carry no `doc` — same reason `doc.hpp` is its own Python
+case) into `<bindir>/tests/luacats/stub/stubdemo.lua`, the `luacats.stub_golden`
+CTest compares it to `stub.golden.lua`, and — when a `lua-language-server` is found —
+`stubcheck.luacats` lints it (see the LuaCATS stubcheck note above). The **C++ case tree is shared across all three backends**
 (`common/cpp/`, welded for `lang::py` **and** `lang::lua`), reached only through
 three macros each `bindings.cpp` defines — `WELDER_TEST_BE` (backend namespace),
 `WELDER_TEST_MODULE_T` (module handle type) and `WELDER_TEST_SUBMODULE` (the one

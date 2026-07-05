@@ -42,7 +42,6 @@ function stubdemo.Shape:area() end
 ---@class stubdemo.Circle : stubdemo.Shape
 ---@field radius number The radius, in units.
 ---@operator mul(number): stubdemo.Circle
----@operator eq(stubdemo.Circle): boolean
 stubdemo.Circle = {}
 
 --- Construct from a radius.
@@ -59,6 +58,21 @@ function stubdemo.Circle:area() end
 ---@return stubdemo.Circle
 ---@overload fun(kx: number, ky: number): stubdemo.Circle
 function stubdemo.Circle:scaled(k) end
+
+--- A bit mask (exercises the bitwise metamethods).
+---@class stubdemo.Mask
+---@field bits integer The raw bits.
+---@operator band(stubdemo.Mask): stubdemo.Mask
+---@operator bor(stubdemo.Mask): stubdemo.Mask
+---@operator bxor(stubdemo.Mask): stubdemo.Mask
+---@operator bnot: stubdemo.Mask
+---@operator shl(integer): stubdemo.Mask
+---@operator shr(integer): stubdemo.Mask
+stubdemo.Mask = {}
+
+---@return stubdemo.Mask
+---@overload fun(bits: integer): stubdemo.Mask
+function stubdemo.Mask.new() end
 
 --- Axis-aligned box (aggregate).
 ---@class stubdemo.Box

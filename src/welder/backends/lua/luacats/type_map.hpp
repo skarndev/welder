@@ -193,27 +193,43 @@ inline constexpr bool is_native_lua =
 
 /** A member operator's LuaCATS `---@operator` name, or `nullptr` if not rendered.
 
-    LuaCATS names the arithmetic/comparison/call/index metamethods; unary vs binary
-    is by arity (a member operator takes 0 parameters when unary). Kept deliberately
-    close to the sol2 backend's metamethod map so the stub and the runtime binding
-    agree on which operators surface.
+    LuaCATS names only the arithmetic / bitwise / call metamethods; unary vs binary
+    is by arity (a member operator takes 0 parameters when unary). The set is exactly
+    lua-language-server's `vm.OP_*_MAP` — `add sub mul div mod pow idiv band bor bxor
+    shl shr concat` (binary), `unm bnot len` (unary), `call` — so anything we return
+    here must be one of those or the language server rejects the stub with
+    `unknown-operator`. This mirrors the sol2 runtime metamethod map (`operator_mm`),
+    minus one distinction: sol2 `#if`-gates the bitwise metamethods to Lua ≥ 5.3,
+    whereas the stub carries no Lua headers (pure reflection + text), so it documents
+    the 5.3+ surface unconditionally — the stub's target version is the reader's
+    `.luarc.json runtime.version`, not a compile-time `LUA_VERSION_NUM`.
+
+    Deliberately absent: **comparison** (`==`/`<`/`<=`) and **subscript** (`[]`).
+    They have no `---@operator` spelling — lua-language-server always permits `==`
+    (yielding boolean) and models indexing through `---@field [key] value`, so
+    there is nothing to annotate. They still bind at *runtime* (sol2 `__eq`/`__lt`/
+    `__le`/`__index`); the stub simply can't type them, so we drop them here rather
+    than emit an annotation the language server can't consume.
     @param f a reflection of the operator function.
     @return the `---@operator` name (static storage), or `nullptr`. */
 consteval const char* operator_luacats(std::meta::info f) {
     using std::meta::operators;
     const bool unary{welder::detail::is_unary_operator(f)};
     switch (std::meta::operator_of(f)) {
-        case operators::op_plus:   return unary ? nullptr : "add";
-        case operators::op_minus:  return unary ? "unm" : "sub";
-        case operators::op_star:   return unary ? nullptr : "mul";
-        case operators::op_slash:  return "div";
+        case operators::op_plus:    return unary ? nullptr : "add";
+        case operators::op_minus:   return unary ? "unm" : "sub";
+        case operators::op_star:    return unary ? nullptr : "mul";
+        case operators::op_slash:   return "div";
         case operators::op_percent: return "mod";
-        case operators::op_equals_equals: return "eq";
-        case operators::op_less:          return "lt";
-        case operators::op_less_equals:   return "le";
-        case operators::op_parentheses:   return "call";
-        case operators::op_square_brackets: return "index";
-        default: return nullptr; // ~=, >, >= are derived; others unmapped
+        case operators::op_parentheses: return "call";
+        // Bitwise (Lua 5.3+). C++ operator^ is XOR (→ bxor), NOT power (Lua ^).
+        case operators::op_caret:   return "bxor";
+        case operators::op_tilde:   return unary ? "bnot" : nullptr;
+        case operators::op_ampersand: return unary ? nullptr : "band"; // unary & = address-of
+        case operators::op_pipe:            return "bor";
+        case operators::op_less_less:       return "shl";
+        case operators::op_greater_greater: return "shr";
+        default: return nullptr; // ==/</<=/[], !=/>/>=: not a LuaCATS @operator
     }
 }
 

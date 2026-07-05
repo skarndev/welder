@@ -5,7 +5,9 @@
 // cases exercise binding behavior and mostly carry no [[=welder::doc]] — the same
 // reason doc.hpp is its own Python case). It exercises the surface a stub must
 // render: class/field/method/return/param docs, constructors, an aggregate field
-// constructor, welded-base inheritance, operators, scoped + unscoped enums, a free
+// constructor, welded-base inheritance, operators (arithmetic + the bitwise set
+// LuaCATS can type; comparison/subscript are excluded — no `---@operator` form),
+// scoped + unscoped enums, a free
 // function, a namespace variable, the STL type map (vector/map/optional), and a
 // nested namespace. WELDER_LUACATS_MAIN emits the ---@meta stub for `stubdemo`;
 // the CTest golden-compares it (tests/luacats/stub.golden.lua).
@@ -60,6 +62,21 @@ Circle : Shape {
     [[=welder::doc("A scaled copy.")]]
     Circle operator*([[=welder::doc("the scale factor")]] double k) const;
     bool operator==(const Circle& rhs) const;
+};
+
+// Bitwise operators: exercise the Lua ≥ 5.3 metamethods the stub can also type
+// (band/bor/bxor/bnot/shl/shr). ==/</<=/[] are deliberately NOT here — LuaCATS
+// `---@operator` can't name them (they bind at runtime but have no stub form).
+struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A bit mask (exercises the bitwise metamethods).")]]
+Mask {
+    [[=welder::doc("The raw bits.")]] std::uint32_t bits{0};
+
+    [[=welder::doc("Bitwise AND.")]] Mask operator&(const Mask& rhs) const;
+    Mask operator|(const Mask& rhs) const;
+    Mask operator^(const Mask& rhs) const;
+    [[=welder::doc("Bitwise NOT.")]] Mask operator~() const;
+    Mask operator<<([[=welder::doc("shift distance")]] unsigned n) const;
+    Mask operator>>(unsigned n) const;
 };
 
 struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Axis-aligned box (aggregate).")]]

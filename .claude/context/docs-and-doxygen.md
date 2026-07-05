@@ -68,7 +68,10 @@ constructors accumulate on the `class_writer` and render as one `.new` group at 
 — and module/submodule tables (`ns = {}`) are declared shallowest-first ahead of the
 body. Build a stub with
 `welder_luacats_generate_stub()` over a `WELDER_LUACATS_MAIN(<ns>)` generator; the
-golden lives in `tests/luacats/`. See `binding-features.md` (Lua specifics) and
+golden lives in `tests/luacats/`, and — when a `lua-language-server` is installed —
+the `stubcheck.luacats` CTest lints the emitted stub (the Lua analogue of mypy over
+the `.pyi`; comparison/subscript operators are dropped from the stub since LuaCATS
+`---@operator` can't name them). See `binding-features.md` (Lua specifics) and
 build-test-run.md (the stub build/test path).
 
 ## C++ docs via a Doxygen INPUT_FILTER (`tools/welder_doxygen_filter.py`)

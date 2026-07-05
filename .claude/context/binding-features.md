@@ -123,6 +123,14 @@ The same annotated cases bind for `lang::lua`; the Lua-only differences (see
   `docs-and-doxygen.md` and build-test-run.md). The stub reflects the same welded
   Lua types through the same driver and writes a `---@meta` file with `---@field`/
   `---@param`/`---@return`/`---@class`/`---@enum`/`---@operator` tags plus the docs.
+  The stub `---@operator` set mirrors the sol2 runtime metamethod map (arithmetic +
+  bitwise + `call`), with two exceptions the language server can't name (`vm.OP_*_MAP`):
+  **comparison** (`==`/`<`/`<=`) and **subscript** (`[]`) — sol2 binds them
+  (`__eq`/`__lt`/`__le`/`__index`) but `operator_luacats` (type_map.hpp) drops them
+  (they work at runtime, the stub just can't type them; emitting `---@operator
+  eq/lt/le/index` makes the language server reject the stub with `unknown-operator`).
+  The bitwise metamethods sol2 `#if`-gates to Lua ≥ 5.3 are emitted unconditionally
+  (the stub carries no Lua headers, so version is the reader's `.luarc.json`).
 Tested by the shared cases bound for `lua`, asserted by the busted specs in
 `tests/lua/spec/*_spec.lua`.
 
@@ -136,7 +144,12 @@ one documented `function` plus `---@overload fun(…)` lines (the primary — ke
 its full `@param`/summary docs — is the first overload carrying a doc); a **const**
 member's read-only-ness is surfaced as a `(read-only)` description note, since
 LuaCATS has no read-only/const field tag ([lua-language-server open request][ro]).
-Remaining stub limit: no lua-language-server validate-if-present step yet (golden is
-the gate).
+The generated stub is now validate-if-present linted by **lua-language-server**
+(`stubcheck.luacats` CTest, the Lua analogue of the Python `stubcheck.<variant>`
+mypy gate): `lua-language-server --check` over the emitted stub, gated on the tool
+being found. The `.luarc.json` beside the stub forces the type/annotation
+diagnostics that matter for a defines-but-never-uses `---@meta` file
+(`undefined-doc-name`/`-class`, `unknown-operator` → `neededFileStatus: Any!`). It
+was this lint that caught the invalid `---@operator eq/lt/le/index` emissions.
 
 [ro]: https://github.com/LuaLS/lua-language-server/discussions/2379

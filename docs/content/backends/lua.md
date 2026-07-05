@@ -204,5 +204,15 @@ only, which is all LuaCATS `---@overload` records). A `const` data member is not
 `(read-only)` in its `---@field` description — LuaCATS has no read-only field tag
 ([an open lua-language-server request](https://github.com/LuaLS/lua-language-server/discussions/2379)),
 so the immutability the sol2 runtime enforces is documented here, not machine-checked.
-Current limit: the emitted stub isn't yet run through `lua-language-server` for
-validation.
+
+Not every runtime metamethod has a stub form. LuaCATS `---@operator` only names the
+operators the language server models — the arithmetic and bitwise ones plus
+`call`/`len`/`concat`/`unm` — so the **comparison** (`==`, `<`, `<=`) and
+**subscript** (`[]`) metamethods the sol2 runtime binds are *omitted* from the stub:
+lua-language-server has no `---@operator` spelling for them (`==` is always allowed
+and yields a boolean; indexing is expressed with `---@field [key] value`). They work
+at runtime regardless; the stub simply can't type them.
+
+welder's own test suite runs the emitted stub through `lua-language-server --check`
+when the server is installed (the Lua analogue of type-checking the `.pyi` stubs with
+mypy), so a malformed annotation or dangling type reference fails the build.
