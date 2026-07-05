@@ -34,6 +34,7 @@
 
 #include <welder/backend.hpp>    // the backend contract + generic driver
 #include <welder/backends/python/doc_style.hpp> // welder::python::google_style
+#include <welder/backends/python/operators.hpp> // welder::python::operator_dunder
 #include <welder/bind_traits.hpp>// param_types / param_names / aggregate_fields
 #include <welder/doc.hpp>        // function_docstring
 #include <welder/module.hpp>     // WELDER_MODULE dispatch (entry-point macro)
@@ -49,230 +50,200 @@ namespace nb = ::nanobind;
 
 namespace detail {
 
-/** Whether nanobind can only convert @a T via *runtime class registration*.
-
-    True iff @a T's caster is (or derives from) nanobind's generic
-    `type_caster_base` fallback, which looks @a T up in nanobind's registered-types
-    map (`is_base_caster_v` is nanobind's own name for "this caster derives from
-    `type_caster_base`"). True for program-defined classes and enums; false for
-    scalars, strings and the nanobind wrapper types (`nb::object`, `nb::dict`, …).
-    This is the one bindability fact welder's core cannot know on its own; it drives
-    `caster_oracle` below.
-
-    Like the pybind11 backend's counterpart, it is *conservative* — it reads @a T's
-    caster type at compile time, so it reports whether @a T *needs* a class/enum,
-    never whether one exists at runtime, and "native" is relative to the TU's
-    includes (`std::string` / `std::vector` / … are native only when their
-    `<nanobind/stl/*>` converter header is included). A type hand-registered
-    out-of-band still reads `true`; that false positive is resolved by the deferred
-    `trust_bindable` escape hatch.
-
-    @tparam T the type whose caster to classify.
-*/
-template <class T>
-inline constexpr bool needs_registration =
-    nb::detail::is_base_caster_v<nb::detail::make_caster<T>>;
-
-/** The Python special-method ("dunder") name for a member operator, or `nullptr`
-    if welder does not expose that operator.
-
-    Identical policy to the pybind11 backend — Python dunder names are the same
-    across Python binding frameworks. Unary vs binary is told apart by arity (a
-    member operator takes 0 parameters when unary, 1 when binary), disambiguating
-    the operators that have both forms (`+`, `-`). In-place compound assignments
-    (`operator+=`, …), `<=>`, `&&`, `||`, `++`, `--` and `=` are intentionally not
-    mapped.
-
-    @param f a reflection of the operator function.
-    @return the dunder name (static storage), or `nullptr`.
-*/
-consteval const char* operator_dunder_of(std::meta::info f) {
-    using std::meta::operators;
-    const bool unary{welder::detail::is_unary_operator(f)};
-    switch (std::meta::operator_of(f)) {
-        case operators::op_plus:    return unary ? "__pos__" : "__add__";
-        case operators::op_minus:   return unary ? "__neg__" : "__sub__";
-        case operators::op_star:    return unary ? nullptr : "__mul__"; // unary * = deref
-        case operators::op_slash:   return "__truediv__";
-        case operators::op_percent: return "__mod__";
-        case operators::op_tilde:   return "__invert__";
-        case operators::op_caret:   return "__xor__";
-        case operators::op_ampersand: return unary ? nullptr : "__and__"; // unary & = address-of
-        case operators::op_pipe:    return "__or__";
-        case operators::op_less_less:       return "__lshift__";
-        case operators::op_greater_greater: return "__rshift__";
-        case operators::op_equals_equals:      return "__eq__";
-        case operators::op_exclamation_equals: return "__ne__";
-        case operators::op_less:           return "__lt__";
-        case operators::op_greater:        return "__gt__";
-        case operators::op_less_equals:    return "__le__";
-        case operators::op_greater_equals: return "__ge__";
-        case operators::op_parentheses:     return "__call__";
-        case operators::op_square_brackets: return "__getitem__";
-        default:                            return nullptr;
-    }
-}
-
-/** Register the function/method reflected by @a Fn onto a nanobind target.
-
-    The folded docstring is passed when non-empty, and `nb::arg(name)...` when every
-    parameter is named (so Python callers see real keyword arguments, not
-    positional-only).
-    @tparam Fn a reflection of the function.
-    @tparam Def the target-adapter callable type.
-    @tparam I the parameter index pack.
-    @param name     the Python name.
-    @param def_into adapts the target — `cls.def`, `cls.def_static`, or `m.def`.
-*/
-template <std::meta::info Fn, class Def, std::size_t... I>
-void def_function(const char* name, Def def_into, std::index_sequence<I...>) {
-    static constexpr auto names{welder::detail::param_names<Fn>()};
-    const std::string doc{
-        welder::function_docstring<Fn, welder::python::google_style>()};
-    if constexpr (welder::detail::all_params_named<Fn>()) {
-        if (doc.empty())
-            def_into(name, &[:Fn:], nb::arg(names[I])...);
-        else
-            def_into(name, &[:Fn:], doc.c_str(), nb::arg(names[I])...);
-    } else {
-        if (doc.empty())
-            def_into(name, &[:Fn:]);
-        else
-            def_into(name, &[:Fn:], doc.c_str());
-    }
-}
-
-/** Convenience overload: derive the parameter index sequence from @a Fn. */
-template <std::meta::info Fn, class Def>
-void def_function(const char* name, Def def_into) {
-    def_function<Fn>(name, def_into,
-                     std::make_index_sequence<
-                         std::meta::parameters_of(Fn).size()>{});
-}
-
-/** Register `nb::init<P0, P1, …>()` for constructor @a Ctor.
-
-    Names the parameters (`nb::arg`) when all are named, otherwise positional.
-    @tparam Ctor a reflection of the constructor.
-    @tparam I the parameter index pack.
-    @param cls the class handle.
-*/
-template <std::meta::info Ctor, std::size_t... I>
-void def_init(auto& cls, std::index_sequence<I...>) {
-    static constexpr auto params{welder::detail::param_types<Ctor>()};
-    static constexpr auto names{welder::detail::param_names<Ctor>()};
-    if constexpr (welder::detail::all_params_named<Ctor>())
-        cls.def(nb::init<typename [:params[I]:]...>(), nb::arg(names[I])...);
-    else
-        cls.def(nb::init<typename [:params[I]:]...>());
-}
-
-/** Synthesize a field constructor for a baseless aggregate @a T.
-
-    nanobind builds a custom constructor by binding an `__init__` whose first
-    parameter is a pointer to the (uninitialized) instance; the body placement-news
-    the aggregate from the field values. Emits
-    `def("__init__", [](T* self, F0 f0, …) { new (self) T{f0, …}; }, nb::arg("f0"),
-    …)` so Python can build it from field values (`T(f0, f1)`).
-    @tparam T the aggregate type.
-    @tparam I the field index pack.
-    @param cls the class handle.
-*/
-template <class T, std::size_t... I>
-void def_aggregate_init(auto& cls, std::index_sequence<I...>) {
-    static constexpr auto fields{welder::detail::aggregate_fields<T>()};
-    cls.def(
-        "__init__",
-        [](T* self, typename [:std::meta::type_of(fields[I]):]... args) {
-            new (self) T{std::move(args)...};
-        },
-        nb::arg(std::define_static_string(
-            std::meta::identifier_of(fields[I])))...);
-}
-
-/** Give module @a m live get/set semantics for the names in @a props.
-
-    Reassigns @a m's Python class to a fresh `ModuleType` subclass carrying @a props
-    (name → property). Python modules don't support properties directly, but a
-    module's `__class__` may be swapped for a `ModuleType` subclass. Used only when
-    a namespace exposes a mutable variable.
-    @param m     the module handle.
-    @param props a dict of name → `property`.
-*/
-inline void install_live_properties(nb::module_& m, nb::dict props) {
-    auto builtins{nb::module_::import_("builtins")};
-    auto types{nb::module_::import_("types")};
-    auto subclass{builtins.attr("type")(
-        nb::str("welder_live_module"),
-        nb::make_tuple(types.attr("ModuleType")), props)};
-    m.attr("__class__") = subclass;
-}
-
-/** Construct `nb::class_<T, NativeBases...>` from a reflected base-type array.
-
-    A non-null @a doc becomes the class docstring (nanobind treats a bare
-    `const char*` extra as the doc); `nullptr` is branched out rather than passed.
-    @note nanobind accepts at most one base here; @a Bases carrying two or more
-    welded bases trips nanobind's own single-base static assertion.
-    @tparam T     the class type.
-    @tparam Bases the static array of native base type reflections.
-    @tparam I     the base index pack.
-    @param m    the module handle.
-    @param name the Python class name.
-    @param doc  the class docstring, or `nullptr`.
-*/
-template <class T, auto Bases, std::size_t... I>
-auto make_class_impl(nb::module_& m, const char* name, const char* doc,
-                     std::index_sequence<I...>) {
-    if (doc)
-        return nb::class_<T, typename [:Bases[I]:]...>(m, name, doc);
-    return nb::class_<T, typename [:Bases[I]:]...>(m, name);
-}
-
 /** The nanobind backend: a stateless policy type satisfying @ref welder::backend.
 
-    Its static members are the nanobind emission primitives welder's driver calls;
-    the driver supplies all the reflection-derived decisions. See
-    `<welder/backend.hpp>` for the contract each member fulfills.
+    Its public static members are the nanobind emission primitives welder's driver
+    calls; the driver supplies all the reflection-derived decisions. See
+    `<welder/backend.hpp>` for the contract each member fulfills. The `protected`
+    members below are nanobind-specific implementation helpers (prefixed `_`), not
+    part of the contract.
 */
 struct backend {
     static constexpr lang language{lang::py}; /**< welder::lang::py. */
     using module_type = nb::module_;          /**< nanobind's module handle. */
 
+  protected:
+    // --- implementation helpers (not part of the welder::backend contract) --
+
+    /** Whether nanobind can only convert @a T via *runtime class registration*.
+
+        True iff @a T's caster is (or derives from) nanobind's generic
+        `type_caster_base` fallback, which looks @a T up in nanobind's
+        registered-types map (`is_base_caster_v` is nanobind's own name for "this
+        caster derives from `type_caster_base`"). True for program-defined classes
+        and enums; false for scalars, strings and the nanobind wrapper types
+        (`nb::object`, `nb::dict`, …). This is the one bindability fact welder's core
+        cannot know on its own; it drives `has_native_caster` below.
+
+        Like the pybind11 backend's counterpart, it is *conservative* — it reads
+        @a T's caster type at compile time, so it reports whether @a T *needs* a
+        class/enum, never whether one exists at runtime, and "native" is relative to
+        the TU's includes (`std::string` / `std::vector` / … are native only when
+        their `<nanobind/stl/*>` converter header is included). A type hand-registered
+        out-of-band still reads `true`; that false positive is resolved by the
+        deferred `trust_bindable` escape hatch.
+
+        @tparam T the type whose caster to classify.
+    */
+    template <class T>
+    static constexpr bool _needs_registration =
+        nb::detail::is_base_caster_v<nb::detail::make_caster<T>>;
+
+    /** Register the function/method reflected by @a Fn onto a nanobind target.
+
+        The folded docstring is passed when non-empty, and `nb::arg(name)...` when
+        every parameter is named (so Python callers see real keyword arguments, not
+        positional-only).
+        @tparam Fn a reflection of the function.
+        @tparam Def the target-adapter callable type.
+        @tparam I the parameter index pack.
+        @param name     the Python name.
+        @param def_into adapts the target — `cls.def`, `cls.def_static`, or `m.def`.
+    */
+    template <std::meta::info Fn, class Def, std::size_t... I>
+    static void _def_function(const char* name, Def def_into,
+                              std::index_sequence<I...>) {
+        static constexpr auto names{welder::detail::param_names<Fn>()};
+        const std::string doc{
+            welder::function_docstring<Fn, welder::python::google_style>()};
+        if constexpr (welder::detail::all_params_named<Fn>()) {
+            if (doc.empty())
+                def_into(name, &[:Fn:], nb::arg(names[I])...);
+            else
+                def_into(name, &[:Fn:], doc.c_str(), nb::arg(names[I])...);
+        } else {
+            if (doc.empty())
+                def_into(name, &[:Fn:]);
+            else
+                def_into(name, &[:Fn:], doc.c_str());
+        }
+    }
+
+    /** Convenience overload: derive the parameter index sequence from @a Fn. */
+    template <std::meta::info Fn, class Def>
+    static void _def_function(const char* name, Def def_into) {
+        _def_function<Fn>(name, def_into,
+                          std::make_index_sequence<
+                              std::meta::parameters_of(Fn).size()>{});
+    }
+
+    /** Register `nb::init<P0, P1, …>()` for constructor @a Ctor.
+
+        Names the parameters (`nb::arg`) when all are named, otherwise positional.
+        @tparam Ctor a reflection of the constructor.
+        @tparam I the parameter index pack.
+        @param cls the class handle.
+    */
+    template <std::meta::info Ctor, std::size_t... I>
+    static void _def_init(auto& cls, std::index_sequence<I...>) {
+        static constexpr auto params{welder::detail::param_types<Ctor>()};
+        static constexpr auto names{welder::detail::param_names<Ctor>()};
+        if constexpr (welder::detail::all_params_named<Ctor>())
+            cls.def(nb::init<typename [:params[I]:]...>(), nb::arg(names[I])...);
+        else
+            cls.def(nb::init<typename [:params[I]:]...>());
+    }
+
+    /** Synthesize a field constructor for a baseless aggregate @a T.
+
+        nanobind builds a custom constructor by binding an `__init__` whose first
+        parameter is a pointer to the (uninitialized) instance; the body
+        placement-news the aggregate from the field values. Emits
+        `def("__init__", [](T* self, F0 f0, …) { new (self) T{f0, …}; },
+        nb::arg("f0"), …)` so Python can build it from field values (`T(f0, f1)`).
+        @tparam T the aggregate type.
+        @tparam I the field index pack.
+        @param cls the class handle.
+    */
+    template <class T, std::size_t... I>
+    static void _def_aggregate_init(auto& cls, std::index_sequence<I...>) {
+        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        cls.def(
+            "__init__",
+            [](T* self, typename [:std::meta::type_of(fields[I]):]... args) {
+                new (self) T{std::move(args)...};
+            },
+            nb::arg(std::define_static_string(
+                std::meta::identifier_of(fields[I])))...);
+    }
+
+    /** Give module @a m live get/set semantics for the names in @a props.
+
+        Reassigns @a m's Python class to a fresh `ModuleType` subclass carrying
+        @a props (name → property). Python modules don't support properties
+        directly, but a module's `__class__` may be swapped for a `ModuleType`
+        subclass. Used only when a namespace exposes a mutable variable.
+        @param m     the module handle.
+        @param props a dict of name → `property`.
+    */
+    static void _install_live_properties(nb::module_& m, nb::dict props) {
+        auto builtins{nb::module_::import_("builtins")};
+        auto types{nb::module_::import_("types")};
+        auto subclass{builtins.attr("type")(
+            nb::str("welder_live_module"),
+            nb::make_tuple(types.attr("ModuleType")), props)};
+        m.attr("__class__") = subclass;
+    }
+
+    /** Construct `nb::class_<T, NativeBases...>` from a reflected base-type array.
+
+        A non-null @a doc becomes the class docstring (nanobind treats a bare
+        `const char*` extra as the doc); `nullptr` is branched out rather than
+        passed.
+        @note nanobind accepts at most one base here; @a Bases carrying two or more
+        welded bases trips nanobind's own single-base static assertion.
+        @tparam T     the class type.
+        @tparam Bases the static array of native base type reflections.
+        @tparam I     the base index pack.
+        @param m    the module handle.
+        @param name the Python class name.
+        @param doc  the class docstring, or `nullptr`.
+    */
+    template <class T, auto Bases, std::size_t... I>
+    static auto _make_class(nb::module_& m, const char* name, const char* doc,
+                            std::index_sequence<I...>) {
+        if (doc)
+            return nb::class_<T, typename [:Bases[I]:]...>(m, name, doc);
+        return nb::class_<T, typename [:Bases[I]:]...>(m, name);
+    }
+
+  public:
+    // --- caster oracle + emission primitives (the welder::backend contract) --
+
     /** `caster_oracle`: @a T is convertible without welder registering a class for
         it iff nanobind does *not* fall back to runtime class registration. */
     template <class T>
-    static constexpr bool has_native_caster = !needs_registration<T>;
+    static constexpr bool has_native_caster = !_needs_registration<T>;
 
     /** Map a member operator to its Python dunder (`nullptr` = not exposed). */
     static consteval const char* special_method_name(std::meta::info op_fn) {
-        return operator_dunder_of(op_fn);
+        return welder::python::operator_dunder(op_fn);
     }
 
     // --- class binding ------------------------------------------------------
 
-    /** Create the `nb::class_<T, Bases…>` handle. @see make_class_impl */
+    /** Create the `nb::class_<T, Bases…>` handle. @see _make_class */
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type& m, const char* name, const char* doc,
                            std::index_sequence<I...> seq) {
-        return make_class_impl<T, Bases>(m, name, doc, seq);
+        return _make_class<T, Bases>(m, name, doc, seq);
     }
 
     /** Bind the default constructor. */
     static void add_default_ctor(auto& cls) { cls.def(nb::init<>()); }
 
-    /** Bind constructor @a Ctor as an `nb::init<…>`. @see def_init */
+    /** Bind constructor @a Ctor as an `nb::init<…>`. @see _def_init */
     template <std::meta::info Ctor>
     static void add_constructor(auto& cls) {
-        def_init<Ctor>(cls, std::make_index_sequence<
-                                std::meta::parameters_of(Ctor).size()>{});
+        _def_init<Ctor>(cls, std::make_index_sequence<
+                                 std::meta::parameters_of(Ctor).size()>{});
     }
 
-    /** Bind the synthesized aggregate field constructor. @see def_aggregate_init */
+    /** Bind the synthesized aggregate field constructor. @see _def_aggregate_init */
     template <class T>
     static void add_aggregate_constructor(auto& cls) {
         constexpr auto fields{welder::detail::aggregate_fields<T>()};
-        def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
+        _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
     }
 
     /** Bind data member @a Mem as an attribute.
@@ -305,27 +276,28 @@ struct backend {
     /** Bind member function @a Fn as a method. */
     template <std::meta::info Fn>
     static void add_method(auto& cls) {
-        def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
-                         [&cls](auto&&... a) {
-                             cls.def(std::forward<decltype(a)>(a)...);
-                         });
+        _def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
+                          [&cls](auto&&... a) {
+                              cls.def(std::forward<decltype(a)>(a)...);
+                          });
     }
 
     /** Bind static member function @a Fn as a static method. */
     template <std::meta::info Fn>
     static void add_static_method(auto& cls) {
-        def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
-                         [&cls](auto&&... a) {
-                             cls.def_static(std::forward<decltype(a)>(a)...);
-                         });
+        _def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
+                          [&cls](auto&&... a) {
+                              cls.def_static(std::forward<decltype(a)>(a)...);
+                          });
     }
 
     /** Bind member operator @a Fn under its Python dunder. */
     template <std::meta::info Fn>
     static void add_operator(auto& cls) {
-        def_function<Fn>(operator_dunder_of(Fn), [&cls](auto&&... a) {
-            cls.def(std::forward<decltype(a)>(a)...);
-        });
+        _def_function<Fn>(welder::python::operator_dunder(Fn),
+                          [&cls](auto&&... a) {
+                              cls.def(std::forward<decltype(a)>(a)...);
+                          });
     }
 
     // --- enum binding -------------------------------------------------------
@@ -363,7 +335,7 @@ struct backend {
     // --- namespace / module binding -----------------------------------------
 
     /** Open a per-module session: a dict accumulating live (mutable-variable)
-        properties; install_live_properties() applies them in one `__class__` swap
+        properties; _install_live_properties() applies them in one `__class__` swap
         at close. */
     static nb::dict open_module(module_type&) { return nb::dict{}; }
 
@@ -378,10 +350,10 @@ struct backend {
     /** Bind free function @a Fn as a module-level function. */
     template <std::meta::info Fn>
     static void add_function(module_type& m) {
-        def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
-                         [&m](auto&&... a) {
-                             m.def(std::forward<decltype(a)>(a)...);
-                         });
+        _def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
+                          [&m](auto&&... a) {
+                              m.def(std::forward<decltype(a)>(a)...);
+                          });
     }
 
     /** Bind namespace variable @a Var as a module attribute.
@@ -415,9 +387,12 @@ struct backend {
     /** Close the session: apply any accumulated live properties. */
     static void close_module(module_type& m, nb::dict& live) {
         if (live.size() != 0)
-            install_live_properties(m, live);
+            _install_live_properties(m, live);
     }
 };
+
+static_assert(welder::backend<backend>,
+              "welder::nanobind::detail::backend must satisfy welder::backend");
 
 } // namespace detail
 

@@ -3,7 +3,7 @@
 // field is bindable only if Unwelded is, so binding a type that exposes one is a
 // hard error even though std::vector itself has a native pybind11 caster. Proves
 // the recursion catches an unwelded type hidden inside a container (the case the
-// top-level needs_registration trait alone would miss).
+// top-level _needs_registration trait alone would miss).
 //
 // Built by the `negcompile.container_of_unwelded` CTest, which expects failure.
 #include <vector>

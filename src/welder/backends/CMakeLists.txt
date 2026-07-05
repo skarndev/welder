@@ -1,8 +1,9 @@
 # Header-only language backends. Each backend is a thin adapter consuming the
 # same core resolution API (welded_for / member_bound / public_bases) plus its
-# own target framework. Two Python backends (pybind11, nanobind) share the
-# docstring styles in <welder/backends/python/doc_style.hpp>; the sol2 backend
-# targets Lua via <welder/backends/lua/sol2/backend.hpp>.
+# own target framework. Each backend struct keeps the welder::backend contract
+# public and its framework-specific helpers protected (prefixed _); cross-backend
+# maps are factored into shared headers next to the backends (Python: doc_style.hpp
+# + operators.hpp; sol2: metamethods.hpp; luacats: type_map.hpp + document.hpp).
 
 # --- welder::pybind11 : pybind11 Python backend ------------------------------
 if(WELDER_BUILD_PYBIND11)

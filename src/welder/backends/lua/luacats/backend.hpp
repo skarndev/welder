@@ -22,6 +22,13 @@
     executable runs the driver in `main()` and prints the document; a CMake helper
     (`welder_luacats_generate_stub`) captures it to `<name>.lua`.
 
+    The emission primitives are thin: the C++→LuaCATS **type map** and the small
+    text helpers live in `<welder/backends/lua/luacats/type_map.hpp>`, and the
+    document assembler (signature rendering + the `*_writer` handle types the
+    driver's module/class/enum handles deduce to) in
+    `<welder/backends/lua/luacats/document.hpp>`. The backend struct below only wires
+    those to the driver contract.
+
     Requires the welder vocabulary first (via `import welder;` or `#include
     <welder/welder.hpp>`). Then:
     @code
@@ -32,241 +39,29 @@
     @code
     welder::luacats::generate<^^mymod>(std::cout);
     @endcode
-
-    ## The type map (the one thing sol2 did not need)
-
-    The runtime sol2 backend only needed a yes/no *caster oracle*; a stub needs the
-    actual LuaCATS **type name** for every C++ type. @ref detail::lua_type_string
-    maps scalars (`integer`/`number`/`boolean`/`string`), the STL wrappers welder
-    recurses (`std::vector<T>` → `T[]`, `std::map<K,V>` → `table<K,V>`,
-    `std::optional<T>` → `T?`, smart pointers → the pointee), and welded
-    classes/enums to their dotted Lua name; anything unrecognized degrades to `any`.
 */
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
-#include <cstdint>
 #include <fstream>  // WELDER_LUACATS_MAIN: write the stub to an output-path argument
 #include <iostream> // WELDER_LUACATS_MAIN: default to stdout
 #include <meta>
 #include <ostream>
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include <welder/backend.hpp>          // the backend contract + generic driver
+#include <welder/backends/lua/luacats/document.hpp> // the document + writer handles
+#include <welder/backends/lua/luacats/type_map.hpp> // lua_type / operator map / text
 #include <welder/backends/lua/overloads.hpp> // shared Lua overload-set selectors
-#include <welder/bind_traits.hpp>      // param_types / aggregate_fields
+#include <welder/bind_traits.hpp>      // aggregate_fields / is_unary_operator
 #include <welder/doc.hpp>              // doc_of / param_docs / return_doc_of
 #include <welder/module.hpp>           // WELDER_MODULE dispatch (unused entry, kept parallel)
 
 namespace welder::luacats {
 
 namespace detail {
-
-// --- small text helpers -----------------------------------------------------
-
-/** Append @a text as `--- ` comment lines (each source line prefixed), so a
-    multiline summary lands as a LuaCATS description block. A null/empty @a text
-    emits nothing. */
-inline void emit_doc_comment(std::string& out, const char* text) {
-    if (!text || !*text)
-        return;
-    out += "--- ";
-    for (const char* c{text}; *c; ++c) {
-        out += *c;
-        if (*c == '\n' && c[1] != '\0')
-            out += "--- ";
-    }
-    out += '\n';
-}
-
-/** A one-line description for a `@field`/`@param`/`@return` tail: newlines in @a
-    text collapse to spaces (LuaCATS tags are single-line). Empty if @a text is
-    null. */
-inline std::string one_line(const char* text) {
-    std::string out{};
-    if (!text)
-        return out;
-    for (const char* c{text}; *c; ++c)
-        out += (*c == '\n') ? ' ' : *c;
-    return out;
-}
-
-// --- the C++ -> LuaCATS type map --------------------------------------------
-
-/** The dotted LuaCATS name of a namespace-or-type reflection: its own identifier
-    prefixed by each enclosing named namespace, joined with `.` (so
-    `geometry::Point` → `"geometry.Point"`). Class scopes and the global namespace
-    contribute nothing. */
-consteval std::string qualified_name(std::meta::info ent) {
-    std::vector<std::string> parts{};
-    if (std::meta::has_identifier(ent))
-        parts.emplace_back(std::meta::identifier_of(ent));
-    std::meta::info p{std::meta::parent_of(ent)};
-    while (p != ^^:: && std::meta::is_namespace(p)) {
-        if (std::meta::has_identifier(p))
-            parts.emplace_back(std::meta::identifier_of(p));
-        p = std::meta::parent_of(p);
-    }
-    std::string out{};
-    for (auto it{parts.rbegin()}; it != parts.rend(); ++it) {
-        if (!out.empty())
-            out += '.';
-        out += *it;
-    }
-    return out;
-}
-
-/** Evaluate a standard unary type-trait *variable template* (e.g.
-    `^^std::is_integral_v`) on the type @a t. */
-consteval bool type_trait(std::meta::info trait_var, std::meta::info t) {
-    return std::meta::extract<bool>(std::meta::substitute(trait_var, {t}));
-}
-
-/** Whether @a type (already a bare type) is a listed element-wise wrapper whose
-    LuaCATS spelling this map renders; @a tmpl_out receives its class template. */
-consteval bool is_wrapper(std::meta::info type, std::meta::info& tmpl_out) {
-    if (!std::meta::has_template_arguments(type))
-        return false;
-    tmpl_out = std::meta::template_of(type);
-    return true;
-}
-
-/** The LuaCATS type name for a C++ type reflection.
-
-    Strips cv/ref/pointer, then: known STL wrappers render structurally (recursing
-    on their value arguments); `std::string`/`std::string_view`/`char*` → `string`;
-    `bool` → `boolean`; integral → `integer`; floating → `number`; a class/enum →
-    its @ref qualified_name; anything else → `any`. The recursion mirrors welder's
-    bindability wrapper table so a `std::vector<Point>` renders as `Point[]`.
-    @param type a reflection of the type to render.
-    @return the LuaCATS type string. */
-consteval std::string lua_type_string(std::meta::info type) {
-    namespace m = std::meta;
-    const m::info w{m::dealias(m::substitute(^^std::remove_cvref_t, {type}))};
-
-    // String-like (handled before the arithmetic/class buckets).
-    if (w == m::dealias(^^std::string) || w == m::dealias(^^std::string_view))
-        return "string";
-    if (type_trait(^^std::is_pointer_v, w)) {
-        const m::info pointee{m::dealias(m::substitute(
-            ^^std::remove_cv_t, {m::substitute(^^std::remove_pointer_t, {w})}))};
-        if (pointee == ^^char)
-            return "string";
-        return lua_type_string(pointee); // a pointer to a value type = that type
-    }
-
-    // Element-wise STL wrappers.
-    m::info tmpl{};
-    if (is_wrapper(w, tmpl)) {
-        const auto args{m::template_arguments_of(w)};
-        auto elem = [&](std::size_t i) { return lua_type_string(args[i]); };
-        if (tmpl == ^^std::vector || tmpl == ^^std::list || tmpl == ^^std::deque ||
-            tmpl == ^^std::set || tmpl == ^^std::multiset ||
-            tmpl == ^^std::unordered_set || tmpl == ^^std::unordered_multiset ||
-            tmpl == ^^std::array)
-            return elem(0) + "[]";
-        if (tmpl == ^^std::map || tmpl == ^^std::multimap ||
-            tmpl == ^^std::unordered_map || tmpl == ^^std::unordered_multimap)
-            return "table<" + elem(0) + ", " + elem(1) + ">";
-        if (tmpl == ^^std::optional)
-            return elem(0) + "?";
-        if (tmpl == ^^std::shared_ptr || tmpl == ^^std::unique_ptr)
-            return elem(0);
-        if (tmpl == ^^std::pair)
-            return "{ [1]: " + elem(0) + ", [2]: " + elem(1) + " }";
-        if (tmpl == ^^std::variant) {
-            std::string out{};
-            for (std::size_t i{0}; i < args.size(); ++i)
-                out += (i ? "|" : "") + lua_type_string(args[i]);
-            return out;
-        }
-        // std::tuple and any other specialization fall through to the class map.
-    }
-
-    if (w == ^^bool)
-        return "boolean";
-    if (type_trait(^^std::is_integral_v, w))
-        return "integer";
-    if (type_trait(^^std::is_floating_point_v, w))
-        return "number";
-    if (m::is_enum_type(w) || m::is_class_type(w))
-        return qualified_name(w);
-    return "any";
-}
-
-/** @ref lua_type_string as a static-storage C string, callable on a constant
-    type reflection. */
-consteval const char* lua_type(std::meta::info type) {
-    return std::define_static_string(lua_type_string(type));
-}
-
-/** Whether the backend converts @a U without welder registering a type: scalars,
-    strings and `char*`. Classes and enums are program-defined, so they must be
-    welded — mirrors the sol2 oracle without depending on sol2. */
-template <class U>
-inline constexpr bool is_native_lua =
-    std::is_arithmetic_v<U> ||
-    std::is_same_v<std::remove_cv_t<U>, std::string> ||
-    std::is_same_v<std::remove_cv_t<U>, std::string_view> ||
-    std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::remove_cvref_t<U>>>,
-                   char>;
-
-// --- signature rendering ----------------------------------------------------
-
-/** The LuaCATS type name of each parameter of @a Fn, as a splice-ready array
-    parallel to `param_docs<Fn>()`. */
-template <std::meta::info Fn>
-consteval auto param_lua_types() {
-    // Guard n != 0: param_types<Fn> materializes std::array<info, n> and indexes
-    // it, and std::array<T, 0>::operator[] is not usable (as the rest of welder
-    // guards too), so it must not be instantiated for a parameterless function.
-    constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
-    std::array<const char*, n> out{};
-    if constexpr (n != 0) {
-        constexpr auto types{welder::detail::param_types<Fn>()};
-        for (std::size_t i{0}; i < n; ++i)
-            out[i] = std::define_static_string(lua_type_string(types[i]));
-    }
-    return out;
-}
-
-/** The comma-joined argument-name list for @a Fn's declaration line (an unnamed
-    parameter becomes `arg<N>`). */
-template <std::meta::info Fn>
-std::string arg_list() {
-    static constexpr auto pds{welder::param_docs<Fn>()};
-    std::string out{};
-    for (std::size_t i{0}; i < pds.size(); ++i) {
-        if (i)
-            out += ", ";
-        out += pds[i].name ? std::string{pds[i].name}
-                           : "arg" + std::to_string(i + 1);
-    }
-    return out;
-}
-
-/** Emit the `---@param` lines for @a Fn (name, LuaCATS type, and its `doc`). */
-template <std::meta::info Fn>
-void emit_params(std::string& out) {
-    static constexpr auto pds{welder::param_docs<Fn>()};
-    static constexpr auto types{param_lua_types<Fn>()};
-    for (std::size_t i{0}; i < pds.size(); ++i) {
-        out += "---@param ";
-        out += pds[i].name ? std::string{pds[i].name}
-                           : "arg" + std::to_string(i + 1);
-        out += ' ';
-        out += types[i];
-        const std::string d{one_line(pds[i].text)};
-        if (!d.empty())
-            out += ' ' + d;
-        out += '\n';
-    }
-}
 
 // The overload-set selectors are shared with the sol2 backend
 // (`<welder/backends/lua/overloads.hpp>`; both gather a name's C++ overloads that the
@@ -277,321 +72,79 @@ using welder::lua::is_overload_leader;
 using welder::lua::method_overload_set;
 using welder::lua::overload_group;
 
-/** The `fun(<name>: <type>, …): <ret>` signature of @a Fn, for a `---@overload` line.
-
-    A non-empty @a ret_override forces the return type — used for a constructor,
-    whose reflection carries no return type (so `return_type_of` must not be
-    instantiated for it: the `is_constructor` guard discards that branch). */
-template <std::meta::info Fn>
-std::string fun_signature(const std::string& ret_override) {
-    static constexpr auto pds{welder::param_docs<Fn>()};
-    static constexpr auto types{param_lua_types<Fn>()};
-    std::string s{"fun("};
-    for (std::size_t i{0}; i < pds.size(); ++i) {
-        if (i)
-            s += ", ";
-        s += pds[i].name ? std::string{pds[i].name} : "arg" + std::to_string(i + 1);
-        s += ": ";
-        s += types[i];
-    }
-    s += ")";
-    std::string ret{ret_override};
-    if (ret.empty()) {
-        if constexpr (!std::meta::is_constructor(Fn)) {
-            using R = [:std::meta::return_type_of(Fn):];
-            if constexpr (!std::is_void_v<R>)
-                ret = lua_type(std::meta::return_type_of(Fn));
-        }
-    }
-    if (!ret.empty())
-        s += ": " + ret;
-    return s;
-}
-
-/** One overload of a callee, pre-rendered into the pieces a group needs: the
-    summary `doc`, the `---@param` block, the `---@return` line, the `function`
-    argument list, and the `fun(…)` signature for a `---@overload` line. */
-struct func_overload {
-    std::string doc{};      /**< Summary docstring (may be empty). */
-    std::string params{};   /**< `---@param …` lines (may be empty). */
-    std::string ret_line{}; /**< The `---@return …` line (empty when void). */
-    std::string args{};     /**< The `function callee(<args>)` name list. */
-    std::string fun_sig{};  /**< The `fun(a: T, …): R` signature. */
-};
-
-/** Build the @ref func_overload for function/constructor @a Fn. A non-empty @a
-    ret_override supplies the return type for a constructor (which has none). */
-template <std::meta::info Fn>
-func_overload build_overload(const std::string& ret_override) {
-    func_overload o{};
-    if (const char* d{welder::doc_of<Fn>()})
-        o.doc = d;
-    emit_params<Fn>(o.params);
-    if (!ret_override.empty()) {
-        o.ret_line = "---@return " + ret_override + '\n';
-    } else if constexpr (!std::meta::is_constructor(Fn)) {
-        using R = [:std::meta::return_type_of(Fn):];
-        if constexpr (!std::is_void_v<R>) {
-            o.ret_line = "---@return ";
-            o.ret_line += lua_type(std::meta::return_type_of(Fn));
-            const std::string d{one_line(welder::return_doc_of<Fn>())};
-            if (!d.empty())
-                o.ret_line += ' ' + d;
-            o.ret_line += '\n';
-        }
-    }
-    o.args = arg_list<Fn>();
-    o.fun_sig = fun_signature<Fn>(ret_override);
-    return o;
-}
-
-/** Append `build_overload` for each member of overload group @a Grp to @a out. */
-template <auto Grp, std::size_t... I>
-void collect_overloads(std::vector<func_overload>& out, std::index_sequence<I...>) {
-    (out.push_back(build_overload<Grp[I]>({})), ...);
-}
-
-/** Emit one documented `function <callee>(…)` for overload group @a sigs, with a
-    `---@overload fun(…)` line per *additional* signature — the idiomatic LuaCATS
-    shape (one symbol, several signatures), rather than repeated `function` defs.
-
-    @a sigs is non-empty. The "primary" overload — the one whose full docs and
-    parameter block are kept — is the first that carries a docstring (else the
-    first), so a documented overload's `@param`/summary text survives; the rest, of
-    which LuaCATS `---@overload` records only the bare signature, follow it. */
-inline void render_overload_group(std::string& out, const std::string& callee,
-                                  const std::vector<func_overload>& sigs) {
-    std::size_t primary{0};
-    for (std::size_t i{0}; i < sigs.size(); ++i)
-        if (!sigs[i].doc.empty()) {
-            primary = i;
-            break;
-        }
-    const func_overload& p{sigs[primary]};
-    emit_doc_comment(out, p.doc.empty() ? nullptr : p.doc.c_str());
-    out += p.params;
-    out += p.ret_line;
-    for (std::size_t i{0}; i < sigs.size(); ++i)
-        if (i != primary)
-            out += "---@overload " + sigs[i].fun_sig + '\n';
-    out += "function " + callee + "(" + p.args + ") end\n\n";
-}
-
-// --- the backend document ---------------------------------------------------
-
-/** A module/submodule table to declare (`prefix = {}`), with its optional doc. */
-struct table_decl {
-    std::string prefix{}; /**< The dotted table path, e.g. `"geometry.detail"`. */
-    std::string doc{};    /**< Its namespace `doc`, if any. */
-};
-
-/** The growing LuaCATS document shared by every writer handle. Class/enum/function
-    text lands in @ref body; module tables are collected in @ref tables and
-    rendered (shallowest first) ahead of it, since a `geometry.Point` class or a
-    `geometry.foo` function needs the `geometry` table to exist. */
-struct document {
-    std::vector<table_decl> tables{};
-    std::string body{};
-
-    /** Record (once) a module table to declare, updating its doc if given. */
-    void declare_table(std::string_view prefix, const char* doc = nullptr) {
-        for (auto& t : tables)
-            if (t.prefix == prefix) {
-                if (doc && *doc)
-                    t.doc = doc;
-                return;
-            }
-        tables.push_back({std::string{prefix}, doc ? doc : ""});
-    }
-
-    /** The finished stub text: the `---@meta` header, the module tables shallowest
-        first, then the accumulated declarations. */
-    std::string render() const {
-        auto depth = [](const std::string& s) {
-            return std::count(s.begin(), s.end(), '.');
-        };
-        std::vector<table_decl> decls{tables};
-        std::stable_sort(decls.begin(), decls.end(),
-                         [&](const table_decl& a, const table_decl& b) {
-                             return depth(a.prefix) < depth(b.prefix);
-                         });
-        std::string out{"---@meta\n\n"};
-        for (const auto& d : decls) {
-            emit_doc_comment(out, d.doc.empty() ? nullptr : d.doc.c_str());
-            out += d.prefix + " = {}\n\n";
-        }
-        out += body;
-        return out;
-    }
-};
-
-/** A module handle: the shared document plus this (sub)module's dotted table path.
-    Copyable, because the driver's `add_submodule` returns one by value. */
-struct module_writer {
-    document* doc{nullptr};
-    std::string prefix{};
-};
-
-/** A class handle. Accumulates the `@field`/`@operator` lines (which sit *inside*
-    the `---@class` block) and the method/constructor statements (which follow it),
-    then flushes the assembled block to the document on destruction — the driver
-    has no explicit "finish class" hook, so RAII is the finalizer. Move-only so a
-    moved-from temporary does not double-flush. */
-struct class_writer {
-    document* doc{nullptr};
-    std::string qualified{};  /**< Dotted LuaCATS class name. */
-    std::string cls_doc{};    /**< The class `doc`. */
-    std::string bases{};      /**< Comma-joined base names, or empty. */
-    std::string fields{};     /**< Accumulated `---@field` / `---@operator` lines. */
-    std::string methods{};    /**< Accumulated `function` statements. */
-    std::vector<func_overload> ctors{}; /**< The `.new` overloads, grouped on flush. */
-
-    class_writer() = default;
-    class_writer(const class_writer&) = delete;
-    class_writer& operator=(const class_writer&) = delete;
-    class_writer(class_writer&& o) noexcept { *this = std::move(o); }
-    class_writer& operator=(class_writer&& o) noexcept {
-        doc = o.doc;
-        qualified = std::move(o.qualified);
-        cls_doc = std::move(o.cls_doc);
-        bases = std::move(o.bases);
-        fields = std::move(o.fields);
-        methods = std::move(o.methods);
-        ctors = std::move(o.ctors);
-        o.doc = nullptr; // the source no longer flushes
-        return *this;
-    }
-    ~class_writer() {
-        if (!doc)
-            return;
-        emit_doc_comment(doc->body, cls_doc.empty() ? nullptr : cls_doc.c_str());
-        doc->body += "---@class " + qualified;
-        if (!bases.empty())
-            doc->body += " : " + bases;
-        doc->body += '\n';
-        doc->body += fields;
-        doc->body += qualified + " = {}\n\n";
-        // Constructors (all producing `Class.new`) are grouped into one documented
-        // function with `---@overload` signatures; they precede the methods.
-        if (!ctors.empty())
-            render_overload_group(doc->body, qualified + ".new", ctors);
-        doc->body += methods;
-    }
-};
-
-/** An enum handle: the value table text accumulated by `add_enumerator`, flushed
-    as a `---@enum` block by RAII (same rationale as @ref class_writer). */
-struct enum_writer {
-    document* doc{nullptr};
-    std::string qualified{};
-    std::string enum_doc{};
-    std::string values{}; /**< Accumulated `    Name = value,` lines. */
-
-    enum_writer() = default;
-    enum_writer(const enum_writer&) = delete;
-    enum_writer& operator=(const enum_writer&) = delete;
-    enum_writer(enum_writer&& o) noexcept { *this = std::move(o); }
-    enum_writer& operator=(enum_writer&& o) noexcept {
-        doc = o.doc;
-        qualified = std::move(o.qualified);
-        enum_doc = std::move(o.enum_doc);
-        values = std::move(o.values);
-        o.doc = nullptr;
-        return *this;
-    }
-    ~enum_writer() {
-        if (!doc)
-            return;
-        emit_doc_comment(doc->body, enum_doc.empty() ? nullptr : enum_doc.c_str());
-        doc->body += "---@enum " + qualified + '\n';
-        doc->body += qualified + " = {\n" + values + "}\n\n";
-    }
-};
-
-/** The comma-joined LuaCATS names of a class's welded bases (for `---@class X : …`). */
-template <auto Bases, std::size_t... I>
-consteval const char* bases_string(std::index_sequence<I...>) {
-    std::string out{};
-    ((out += (out.empty() ? "" : ", ") + qualified_name(Bases[I])), ...);
-    return std::define_static_string(out);
-}
-
-/** Precompute an aggregate's `---@param` lines and its `.new` argument list.
-
-    A flat function template (not an immediately-invoked generic lambda): a
-    splice + constant-index pack expansion inside such a lambda misbehaves on
-    gcc-16, so the field names/types are materialized into constant arrays by the
-    pack, then consumed by a plain runtime loop. The driver only calls this for an
-    aggregate with at least one field, so the pack is never empty. */
-template <class T, std::size_t... J>
-void aggregate_param_lines(std::string& out, std::string& args,
-                           std::index_sequence<J...>) {
-    static constexpr auto fields{welder::detail::aggregate_fields<T>()};
-    static constexpr const char* names[]{
-        std::define_static_string(std::meta::identifier_of(fields[J]))...};
-    static constexpr const char* types[]{
-        lua_type(std::meta::type_of(fields[J]))...};
-    for (std::size_t i{0}; i < sizeof...(J); ++i) {
-        out += "---@param ";
-        out += names[i];
-        out += ' ';
-        out += types[i];
-        out += '\n';
-        args += (args.empty() ? "" : ", ");
-        args += names[i];
-    }
-}
-
-/** The `<field>: <type>, …` list for an aggregate's `.new` `fun(…)` signature (its
-    `---@overload` line). Same field source as @ref aggregate_param_lines. */
-template <class T, std::size_t... J>
-std::string aggregate_fun_params(std::index_sequence<J...>) {
-    static constexpr auto fields{welder::detail::aggregate_fields<T>()};
-    static constexpr const char* names[]{
-        std::define_static_string(std::meta::identifier_of(fields[J]))...};
-    static constexpr const char* types[]{lua_type(std::meta::type_of(fields[J]))...};
-    std::string s{};
-    for (std::size_t i{0}; i < sizeof...(J); ++i) {
-        if (i)
-            s += ", ";
-        s += names[i];
-        s += ": ";
-        s += types[i];
-    }
-    return s;
-}
-
-/** A member operator's LuaCATS `---@operator` name, or `nullptr` if not rendered.
-
-    LuaCATS names the arithmetic/comparison/call/index metamethods; unary vs binary
-    is by arity (a member operator takes 0 parameters when unary). Kept deliberately
-    close to the sol2 backend's metamethod map so the stub and the runtime binding
-    agree on which operators surface. */
-consteval const char* operator_luacats(std::meta::info f) {
-    using std::meta::operators;
-    const bool unary{welder::detail::is_unary_operator(f)};
-    switch (std::meta::operator_of(f)) {
-        case operators::op_plus:   return unary ? nullptr : "add";
-        case operators::op_minus:  return unary ? "unm" : "sub";
-        case operators::op_star:   return unary ? nullptr : "mul";
-        case operators::op_slash:  return "div";
-        case operators::op_percent: return "mod";
-        case operators::op_equals_equals: return "eq";
-        case operators::op_less:          return "lt";
-        case operators::op_less_equals:   return "le";
-        case operators::op_parentheses:   return "call";
-        case operators::op_square_brackets: return "index";
-        default: return nullptr; // ~=, >, >= are derived; others unmapped
-    }
-}
-
 /** The LuaCATS stub backend: a stateless policy satisfying @ref welder::backend
-    that emits text instead of registering a live module. */
+    that emits text instead of registering a live module.
+
+    Its public static members are the emission primitives welder's driver calls;
+    they wire the type map (`type_map.hpp`) and document assembler (`document.hpp`)
+    to the driver contract. The `protected` members below are the few helpers that
+    are purely internal to the struct (prefixed `_`). */
 struct backend {
     static constexpr lang language{lang::lua}; /**< Stubs are for the Lua binding. */
     using module_type = module_writer;
 
     struct session {}; /**< No deferred module state. */
+
+  protected:
+    // --- implementation helpers (not part of the welder::backend contract) --
+
+    /** The comma-joined LuaCATS names of a class's welded bases (for
+        `---@class X : …`). */
+    template <auto Bases, std::size_t... I>
+    static consteval const char* _bases_string(std::index_sequence<I...>) {
+        std::string out{};
+        ((out += (out.empty() ? "" : ", ") + qualified_name(Bases[I])), ...);
+        return std::define_static_string(out);
+    }
+
+    /** Precompute an aggregate's `---@param` lines and its `.new` argument list.
+
+        A flat function template (not an immediately-invoked generic lambda): a
+        splice + constant-index pack expansion inside such a lambda misbehaves on
+        gcc-16, so the field names/types are materialized into constant arrays by the
+        pack, then consumed by a plain runtime loop. The driver only calls this for
+        an aggregate with at least one field, so the pack is never empty. */
+    template <class T, std::size_t... J>
+    static void _aggregate_param_lines(std::string& out, std::string& args,
+                                       std::index_sequence<J...>) {
+        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        static constexpr const char* names[]{
+            std::define_static_string(std::meta::identifier_of(fields[J]))...};
+        static constexpr const char* types[]{
+            lua_type(std::meta::type_of(fields[J]))...};
+        for (std::size_t i{0}; i < sizeof...(J); ++i) {
+            out += "---@param ";
+            out += names[i];
+            out += ' ';
+            out += types[i];
+            out += '\n';
+            args += (args.empty() ? "" : ", ");
+            args += names[i];
+        }
+    }
+
+    /** The `<field>: <type>, …` list for an aggregate's `.new` `fun(…)` signature
+        (its `---@overload` line). Same field source as @ref _aggregate_param_lines. */
+    template <class T, std::size_t... J>
+    static std::string _aggregate_fun_params(std::index_sequence<J...>) {
+        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        static constexpr const char* names[]{
+            std::define_static_string(std::meta::identifier_of(fields[J]))...};
+        static constexpr const char* types[]{
+            lua_type(std::meta::type_of(fields[J]))...};
+        std::string s{};
+        for (std::size_t i{0}; i < sizeof...(J); ++i) {
+            if (i)
+                s += ", ";
+            s += names[i];
+            s += ": ";
+            s += types[i];
+        }
+        return s;
+    }
+
+  public:
+    // --- caster oracle + emission primitives (the welder::backend contract) --
 
     /** @ref is_native_lua drives the shared bindability gate. */
     template <class T>
@@ -614,7 +167,7 @@ struct backend {
         w.qualified = m.prefix.empty() ? std::string{name}
                                        : m.prefix + "." + name;
         w.cls_doc = doc ? doc : "";
-        w.bases = bases_string<Bases>(seq);
+        w.bases = _bases_string<Bases>(seq);
         return w;
     }
 
@@ -637,9 +190,9 @@ struct backend {
         static constexpr auto seq{
             std::make_index_sequence<welder::detail::aggregate_fields<T>().size()>{}};
         func_overload o{};
-        aggregate_param_lines<T>(o.params, o.args, seq);
+        _aggregate_param_lines<T>(o.params, o.args, seq);
         o.ret_line = "---@return " + w.qualified + '\n';
-        o.fun_sig = "fun(" + aggregate_fun_params<T>(seq) + "): " + w.qualified;
+        o.fun_sig = "fun(" + _aggregate_fun_params<T>(seq) + "): " + w.qualified;
         w.ctors.push_back(std::move(o));
     }
 
@@ -778,6 +331,9 @@ struct backend {
 
     static void close_module(module_type&, session&) {}
 };
+
+static_assert(welder::backend<backend>,
+              "welder::luacats::detail::backend must satisfy welder::backend");
 
 } // namespace detail
 

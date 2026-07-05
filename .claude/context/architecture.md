@@ -34,12 +34,16 @@ src/welder/
   backends/
     python/
       doc_style.hpp         Python docstring styles shared by both backends — welder::python::google_style (moved out of doc.hpp, which keeps only the neutral doc_style concept + function_docstring)
-      pybind11/backend.hpp  pybind11 backend: struct detail::backend (emission primitives) + public bind<T> / bind_namespace / build_module wrappers over the driver
+      operators.hpp         C++-operator → Python dunder map shared by both backends — welder::python::operator_dunder (identical across pybind11/nanobind; mirrors doc_style.hpp)
+      pybind11/backend.hpp  pybind11 backend: struct detail::backend (public emission primitives + protected _ helpers) + public bind<T> / bind_namespace / build_module wrappers over the driver
       nanobind/backend.hpp  nanobind backend: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
     lua/
       overloads.hpp         Overload-set selectors shared by BOTH Lua backends — welder::lua::{method,operator,function}_overload_set / is_overload_leader / overload_group; both gather a name's overloads (sol2 → sol::overload, luacats → ---@overload) because the driver visits overloads one at a time. Mirrors backends/python/doc_style.hpp.
-      sol2/backend.hpp      sol2 Lua backend: the same, against sol2's API (module_type = sol::table; usertype/new_usertype; metamethod operator map; enums as name→value tables; luaopen_ entry macro)
-      luacats/backend.hpp   LuaCATS `---@meta` stub backend: text-emitting welder::backend over the SAME driver (no sol2/Lua dep); C++→LuaCATS type map + doc tags; ---@overload grouping; WELDER_LUACATS_MAIN generator entry
+      sol2/backend.hpp      sol2 Lua backend: struct detail::backend (emission primitives + protected _ helpers: constructor-set gathering, welded-base closure, overload registration), against sol2's API (module_type = sol::table; usertype/new_usertype; enums as name→value tables; luaopen_ entry macro)
+      sol2/metamethods.hpp  C++-operator → sol2/Lua metamethod map (welder::sol2::detail::operator_mm) split out of the sol2 backend — the sol2 analogue of backends/python/operators.hpp (Lua's asymmetric set: no __ne/__gt/__ge; ^→__bxor; 5.3-gated bitwise)
+      luacats/backend.hpp   LuaCATS `---@meta` stub backend: text-emitting welder::backend over the SAME driver (no sol2/Lua dep); struct detail::backend wires the type map + document assembler to the driver; ---@overload grouping; WELDER_LUACATS_MAIN generator entry
+      luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
+      luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
     CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luacats
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
@@ -82,7 +86,22 @@ A backend is a stateless struct `B` satisfying `welder::backend` (`backend.hpp`)
 The core's generic driver (`welder::detail::bind_type` / `bind_namespace_driver` /
 `build_module_driver`) is templated on `B` and calls its members; the public
 `welder::pybind11::bind` / `bind_namespace` / `build_module` are one-line wrappers
-that plug in `pybind11::detail::backend`. `B` provides:
+that plug in `pybind11::detail::backend`.
+
+**Struct convention (all backends).** Each `detail::backend` reads as one unit: the
+associated types up top, then a `protected:` block of framework-specific
+implementation helpers (each prefixed `_`, e.g. `_needs_registration`,
+`_def_function`, `_make_usertype`), then the `public:` emission primitives — the
+`welder::backend` contract — written in terms of them. A
+`static_assert(welder::backend<backend>)` immediately follows the struct so a
+contract mismatch is a local, named error rather than a deep instantiation failure.
+Cross-backend maps that would otherwise be duplicated verbatim are factored into
+shared headers instead of the struct: the Python dunder map into
+`backends/python/operators.hpp`, the sol2 metamethod map into
+`backends/lua/sol2/metamethods.hpp`, and the LuaCATS type map + document assembler
+into `backends/lua/luacats/{type_map,document}.hpp`.
+
+`B` provides:
 
 - **Associated:** `static constexpr lang language;` the target language;
   `using module_type = …;` the module handle; `template<class T> static constexpr

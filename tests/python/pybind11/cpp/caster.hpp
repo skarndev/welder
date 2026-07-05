@@ -5,7 +5,7 @@
 // trust_bindable — when the user gives it a self-contained pybind11 type_caster
 // (one that does NOT derive from type_caster_base, e.g. via PYBIND11_TYPE_CASTER).
 // The specialization displaces pybind11's generic class-registration fallback, so
-// needs_registration is false, has_native_caster is true, and welder's bindability
+// _needs_registration is false, has_native_caster is true, and welder's bindability
 // gate passes on its own. Because the caster converts to/from a native Python value
 // (here a float), the member also stubs cleanly as that type.
 //

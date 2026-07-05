@@ -69,7 +69,7 @@ trust. The mechanism is standard for each framework:
 === "pybind11"
 
     A `type_caster<T>` built with `PYBIND11_TYPE_CASTER` (does not derive from
-    `type_caster_base`), so `needs_registration<T>` is *false* and `const_name`
+    `type_caster_base`), so `_needs_registration<T>` is *false* and `const_name`
     stubs it cleanly (e.g. as `float`):
 
     ```cpp

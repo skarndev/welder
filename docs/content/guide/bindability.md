@@ -59,7 +59,7 @@ registering a class for it? That's the backend's `has_native_caster<T>` (the
 
 | Backend | `has_native_caster<T>` reads |
 |---|---|
-| **pybind11** | `!needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? |
+| **pybind11** | `!_needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? |
 | **nanobind** | `!nb::detail::is_base_caster_v<make_caster<T>>` — same question, nanobind's spelling |
 | **sol2** (Lua) | `sol::lua_type_of<T> != userdata` — does Lua have a native representation? |
 
