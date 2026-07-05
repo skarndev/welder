@@ -22,6 +22,7 @@ flowchart TB
         N["backends/python/nanobind/backend.hpp"]
         DS["backends/python/doc_style.hpp — shared"]
         LU["backends/lua/sol2/backend.hpp"]
+        LC["backends/lua/luacats/stub.hpp — build-time stub"]
     end
     voc --> core
     core --> be
@@ -58,8 +59,11 @@ wrappers that plug `pybind11::detail::backend` into the generic driver.
 
     …is writing one backend struct plus thin public wrappers. The nanobind backend
     is nearly a copy of the pybind11 one (same class-handle model, sharing the
-    Python docstring styles); a Lua backend implements the same primitives against
-    Lua's C API. The core is reused verbatim.
+    Python docstring styles); the sol2 Lua backend implements the same primitives
+    against Lua's C API. The core is reused verbatim — see the
+    [Backends](backends/index.md) section for each one. The **luacats** backend reuses
+    the *same driver* for a different job: instead of emitting runtime registration,
+    it walks the welded namespace and writes a LuaCATS `---@meta` stub at build time.
 
 ## The module-vs-header boundary
 

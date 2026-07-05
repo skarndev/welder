@@ -1,9 +1,12 @@
 # Enums
 
 A welded enum — scoped or unscoped — binds via the same `bind<T>` entry point
-(dispatched to the enum path by `is_enum_v`) as a `py::enum_`. Each **enumerator
-resolves like a data member**: the enum's `policy` plus per-enumerator
-`exclude`/`include` marks decide what binds.
+(dispatched to the enum path by `is_enum_v`). Each **enumerator resolves like a
+data member**: the enum's `policy` plus per-enumerator `exclude`/`include` marks
+decide what binds. What it becomes in the target language differs:
+
+- **Python** — a `py::enum_` / nanobind `IntEnum` (int-convertible).
+- **Lua** — a plain `name → value` **table** (Lua has no enum type).
 
 !!! warning "Grammar: the annotation goes *after* the enumerator name"
 
@@ -18,7 +21,7 @@ resolves like a data member**: the enum's `policy` plus per-enumerator
 
 ```cpp
 enum class
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Direction {
     North,
     East,
@@ -27,36 +30,54 @@ Direction {
 };
 ```
 
-Excluding an enumerator does **not** renumber the rest — `West` is still `3`. A
-scoped enum stays qualified:
+Excluding an enumerator does **not** renumber the rest — `West` is still `3`. The
+enumerator stays qualified under the enum name:
 
-```pycon
->>> Direction.West.value
-3
->>> hasattr(Direction, "South")
-False
-```
+=== "Python"
+
+    ```pycon
+    >>> Direction.West.value     # a py::enum_ member
+    3
+    >>> hasattr(Direction, "South")
+    False
+    ```
+
+=== "Lua"
+
+    ```lua
+    print(Direction.West)        --> 3    (table maps name → value directly)
+    print(Direction.South)       --> nil  (excluded)
+    ```
 
 ## Unscoped enum — values exported
 
-An unscoped enum also `export_values()`, so its enumerators are visible unqualified
-on the enclosing module, mirroring C++:
+An unscoped enum also mirrors its enumerators onto the enclosing module unqualified
+(pybind11 `export_values()`; the sol2 backend copies the names onto the module
+table), matching C++:
 
 ```cpp
-enum [[=welder::weld(welder::lang::py)]]
+enum [[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Signal { Green, Yellow, Red };
 ```
 
-```pycon
->>> Signal.Red, Red        # both work
-(<Signal.Red: 2>, <Signal.Red: 2>)
-```
+=== "Python"
+
+    ```pycon
+    >>> Signal.Red, Red          # both work
+    (<Signal.Red: 2>, <Signal.Red: 2>)
+    ```
+
+=== "Lua"
+
+    ```lua
+    print(Signal.Red, Red)       --> 2  2
+    ```
 
 ## Scoped enum, opt-in policy
 
 ```cpp
 enum class
-[[=welder::weld(welder::lang::py), =welder::policy::opt_in]]
+[[=welder::weld(welder::lang::py, welder::lang::lua), =welder::policy::opt_in]]
 Level {
     Debug [[=welder::mark::include]],
     Info  [[=welder::mark::include]],
@@ -70,7 +91,7 @@ An enum-typed member or parameter binds because the enum is welded — bind the 
 **first** (like a welded base), then the type that uses it:
 
 ```cpp
-struct [[=welder::weld(welder::lang::py)]]
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Compass {
     Direction facing;
 };
@@ -82,7 +103,8 @@ this for you — put the enums before the structs that use them.
 ## Docs
 
 The enum's `doc` becomes the Python docstring. Per-enumerator docs aren't supported
-(pybind11's `.value()` takes none); on the **C++** side the
-[Doxygen filter](cpp-docs.md) surfaces enumerator docs.
+at runtime (pybind11's `.value()` takes none; Lua has no docstring slot). On the
+**C++** side the [Doxygen filter](cpp-docs.md) surfaces enumerator docs, and the
+[LuaCATS stub](../backends/lua.md#stubs-luacats) marks the table `---@enum`.
 
 Next: [Inheritance](inheritance.md).

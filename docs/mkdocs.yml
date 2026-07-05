@@ -104,9 +104,13 @@ nav:
       - Inheritance: guide/inheritance.md
       - Namespaces & modules: guide/namespaces-modules.md
       - Docstrings: guide/docstrings.md
-      - The Lua backend (sol2): guide/lua.md
       - The bindability gate: guide/bindability.md
       - Trust & type casters: guide/trust-casters.md
       - Generating C++ docs: guide/cpp-docs.md
+  - Backends:
+      - backends/index.md
+      - Python (pybind11 & nanobind): backends/python.md
+      - Lua (sol2): backends/lua.md
+      - Shipping multiple backends: backends/multiple.md
   - Architecture: architecture.md
   - C++ API Reference: reference.md

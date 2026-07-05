@@ -7,7 +7,7 @@ an independently-registered entity — rather than an inheritance directive.
 ```mermaid
 flowchart TD
     D["Derived<br/>(welded)"] --> Q{"is the base welded?"}
-    Q -- yes --> W["native pybind11 base<br/><code>class_&lt;T, Base&gt;</code><br/>(bind Base separately, first)"]
+    Q -- yes --> W["native backend base<br/>(bind Base separately, first)"]
     Q -- no --> M["C++ mixin<br/>eligible members flattened in<br/>(honoring its own marks/policy)"]
     style D stroke:#e64a19,stroke-width:3px
     style W stroke:#e64a19,stroke-width:3px
@@ -16,30 +16,40 @@ flowchart TD
 
 ## Welded base → native base
 
-A **welded** base becomes a native pybind11 base (`class_<T, Base…>`). Bind it
-separately, and **first**, so pybind11 knows the class object:
+A **welded** base becomes a native base class in the target framework (pybind11
+`class_<T, Base…>`, nanobind `class_<T, Base>`, sol2 `sol::bases<…>`). Bind it
+separately, and **first**, so the backend knows the base's class object:
 
 ```cpp
-struct [[=welder::weld(welder::lang::py)]]
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Shape {
     std::string name;
 };
 
-struct [[=welder::weld(welder::lang::py)]]
-Circle : Shape {          // Shape is welded → a real Python base class
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Circle : Shape {          // Shape is welded → a real base class in each language
     double radius{0.0};
 };
 
 // bind order: base before derived
-welder::pybind11::bind<Shape>(m);
-welder::pybind11::bind<Circle>(m);
+bind<Shape>(m);
+bind<Circle>(m);          // welder::pybind11::bind / welder::sol2::bind / …
 ```
 
-```pycon
->>> issubclass(Circle, Shape)
-True
->>> c = Circle(); c.name = "unit"; c.radius = 1.0
-```
+=== "Python"
+
+    ```pycon
+    >>> issubclass(Circle, Shape)
+    True
+    >>> c = Circle(); c.name = "unit"; c.radius = 1.0
+    ```
+
+=== "Lua"
+
+    ```lua
+    local c = Circle(); c.name = "unit"; c.radius = 1.0
+    print(c.name)          --> unit   (inherited field)
+    ```
 
 welder also reaches the **nearest welded ancestors through non-welded ones**
 (deduplicated), so an intermediate unwelded layer doesn't hide a welded
@@ -65,10 +75,21 @@ Record : Timestamps {                   // inherits Timestamps as a mixin
 `Record` gets `id` and `created` (flattened from `Timestamps`), but not `touched`
 (the base's own `exclude` is respected). There is no `Timestamps` Python type.
 
-## Diamonds
+## Multiple bases and diamonds
 
-- A **virtual** diamond works.
+How much of the C++ inheritance graph survives depends on the target framework:
+
+| Backend | Multiple welded bases | Virtual diamond |
+|---|---|---|
+| **pybind11** | ✅ | ✅ |
+| **sol2** (Lua) | ✅ | ✅ |
+| **nanobind** | ❌ single base only | ❌ |
+
+- A **virtual** diamond works on the backends that support multiple bases.
 - A **non-virtual** diamond with a shared *welded* base is a genuine C++ ambiguity
   — welder does not work around it (nor should it; it's ambiguous in C++ too).
+- On **nanobind**, `nb::class_<T, Base>` takes a single base, so a multi-base type
+  won't bind there. See the
+  [Python backends comparison](../backends/python.md#feature-comparison).
 
 Next: [Namespaces & modules](namespaces-modules.md).

@@ -22,8 +22,7 @@
 
     @code
     WELDER_MODULE(geometry, pybind11) { module.attr("VERSION") = "1.0"; }
-    WELDER_MODULE(geometry, lua)      { // lua-specific glue, when available
-    }
+    WELDER_MODULE(geometry, sol2)     { module["VERSION"] = "1.0"; } // Lua glue
     @endcode
 
     (pybind11 and nanobind both emit `PyInit_<name>`, so those two can't coexist

@@ -14,7 +14,8 @@ that names the offending type. Never a silent skip.
 The error (a `static_assert` in `assert_bindable`) names the type and points at the
 fix:
 
-> weld the type, give it a pybind11 `type_caster`, or `mark::exclude` the member.
+> weld the type, give it a backend caster (a pybind11/nanobind `type_caster`, a sol2
+> usertype), or `mark::exclude` the member.
 
 ## How it decides
 
@@ -54,11 +55,15 @@ arguments.
 Everything above is shared. The single fact the core cannot know is
 **native vs. needs-registration**: can the backend convert `T` *without* welder
 registering a class for it? That's the backend's `has_native_caster<T>` (the
-`caster_oracle`). pybind11 implements it as `!needs_registration<T>` — is T's caster
-the generic `type_caster_base` fallback (which needs a `class_`/`enum_`), or
-something native/self-contained?
+`caster_oracle`), the one hook every backend must supply:
 
-It is deliberately **conservative** — a compile-time read of T's caster type. It
+| Backend | `has_native_caster<T>` reads |
+|---|---|
+| **pybind11** | `!needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? |
+| **nanobind** | `!nb::detail::is_base_caster_v<make_caster<T>>` — same question, nanobind's spelling |
+| **sol2** (Lua) | `sol::lua_type_of<T> != userdata` — does Lua have a native representation? |
+
+Each is deliberately **conservative** — a compile-time read of T's caster type. It
 reports whether T *needs* registration, never whether one will actually exist. So a
 hand-registered but non-welded type still reads "needs registration" and is
 rejected. (That's what the [trust escape hatches](trust-casters.md) are for.)
@@ -68,7 +73,8 @@ rejected. (That's what the [trust escape hatches](trust-casters.md) are for.)
     `std::complex`, `std::function`, `std::chrono`, `std::filesystem::path` are
     native to pybind11 **only with their converter header** included
     (`<pybind11/complex.h>`, …). Forget the header and the gate correctly reports
-    the type as unbindable.
+    the type as unbindable. The same include-sensitivity applies to nanobind's
+    converter headers.
 
 ## Not exhaustive for foreign wrappers
 

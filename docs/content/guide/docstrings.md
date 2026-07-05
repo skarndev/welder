@@ -1,9 +1,11 @@
 # Docstrings
 
 Documentation is part of the vocabulary. You write it **once**, on the C++
-declaration, and it reaches *two* audiences: the target language's `__doc__` (via
-the binding backend) and the C++ API reference (via the
-[Doxygen filter](cpp-docs.md)).
+declaration, and it reaches every audience welder can carry it to: the target
+language's runtime docstring (Python `__doc__`, via the binding backend), the C++
+API reference (via the [Doxygen filter](cpp-docs.md)), and generated stubs
+([`.pyi`](#stubs) for Python, [LuaCATS `---@meta`](../backends/lua.md#stubs-luacats)
+for Lua — the latter is where Lua's docs live, since Lua has no runtime slot).
 
 | Annotation | Applies to | Becomes |
 |---|---|---|
@@ -171,6 +173,6 @@ the types your Python users' editors and type-checkers see.
 Lua has no runtime docstring slot, so there the docs live only in a stub: welder
 emits a **LuaCATS (`---@meta`) definition file** — reflection-generated at build
 time — carrying the same `doc`/`returns`/parameter text. See [Stubs
-(LuaCATS)](lua.md#stubs-luacats) in the Lua guide.
+(LuaCATS)](../backends/lua.md#stubs-luacats) in the Lua backend guide.
 
 Next: [The bindability gate](bindability.md).

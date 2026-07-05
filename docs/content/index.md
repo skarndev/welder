@@ -91,8 +91,8 @@ False
 ```mermaid
 flowchart LR
     A["Annotated C++ type<br/><code>[[=welder::weld(...)]]</code>"] --> B["welder core<br/>(reflection: what binds?)"]
-    B --> C["backend<br/>(pybind11, …)"]
-    C --> D["importable module"]
+    B --> C["backend<br/>(pybind11 · nanobind · sol2)"]
+    C --> D["Python & Lua modules"]
     A -.same annotations.-> E["Doxygen filter"]
     E --> F["C++ API reference"]
     style A stroke:#e64a19,stroke-width:3px
@@ -104,9 +104,11 @@ A language-agnostic **core** owns all the reflection work — deciding *what* bi
 whether each type is *representable*, and walking types/namespaces/bases. A
 **backend** is a stateless policy struct supplying only the emission primitives
 (how to register a class/method/property in its framework). Adding a language is
-one backend struct; the core is reused verbatim.
+one backend struct; the core is reused verbatim. The *same* annotated type binds to
+**Python** (pybind11 or nanobind) and **Lua** (sol2) — you weld it once.
 
 [:octicons-arrow-right-24: Read the architecture](architecture.md){ .md-button }
+[:octicons-arrow-right-24: Explore the backends](backends/index.md){ .md-button }
 [:octicons-arrow-right-24: Browse the C++ reference](reference.md){ .md-button .md-button--primary }
 
 !!! warning "Early proof-of-concept"

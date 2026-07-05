@@ -1,11 +1,16 @@
-# The Lua backend (sol2)
+# Lua (sol2)
 
 welder binds the *same* annotated C++ to Lua as to Python — you add
 `welder::lang::lua` to a type's `weld` and register with the **sol2** backend. The
-core (which members bind, inheritance, the bindability gate, namespaces) is shared
-verbatim; only the emission differs. The result is a **loadable Lua C module**: a
-shared object Lua's `require` finds on `package.cpath` and enters through
-`luaopen_<name>`.
+core (which members bind, inheritance, the [bindability
+gate](../guide/bindability.md), namespaces) is shared verbatim; only the emission
+differs. The result is a **loadable Lua C module**: a shared object Lua's `require`
+finds on `package.cpath` and enters through `luaopen_<name>`.
+
+Everything in the [guide](../guide/index.md) applies to Lua; this page is the
+sol2-specific detail — how the entry point works, where Lua's surface differs from
+Python's, and the LuaCATS stub that carries the docstrings Lua has no runtime slot
+for.
 
 ```cpp title="shapes_lua.cpp"
 #include <welder/welder.hpp>                       // vocabulary (header-only)
@@ -24,8 +29,7 @@ Rect {
     Rect operator+(const Rect& o) const { return {w + o.w, h + o.h}; } // __add
 };
 
-// Emits `luaopen_shapes_lua` and binds the whole `shapes_lua` namespace... or,
-// per type, write the entry yourself:
+// Per type, write the entry yourself:
 extern "C" int luaopen_shapes(lua_State* L) {
     sol::state_view lua(L);
     sol::table m = lua.create_table();
@@ -42,8 +46,10 @@ print(r:area())                -- 12.0  (methods use `:`)
 print((r + s.Rect(1, 1)).w)    -- 4.0   (operator+ -> __add)
 ```
 
-Or skip the boilerplate with the backend-agnostic entry macro, which binds a whole
-namespace and emits the `luaopen_` symbol for you:
+Or skip the boilerplate with the backend-agnostic
+[entry macro](../guide/namespaces-modules.md#binding-a-whole-module), which binds a
+whole namespace and emits the `luaopen_` symbol for you. The selector is the backend
+name **`sol2`**, not `lua`:
 
 ```cpp
 WELDER_MODULE(shapes_lua, sol2) {
@@ -59,24 +65,38 @@ produces a `require`-able `<name>.so` with the right link model (the module reso
 
 ```cmake
 find_package(sol2 REQUIRED)
-find_package(lua REQUIRED)
 welder_sol2_add_module(shapes example.cpp)
+target_compile_features(shapes PRIVATE cxx_std_26)
 target_link_libraries(shapes PRIVATE welder::headers)
 ```
+
+The target name must match the namespace token in `WELDER_MODULE(shapes, sol2)` so
+`luaopen_shapes` is the loaded entry point.
 
 !!! note "Header-only consumption only"
 
     A Lua binding TU consumes welder **header-only** (`#include
     <welder/welder.hpp>`), not `import welder;`: sol2's `<luaconf.h>` does not
     survive C++20 module dependency scanning. `welder_sol2_add_module` disables the
-    scan for you.
+    scan for you (`CXX_SCAN_FOR_MODULES OFF`).
+
+!!! warning "Match the Lua minor version"
+
+    A loadable module has no cross-minor ABI compatibility — a Lua 5.4 module loaded
+    by a 5.5 interpreter segfaults. sol2 supplies only the C++ headers; **Lua itself
+    comes from your system/install**, steered by `-DWELDER_LUA_DIR` (an install
+    prefix, e.g. `$(brew --prefix lua@5.4)`) and pinned with `-DWELDER_LUA_VERSION`
+    (default `5.4`). A configure-time guard hard-errors on a minor mismatch. (sol2
+    3.5.0 does not support Lua 5.5.)
 
 ## How Lua differs from Python
 
 Everything welder resolves (policy, `mark::exclude/include`, inheritance, the
 bindability gate) works identically; the target-language surface is what changes.
 
-**Operators become Lua metamethods**, a smaller and asymmetric set:
+### Operators become metamethods
+
+Lua's metamethod set is smaller and asymmetric:
 
 | C++ | Lua | | C++ | Lua |
 |---|---|---|---|---|
@@ -91,31 +111,30 @@ bindability gate) works identically; the target-language surface is what changes
 C++ `operator^` is bitwise-xor → `__bxor` (not `__pow`); the bitwise metamethods
 require Lua ≥ 5.3.
 
-**Enums are tables.** Lua has no enum type, so a welded enum binds as a name→value
-table (`Color.Red`); an unscoped enum's names are also mirrored onto the enclosing
-module, mirroring C++.
+### Everything else
 
-**No runtime docstrings.** Lua has no `__doc__`, so `doc`/`returns` annotations are
-ignored *at runtime*. Their home is a generated **LuaCATS stub** — see
-[Stubs](#stubs-luacats) below.
-
-**Namespace variables snapshot** at load time; **overloaded methods** collapse to
-the last one bound (sol2 stores one value per name). Both are documented limits with
-planned enhancements.
-
-sol2 supports **multiple and virtual base classes**, so a multi-base diamond binds
-here (as with pybind11; nanobind is single-inheritance only).
+- **Enums are tables.** Lua has no enum type, so a welded enum binds as a name→value
+  table (`Color.Red` *is* the value); an unscoped enum's names are also mirrored onto
+  the enclosing module, mirroring C++.
+- **No runtime docstrings.** Lua has no `__doc__`, so `doc`/`returns` annotations are
+  ignored *at runtime*. Their home is the generated [LuaCATS stub](#stubs-luacats).
+- **Namespace variables snapshot** at load time (a live get/set property is planned).
+- **Overloaded methods** collapse to the last one bound (sol2 stores one value per
+  name); a `sol::overload` grouping is planned.
+- **Multiple and virtual base classes** are supported (as with pybind11; nanobind is
+  single-inheritance only), so a multi-base diamond binds here.
 
 ## Stubs (LuaCATS)
 
 Because Lua drops docstrings at runtime, welder can emit a **LuaCATS
 (`---@meta`) definition file** — the Lua analogue of the Python
-[`.pyi` stubs](docstrings.md#stubs) — so the [Lua language
+[`.pyi` stubs](../guide/docstrings.md#stubs) — so the [Lua language
 server](https://luals.github.io/) gives you completion, type hints and the
 docstrings in your editor. Unlike the Python stubs (scraped from the *loaded*
 module), a Lua stub is **reflection-emitted at build time** by the `welder::luacats`
 backend, which walks the same welded types through the same core driver as sol2 and
-writes LuaCATS text.
+writes LuaCATS text — so it needs no sol2 or Lua at all, just the reflecting
+compiler.
 
 Write a tiny generator TU and let the entry macro provide `main()`:
 
@@ -126,7 +145,7 @@ Write a tiny generator TU and let the entry macro provide `main()`:
 WELDER_LUACATS_MAIN(shapes)   // emit the ---@meta stub for namespace ^^shapes
 ```
 
-Wire it in CMake — it needs no sol2 or Lua, just the reflecting compiler:
+Wire it in CMake:
 
 ```cmake
 welder_luacats_generate_stub(shapes_stub
