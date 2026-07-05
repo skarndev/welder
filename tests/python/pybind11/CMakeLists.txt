@@ -2,7 +2,7 @@
 # module-form (`import welder;`) and header-only — then run the shared behavioral
 # specs (tests/test_*.py) against each. The target name doubles as the importable
 # Python module name (PYBIND11_MODULE(WELDER_TEST_MODNAME)).
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 REQUIRED)
 
 function(welder_add_pybind11_test_module tgt)

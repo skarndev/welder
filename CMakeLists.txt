@@ -14,6 +14,20 @@ option(WELDER_BUILD_TESTS "Build tests" ON)
 option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ON)
 option(WELDER_BUILD_DOCS "Build the documentation site (mkdocs + Doxygen reference)" OFF)
 
+# Language-runtime version knobs. Conan supplies the C++ backend headers (sol2,
+# pybind11, nanobind) at the versions we test with, but the *language runtimes*
+# (Python, Lua) come from the system/user: an extension's ABI must match the
+# interpreter that loads it, and only a real install carries an interpreter plus a
+# package manager (uv, luarocks). These pin which minor the backends build against
+# and which their test environments target; override to run against your own.
+set(WELDER_LUA_VERSION "5.4" CACHE STRING
+  "Lua minor the sol2 backend builds against and its tests run with")
+set(WELDER_LUA_DIR "" CACHE PATH
+  "Lua install prefix (e.g. `brew --prefix lua@5.4`) providing the headers, \
+interpreter and luarocks target; empty = search the system")
+set(WELDER_PYTHON_VERSION "3.14" CACHE STRING
+  "Python minor the Python backends build against and their uv env targets")
+
 # Reusable CMake helpers (e.g. welder_pybind11_generate_stubs).
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(WelderPybind11Stubgen)

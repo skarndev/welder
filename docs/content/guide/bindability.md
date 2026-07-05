@@ -78,7 +78,7 @@ deliberate boundary, not a bug.
 
 ## Testing it
 
-Negative-compile cases live in `tests/pybind11/cpp/neg/` as `WILL_FAIL` CTests
+Negative-compile cases live in `tests/python/pybind11/cpp/neg/` as `WILL_FAIL` CTests
 (`negcompile.*`): they assert that using an unrepresentable type *fails to
 compile*. The positive counterparts live alongside the feature tests.
 

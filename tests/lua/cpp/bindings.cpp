@@ -2,7 +2,7 @@
 // as the pybind11 / nanobind extensions (tests/common/cpp) — the cases are welded
 // for lang::lua as well as lang::py, and reach the backend only through the seam
 // macros below. Only the assertions differ: Lua behaviour (metamethods, tables,
-// per-language marks) is checked from tests/sol2/test.lua, not pytest.
+// per-language marks) is checked by the LuaUnit specs in tests/lua/, not pytest.
 //
 // Header-only consumption (welder::headers); the sol2 backend + Lua headers come
 // through welder::sol2. There is no module-form variant: sol2's <luaconf.h> does

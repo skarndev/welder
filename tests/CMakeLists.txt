@@ -1,18 +1,17 @@
-# Python binding tests. The behavioral specs (test_*.py + conftest.py) assert
-# welder's *backend-agnostic* semantics — which members bind, inheritance,
-# namespaces — so they are shared across backends and live here. Each backend
-# subdirectory (tests/pybind11, later tests/nanobind, ...) builds its own
-# extension(s) and registers CTest entries that run these shared specs against the
-# built module, selected at runtime by the WELDER_TEST_MODULE env var (read in
-# conftest.py). Once a second backend exists, the shared specs double as a
-# cross-backend consistency check.
+# welder's tests split by target language: the backend-neutral C++ case tree
+# (common/cpp) and the compile-only core checks live here; the Python backends +
+# their pytest specs live under python/, the Lua backend + its busted specs under
+# lua/. The C++ cases are shared across all three backends (welded for both
+# lang::py and lang::lua) as a cross-backend consistency check.
 find_program(UV_EXECUTABLE uv)
 
-# Handed down to the backend subdirectories. WELDER_TEST_VENV_PYTHON stays empty
+# Handed down to the language subdirectories. WELDER_TEST_VENV_PYTHON stays empty
 # if the uv env can't be prepared: backends then still *build* their extensions
 # (a compile check) but skip registering CTest entries. WELDER_TEST_COMMON_CPP is
-# the backend-neutral C++ case tree, shared by every backend's bindings.cpp.
-set(WELDER_TEST_PYDIR ${CMAKE_CURRENT_SOURCE_DIR})
+# the backend-neutral C++ case tree, shared by every backend's bindings.cpp. The
+# uv env is prepared here (not under python/) because the doxyfilter tests also use
+# it (for `lark`); it manages the pyproject that now lives in python/.
+set(WELDER_TEST_PYDIR ${CMAKE_CURRENT_SOURCE_DIR}/python)
 set(WELDER_TEST_COMMON_CPP ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp)
 set(WELDER_TEST_VENV_PYTHON "")
 
@@ -23,15 +22,15 @@ else()
   # CPython rather than the build's Homebrew framework Python: uv rejects the
   # latter (its platform.mac_ver() is empty). That's fine for importing our
   # extensions — on macOS they use dynamic symbol lookup (no libpython link), so
-  # they load in any ABI-compatible CPython of the same minor version (3.14).
-  message(STATUS "welder: syncing uv test environment...")
+  # they load in any ABI-compatible CPython of the same minor (WELDER_PYTHON_VERSION).
+  message(STATUS "welder: syncing uv test environment (Python ${WELDER_PYTHON_VERSION})...")
   execute_process(
-    COMMAND ${UV_EXECUTABLE} sync --project ${CMAKE_CURRENT_SOURCE_DIR}
-            --python 3.14 --python-preference only-managed
+    COMMAND ${UV_EXECUTABLE} sync --project ${WELDER_TEST_PYDIR}
+            --python ${WELDER_PYTHON_VERSION} --python-preference only-managed
     RESULT_VARIABLE _uv_res
     OUTPUT_VARIABLE _uv_out ERROR_VARIABLE _uv_out)
   if(_uv_res EQUAL 0)
-    set(WELDER_TEST_VENV_PYTHON ${CMAKE_CURRENT_SOURCE_DIR}/.venv/bin/python)
+    set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/bin/python)
   else()
     message(WARNING "welder: 'uv sync' failed; Python tests will be skipped:\n${_uv_out}")
   endif()
@@ -45,7 +44,7 @@ if(WELDER_TEST_VENV_PYTHON)
   add_test(
     NAME mypy.tests
     COMMAND ${WELDER_TEST_VENV_PYTHON} -m mypy
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
 endif()
 
 # Backend-abstraction probe (backend-agnostic): a minimal in-file backend that
@@ -88,18 +87,13 @@ add_test(NAME compile.doc_cleandoc
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 
-# Per-backend test trees (each builds its extensions + registers CTest). Both
-# consume the shared specs (tests/test_*.py) and the shared C++ case tree
-# (tests/common/cpp), so once both are built the specs double as a cross-backend
-# consistency check.
-if(WELDER_BUILD_PYBIND11)
-  add_subdirectory(pybind11)
+# Per-language test trees. python/ builds the pybind11 + nanobind extensions and
+# runs the shared pytest specs against each (a cross-backend consistency check);
+# lua/ builds the sol2 extension and runs the busted specs against it. Both bind
+# the *same* shared C++ cases (tests/common/cpp).
+if(WELDER_BUILD_PYBIND11 OR WELDER_BUILD_NANOBIND)
+  add_subdirectory(python)
 endif()
-if(WELDER_BUILD_NANOBIND)
-  add_subdirectory(nanobind)
-endif()
-# The sol2 (Lua) tree reuses the same shared C++ cases, asserted from Lua rather
-# than pytest — it needs no uv/Python env, so it registers independently.
 if(WELDER_BUILD_SOL2)
-  add_subdirectory(sol2)
+  add_subdirectory(lua)
 endif()

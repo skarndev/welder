@@ -6,7 +6,7 @@
 
 # --- welder::pybind11 : pybind11 Python backend ------------------------------
 if(WELDER_BUILD_PYBIND11)
-  find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+  find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
   find_package(pybind11 REQUIRED)
 
   add_library(welder_pybind11 INTERFACE)
@@ -23,7 +23,7 @@ endif()
 # runtime, visibility and link flags). nanobind's config requires Python to be
 # found first and defines NB_DIR (its package root).
 if(WELDER_BUILD_NANOBIND)
-  find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+  find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
   find_package(nanobind CONFIG REQUIRED)
 
   add_library(welder_nanobind INTERFACE)
@@ -38,21 +38,47 @@ endif()
 # symbols from the *host* interpreter at load time and must NOT bundle its own
 # Lua runtime (a second copy would mismatch the host's `lua_State`). So this
 # INTERFACE target surfaces only the sol2 + Lua *headers* — it deliberately does
-# not link `lua::lua` (which carries `liblua`). Create the extension with
+# not link a Lua library (which carries `liblua`). Create the extension with
 # welder_sol2_add_module() (see cmake/WelderSol2Module.cmake), which sets the
 # bare `<name>.so` output and the host-symbol link model.
+#
+# sol2 (the C++ wrapper) comes from conan, but Lua itself comes from the *system /
+# user* via CMake's builtin FindLua — not conan's transitive `lua`. The module's
+# ABI must match the interpreter that will `require` it (Lua has no cross-minor
+# ABI), and only a real install carries that interpreter + luarocks, so the
+# runtime Lua is the single source of truth for the headers too. Steer it with
+# -DWELDER_LUA_DIR (an install prefix) and pin the minor with -DWELDER_LUA_VERSION.
 if(WELDER_BUILD_SOL2)
   find_package(sol2 REQUIRED)
-  find_package(lua REQUIRED)
+  # Pin the Lua headers to the user's install. conan puts its transitive lua on
+  # CMAKE_PREFIX_PATH, which otherwise shadows FindLua's own search (and even
+  # `Lua_ROOT`), so when WELDER_LUA_DIR is given we resolve LUA_INCLUDE_DIR under it
+  # explicitly and hand the result to FindLua (which honors a preset value and
+  # reads the version from it). Cleared first so a reconfigure re-pins.
+  if(WELDER_LUA_DIR)
+    unset(LUA_INCLUDE_DIR CACHE)
+    find_path(LUA_INCLUDE_DIR lua.h
+      PATHS "${WELDER_LUA_DIR}/include"
+      PATH_SUFFIXES "lua${WELDER_LUA_VERSION}" lua ""
+      NO_DEFAULT_PATH)
+  endif()
+  find_package(Lua MODULE REQUIRED)   # builtin FindLua: system/user, not conan
+  if(NOT "${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}" STREQUAL WELDER_LUA_VERSION)
+    message(FATAL_ERROR
+      "welder: found Lua ${LUA_VERSION_STRING} but WELDER_LUA_VERSION is "
+      "${WELDER_LUA_VERSION}. A sol2 module built against one Lua minor segfaults "
+      "in another. Point -DWELDER_LUA_DIR at a matching install "
+      "(e.g. `brew --prefix lua@${WELDER_LUA_VERSION}`) or set -DWELDER_LUA_VERSION.")
+  endif()
 
   add_library(welder_sol2 INTERFACE)
   add_library(welder::sol2 ALIAS welder_sol2)
   target_link_libraries(welder_sol2 INTERFACE welder_headers)
-  # Headers only (see note above): pull the include dirs off the imported
-  # targets without linking their libraries.
+  # Headers only (see note above): sol2's own include dir plus the user's Lua
+  # headers, without linking either library.
   target_include_directories(welder_sol2 SYSTEM INTERFACE
     $<TARGET_PROPERTY:sol2::sol2,INTERFACE_INCLUDE_DIRECTORIES>
-    $<TARGET_PROPERTY:lua::lua,INTERFACE_INCLUDE_DIRECTORIES>)
+    ${LUA_INCLUDE_DIR})
   # Match the probes: enable sol2's strong safety set (type/bounds checks).
   target_compile_definitions(welder_sol2 INTERFACE SOL_ALL_SAFETIES_ON=1)
 endif()

@@ -25,10 +25,12 @@ class WelderConan(ConanFile):
         if self.options.with_nanobind:
             self.requires("nanobind/2.13.0")
         if self.options.with_sol2:
-            # sol2 is header-only and pulls a specific Lua (5.4.6 today) as a
-            # transitive dependency; the welder::sol2 target consumes both. The
-            # Lua version is bounded by what sol2's recipe accepts — override the
-            # transitive `lua/*` here to move within that range if needed.
+            # sol2 is the header-only C++ wrapper only. Lua itself is NOT taken
+            # from conan: welder::sol2 builds against the *system/user* Lua found
+            # by CMake's FindLua (steered by WELDER_LUA_DIR/WELDER_LUA_VERSION) so
+            # the module's ABI matches the interpreter + luarocks that load/test
+            # it. sol2 still pulls a transitive `lua` for its own recipe, but the
+            # welder build does not consume it. See src/welder/backends/CMakeLists.txt.
             self.requires("sol2/3.5.0")
 
     def layout(self):

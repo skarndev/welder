@@ -59,8 +59,8 @@ though sol2 would convert them as numbers, so a welded enum's name→value table
 required and enum-typed members are gated on it — matching the Python backends. The
 STL-wrapper recursion, trust hatches and assert messages are shared as usual.
 
-Negative-compile cases live in `tests/pybind11/cpp/neg/`, `tests/nanobind/cpp/neg/`
-and `tests/sol2/cpp/neg/` (`negcompile.*` / `negcompile.nanobind.*` /
+Negative-compile cases live in `tests/python/pybind11/cpp/neg/`, `tests/python/nanobind/cpp/neg/`
+and `tests/lua/cpp/neg/` (`negcompile.*` / `negcompile.nanobind.*` /
 `negcompile.sol2_unwelded` CTests, `WILL_FAIL`).
 
 ## Escape hatches (trust)
@@ -74,7 +74,7 @@ vocabulary, and suppressing the gate so the user then owns the registration:
 - a type-level `welder::trust_bindable<T> = true` (trusts T everywhere, folded into
   `bindable()` so it also clears `T*` / `const T&` / `std::vector<T>`).
 
-Tested in `tests/pybind11/cpp/trust.hpp` + `test_trust.py`. A richer future point
+Tested in `tests/python/pybind11/cpp/trust.hpp` + `test_trust.py`. A richer future point
 could map T to a stub type name (`bindable_as<T>`); still TODO.
 
 ## Self-contained type casters
@@ -86,4 +86,4 @@ cleanly (e.g. as `float`). The one requirement (standard pybind11, not
 welder-specific): the caster must be visible **before** welder binds any type using
 T — gcc-16 defers the point of instantiation to end-of-TU so a later caster in the
 *same* TU also works, but that is ill-formed-NDR to rely on; keep the caster ahead
-of the bind. Tested in `tests/pybind11/cpp/caster.hpp` + `test_caster.py`.
+of the bind. Tested in `tests/python/pybind11/cpp/caster.hpp` + `test_caster.py`.

@@ -43,7 +43,7 @@ enumerator does not renumber the rest. An **unscoped** enum also `export_values(
 **scoped** enum stays `E.Value`. The enum `doc` becomes the Python docstring;
 per-enumerator docs aren't supported (pybind11 `.value()` takes none). An
 enum-typed member/parameter binds because the enum is welded (bind the enum first,
-like a welded base). Tested: `tests/pybind11/cpp/enums.hpp` + `test_enums.py`.
+like a welded base). Tested: `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py`.
 
 ## Inheritance from public bases
 `weld` is a *discovery marker* (an independently-registered, module-discoverable
@@ -109,7 +109,8 @@ The same annotated cases bind for `lang::lua`; the Lua-only differences (see
 - **Namespace variables snapshot** at load time (const and mutable alike); live
   get/set over a C++ global is a planned enhancement.
 - **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`).
-Tested by the shared cases bound for `lua`, asserted in `tests/sol2/test.lua`.
+Tested by the shared cases bound for `lua`, asserted by the busted specs in
+`tests/lua/spec/*_spec.lua`.
 
 ## Not yet implemented
 Properties (getter/setter pairs) are designed-for but not yet implemented; so are

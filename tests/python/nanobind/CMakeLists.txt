@@ -10,7 +10,7 @@
 # nanobind ships its runtime as source compiled into each extension via
 # nanobind_add_module (not a plain link library), so the extensions are created
 # with that helper rather than Python_add_library.
-find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(nanobind CONFIG REQUIRED)
 
 function(welder_add_nanobind_test_module tgt)
