@@ -96,20 +96,31 @@ bindability gate) works identically; the target-language surface is what changes
 
 ### Operators become metamethods
 
-Lua's metamethod set is smaller and asymmetric:
+Lua's metamethod set is smaller and asymmetric. Every welded **member** operator
+binds to a metamethod (told apart unary vs. binary by arity); this is the complete
+set welder maps:
 
 | C++ | Lua | | C++ | Lua |
 |---|---|---|---|---|
 | `a + b` | `__add` | | `a == b` | `__eq` |
-| `a - b` / `-a` | `__sub` / `__unm` | | `a < b` | `__lt` |
-| `a * b` | `__mul` | | `a <= b` | `__le` |
+| `a - b` | `__sub` | | `a < b` | `__lt` |
+| `-a` (unary) | `__unm` | | `a <= b` | `__le` |
+| `a * b` | `__mul` | | `a(...)` | `__call` |
 | `a / b` | `__div` | | `a[i]` | `__index` |
-| `a % b` | `__mod` | | `a(...)` | `__call` |
+| `a % b` | `__mod` | | | |
+
+Bitwise operators map too, but only on **Lua ≥ 5.3** (not LuaJIT's 5.1 ABI), so
+they are `#if`-gated:
+
+| C++ | Lua | | C++ | Lua |
+|---|---|---|---|---|
+| `a ^ b` | `__bxor` | | `a << b` | `__shl` |
+| `a & b` | `__band` | | `a >> b` | `__shr` |
+| `a \| b` | `__bor` | | `~a` (unary) | `__bnot` |
 
 `operator!=`, `operator>` and `operator>=` map to **nothing** — Lua derives `~=`,
 `>` and `>=` from `__eq`, `__lt` and `__le`, so they just work once those are bound.
-C++ `operator^` is bitwise-xor → `__bxor` (not `__pow`); the bitwise metamethods
-require Lua ≥ 5.3.
+Note C++ `operator^` is bitwise-xor → `__bxor` (**not** `__pow`/power).
 
 ### Everything else
 

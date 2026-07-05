@@ -155,6 +155,8 @@ metamethod, told apart unary vs. binary by arity. The mapping differs per langua
     | `operator()` | `__call__` | `operator<` | `__lt__` |
 
     Arithmetic, bitwise, comparison, call and subscript operators are covered.
+    See the [Python backend page](../backends/python.md#operators-become-dunders)
+    for the full table.
 
 === "Lua"
 

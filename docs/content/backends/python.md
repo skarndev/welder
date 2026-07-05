@@ -77,6 +77,33 @@ a single base, so a multi-base or diamond type binds under pybind11 but not nano
 welder's shared inheritance test guards the diamond case behind
 `WELDER_TEST_MULTIPLE_INHERITANCE` for exactly this reason.
 
+## Operators become dunders
+
+Every welded **member** operator binds to a Python special method ("dunder"), told
+apart unary vs. binary by arity. Both backends map the *identical* set — this is the
+complete list:
+
+| C++ | Python | | C++ | Python |
+|---|---|---|---|---|
+| `a + b` | `__add__` | | `a == b` | `__eq__` |
+| `a - b` | `__sub__` | | `a != b` | `__ne__` |
+| `-a` (unary) | `__neg__` | | `a < b` | `__lt__` |
+| `+a` (unary) | `__pos__` | | `a > b` | `__gt__` |
+| `a * b` | `__mul__` | | `a <= b` | `__le__` |
+| `a / b` | `__truediv__` | | `a >= b` | `__ge__` |
+| `a % b` | `__mod__` | | `a(...)` | `__call__` |
+| `a & b` | `__and__` | | `a[i]` | `__getitem__` |
+| `a \| b` | `__or__` | | `a ^ b` | `__xor__` |
+| `~a` (unary) | `__invert__` | | `a << b` / `a >> b` | `__lshift__` / `__rshift__` |
+
+Unlike Lua, Python does **not** derive `!=`, `>`, `>=` from their counterparts, so
+`operator!=`, `operator>` and `operator>=` are each bound explicitly. In-place
+compound assignments (`operator+=`, …) are not mapped — Python falls back to
+`a = a + b` via `__add__` — and unary `*` (dereference) and unary `&` (address-of)
+are left alone. See the [guide's operator
+section](../guide/binding-types.md#overloaded-operators) for the full list of
+deliberately-excluded operators.
+
 ## `.pyi` stubs
 
 Your `doc` text and signatures flow into generated
