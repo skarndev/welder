@@ -17,6 +17,10 @@ __pycache__/
 .cache/
 compile_commands.json
 temp_*
+.idea/
+
+# MCP server config (local, machine-specific)
+.mcp.json
 
 # uv / virtualenv
 .venv/
