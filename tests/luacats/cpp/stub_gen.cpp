@@ -16,7 +16,7 @@
 #include <vector>
 
 #include <welder/welder.hpp>
-#include <welder/backends/lua/luacats/stub.hpp>
+#include <welder/backends/lua/luacats/backend.hpp>
 
 namespace [[=welder::doc("A tiny geometry module for the LuaCATS stub test.")]]
 stubdemo {

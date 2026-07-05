@@ -69,7 +69,7 @@ entry macro:
 
     ```cpp
     #include "shapes/shapes.hpp"
-    #include <welder/backends/lua/luacats/stub.hpp>
+    #include <welder/backends/lua/luacats/backend.hpp>
 
     WELDER_LUACATS_MAIN(shapes)          // generates shapes.lua at build time
     ```

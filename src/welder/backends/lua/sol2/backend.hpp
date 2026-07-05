@@ -69,9 +69,10 @@
 #include <utility>
 #include <vector>
 
-#include <welder/backend.hpp>     // the backend contract + generic driver
-#include <welder/bind_traits.hpp> // is_bindable_constructor / aggregate_* helpers
-#include <welder/module.hpp>      // WELDER_MODULE dispatch (entry-point macro)
+#include <welder/backend.hpp>          // the backend contract + generic driver
+#include <welder/backends/lua/overloads.hpp> // shared Lua overload-set selectors
+#include <welder/bind_traits.hpp>      // is_bindable_constructor / aggregate_* helpers
+#include <welder/module.hpp>           // WELDER_MODULE dispatch (entry-point macro)
 
 #include <sol/sol.hpp>
 
@@ -351,14 +352,14 @@ struct enum_binding {
 // wants the whole set at once, exactly as it does for a type's constructors (see
 // ctor_signatures). The driver still visits each overload individually (that suits
 // pybind11's incremental `.def`), so the backend gathers the siblings itself; the
-// selection predicates live in the core (`bind_traits.hpp`, shared with the LuaCATS
-// stub backend, which also gathers overloads), re-invoked here so a group is exactly
-// what the driver binds.
-using welder::detail::function_overload_set;
-using welder::detail::is_overload_leader;
-using welder::detail::method_overload_set;
-using welder::detail::operator_overload_set;
-using welder::detail::overload_group;
+// name-gathering selectors are shared with the LuaCATS stub backend
+// (`<welder/backends/lua/overloads.hpp>`) and reuse the core eligibility predicates,
+// so a group is exactly what the driver binds.
+using welder::lua::function_overload_set;
+using welder::lua::is_overload_leader;
+using welder::lua::method_overload_set;
+using welder::lua::operator_overload_set;
+using welder::lua::overload_group;
 
 /** Register overload group @a Grp on target @a t under @a Grp[0]'s identifier — a
     single callable when unique, a `sol::overload(…)` when several. Each overload is

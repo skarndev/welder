@@ -50,7 +50,7 @@ permitted annotation constant on gcc-16.
 no sink). Their Lua home is a **generated LuaCATS (`---@meta`) definition file** —
 the `.pyi` analogue — *reflection-emitted at build time*, not scraped from a loaded
 module (a loaded sol2 usertype exposes nothing introspectable). **Implemented** as
-the `welder::luacats` backend (`src/welder/backends/lua/luacats/stub.hpp`): a
+the `welder::luacats` backend (`src/welder/backends/lua/luacats/backend.hpp`): a
 text-emitting `welder::backend` that plugs the *same* generic driver as sol2 (so
 member selection / base flattening / policy-marks / the bindability gate are reused
 verbatim), swapping the emission primitives to append LuaCATS text — `--- ` summary
@@ -59,8 +59,9 @@ lines, `---@field`/`---@param`/`---@return name type description` tags, `---@cla
 C++→LuaCATS type map (`lua_type_string`; see build-test-run.md). Overloaded
 methods/constructors/free functions collapse to one documented `function` + idiomatic
 `---@overload fun(…)` lines (grouped via the shared `*_overload_set` selectors in
-`bind_traits.hpp`, since the driver still visits overloads one at a time; the primary
-is the first overload with a doc, so its `@param`/summary text survives); a const
+`backends/lua/overloads.hpp` — `welder::lua`, shared with the sol2 backend — since the
+driver still visits overloads one at a time; the primary is the first overload with a
+doc, so its `@param`/summary text survives); a const
 member's read-only-ness is a `(read-only)` description note (LuaCATS has no read-only
 field tag). Class/enum blocks flush by RAII (the driver has no "finish class" hook) —
 constructors accumulate on the `class_writer` and render as one `.new` group at flush

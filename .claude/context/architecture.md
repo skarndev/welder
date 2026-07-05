@@ -37,8 +37,9 @@ src/welder/
       pybind11/backend.hpp  pybind11 backend: struct detail::backend (emission primitives) + public bind<T> / bind_namespace / build_module wrappers over the driver
       nanobind/backend.hpp  nanobind backend: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
     lua/
+      overloads.hpp         Overload-set selectors shared by BOTH Lua backends — welder::lua::{method,operator,function}_overload_set / is_overload_leader / overload_group; both gather a name's overloads (sol2 → sol::overload, luacats → ---@overload) because the driver visits overloads one at a time. Mirrors backends/python/doc_style.hpp.
       sol2/backend.hpp      sol2 Lua backend: the same, against sol2's API (module_type = sol::table; usertype/new_usertype; metamethod operator map; enums as name→value tables; luaopen_ entry macro)
-      luacats/stub.hpp      LuaCATS `---@meta` stub backend: text-emitting welder::backend over the SAME driver (no sol2/Lua dep); C++→LuaCATS type map + doc tags; WELDER_LUACATS_MAIN generator entry
+      luacats/backend.hpp   LuaCATS `---@meta` stub backend: text-emitting welder::backend over the SAME driver (no sol2/Lua dep); C++→LuaCATS type map + doc tags; ---@overload grouping; WELDER_LUACATS_MAIN generator entry
     CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luacats
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/

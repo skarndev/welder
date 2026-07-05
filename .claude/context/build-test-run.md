@@ -80,7 +80,7 @@ welder docstrings flow into the stubs. pybind11-stubgen is pinned to its GitHub
 ## LuaCATS stub generation (the Lua analogue of `.pyi`)
 Lua has no runtime docstring slot, so the sol2 backend drops `doc`/`returns` at
 load time; their home is a **generated LuaCATS (`---@meta`) definition file**,
-emitted by the `welder::luacats` backend (`src/welder/backends/lua/luacats/stub.hpp`).
+emitted by the `welder::luacats` backend (`src/welder/backends/lua/luacats/backend.hpp`).
 Unlike `.pyi` (pybind11-stubgen *imports* the built module), a Lua stub cannot be
 scraped from a loaded sol2 usertype, so it is **reflection-emitted at build time**:
 the stub backend is a real `welder::backend` that plugs the *same* generic driver

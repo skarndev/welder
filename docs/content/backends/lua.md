@@ -142,7 +142,7 @@ Write a tiny generator TU and let the entry macro provide `main()`:
 
 ```cpp title="shapes_stub.cpp"
 #include <welder/welder.hpp>
-#include <welder/backends/lua/luacats/stub.hpp>
+#include <welder/backends/lua/luacats/backend.hpp>
 
 WELDER_LUACATS_MAIN(shapes)   // emit the ---@meta stub for namespace ^^shapes
 ```

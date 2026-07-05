@@ -25,7 +25,7 @@
     Requires the welder vocabulary first (via `import welder;` or `#include
     <welder/welder.hpp>`). Then:
     @code
-    #include <welder/backends/lua/luacats/stub.hpp>
+    #include <welder/backends/lua/luacats/backend.hpp>
     WELDER_LUACATS_MAIN(mymod)   // main(): print the ---@meta stub for namespace ^^mymod
     @endcode
     or drive it by hand:
@@ -57,10 +57,11 @@
 #include <utility>
 #include <vector>
 
-#include <welder/backend.hpp>     // the backend contract + generic driver
-#include <welder/bind_traits.hpp> // param_types / aggregate_fields
-#include <welder/doc.hpp>         // doc_of / param_docs / return_doc_of
-#include <welder/module.hpp>      // WELDER_MODULE dispatch (unused entry, kept parallel)
+#include <welder/backend.hpp>          // the backend contract + generic driver
+#include <welder/backends/lua/overloads.hpp> // shared Lua overload-set selectors
+#include <welder/bind_traits.hpp>      // param_types / aggregate_fields
+#include <welder/doc.hpp>              // doc_of / param_docs / return_doc_of
+#include <welder/module.hpp>           // WELDER_MODULE dispatch (unused entry, kept parallel)
 
 namespace welder::luacats {
 
@@ -267,13 +268,14 @@ void emit_params(std::string& out) {
     }
 }
 
-// The overload-set selectors are shared with the sol2 backend (both gather a name's
-// C++ overloads that the generic driver visits one at a time); the LuaCATS stub
-// renders the group as one documented `function` plus `---@overload` lines.
-using welder::detail::function_overload_set;
-using welder::detail::is_overload_leader;
-using welder::detail::method_overload_set;
-using welder::detail::overload_group;
+// The overload-set selectors are shared with the sol2 backend
+// (`<welder/backends/lua/overloads.hpp>`; both gather a name's C++ overloads that the
+// generic driver visits one at a time). The LuaCATS stub renders the group as one
+// documented `function` plus `---@overload` lines.
+using welder::lua::function_overload_set;
+using welder::lua::is_overload_leader;
+using welder::lua::method_overload_set;
+using welder::lua::overload_group;
 
 /** The `fun(<name>: <type>, …): <ret>` signature of @a Fn, for a `---@overload` line.
 

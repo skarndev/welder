@@ -22,7 +22,7 @@ flowchart TB
         N["backends/python/nanobind/backend.hpp"]
         DS["backends/python/doc_style.hpp — shared"]
         LU["backends/lua/sol2/backend.hpp"]
-        LC["backends/lua/luacats/stub.hpp — build-time stub"]
+        LC["backends/lua/luacats/backend.hpp — build-time stub"]
     end
     voc --> core
     core --> be
