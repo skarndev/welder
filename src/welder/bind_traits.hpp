@@ -138,6 +138,106 @@ consteval bool is_unary_operator(std::meta::info f) {
     return std::meta::parameters_of(f).empty();
 }
 
+// --- overload grouping ------------------------------------------------------
+//
+// A backend that stores one entity per name (sol2's usertype table entry, the
+// LuaCATS stub's single `function`/`---@overload` block) must gather a name's
+// several C++ overloads, yet the generic driver visits them one at a time — which
+// suits pybind11/nanobind, whose chained `.def` wants each overload separately.
+// These selectors gather a member's overload set from the scope where it is
+// declared, reusing the driver's own eligibility predicates so a group is exactly
+// what the driver binds. Each scope is walked on its own, so a same-named member in
+// a derived class still hides the base's (C++ name-hiding), the way the driver's
+// flatten-then-overwrite already behaves.
+
+/** The bound method overloads sharing @a fn's name and static-ness, from the class
+    where @a fn is declared, in declaration order.
+    @param fn a reflection of one bindable method (see is_bindable_method).
+    @param L  the target language.
+    @return the overload set (always contains @a fn). */
+consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn, lang L) {
+    const std::meta::info cls{std::meta::parent_of(fn)};
+    const policy_kind pol{policy_of(cls)};
+    const auto name{std::meta::identifier_of(fn)};
+    const bool is_static{std::meta::is_static_member(fn)};
+    std::vector<std::meta::info> out{};
+    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+        if (is_bindable_method(m, L, pol) &&
+            std::meta::is_static_member(m) == is_static &&
+            std::meta::identifier_of(m) == name)
+            out.push_back(m);
+    return out;
+}
+
+/** The bound operator overloads sharing @a fn's target slot (same operator and
+    arity — hence the same special-method name), from @a fn's declaring class.
+    @param fn a reflection of one operator candidate (see is_operator_candidate).
+    @param L  the target language.
+    @return the overload set (always contains @a fn). */
+consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
+                                                             lang L) {
+    const std::meta::info cls{std::meta::parent_of(fn)};
+    const policy_kind pol{policy_of(cls)};
+    std::vector<std::meta::info> out{};
+    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+        if (is_operator_candidate(m, L, pol) &&
+            std::meta::operator_of(m) == std::meta::operator_of(fn) &&
+            is_unary_operator(m) == is_unary_operator(fn))
+            out.push_back(m);
+    return out;
+}
+
+/** The bound free-function overloads sharing @a fn's name, from @a fn's declaring
+    namespace, in declaration order.
+    @param fn a reflection of one bound namespace-scope function.
+    @param L  the target language.
+    @return the overload set (always contains @a fn). */
+consteval std::vector<std::meta::info> function_overload_set(std::meta::info fn,
+                                                             lang L) {
+    const std::meta::info ns{std::meta::parent_of(fn)};
+    const policy_kind pol{policy_of(ns)};
+    const auto name{std::meta::identifier_of(fn)};
+    std::vector<std::meta::info> out{};
+    for (auto m : std::meta::members_of(ns, std::meta::access_context::unchecked()))
+        if (std::meta::is_function(m) && welded_for(m, L) &&
+            member_bound(m, L, pol) && std::meta::identifier_of(m) == name)
+            out.push_back(m);
+    return out;
+}
+
+/** The signature of an overload-set selector (`method_overload_set`, …). */
+using overload_selector = std::vector<std::meta::info> (*)(std::meta::info, lang);
+
+/** @a Select's overload set for @a Fn as a fixed-size, splice-ready static array.
+    @tparam Select the selector (e.g. `method_overload_set`).
+    @tparam Fn     the representative overload.
+    @tparam L      the target language.
+    @return an array of the group's member reflections, in declaration order. */
+template <overload_selector Select, std::meta::info Fn, lang L>
+consteval auto overload_group() {
+    constexpr std::size_t n{Select(Fn, L).size()};
+    std::array<std::meta::info, n> out{};
+    // Guard the fill: std::array<T, 0>::operator[] is not usable (n is >= 1 for a
+    // group leader, but the guard keeps this well-formed regardless).
+    if constexpr (n != 0) {
+        auto v{Select(Fn, L)};
+        for (std::size_t i{0}; i < n; ++i)
+            out[i] = v[i];
+    }
+    return out;
+}
+
+/** Whether @a fn is the first (declaration order) member of its @a Select overload
+    set — the single visit on which a name-gathering backend emits the whole group.
+    @tparam Select the selector.
+    @param fn the candidate overload.
+    @param L  the target language. */
+template <overload_selector Select>
+consteval bool is_overload_leader(std::meta::info fn, lang L) {
+    auto v{Select(fn, L)};
+    return !v.empty() && v.front() == fn;
+}
+
 // --- aggregate initialization -----------------------------------------------
 //
 // An aggregate (a simple POD-like struct: no user-declared constructors) cannot

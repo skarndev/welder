@@ -96,10 +96,13 @@ dotted Lua name, else `any`. A generator TU uses `WELDER_LUACATS_MAIN(<ns>)` (a
 `main()` that writes the stub for namespace `^^ns` to its argv[1] path, else
 stdout); `welder_luacats_generate_stub(<name> SOURCES … [OUTPUT …])`
 (cmake/WelderLuaCATSStub.cmake) builds that generator and runs it into `<name>.lua`
-as an ALL target. **Known limits (v1):** overloaded methods/constructors emit
-several `function` definitions with the same name (idiomatic `---@overload` is
-future work); const data members aren't marked read-only; there is no
-lua-language-server validate-if-present step yet (the golden is the gate).
+as an ALL target. Overloaded methods/constructors/free functions render as one
+documented `function` + `---@overload fun(…)` lines (the first overload with a doc is
+the primary, keeping its `@param`/summary text; the others carry signature only, all
+LuaCATS records). A **const** data member gets a `(read-only)` description note —
+LuaCATS has no read-only field tag (an open lua-language-server request), so it is
+documented, not enforced. **Remaining limit:** no lua-language-server
+validate-if-present step yet (the golden is the gate).
 
 ## Test-side type gates (mypy)
 Three test-side mypy gates:

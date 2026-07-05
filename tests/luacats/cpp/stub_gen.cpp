@@ -31,6 +31,7 @@ Color { Red, Green = 2, Blue };
 struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A shape.")]]
 Shape {
     [[=welder::doc("A human-readable label.")]] std::string label;
+    [[=welder::doc("Number of spatial dimensions.")]] const std::uint32_t dims{2};
 
     Shape() = default;
 
@@ -50,6 +51,11 @@ Circle : Shape {
     Circle([[=welder::doc("the radius")]] double radius);
 
     double area() const;
+
+    // Overloaded method: rendered as one `function` + a `---@overload` signature.
+    [[=welder::doc("A scaled copy.")]]
+    Circle scaled([[=welder::doc("uniform factor")]] double k) const;
+    Circle scaled(double kx, double ky) const;
 
     [[=welder::doc("A scaled copy.")]]
     Circle operator*([[=welder::doc("the scale factor")]] double k) const;
@@ -74,6 +80,12 @@ Polygon {
 [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Sum a list of areas.")]]
 [[=welder::returns("the total area")]]
 double total_area([[=welder::doc("the shapes' areas")]] const std::vector<double>& areas);
+
+// Overloaded free function: one `function` def + a `---@overload` signature.
+[[=welder::weld(welder::lang::lua)]] [[=welder::doc("Describe an area, optionally with a unit.")]]
+std::string describe([[=welder::doc("the area")]] double area);
+[[=welder::weld(welder::lang::lua)]]
+std::string describe(double area, const std::string& unit);
 
 namespace [[=welder::doc("Unit constants.")]] units {
 [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Radians in a full turn.")]]

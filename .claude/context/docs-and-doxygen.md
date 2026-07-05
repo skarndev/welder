@@ -56,9 +56,16 @@ member selection / base flattening / policy-marks / the bindability gate are reu
 verbatim), swapping the emission primitives to append LuaCATS text — `--- ` summary
 lines, `---@field`/`---@param`/`---@return name type description` tags, `---@class X
 : Base`, `---@enum`, `---@operator`. The one thing sol2 didn't need is the
-C++→LuaCATS type map (`lua_type_string`; see build-test-run.md). Class/enum blocks
-flush by RAII (the driver has no "finish class" hook), and module/submodule tables
-(`ns = {}`) are declared shallowest-first ahead of the body. Build a stub with
+C++→LuaCATS type map (`lua_type_string`; see build-test-run.md). Overloaded
+methods/constructors/free functions collapse to one documented `function` + idiomatic
+`---@overload fun(…)` lines (grouped via the shared `*_overload_set` selectors in
+`bind_traits.hpp`, since the driver still visits overloads one at a time; the primary
+is the first overload with a doc, so its `@param`/summary text survives); a const
+member's read-only-ness is a `(read-only)` description note (LuaCATS has no read-only
+field tag). Class/enum blocks flush by RAII (the driver has no "finish class" hook) —
+constructors accumulate on the `class_writer` and render as one `.new` group at flush
+— and module/submodule tables (`ns = {}`) are declared shallowest-first ahead of the
+body. Build a stub with
 `welder_luacats_generate_stub()` over a `WELDER_LUACATS_MAIN(<ns>)` generator; the
 golden lives in `tests/luacats/`. See `binding-features.md` (Lua specifics) and
 build-test-run.md (the stub build/test path).

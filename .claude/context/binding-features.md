@@ -126,6 +126,12 @@ Properties (getter/setter pairs) are designed-for but not yet implemented; so ar
 further languages. (Enums, custom type converters, the Lua/sol2 backend, sol2
 overload grouping, and the LuaCATS stub emitter now are.) Remaining sol2 backend
 enhancement noted above: live namespace variables (and LuaJIT's 5.1 operator-map
-branch). LuaCATS stub v1 limits: overloads emit repeated `function` definitions (not
-`---@overload`), const members aren't marked read-only, and there is no
-lua-language-server validate-if-present step yet (golden is the gate).
+branch). LuaCATS stub: overloaded methods/constructors/free functions now render as
+one documented `function` plus `---@overload fun(…)` lines (the primary — kept with
+its full `@param`/summary docs — is the first overload carrying a doc); a **const**
+member's read-only-ness is surfaced as a `(read-only)` description note, since
+LuaCATS has no read-only/const field tag ([lua-language-server open request][ro]).
+Remaining stub limit: no lua-language-server validate-if-present step yet (golden is
+the gate).
+
+[ro]: https://github.com/LuaLS/lua-language-server/discussions/2379

@@ -267,31 +267,112 @@ void emit_params(std::string& out) {
     }
 }
 
-/** Emit a full documented function statement: summary, `@param`s, `@return`, then
-    `function <callee>(<args>) end`.
+// The overload-set selectors are shared with the sol2 backend (both gather a name's
+// C++ overloads that the generic driver visits one at a time); the LuaCATS stub
+// renders the group as one documented `function` plus `---@overload` lines.
+using welder::detail::function_overload_set;
+using welder::detail::is_overload_leader;
+using welder::detail::method_overload_set;
+using welder::detail::overload_group;
+
+/** The `fun(<name>: <type>, …): <ret>` signature of @a Fn, for a `---@overload` line.
 
     A non-empty @a ret_override forces the return type — used for a constructor,
     whose reflection carries no return type (so `return_type_of` must not be
     instantiated for it: the `is_constructor` guard discards that branch). */
 template <std::meta::info Fn>
-void emit_function(std::string& out, const std::string& callee,
-                   const std::string& ret_override = {}) {
-    emit_doc_comment(out, welder::doc_of<Fn>());
-    emit_params<Fn>(out);
-    if (!ret_override.empty())
-        out += "---@return " + ret_override + '\n';
-    else if constexpr (!std::meta::is_constructor(Fn)) {
-        using R = [:std::meta::return_type_of(Fn):];
-        if constexpr (!std::is_void_v<R>) {
-            out += "---@return ";
-            out += lua_type(std::meta::return_type_of(Fn));
-            const std::string d{one_line(welder::return_doc_of<Fn>())};
-            if (!d.empty())
-                out += ' ' + d;
-            out += '\n';
+std::string fun_signature(const std::string& ret_override) {
+    static constexpr auto pds{welder::param_docs<Fn>()};
+    static constexpr auto types{param_lua_types<Fn>()};
+    std::string s{"fun("};
+    for (std::size_t i{0}; i < pds.size(); ++i) {
+        if (i)
+            s += ", ";
+        s += pds[i].name ? std::string{pds[i].name} : "arg" + std::to_string(i + 1);
+        s += ": ";
+        s += types[i];
+    }
+    s += ")";
+    std::string ret{ret_override};
+    if (ret.empty()) {
+        if constexpr (!std::meta::is_constructor(Fn)) {
+            using R = [:std::meta::return_type_of(Fn):];
+            if constexpr (!std::is_void_v<R>)
+                ret = lua_type(std::meta::return_type_of(Fn));
         }
     }
-    out += "function " + callee + "(" + arg_list<Fn>() + ") end\n\n";
+    if (!ret.empty())
+        s += ": " + ret;
+    return s;
+}
+
+/** One overload of a callee, pre-rendered into the pieces a group needs: the
+    summary `doc`, the `---@param` block, the `---@return` line, the `function`
+    argument list, and the `fun(…)` signature for a `---@overload` line. */
+struct func_overload {
+    std::string doc{};      /**< Summary docstring (may be empty). */
+    std::string params{};   /**< `---@param …` lines (may be empty). */
+    std::string ret_line{}; /**< The `---@return …` line (empty when void). */
+    std::string args{};     /**< The `function callee(<args>)` name list. */
+    std::string fun_sig{};  /**< The `fun(a: T, …): R` signature. */
+};
+
+/** Build the @ref func_overload for function/constructor @a Fn. A non-empty @a
+    ret_override supplies the return type for a constructor (which has none). */
+template <std::meta::info Fn>
+func_overload build_overload(const std::string& ret_override) {
+    func_overload o{};
+    if (const char* d{welder::doc_of<Fn>()})
+        o.doc = d;
+    emit_params<Fn>(o.params);
+    if (!ret_override.empty()) {
+        o.ret_line = "---@return " + ret_override + '\n';
+    } else if constexpr (!std::meta::is_constructor(Fn)) {
+        using R = [:std::meta::return_type_of(Fn):];
+        if constexpr (!std::is_void_v<R>) {
+            o.ret_line = "---@return ";
+            o.ret_line += lua_type(std::meta::return_type_of(Fn));
+            const std::string d{one_line(welder::return_doc_of<Fn>())};
+            if (!d.empty())
+                o.ret_line += ' ' + d;
+            o.ret_line += '\n';
+        }
+    }
+    o.args = arg_list<Fn>();
+    o.fun_sig = fun_signature<Fn>(ret_override);
+    return o;
+}
+
+/** Append `build_overload` for each member of overload group @a Grp to @a out. */
+template <auto Grp, std::size_t... I>
+void collect_overloads(std::vector<func_overload>& out, std::index_sequence<I...>) {
+    (out.push_back(build_overload<Grp[I]>({})), ...);
+}
+
+/** Emit one documented `function <callee>(…)` for overload group @a sigs, with a
+    `---@overload fun(…)` line per *additional* signature — the idiomatic LuaCATS
+    shape (one symbol, several signatures), rather than repeated `function` defs.
+
+    @a sigs is non-empty. The "primary" overload — the one whose full docs and
+    parameter block are kept — is the first that carries a docstring (else the
+    first), so a documented overload's `@param`/summary text survives; the rest, of
+    which LuaCATS `---@overload` records only the bare signature, follow it. */
+inline void render_overload_group(std::string& out, const std::string& callee,
+                                  const std::vector<func_overload>& sigs) {
+    std::size_t primary{0};
+    for (std::size_t i{0}; i < sigs.size(); ++i)
+        if (!sigs[i].doc.empty()) {
+            primary = i;
+            break;
+        }
+    const func_overload& p{sigs[primary]};
+    emit_doc_comment(out, p.doc.empty() ? nullptr : p.doc.c_str());
+    out += p.params;
+    out += p.ret_line;
+    for (std::size_t i{0}; i < sigs.size(); ++i)
+        if (i != primary)
+            out += "---@overload " + sigs[i].fun_sig + '\n';
+    out += "function " + callee + "(" + p.args + ") end\n\n";
 }
 
 // --- the backend document ---------------------------------------------------
@@ -361,6 +442,7 @@ struct class_writer {
     std::string bases{};      /**< Comma-joined base names, or empty. */
     std::string fields{};     /**< Accumulated `---@field` / `---@operator` lines. */
     std::string methods{};    /**< Accumulated `function` statements. */
+    std::vector<func_overload> ctors{}; /**< The `.new` overloads, grouped on flush. */
 
     class_writer() = default;
     class_writer(const class_writer&) = delete;
@@ -373,6 +455,7 @@ struct class_writer {
         bases = std::move(o.bases);
         fields = std::move(o.fields);
         methods = std::move(o.methods);
+        ctors = std::move(o.ctors);
         o.doc = nullptr; // the source no longer flushes
         return *this;
     }
@@ -386,6 +469,10 @@ struct class_writer {
         doc->body += '\n';
         doc->body += fields;
         doc->body += qualified + " = {}\n\n";
+        // Constructors (all producing `Class.new`) are grouped into one documented
+        // function with `---@overload` signatures; they precede the methods.
+        if (!ctors.empty())
+            render_overload_group(doc->body, qualified + ".new", ctors);
         doc->body += methods;
     }
 };
@@ -453,6 +540,25 @@ void aggregate_param_lines(std::string& out, std::string& args,
     }
 }
 
+/** The `<field>: <type>, …` list for an aggregate's `.new` `fun(…)` signature (its
+    `---@overload` line). Same field source as @ref aggregate_param_lines. */
+template <class T, std::size_t... J>
+std::string aggregate_fun_params(std::index_sequence<J...>) {
+    static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+    static constexpr const char* names[]{
+        std::define_static_string(std::meta::identifier_of(fields[J]))...};
+    static constexpr const char* types[]{lua_type(std::meta::type_of(fields[J]))...};
+    std::string s{};
+    for (std::size_t i{0}; i < sizeof...(J); ++i) {
+        if (i)
+            s += ", ";
+        s += names[i];
+        s += ": ";
+        s += types[i];
+    }
+    return s;
+}
+
 /** A member operator's LuaCATS `---@operator` name, or `nullptr` if not rendered.
 
     LuaCATS names the arithmetic/comparison/call/index metamethods; unary vs binary
@@ -511,26 +617,28 @@ struct backend {
     }
 
     static void add_default_ctor(class_writer& w) {
-        // Documented `Class.new()` with no arguments, returning the class.
-        w.methods += "---@return " + w.qualified + '\n';
-        w.methods += "function " + w.qualified + ".new() end\n\n";
+        // A no-argument `.new()` overload returning the class; grouped on flush.
+        func_overload o{};
+        o.ret_line = "---@return " + w.qualified + '\n';
+        o.fun_sig = "fun(): " + w.qualified;
+        w.ctors.push_back(std::move(o));
     }
 
     template <std::meta::info Ctor>
     static void add_constructor(class_writer& w) {
-        emit_function<Ctor>(w.methods, w.qualified + ".new", w.qualified);
+        w.ctors.push_back(build_overload<Ctor>(w.qualified));
     }
 
     template <class T>
     static void add_aggregate_constructor(class_writer& w) {
         // C++26 aggregate field constructor: one `.new` param per field.
-        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
-        std::string out{}, args{};
-        aggregate_param_lines<T>(out, args,
-                                 std::make_index_sequence<fields.size()>{});
-        out += "---@return " + w.qualified + '\n';
-        out += "function " + w.qualified + ".new(" + args + ") end\n\n";
-        w.methods += out;
+        static constexpr auto seq{
+            std::make_index_sequence<welder::detail::aggregate_fields<T>().size()>{}};
+        func_overload o{};
+        aggregate_param_lines<T>(o.params, o.args, seq);
+        o.ret_line = "---@return " + w.qualified + '\n';
+        o.fun_sig = "fun(" + aggregate_fun_params<T>(seq) + "): " + w.qualified;
+        w.ctors.push_back(std::move(o));
     }
 
     template <std::meta::info Mem>
@@ -539,7 +647,13 @@ struct backend {
         w.fields += std::meta::identifier_of(Mem);
         w.fields += ' ';
         w.fields += lua_type(std::meta::type_of(Mem));
-        const std::string d{one_line(welder::doc_of<Mem>())};
+        std::string d{one_line(welder::doc_of<Mem>())};
+        // LuaCATS has no read-only/const field modifier (an open feature request on
+        // lua-language-server), so a const member's immutability — which the sol2
+        // runtime backend enforces with sol::readonly — is surfaced as a description
+        // note rather than an (unrecognized) tag.
+        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+            d = d.empty() ? "(read-only)" : d + " (read-only)";
         if (!d.empty())
             w.fields += ' ' + d;
         w.fields += '\n';
@@ -548,17 +662,29 @@ struct backend {
     template <std::meta::info Fn>
     static void add_method(class_writer& w) {
         // A method is `Class:name(...)` (implicit self); reflection's parameters
-        // already exclude self, so the arg list renders directly.
-        emit_function<Fn>(
-            w.methods,
-            w.qualified + ":" + std::string{std::meta::identifier_of(Fn)});
+        // already exclude self, so the arg list renders directly. Overloads are
+        // gathered into one documented function with `---@overload` signatures, so
+        // the whole group is emitted once, on its first (declaration-order) member.
+        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
+            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
+            std::vector<func_overload> sigs{};
+            collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
+            render_overload_group(
+                w.methods,
+                w.qualified + ":" + std::string{std::meta::identifier_of(Fn)}, sigs);
+        }
     }
 
     template <std::meta::info Fn>
     static void add_static_method(class_writer& w) {
-        emit_function<Fn>(
-            w.methods,
-            w.qualified + "." + std::string{std::meta::identifier_of(Fn)});
+        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
+            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
+            std::vector<func_overload> sigs{};
+            collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
+            render_overload_group(
+                w.methods,
+                w.qualified + "." + std::string{std::meta::identifier_of(Fn)}, sigs);
+        }
     }
 
     template <std::meta::info Fn>
@@ -617,11 +743,17 @@ struct backend {
 
     template <std::meta::info Fn>
     static void add_function(module_type& m) {
-        emit_function<Fn>(
-            m.doc->body,
-            (m.prefix.empty() ? std::string{}
-                              : m.prefix + ".") +
-                std::string{std::meta::identifier_of(Fn)});
+        // Free-function overloads group just like methods (see add_method).
+        if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
+            constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
+            std::vector<func_overload> sigs{};
+            collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
+            render_overload_group(
+                m.doc->body,
+                (m.prefix.empty() ? std::string{} : m.prefix + ".") +
+                    std::string{std::meta::identifier_of(Fn)},
+                sigs);
+        }
     }
 
     template <std::meta::info Var>

@@ -26,6 +26,7 @@ stubdemo.Color = {
 --- A shape.
 ---@class stubdemo.Shape
 ---@field label string A human-readable label.
+---@field dims integer Number of spatial dimensions. (read-only)
 stubdemo.Shape = {}
 
 ---@return stubdemo.Shape
@@ -44,16 +45,20 @@ function stubdemo.Shape:area() end
 ---@operator eq(stubdemo.Circle): boolean
 stubdemo.Circle = {}
 
----@return stubdemo.Circle
-function stubdemo.Circle.new() end
-
 --- Construct from a radius.
 ---@param radius number the radius
 ---@return stubdemo.Circle
+---@overload fun(): stubdemo.Circle
 function stubdemo.Circle.new(radius) end
 
 ---@return number
 function stubdemo.Circle:area() end
+
+--- A scaled copy.
+---@param k number uniform factor
+---@return stubdemo.Circle
+---@overload fun(kx: number, ky: number): stubdemo.Circle
+function stubdemo.Circle:scaled(k) end
 
 --- Axis-aligned box (aggregate).
 ---@class stubdemo.Box
@@ -62,12 +67,8 @@ function stubdemo.Circle:area() end
 stubdemo.Box = {}
 
 ---@return stubdemo.Box
+---@overload fun(width: number, height: number): stubdemo.Box
 function stubdemo.Box.new() end
-
----@param width number
----@param height number
----@return stubdemo.Box
-function stubdemo.Box.new(width, height) end
 
 --- A polygon.
 ---@class stubdemo.Polygon
@@ -77,18 +78,19 @@ function stubdemo.Box.new(width, height) end
 stubdemo.Polygon = {}
 
 ---@return stubdemo.Polygon
+---@overload fun(corners: stubdemo.Box[], name: string?, anchors: table<string, stubdemo.Box>): stubdemo.Polygon
 function stubdemo.Polygon.new() end
-
----@param corners stubdemo.Box[]
----@param name string?
----@param anchors table<string, stubdemo.Box>
----@return stubdemo.Polygon
-function stubdemo.Polygon.new(corners, name, anchors) end
 
 --- Sum a list of areas.
 ---@param areas number[] the shapes' areas
 ---@return number the total area
 function stubdemo.total_area(areas) end
+
+--- Describe an area, optionally with a unit.
+---@param area number the area
+---@return string
+---@overload fun(area: number, unit: string): string
+function stubdemo.describe(area) end
 
 --- Radians in a full turn.
 ---@type number

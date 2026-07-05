@@ -186,6 +186,12 @@ scalars (`integer`/`number`/`boolean`/`string`), the STL wrappers welder recurse
 (`std::vector<T>` → `T[]`, `std::map<K,V>` → `table<K,V>`, `std::optional<T>` →
 `T?`, smart pointers → the pointee) and welded classes/enums (their dotted name);
 anything else degrades to `any`. Enums become `---@enum` tables, welded bases become
-`---@class X : Base`. Current limits: overloaded methods/constructors emit repeated
-`function` definitions rather than idiomatic `---@overload`, and const members are
-not yet marked read-only.
+`---@class X : Base`. Overloaded methods, constructors and free functions render as a
+single documented `function` plus idiomatic `---@overload fun(…)` lines (the primary
+signature keeps its full `@param`/summary docs; the extra signatures carry types
+only, which is all LuaCATS `---@overload` records). A `const` data member is noted
+`(read-only)` in its `---@field` description — LuaCATS has no read-only field tag
+([an open lua-language-server request](https://github.com/LuaLS/lua-language-server/discussions/2379)),
+so the immutability the sol2 runtime enforces is documented here, not machine-checked.
+Current limit: the emitted stub isn't yet run through `lua-language-server` for
+validation.
