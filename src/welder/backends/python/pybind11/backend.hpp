@@ -19,6 +19,7 @@
 */
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <meta>
 #include <string>
 #include <type_traits>
@@ -32,6 +33,7 @@
 #include <welder/module.hpp>     // WELDER_MODULE dispatch (entry-point macro)
 
 #include <pybind11/pybind11.h>
+#include <pybind11/native_enum.h> // py::native_enum (stdlib enum binding)
 
 namespace welder::pybind11 {
 
@@ -69,7 +71,7 @@ struct backend {
         Two things it deliberately does NOT see through — both making it
         *conservative* (it may over-report needs-registration, never under-report):
         - It reads @a T's *caster type* at compile time, so it reports whether @a T
-          *needs* a `class_`/`enum_` — never whether one will actually exist at
+          *needs* a `class_`/`native_enum` — never whether one will actually exist at
           runtime. A class the user hand-registers with `py::class_` (or a
           third-party library registers) but does not weld still reads `true`, so
           welder requires `welded_for` and rejects it: a false positive, resolved by
@@ -302,14 +304,48 @@ struct backend {
 
     // --- enum binding -------------------------------------------------------
 
-    /** Create the `py::enum_<E>` handle (a non-null @a doc becomes its docstring). */
+    /** Owning handle for a `py::native_enum<E>`, plus the scope + name to reach the
+        finalized enum object.
+
+        `native_enum` binds Python's stdlib `enum.IntEnum`, so enumerators are
+        int-convertible (`int(E.Value)`) and compare against ints — matching
+        pybind11's legacy `py::enum_` default and the nanobind backend's
+        `nb::is_arithmetic()`. We use `native_enum` because plain `py::enum_` is
+        discouraged as of pybind11 3.0.
+
+        `native_enum` is move-only and must be explicitly `.finalize()`d, so it is
+        wrapped here in a movable handle the shared `bind_enum` driver can hold by
+        value, drive via `value()`/`export_values()`, and finalize at the end. */
     template <class E>
-    static auto make_enum(module_type& m, const char* name, const char* doc) {
-        // A non-null doc is the enum docstring (a bare const char* extra); nullptr
-        // is branched out rather than passed (pybind11 would strdup it).
-        if (doc)
-            return py::enum_<E>(m, name, doc);
-        return py::enum_<E>(m, name);
+    struct enum_handle {
+        module_type scope;                        ///< the enclosing (sub)module
+        const char* name;                         ///< the enum's Python name
+        std::unique_ptr<py::native_enum<E>> impl; ///< the (move-only) native enum
+
+        void value(const char* n, E v) { impl->value(n, v); }
+        void export_values() { impl->export_values(); }
+
+        void finalize() {
+            impl->finalize(); // commits the enum onto `scope` as `name`
+            // pybind11 3.0.1 does not yet stamp the `__pybind11_native_enum__`
+            // marker that pybind11-stubgen keys on to recognize a stdlib-enum (and
+            // strip its `enum` internals from the generated .pyi); a later pybind11
+            // sets it. Set it ourselves so welded enums produce clean stubs — both
+            // welder's own and any run by a consumer. Harmless once pybind11 sets it
+            // too; drop when the conan pybind11 package carries it.
+            scope.attr(name).attr("__pybind11_native_enum__") = true;
+        }
+    };
+
+    /** Create the `enum_handle` for @a E (a non-null @a doc becomes its docstring). */
+    template <class E>
+    static enum_handle<E> make_enum(module_type& m, const char* name,
+                                    const char* doc) {
+        // native_enum's class_doc "" means "leave __doc__ untouched"; a non-null doc
+        // is the enum docstring, applied at finalize().
+        return {m, name,
+                std::make_unique<py::native_enum<E>>(m, name, "enum.IntEnum",
+                                                     doc ? doc : "")};
     }
 
     /** Add enumerator @a Enum to the enum handle. */
@@ -318,7 +354,8 @@ struct backend {
         e.value(std::define_static_string(std::meta::identifier_of(Enum)), [:Enum:]);
     }
 
-    /** Finalize enum @a E: export an unscoped enum's values into the enclosing scope. */
+    /** Finalize enum @a E: export an unscoped enum's values into the enclosing scope,
+        then commit the enum to the module. */
     template <class E>
     static void finish_enum(auto& e) {
         // Mirror C++ scope semantics: an unscoped enum's enumerators are visible
@@ -326,6 +363,7 @@ struct backend {
         // are reached as E.Value, so leave them scoped.
         if constexpr (!std::is_scoped_enum_v<E>)
             e.export_values();
+        e.finalize(); // native_enum requires an explicit finalize()
     }
 
     // --- namespace / module binding -----------------------------------------
@@ -389,14 +427,17 @@ static_assert(welder::backend<backend>,
 
 /** Reflect over @a T and register it on module @a m.
 
-    A class type becomes a `py::class_`; an enum becomes a `py::enum_` (its
-    enumerators resolve like data members, honoring the enum's policy/marks). See
-    the driver in `<welder/backend.hpp>` for the full set of what is bound.
+    A class type becomes a `py::class_`; an enum becomes a stdlib `enum.IntEnum` via
+    `py::native_enum` (its enumerators resolve like data members, honoring the enum's
+    policy/marks). See the driver in `<welder/backend.hpp>` for the full set of what
+    is bound.
 
     @tparam T the type to bind.
     @param m    the module handle.
     @param name the Python name, or `nullptr` to default to @a T's identifier.
-    @return the `class_`/`enum_` handle, so callers can chain further registrations.
+    @return for a class, the `py::class_` handle (chain further registrations onto
+            it); for an enum, the owning `enum_handle` for the already-finalized
+            `py::native_enum`.
 */
 template <class T>
 auto bind(py::module_& m, const char* name = nullptr) {

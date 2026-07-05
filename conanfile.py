@@ -21,7 +21,9 @@ class WelderConan(ConanFile):
 
     def requirements(self):
         if self.options.with_pybind11:
-            self.requires("pybind11/2.13.6")
+            # 3.0 for py::native_enum (stdlib enum binding); the backend uses it
+            # instead of the legacy, now-discouraged py::enum_.
+            self.requires("pybind11/3.0.1")
         if self.options.with_nanobind:
             self.requires("nanobind/2.13.0")
         if self.options.with_sol2:

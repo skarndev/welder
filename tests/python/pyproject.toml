@@ -39,3 +39,15 @@ strict = true
 # the backend's stub tree on MYPYPATH under the canonical name `welder_test`).
 files = ["conftest.py", "test_*.py"]
 # No blanket ignore_missing_imports: stub types come from the pybind11-stubgen .pyi.
+
+# pybind11-stubgen renders a py::native_enum as a real enum.IntEnum whose members
+# come out annotated (`X: ClassVar[E]`, not `X = value`) and which carries a couple
+# of untyped inherited dunders (`__new__`/`__format__`). That is the tool's intended
+# output — it matches pybind11-stubgen's own reference stubs — but mypy's strict
+# enum-member (`misc`) and untyped-def (`no-untyped-def`) checks flag those
+# tool-intrinsic patterns. Relax just those two, and only on the generated `enums`
+# stub, so the rest of the stub gate stays strict. (nanobind emits enum members with
+# values, so its `enums` stub is unaffected by the relaxation.)
+[[tool.mypy.overrides]]
+module = ["*.enums"]
+disable_error_code = ["misc", "no-untyped-def"]

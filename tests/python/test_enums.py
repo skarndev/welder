@@ -1,4 +1,4 @@
-"""Tests for welder binding C++ enums as py::enum_.
+"""Tests for welder binding C++ enums as a stdlib enum.IntEnum.
 
 A welded enum's enumerators resolve like data members (the enum's policy + each
 enumerator's exclude/include marks). Scoped enums are reached as ``E.Value``; an

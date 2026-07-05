@@ -30,7 +30,7 @@ falls back to `a = a + b` via `__add__`), nor are `<=>`, `&&`, `||`, `++`, `--`,
 The operator→name map is the backend's `special_method_name(op)` (nullptr = not
 exposed, which also gates operator eligibility in the driver).
 
-## Enums → `py::enum_`
+## Enums → `enum.IntEnum`
 A welded enum (scoped or unscoped) binds via `bind<E>` (dispatched from the public
 `bind<T>` by `is_enum_v`) or as a namespace/module member; the driver is
 `backend.hpp` `bind_enum`, the backend hooks `make_enum` / `add_enumerator` /
@@ -40,8 +40,12 @@ what binds (via the same `member_bound`); NB the C++ grammar puts an enumerator'
 annotation *after* its name (`South [[=welder::mark::exclude]]`). Excluding an
 enumerator does not renumber the rest. An **unscoped** enum also `export_values()`
 (enumerators visible unqualified on the enclosing module, mirroring C++); a
-**scoped** enum stays `E.Value`. The enum `doc` becomes the Python docstring;
-per-enumerator docs aren't supported (pybind11 `.value()` takes none). An
+**scoped** enum stays `E.Value`. The pybind11 backend binds via `py::native_enum`
+(a stdlib `enum.IntEnum`; `py::enum_` is discouraged as of pybind11 3.0) — it is
+move-only and needs an explicit `.finalize()`, so `make_enum` returns a
+`unique_ptr` handle (the movable value `bind_enum` returns) and `finish_enum`
+finalizes. The enum `doc` becomes the Python docstring; welder doesn't currently
+surface per-enumerator docs. An
 enum-typed member/parameter binds because the enum is welded (bind the enum first,
 like a welded base). Tested: `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py`.
 
@@ -91,8 +95,9 @@ Three backends implement every feature above from the same driver: **pybind11**
 (`welder::pybind11`), **nanobind** (`welder::nanobind`) — both `lang::py` — and
 **sol2** (`welder::sol2`, `lang::lua`). nanobind's one behavioral gap is multiple
 inheritance (single base per class), so a multi-base diamond binds under pybind11 +
-sol2 but not nanobind. Enums bind as `py::enum_` (pybind11) / an `is_arithmetic`
-`nb::enum_` (nanobind → Python `IntEnum`) / a name→value **table** (sol2 — Lua has no
+sol2 but not nanobind. Enums bind as `py::native_enum` (pybind11 → stdlib
+`enum.IntEnum`) / an `is_arithmetic` `nb::enum_` (nanobind → Python `IntEnum`) / a
+name→value **table** (sol2 — Lua has no
 enum type).
 
 ## Lua specifics (sol2)

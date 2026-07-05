@@ -63,7 +63,7 @@ differ:
 | Named params → keyword arguments | ✅ | ✅ |
 | Overloaded methods / constructors | ✅ dispatched | ✅ dispatched |
 | Member & free operators → dunders | ✅ | ✅ |
-| Enums | `py::enum_`, int-convertible | `IntEnum` (`nb::is_arithmetic`) |
+| Enums | `IntEnum` (`py::native_enum`) | `IntEnum` (`nb::is_arithmetic`) |
 | Single welded base | ✅ | ✅ |
 | **Multiple / virtual welded bases** | ✅ | ❌ single base only |
 | Data-member / function docstrings | ✅ | ✅ |
@@ -123,7 +123,7 @@ Both are mypy-checked in welder's own tests.
 === "pybind11"
 
     welder's examples use CMake-native `Python_add_library` + `pybind11::headers`
-    rather than `pybind11_add_module`, because pybind11 2.13's CMake helper is
+    rather than `pybind11_add_module`, because pybind11's CMake helper is
     incompatible with the very recent CMake/FindPython here (and the native path
     keeps the module-build flags under our control):
 

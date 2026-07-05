@@ -306,7 +306,7 @@ struct backend {
 
         `nb::is_arithmetic()` makes it a Python `enum.IntEnum`, so enumerators are
         int-convertible (`int(E.Value)`) and compare against ints — matching the
-        pybind11 backend, whose `py::enum_` is int-convertible by default. */
+        pybind11 backend, whose `py::native_enum` also binds an `enum.IntEnum`. */
     template <class E>
     static auto make_enum(module_type& m, const char* name, const char* doc) {
         // A non-null doc is the enum docstring (a bare const char* extra); nullptr

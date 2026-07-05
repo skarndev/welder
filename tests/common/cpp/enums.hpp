@@ -1,7 +1,7 @@
 #pragma once
 // Enum cases — mirrors tests/test_enums.py (same sections, same order).
 //
-// A welded enum binds as a py::enum_: each enumerator resolves like a data member,
+// A welded enum binds as a Python enum.IntEnum: each enumerator resolves like a data member,
 // honoring the enum's policy and per-enumerator exclude/include marks. NOTE the
 // grammar — an enumerator's annotation goes *after* its name (`South [[=...]]`),
 // unlike a struct member's (which precedes it). A scoped enum is reached as

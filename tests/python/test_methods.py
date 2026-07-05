@@ -56,7 +56,10 @@ def test_overloaded_method_dispatch(
 def test_method_argument_is_named(meth: ModuleType) -> None:
     # The C++ parameter name reaches Python (a keyword arg), not arg0.
     assert meth.Counter(0).add(n=3) is None
-    assert "n: int" in meth.Counter.add.__doc__
+    # The signature carries the name `n:` (backends spell the type differently —
+    # e.g. pybind11 3.x renders the convertible arg as `typing.SupportsInt`).
+    assert "n:" in meth.Counter.add.__doc__
+    assert "arg0" not in meth.Counter.add.__doc__
 
 
 def test_constructor_argument_is_named(meth: ModuleType) -> None:

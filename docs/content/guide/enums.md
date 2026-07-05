@@ -5,7 +5,8 @@ A welded enum — scoped or unscoped — binds via the same `bind<T>` entry poin
 data member**: the enum's `policy` plus per-enumerator `exclude`/`include` marks
 decide what binds. What it becomes in the target language differs:
 
-- **Python** — a `py::enum_` / nanobind `IntEnum` (int-convertible).
+- **Python** — a stdlib `enum.IntEnum` (pybind11 `py::native_enum`, nanobind
+  `nb::is_arithmetic`; int-convertible).
 - **Lua** — a plain `name → value` **table** (Lua has no enum type).
 
 !!! warning "Grammar: the annotation goes *after* the enumerator name"
@@ -36,7 +37,7 @@ enumerator stays qualified under the enum name:
 === "Python"
 
     ```pycon
-    >>> Direction.West.value     # a py::enum_ member
+    >>> Direction.West.value     # an enum.IntEnum member
     3
     >>> hasattr(Direction, "South")
     False
@@ -102,8 +103,8 @@ this for you — put the enums before the structs that use them.
 
 ## Docs
 
-The enum's `doc` becomes the Python docstring. Per-enumerator docs aren't supported
-at runtime (pybind11's `.value()` takes none; Lua has no docstring slot). On the
+The enum's `doc` becomes the Python docstring. welder doesn't currently surface
+per-enumerator docs at runtime (Lua has no docstring slot either). On the
 **C++** side the [Doxygen filter](cpp-docs.md) surfaces enumerator docs, and the
 [LuaCATS stub](../backends/lua.md#stubs-luacats) marks the table `---@enum`.
 
