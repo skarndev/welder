@@ -87,6 +87,11 @@ add_test(NAME compile.doc_cleandoc
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 
+# LuaCATS stub backend (compile + run + golden; needs only the compiler — the stub
+# backend depends on neither sol2 nor a Lua runtime, so it is registered here, not
+# under the sol2-gated lua/ tree).
+add_subdirectory(luacats)
+
 # Per-language test trees. python/ builds the pybind11 + nanobind extensions and
 # runs the shared pytest specs against each (a cross-backend consistency check);
 # lua/ builds the sol2 extension and runs the busted specs against it. Both bind

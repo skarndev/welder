@@ -47,11 +47,21 @@ permitted annotation constant on gcc-16.
 
 **Lua (sol2):** Lua has no runtime docstring slot, so the sol2 backend ignores
 `doc`/`returns` at runtime (the same `doc_of` extraction still runs; there is just
-no sink). Their intended Lua home is a **generated LuaCATS (`---@meta`) definition
-file** — the `.pyi` analogue — but *reflection-emitted at build time*, not scraped
-from a loaded module (a loaded sol2 usertype exposes nothing introspectable). Not
-implemented yet; it would reuse the same generic driver with a text-emitting
-"backend". See `binding-features.md` (Lua specifics).
+no sink). Their Lua home is a **generated LuaCATS (`---@meta`) definition file** —
+the `.pyi` analogue — *reflection-emitted at build time*, not scraped from a loaded
+module (a loaded sol2 usertype exposes nothing introspectable). **Implemented** as
+the `welder::luacats` backend (`src/welder/backends/lua/luacats/stub.hpp`): a
+text-emitting `welder::backend` that plugs the *same* generic driver as sol2 (so
+member selection / base flattening / policy-marks / the bindability gate are reused
+verbatim), swapping the emission primitives to append LuaCATS text — `--- ` summary
+lines, `---@field`/`---@param`/`---@return name type description` tags, `---@class X
+: Base`, `---@enum`, `---@operator`. The one thing sol2 didn't need is the
+C++→LuaCATS type map (`lua_type_string`; see build-test-run.md). Class/enum blocks
+flush by RAII (the driver has no "finish class" hook), and module/submodule tables
+(`ns = {}`) are declared shallowest-first ahead of the body. Build a stub with
+`welder_luacats_generate_stub()` over a `WELDER_LUACATS_MAIN(<ns>)` generator; the
+golden lives in `tests/luacats/`. See `binding-features.md` (Lua specifics) and
+build-test-run.md (the stub build/test path).
 
 ## C++ docs via a Doxygen INPUT_FILTER (`tools/welder_doxygen_filter.py`)
 The C++ API documents itself from the *real sources*. Doxygen's native parser

@@ -32,6 +32,7 @@ set(WELDER_PYTHON_VERSION "3.14" CACHE STRING
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(WelderPybind11Stubgen)
 include(WelderSol2Module)
+include(WelderLuaCATSStub)
 
 # All toolchain-specific flags for C++26 reflection + annotations live here, so
 # the rest of the project stays standard. gcc-16 is currently the only compiler

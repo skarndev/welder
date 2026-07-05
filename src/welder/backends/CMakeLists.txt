@@ -82,3 +82,15 @@ if(WELDER_BUILD_SOL2)
   # Match the probes: enable sol2's strong safety set (type/bounds checks).
   target_compile_definitions(welder_sol2 INTERFACE SOL_ALL_SAFETIES_ON=1)
 endif()
+
+# --- welder::luacats : LuaCATS `---@meta` stub backend -----------------------
+# The Lua counterpart of the Python `.pyi` stubs: a text-emitting backend that
+# reflects the same welded types (via the same generic driver as sol2) and writes
+# a LuaCATS definition file carrying the docstrings Lua drops at runtime. It is
+# pure reflection + text — it does NOT depend on sol2 or a Lua runtime — so this
+# is an unconditional INTERFACE target over the header-only core (which already
+# carries the -freflection flag via welder_flags). Build a stub with
+# welder_luacats_generate_stub() (see cmake/WelderLuaCATSStub.cmake).
+add_library(welder_luacats INTERFACE)
+add_library(welder::luacats ALIAS welder_luacats)
+target_link_libraries(welder_luacats INTERFACE welder_headers)

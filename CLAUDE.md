@@ -14,12 +14,16 @@ header-only (`#include <welder/backends/python/pybind11/backend.hpp>`). We delib
 modularize internally — see `.claude/context/gcc16-toolchain.md` for why.
 
 **Status:** early POC, verified end-to-end (both consumption forms → an importable
-Python module; a `require`-able Lua module). Three backends are implemented — two
-**Python** (**pybind11**, **nanobind**) and one **Lua** (**sol2**) — all sharing
-the same core and the *same* backend-neutral C++ test cases, which each backend
-binds and asserts (pytest for Python, `.lua` for Lua) as a cross-backend
-consistency check. Further languages are designed-for but not yet implemented. For
-the feature-by-feature detail and test locations, see the context files below.
+Python module; a `require`-able Lua module). Three *runtime* backends are
+implemented — two **Python** (**pybind11**, **nanobind**) and one **Lua** (**sol2**)
+— all sharing the same core and the *same* backend-neutral C++ test cases, which
+each backend binds and asserts (pytest for Python, `.lua` for Lua) as a
+cross-backend consistency check. A fourth, **`welder::luacats`**, is a *build-time*
+backend that reflects the same welded Lua types through the same driver and emits a
+**LuaCATS (`---@meta`) stub file** — the Lua analogue of the Python `.pyi` stubs,
+carrying the docstrings Lua has no runtime slot for. Further languages are
+designed-for but not yet implemented. For the feature-by-feature detail and test
+locations, see the context files below.
 
 ## The idea / public API
 
@@ -53,7 +57,7 @@ PYBIND11_MODULE(mymod, m) {
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
 | `mark::trust_bindable` / `mark::trust_bindable(lang...)` | Vouch that this member's type (or a callable's whole signature) is representable outside welder's view (e.g. hand-registered with pybind11); suppresses the bindability gate. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. A specializable `bool` variable template, not an attribute. |
-| `doc("text")` | Docstring for a class, namespace, function, function parameter, or data member. Surfaced as `__doc__` by the Python backends (a data member's rides on its property; const → read-only); ignored on namespace variables. Lua has no runtime docstring slot, so the sol2 backend ignores it at runtime (its home there is a future LuaCATS stub). |
+| `doc("text")` | Docstring for a class, namespace, function, function parameter, or data member. Surfaced as `__doc__` by the Python backends (a data member's rides on its property; const → read-only); ignored on namespace variables. Lua has no runtime docstring slot, so the sol2 backend ignores it at runtime — its home there is the generated **LuaCATS (`---@meta`) stub** (`welder::luacats` backend). |
 | `returns("text")` | Documents a function's return value (a `Returns:` block). Distinct from the summary `doc`. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). Rides on the template itself; becomes `@tparam` in C++ docs, read back via `tparam_docs<Ent>()`. |
 

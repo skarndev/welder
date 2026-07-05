@@ -108,12 +108,18 @@ The same annotated cases bind for `lang::lua`; the Lua-only differences (see
   value per name; `sol::overload` grouping is a planned enhancement).
 - **Namespace variables snapshot** at load time (const and mutable alike); live
   get/set over a C++ global is a planned enhancement.
-- **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`).
+- **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`) — they surface
+  instead in the generated **LuaCATS stub** (`welder::luacats` backend; see
+  `docs-and-doxygen.md` and build-test-run.md). The stub reflects the same welded
+  Lua types through the same driver and writes a `---@meta` file with `---@field`/
+  `---@param`/`---@return`/`---@class`/`---@enum`/`---@operator` tags plus the docs.
 Tested by the shared cases bound for `lua`, asserted by the busted specs in
 `tests/lua/spec/*_spec.lua`.
 
 ## Not yet implemented
 Properties (getter/setter pairs) are designed-for but not yet implemented; so are
-further languages. (Enums, custom type converters, and the Lua/sol2 backend now
-are.) sol2 backend enhancements noted above: overload grouping, live namespace
-variables, LuaCATS stub generation.
+further languages. (Enums, custom type converters, the Lua/sol2 backend, and the
+LuaCATS stub emitter now are.) sol2 backend enhancements noted above: overload
+grouping, live namespace variables. LuaCATS stub v1 limits: overloads emit repeated
+`function` definitions (not `---@overload`), const members aren't marked read-only,
+and there is no lua-language-server validate-if-present step yet (golden is the gate).

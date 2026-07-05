@@ -38,11 +38,13 @@ src/welder/
       nanobind/backend.hpp  nanobind backend: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
     lua/
       sol2/backend.hpp      sol2 Lua backend: the same, against sol2's API (module_type = sol::table; usertype/new_usertype; metamethod operator map; enums as name→value tables; luaopen_ entry macro)
-    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2
+      luacats/stub.hpp      LuaCATS `---@meta` stub backend: text-emitting welder::backend over the SAME driver (no sol2/Lua dep); C++→LuaCATS type map + doc tags; WELDER_LUACATS_MAIN generator entry
+    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luacats
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
   WelderSol2Module.cmake       welder_sol2_add_module() — build a loadable Lua .so (bare name, host-symbol link model, module-scan OFF)
+  WelderLuaCATSStub.cmake      welder_luacats_generate_stub() — build a generator exe (welder::luacats) + run it → <name>.lua (ALL target)
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
@@ -134,9 +136,10 @@ the interesting part:
   diamond binds, unlike nanobind).
 - **enums are name→value tables** (Lua has no enum type); an unscoped enum's names
   are also mirrored onto the enclosing module.
-- **no runtime docstrings** (`doc`/`returns` ignored — their home is a future
-  LuaCATS stub) and **overloaded methods collapse** to the last (sol2 stores one
-  value per name; grouping into `sol::overload` is a planned enhancement).
+- **no runtime docstrings** (`doc`/`returns` ignored — their home is the
+  `welder::luacats` LuaCATS stub backend, below) and **overloaded methods collapse**
+  to the last (sol2 stores one value per name; grouping into `sol::overload` is a
+  planned enhancement).
 - entry point: `WELDER_MODULE(ns, sol2)` emits `extern "C" luaopen_<ns>` returning
   the module table.
 
@@ -146,7 +149,10 @@ the interesting part:
 `nanobind` would resolve to that namespace, so each aliases `namespace py =
 ::pybind11;` / `namespace nb = ::nanobind;` and uses `py::` / `nb::` throughout.
 `welder::sol2` does *not* shadow the library's `::sol` namespace, so it uses `sol::`
-directly (no alias).
+directly (no alias). The **`welder::luacats`** stub backend also targets `lang::lua`
+(it emits the Lua *type stub*, so it reflects the same `weld(…, lang::lua)` types),
+but is a *build-time text emitter*, not a runtime binding — see below and
+`docs-and-doxygen.md`.
 
 Complex/custom type conversions are intended to be registered per-backend via each
 framework's own mechanisms, separately from core resolution — design pending.
@@ -170,6 +176,12 @@ framework's own mechanisms, separately from core resolution — design pending.
   `LLONG_MAX` under p1689 module scanning — a header-unit macro-visibility issue, so
   a Lua binding TU is header-only, never `import welder;`). Gated by
   `WELDER_BUILD_SOL2`; needs `sol2` + `lua` (conan `with_sol2`).
+- **`welder::luacats`** — INTERFACE, the LuaCATS `---@meta` stub backend. Unlike the
+  runtime backends it depends on neither a framework nor a language runtime (pure
+  reflection → text), so it is **unconditional** — just `welder::headers`. Emit a
+  stub with `welder_luacats_generate_stub()` (cmake/WelderLuaCATSStub.cmake), which
+  builds a `WELDER_LUACATS_MAIN` generator executable and runs it into `<name>.lua`
+  as an ALL target (`CXX_SCAN_FOR_MODULES OFF`, matching the Lua-side TUs).
 
 Reflection/module flags are isolated in the `welder_flags` INTERFACE target and
 gated on compiler id, so nothing gcc-specific leaks into the public targets.

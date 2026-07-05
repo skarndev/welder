@@ -77,6 +77,30 @@ welder docstrings flow into the stubs. pybind11-stubgen is pinned to its GitHub
 `main` branch (fixes not yet on PyPI; see `tests/pyproject.toml`
 `[tool.uv.sources]`). Examples opt in via `-DWELDER_STUBGEN_PYTHON=<interp>`.
 
+## LuaCATS stub generation (the Lua analogue of `.pyi`)
+Lua has no runtime docstring slot, so the sol2 backend drops `doc`/`returns` at
+load time; their home is a **generated LuaCATS (`---@meta`) definition file**,
+emitted by the `welder::luacats` backend (`src/welder/backends/lua/luacats/stub.hpp`).
+Unlike `.pyi` (pybind11-stubgen *imports* the built module), a Lua stub cannot be
+scraped from a loaded sol2 usertype, so it is **reflection-emitted at build time**:
+the stub backend is a real `welder::backend` that plugs the *same* generic driver
+as sol2 but emits LuaCATS text instead of registering a live module — so member
+selection, base flattening, policy/marks and the bindability gate are reused
+verbatim; only the emission primitives differ. It is pure reflection + text —
+**no sol2, no Lua runtime** — so `welder::luacats` is an unconditional INTERFACE
+target over `welder::headers`. The one piece sol2 didn't need is the C++→LuaCATS
+**type map** (`lua_type_string`): scalars → `integer`/`number`/`boolean`/`string`,
+the STL wrappers welder recurses (`vector<T>`→`T[]`, `map<K,V>`→`table<K,V>`,
+`optional<T>`→`T?`, smart pointers → the pointee), welded classes/enums → their
+dotted Lua name, else `any`. A generator TU uses `WELDER_LUACATS_MAIN(<ns>)` (a
+`main()` that writes the stub for namespace `^^ns` to its argv[1] path, else
+stdout); `welder_luacats_generate_stub(<name> SOURCES … [OUTPUT …])`
+(cmake/WelderLuaCATSStub.cmake) builds that generator and runs it into `<name>.lua`
+as an ALL target. **Known limits (v1):** overloaded methods/constructors emit
+several `function` definitions with the same name (idiomatic `---@overload` is
+future work); const data members aren't marked read-only; there is no
+lua-language-server validate-if-present step yet (the golden is the gate).
+
 ## Test-side type gates (mypy)
 Three test-side mypy gates:
 - `stubcheck` — mypy over each stub tree.
@@ -89,7 +113,12 @@ Three test-side mypy gates:
 Tests split by target language under `tests/`: the backend-neutral C++ case tree
 (`common/cpp/`) and compile-only core checks (`core/`) live at the top; the Python
 backends + their pytest specs under `python/`, the Lua backend + its busted specs
-under `lua/`. The **C++ case tree is shared across all three backends**
+under `lua/`. The LuaCATS stub backend has its own top-level tree `tests/luacats/`
+(compile + run + byte-exact golden, needing only the compiler — it depends on
+neither sol2 nor Lua): `welder_luacats_generate_stub` builds `cpp/stub_gen.cpp` (a
+*dedicated doc-rich case*, since the shared cases are behavior-focused and mostly
+carry no `doc` — same reason `doc.hpp` is its own Python case) and the
+`luacats.stub_golden` CTest compares its output to `stub.golden.lua`. The **C++ case tree is shared across all three backends**
 (`common/cpp/`, welded for `lang::py` **and** `lang::lua`), reached only through
 three macros each `bindings.cpp` defines — `WELDER_TEST_BE` (backend namespace),
 `WELDER_TEST_MODULE_T` (module handle type) and `WELDER_TEST_SUBMODULE` (the one

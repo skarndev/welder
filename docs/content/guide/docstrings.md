@@ -168,4 +168,9 @@ welder docstrings flow into generated `.pyi` stubs via
 CMake helper `welder_pybind11_generate_stubs()`. So your `doc` text also lands in
 the types your Python users' editors and type-checkers see.
 
+Lua has no runtime docstring slot, so there the docs live only in a stub: welder
+emits a **LuaCATS (`---@meta`) definition file** — reflection-generated at build
+time — carrying the same `doc`/`returns`/parameter text. See [Stubs
+(LuaCATS)](lua.md#stubs-luacats) in the Lua guide.
+
 Next: [The bindability gate](bindability.md).
