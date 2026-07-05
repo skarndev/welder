@@ -104,8 +104,13 @@ The same annotated cases bind for `lang::lua`; the Lua-only differences (see
   `>`, `>=` from `__eq`/`__lt`/`__le`. `^`(XOR)→`__bxor`, `&`/`|`/`~`/`<<`/`>>` →
   the bitwise metamethods, all `#if LUA_VERSION_NUM >= 503`. `[]`→`__index` (a sol2
   fallback that coexists with member/method access), `()`→`__call`.
-- **Overloaded methods/functions collapse** to the last registered (sol2 stores one
-  value per name; `sol::overload` grouping is a planned enhancement).
+- **Overloaded methods/functions/operators are grouped** into one `sol::overload(…)`
+  (sol2 stores one value per name / metamethod slot), so every overload dispatches at
+  call time rather than the last registered winning. The grouping is done in the sol2
+  backend — the driver visits each overload individually (suiting pybind11's chained
+  `.def`), and the backend gathers a name's siblings with the core selection
+  predicates, exactly as it already gathers a type's constructors. A same-named member
+  in a derived class still hides the base's (C++ name-hiding), unchanged.
 - **Namespace variables snapshot** at load time (const and mutable alike); live
   get/set over a C++ global is a planned enhancement.
 - **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`) — they surface
@@ -118,8 +123,9 @@ Tested by the shared cases bound for `lua`, asserted by the busted specs in
 
 ## Not yet implemented
 Properties (getter/setter pairs) are designed-for but not yet implemented; so are
-further languages. (Enums, custom type converters, the Lua/sol2 backend, and the
-LuaCATS stub emitter now are.) sol2 backend enhancements noted above: overload
-grouping, live namespace variables. LuaCATS stub v1 limits: overloads emit repeated
-`function` definitions (not `---@overload`), const members aren't marked read-only,
-and there is no lua-language-server validate-if-present step yet (golden is the gate).
+further languages. (Enums, custom type converters, the Lua/sol2 backend, sol2
+overload grouping, and the LuaCATS stub emitter now are.) Remaining sol2 backend
+enhancement noted above: live namespace variables (and LuaJIT's 5.1 operator-map
+branch). LuaCATS stub v1 limits: overloads emit repeated `function` definitions (not
+`---@overload`), const members aren't marked read-only, and there is no
+lua-language-server validate-if-present step yet (golden is the gate).

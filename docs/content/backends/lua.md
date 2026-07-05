@@ -119,8 +119,10 @@ require Lua ≥ 5.3.
 - **No runtime docstrings.** Lua has no `__doc__`, so `doc`/`returns` annotations are
   ignored *at runtime*. Their home is the generated [LuaCATS stub](#stubs-luacats).
 - **Namespace variables snapshot** at load time (a live get/set property is planned).
-- **Overloaded methods** collapse to the last one bound (sol2 stores one value per
-  name); a `sol::overload` grouping is planned.
+- **Overloaded methods, functions and operators** are grouped into a single
+  `sol::overload(…)` (sol2 stores one value per name / metamethod slot), so every
+  overload of a name dispatches at call time — `c:sum(a)` and `c:sum(a, b)` both work.
+  A same-named method in a derived class still hides the base's, matching C++.
 - **Multiple and virtual base classes** are supported (as with pybind11; nanobind is
   single-inheritance only), so a multi-base diamond binds here.
 

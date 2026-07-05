@@ -137,9 +137,14 @@ the interesting part:
 - **enums are name→value tables** (Lua has no enum type); an unscoped enum's names
   are also mirrored onto the enclosing module.
 - **no runtime docstrings** (`doc`/`returns` ignored — their home is the
-  `welder::luacats` LuaCATS stub backend, below) and **overloaded methods collapse**
-  to the last (sol2 stores one value per name; grouping into `sol::overload` is a
-  planned enhancement).
+  `welder::luacats` LuaCATS stub backend, below). **Overloaded methods, static
+  methods, free functions and operators are grouped into one `sol::overload(…)`**:
+  sol2 stores one value per name/metamethod slot, so the backend gathers a name's
+  overloads (mirroring how it already gathers a type's constructors "all at once")
+  rather than letting the last registered win. Grouping happens in the sol2 backend
+  (`method_overloads`/`operator_overloads`/`function_overloads` re-invoke the core
+  selection predicates); the driver still visits overloads one at a time, which suits
+  pybind11's incremental `.def`.
 - entry point: `WELDER_MODULE(ns, sol2)` emits `extern "C" luaopen_<ns>` returning
   the module table.
 

@@ -54,9 +54,13 @@
       snapshot at load time (const and mutable alike); live get/set over a C++ global
       is a planned enhancement (a metatable proxy over the module table).
 
-    @note Overloaded methods: sol2 stores one value per name, so when a method name
-    has several C++ overloads the last one registered wins (pybind11/nanobind chain
-    them). Grouping overloads into a `sol::overload(…)` is a planned enhancement.
+    @note Overloaded methods, static methods, free functions and operators: sol2
+    stores one value per name (and per metamethod slot), so welder gathers a name's
+    several C++ overloads into one `sol::overload(…)` — sol2 dispatches among them at
+    call time. The gathering happens in the backend (see @ref method_overloads),
+    because the driver visits each overload individually to suit pybind11's
+    incremental `.def`. A same-named member in a derived class still hides the base's
+    (C++ name-hiding), as it did before.
 */
 #include <array>
 #include <cstddef>
@@ -340,6 +344,121 @@ struct enum_binding {
     bool scoped;              /**< `true` for `enum class`. */
 };
 
+// --- overload grouping ------------------------------------------------------
+//
+// sol2 stores a single value per name (and per metamethod slot), so several C++
+// overloads sharing a name must be gathered into one `sol::overload(…)` — sol2
+// wants the whole set at once, exactly as it does for a type's constructors (see
+// ctor_signatures). The driver still visits each overload individually (that suits
+// pybind11's incremental `.def`), so the backend gathers the siblings itself. The
+// membership predicates below are the driver's own (is_bindable_method /
+// is_operator_candidate), re-invoked here, so a group is exactly what the driver
+// binds — the decision logic stays in the core.
+//
+// A signature (@a fn's parent — the class or namespace where it is declared) is
+// walked with the policy of *that* scope, matching how the driver flattens
+// members: an overload set is a within-scope notion, and a same-named member in a
+// derived class hides the base's (registered first, then overwritten), which the
+// last-wins registration already preserves.
+
+/** The bound method overloads sharing @a fn's name and static-ness, in declaration
+    order, from the class where @a fn is declared. */
+consteval std::vector<std::meta::info> method_overloads(std::meta::info fn) {
+    const std::meta::info cls{std::meta::parent_of(fn)};
+    const policy_kind pol{welder::policy_of(cls)};
+    const auto name{std::meta::identifier_of(fn)};
+    const bool is_static{std::meta::is_static_member(fn)};
+    std::vector<std::meta::info> out;
+    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+        if (welder::detail::is_bindable_method(m, lang::lua, pol) &&
+            std::meta::is_static_member(m) == is_static &&
+            std::meta::identifier_of(m) == name)
+            out.push_back(m);
+    return out;
+}
+
+/** The bound operator overloads sharing @a fn's Lua metamethod slot (same operator
+    and arity), in declaration order, from the class where @a fn is declared. */
+consteval std::vector<std::meta::info> operator_overloads(std::meta::info fn) {
+    const std::meta::info cls{std::meta::parent_of(fn)};
+    const policy_kind pol{welder::policy_of(cls)};
+    std::vector<std::meta::info> out;
+    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+        if (welder::detail::is_operator_candidate(m, lang::lua, pol) &&
+            std::meta::operator_of(m) == std::meta::operator_of(fn) &&
+            welder::detail::is_unary_operator(m) ==
+                welder::detail::is_unary_operator(fn))
+            out.push_back(m);
+    return out;
+}
+
+/** The bound free-function overloads sharing @a fn's name, in declaration order,
+    from the namespace where @a fn is declared. */
+consteval std::vector<std::meta::info> function_overloads(std::meta::info fn) {
+    const std::meta::info ns{std::meta::parent_of(fn)};
+    const policy_kind pol{welder::policy_of(ns)};
+    const auto name{std::meta::identifier_of(fn)};
+    std::vector<std::meta::info> out;
+    for (auto m : std::meta::members_of(ns, std::meta::access_context::unchecked()))
+        if (std::meta::is_function(m) && welder::welded_for(m, lang::lua) &&
+            welder::member_bound(m, lang::lua, pol) &&
+            std::meta::identifier_of(m) == name)
+            out.push_back(m);
+    return out;
+}
+
+/** The signature of an overload-gathering producer (`method_overloads`, …). */
+using overload_producer = std::vector<std::meta::info> (*)(std::meta::info);
+
+/** @a Produce's group for @a Fn as a fixed-size, splice-ready static array. */
+template <overload_producer Produce, std::meta::info Fn>
+consteval auto overload_group() {
+    constexpr std::size_t n{Produce(Fn).size()};
+    std::array<std::meta::info, n> out{};
+    // Guard the fill: std::array<T, 0>::operator[] is not consteval. n is >= 1 for
+    // a group leader, but the guard keeps this well-formed if it is ever not.
+    if constexpr (n != 0) {
+        auto v{Produce(Fn)};
+        for (std::size_t i{0}; i < n; ++i)
+            out[i] = v[i];
+    }
+    return out;
+}
+
+/** Whether @a Fn is the first (declaration order) member of its @a Produce group —
+    the one call on which the whole group is registered. */
+template <overload_producer Produce>
+consteval bool is_overload_leader(std::meta::info fn) {
+    auto v{Produce(fn)};
+    return !v.empty() && v.front() == fn;
+}
+
+/** Register overload group @a Grp on target @a t under @a Grp[0]'s identifier — a
+    single callable when unique, a `sol::overload(…)` when several. Each overload is
+    spliced by its specific reflection, so `&[:Grp[i]:]` is the exact overload (no
+    `&C::f` ambiguity). Serves methods, static methods and free functions alike
+    (sol2 registers all three as a table entry). */
+template <auto Grp, class Target, std::size_t... I>
+void register_named(Target& t, std::index_sequence<I...>) {
+    constexpr const char* name{
+        std::define_static_string(std::meta::identifier_of(Grp[0]))};
+    if constexpr (sizeof...(I) == 1)
+        t[name] = &[:Grp[0]:];
+    else
+        t[name] = ::sol::overload(&[:Grp[I]:]...);
+}
+
+/** Register operator group @a Grp under its Lua metamethod slot (a single callable,
+    or a `sol::overload(…)` for several same-slot overloads). */
+template <auto Grp, class Target, std::size_t... I>
+void register_operator(Target& t, std::index_sequence<I...>) {
+    constexpr auto slot{operator_mm(Grp[0]).fn};
+    if constexpr (sizeof...(I) == 1)
+        t[slot] = &[:Grp[0]:];
+    else
+        t[slot] = ::sol::overload(&[:Grp[I]:]...);
+}
+
 /** The sol2 backend: a stateless policy type satisfying @ref welder::backend.
 
     Its static members are the sol2 emission primitives welder's driver calls; the
@@ -404,23 +523,36 @@ struct backend {
             ut[name] = &[:Mem:];
     }
 
-    /** Bind member function @a Fn as a method (`obj:name(…)`). */
+    /** Bind member function @a Fn as a method (`obj:name(…)`). Several C++ overloads
+        of a name are gathered into one `sol::overload(…)`; the driver visits each
+        overload, so the whole group is registered once, on its first member. */
     template <std::meta::info Fn>
     static void add_method(auto& ut) {
-        ut[std::define_static_string(std::meta::identifier_of(Fn))] = &[:Fn:];
+        if constexpr (is_overload_leader<method_overloads>(Fn)) {
+            constexpr auto grp{overload_group<method_overloads, Fn>()};
+            register_named<grp>(ut, std::make_index_sequence<grp.size()>{});
+        }
     }
 
-    /** Bind static member function @a Fn as a class-table function (`T.name(…)`). */
+    /** Bind static member function @a Fn as a class-table function (`T.name(…)`);
+        overloads are grouped as in @ref add_method. */
     template <std::meta::info Fn>
     static void add_static_method(auto& ut) {
-        ut[std::define_static_string(std::meta::identifier_of(Fn))] = &[:Fn:];
+        if constexpr (is_overload_leader<method_overloads>(Fn)) {
+            constexpr auto grp{overload_group<method_overloads, Fn>()};
+            register_named<grp>(ut, std::make_index_sequence<grp.size()>{});
+        }
     }
 
-    /** Bind member operator @a Fn under its Lua metamethod (the specific overload
-        is spliced, so unary/binary forms never collide). */
+    /** Bind member operator @a Fn under its Lua metamethod. The specific overload is
+        spliced, so unary/binary forms never collide; several overloads mapping to
+        the *same* metamethod slot are gathered into one `sol::overload(…)`. */
     template <std::meta::info Fn>
     static void add_operator(auto& ut) {
-        ut[operator_mm(Fn).fn] = &[:Fn:];
+        if constexpr (is_overload_leader<operator_overloads>(Fn)) {
+            constexpr auto grp{overload_group<operator_overloads, Fn>()};
+            register_operator<grp>(ut, std::make_index_sequence<grp.size()>{});
+        }
     }
 
     // --- enum binding -------------------------------------------------------
@@ -459,10 +591,14 @@ struct backend {
     /** No runtime module docstring in Lua (its home is a generated stub). */
     static void set_module_doc(module_type&, const char*) {}
 
-    /** Bind free function @a Fn as a module-level function. */
+    /** Bind free function @a Fn as a module-level function; overloads are gathered
+        into one `sol::overload(…)`, registered once on the group's first member. */
     template <std::meta::info Fn>
     static void add_function(module_type& m) {
-        m[std::define_static_string(std::meta::identifier_of(Fn))] = &[:Fn:];
+        if constexpr (is_overload_leader<function_overloads>(Fn)) {
+            constexpr auto grp{overload_group<function_overloads, Fn>()};
+            register_named<grp>(m, std::make_index_sequence<grp.size()>{});
+        }
     }
 
     /** Bind namespace variable @a Var as a value snapshot at load time.

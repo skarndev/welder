@@ -14,6 +14,14 @@ describe("methods", function()
     h.assert_absent(c, "secret")                  -- excluded method
   end)
 
+  it("dispatches overloaded methods", function()
+    -- Calc.sum has two C++ overloads (1-arg, 2-arg); sol2 groups them into a
+    -- sol::overload so both resolve, rather than the last one winning.
+    local c = m.Calc(10)
+    assert.are.equal(15, c:sum(5))    -- one-arg overload -> base + a
+    assert.are.equal(20, c:sum(5, 5)) -- two-arg overload -> base + a + b
+  end)
+
   it("synthesizes aggregate constructors", function()
     assert.are.equal(0.0, m.Vec2.new().x)         -- default ctor
     local v = m.Vec2.new(3.0, 4.0)                -- synthesized field ctor (paren-init)

@@ -107,9 +107,10 @@ constructor is still callable positionally there.
 ## Methods and static methods
 
 Member functions bind as methods; `static` member functions as static/free
-functions on the type. Overloads are all registered on the Python backends
-(pybind11/nanobind dispatch on argument types); the **sol2** backend keeps only the
-last overload of a name (a documented Lua limitation).
+functions on the type. Overloads are all registered on every backend — the Python
+backends (pybind11/nanobind) chain them, and the **sol2** backend groups a name's
+overloads into one `sol::overload(…)` — so each overload dispatches on its arguments
+at call time.
 
 ```cpp
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
