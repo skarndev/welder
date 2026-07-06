@@ -44,6 +44,42 @@ PYBIND11_MODULE(shapes, m) {
 False
 ```
 
+## Why welder?
+
+### The problem: your data model, typed twice
+
+Hand-written bindings are a second copy of your headers. Exposing a struct to Python
+means one `.def_readwrite("velocity", &Body::velocity)` per field — every name
+spelled again, by hand, in another file. For a couple of types that's fine; for the
+**dozens of plain structs** a file format, a message schema, or a simulation's state
+needs, the binding layer becomes a shadow of your data model that silently rots the
+moment someone adds a field. The compiler won't warn you — the attribute is just
+missing at runtime.
+
+welder deletes that copy. Reflection already knows the fields; welder reads them and
+emits the registration calls for you. Add a field, rebuild, and it is bound. The
+annotations declare only *intent* — which languages, which members — never the shape
+of the type.
+
+### What welder is *not*
+
+welder removes boilerplate; it is **not** a universal binding abstraction. On
+purpose, it does not try to:
+
+- **Convert your types for you.** Carrying a custom or non-trivial type across the
+  language boundary is still the framework's job — a pybind11 `type_caster`, a
+  nanobind caster, a sol2 usertype. welder binds what the framework can already move
+  (and [refuses to compile](guide/bindability.md), loudly, when it can't); it
+  invents no conversions of its own.
+- **Replace the binding framework.** You keep using pybind11 / nanobind / sol2, and
+  keep reaching for their APIs for anything bespoke — a hand-tuned overload, a custom
+  `__repr__`, an ownership or GIL policy. welder generates the *repetitive*
+  registration and then gets out of the way; your framework-specific code sits right
+  beside it (that's what the module hooks and the returned class handle are for).
+- **Flatten the languages into one lowest-common-denominator API.** Each language
+  still gets its idiomatic surface — Python dunders, Lua metamethods — because welder
+  maps onto each framework rather than hiding it.
+
 <div class="grid cards" markdown>
 
 -   :material-rocket-launch:{ .lg .middle } **No codegen step**
@@ -92,7 +128,7 @@ False
 ```mermaid
 flowchart LR
     A["Annotated C++ type<br/><code>[[=welder::weld(...)]]</code>"] --> B["welder core<br/>(reflection: what binds?)"]
-    B --> C["rod<br/>(pybind11 · nanobind · sol2)"]
+    B --> C["a rod = one backend<br/>pybind11 · nanobind · sol2"]
     C --> D["Python & Lua modules"]
     A -.same annotations.-> E["Doxygen filter"]
     E --> F["C++ API reference"]
@@ -110,7 +146,7 @@ language is one rod struct; the core is reused verbatim. The *same* annotated ty
 binds to **Python** (pybind11 or nanobind) and **Lua** (sol2) — you weld it once.
 
 [:octicons-arrow-right-24: Read the architecture](architecture.md){ .md-button }
-[:octicons-arrow-right-24: Explore the rods](backends/index.md){ .md-button }
+[:octicons-arrow-right-24: Explore the languages](backends/index.md){ .md-button }
 [:octicons-arrow-right-24: Browse the C++ reference](reference.md){ .md-button .md-button--primary }
 
 !!! warning "Early proof-of-concept"

@@ -107,10 +107,10 @@ nav:
       - The bindability gate: guide/bindability.md
       - Trust & type casters: guide/trust-casters.md
       - Generating C++ docs: guide/cpp-docs.md
-  - Rods:
+  - Languages:
       - backends/index.md
       - Python (pybind11 & nanobind): backends/python.md
       - Lua (sol2): backends/lua.md
-      - Shipping multiple rods: backends/multiple.md
+      - Shipping to multiple languages: backends/multiple.md
   - Architecture: architecture.md
   - C++ API Reference: reference.md

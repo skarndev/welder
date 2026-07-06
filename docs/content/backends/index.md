@@ -1,11 +1,13 @@
-# Rods
+# Languages
 
-A **rod** (a welding rod) is what turns welder's reflection into real registration
-calls in a target framework. The [guide](../guide/index.md) is deliberately
-rod-agnostic — the annotations, the resolution rule, inheritance, and the
-bindability gate are all shared core. This section covers what changes *per rod*:
-the exact `weld_type` call, the framework it targets, and the small surface where
-languages genuinely differ.
+welder binds your annotated C++ to **Python** and **Lua** today. The piece that
+turns welder's reflection into a given framework's real registration calls is a
+**rod** (a welding rod) — Python has two (pybind11 and nanobind), Lua has one
+(sol2), plus a build-time rod that writes a Lua editor stub. The
+[guide](../guide/index.md) is deliberately rod-agnostic — the annotations, the
+resolution rule, inheritance, and the bindability gate are all shared core. This
+section covers what changes *per rod*: the exact `weld_type` call, the framework it
+targets, and the small surface where languages genuinely differ.
 
 ## The rods welder ships
 
