@@ -287,4 +287,54 @@ consteval tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M])
     return tparam_spec<N, M>{fixed_string<N>{name}, fixed_string<M>{text}};
 }
 
+// --- weld_as: force an entity's target-language name verbatim ----------------
+
+/** The stored form of a `weld_as` annotation: a forced target-language name.
+
+    Where a code-style transformer (see `<welder/naming.hpp>`) reshapes an
+    entity's C++ identifier into the target language's convention, `weld_as` is the
+    ultimate override — the string is used **verbatim**, bypassing the transformer
+    entirely. Scope it to one language or (bare) to all of them, so a member can
+    read `process` in Python and `Process` in Lua at once:
+    @code
+    [[=welder::weld_as("id")]]                     // every language
+    [[=welder::weld_as(welder::lang::py, "id")]]   // Python only
+    @endcode
+
+    The name is captured inline (a @ref fixed_string), like `doc`, so it can live in
+    a structural annotation constant.
+    @tparam N the name length including the terminator (deduced).
+*/
+template <decltype(sizeof(0)) N>
+struct weld_as_spec {
+    unsigned mask = 0;    /**< The languages to rename for; `0` == all languages. */
+    fixed_string<N> name; /**< The verbatim target-language name. */
+};
+
+/** Force @a s as the target name in every welded language.
+
+    Usage: `[[=welder::weld_as("do_thing")]]`.
+    @tparam N the name length (deduced).
+    @param s the verbatim name.
+    @return a weld_as_spec covering all languages.
+*/
+template <decltype(sizeof(0)) N>
+consteval weld_as_spec<N> weld_as(const char (&s)[N]) {
+    return weld_as_spec<N>{0u, fixed_string<N>{s}};
+}
+
+/** Force @a s as the target name in language @a l only.
+
+    Usage: `[[=welder::weld_as(welder::lang::py, "do_thing")]]`. Repeat the
+    annotation to give an entity a different verbatim name per language.
+    @tparam N the name length (deduced).
+    @param l the language this override applies to.
+    @param s the verbatim name.
+    @return a weld_as_spec scoped to @a l.
+*/
+template <decltype(sizeof(0)) N>
+consteval weld_as_spec<N> weld_as(lang l, const char (&s)[N]) {
+    return weld_as_spec<N>{lang_bit(l), fixed_string<N>{s}};
+}
+
 } // namespace welder

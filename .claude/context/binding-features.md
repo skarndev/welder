@@ -90,6 +90,40 @@ makes `weld_type<Welded<int>>(m, "name")` legitimate today — the explicit name
 required (a specialization `has_identifier` == false; the `identifier_of` name
 default would throw).
 
+## Naming conventions & `weld_as`
+Two pieces, both rod-agnostic (they live in the core / driver, so every rod gets
+them for free):
+- **Name styles.** `welder::welder<Rod, Style=naming::none>` takes a *name style* as
+  its second template arg. The driver threads `Style` into every name-producing rod
+  hook (`add_field<Mem, Style>`, `add_method<Fn, Style>`, `add_enumerator`,
+  `add_function`, `add_variable`, `add_static_method`) and pre-styles the names it
+  owns itself (class/enum → `make_class`/`make_enum`, submodule → `add_submodule`).
+  Each name resolves through `::welder::name_of<Ent, L, Style, ent_kind::K>()`
+  (`naming.hpp`). A style is a set of **per-kind** `static consteval std::string
+  transform_*(std::meta::info)` hooks (`transform_class`/`_enum`/`_enumerator`/
+  `_method`/`_static_method`/`_function`/`_field`/`_variable`/`_submodule`) — the
+  `naming::name_style` concept. Core helpers: `split_words`/`join_words`/`restyle`
+  (split an identifier however spelled — underscores, camel humps, acronym runs — then
+  re-join in a `case_kind`); styles `naming::{none, snake_case, pascal_case,
+  camel_case, screaming_snake_case, kebab_case}` (`uniform<Kind>`). `none` is the
+  default (identity). The shipped Python mix is `welder::rods::python::pep8`
+  (`rods/python/naming.hpp`): PascalCase types, snake_case everything else,
+  enumerators verbatim.
+- **`weld_as`** (`annotations.hpp`, std-free): the ultimate per-entity override. On an
+  entity, `[[=welder::weld_as("name")]]` (all langs) or `[[=welder::weld_as(lang,
+  "name")]]` (one lang, repeatable) forces the target name **verbatim** — it never
+  flows through `Style`. Stored as a templated `weld_as_spec<N>` (mask + `fixed_string`,
+  like `doc_spec`); read by `weld_as_of<Ent, L>()`, which `name_of` checks first.
+- **Caveat (LuaCATS):** the stub styles *declarations*, but type *references* /
+  `---@class` base lists still use the C++ type name, so a style/`weld_as` renaming a
+  **type** is not propagated into them. `pep8` keeps type names PascalCase, so it
+  doesn't bite. `luacats::rod::generate<Ns, Style>` forwards a style so a styled stub
+  can match a styled sol2 binding.
+- **Tests:** `tests/core/naming.cpp` (compile-only static_asserts: word-splitting,
+  restyle across conventions, `name_of`/`weld_as_of` incl. per-language overrides and
+  style-bypass). All four rods compile against the threaded contract (`rod_probe.cpp`
+  updated with the trailing `Style` hook param).
+
 ## Rods
 Three rods implement every feature above from the same driver: **pybind11**
 (`welder::rods::pybind11::rod`), **nanobind** (`welder::rods::nanobind::rod`) — both

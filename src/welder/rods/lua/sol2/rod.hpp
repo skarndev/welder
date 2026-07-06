@@ -320,19 +320,20 @@ struct rod {
         return out;
     }
 
-    /** Register overload group @a Grp on target @a t under @a Grp[0]'s identifier —
-        a single callable when unique, a `sol::overload(…)` when several. Each
-        overload is spliced by its specific reflection, so `&[:Grp[i]:]` is the exact
-        overload (no `&C::f` ambiguity). Serves methods, static methods and free
-        functions alike (sol2 registers all three as a table entry).
+    /** Register overload group @a Grp on target @a t under the (already name-styled)
+        @a name — a single callable when unique, a `sol::overload(…)` when several.
+        Each overload is spliced by its specific reflection, so `&[:Grp[i]:]` is the
+        exact overload (no `&C::f` ambiguity). Serves methods, static methods and free
+        functions alike (sol2 registers all three as a table entry). The caller passes
+        the resolved name (via `welder::name_of`), since it varies by entity kind.
         @tparam Grp    the overload group (a static array of reflections).
         @tparam Target the sol2 usertype/table type to register onto.
         @tparam I      the group index pack.
-        @param t the usertype or module table to register onto. */
+        @param t    the usertype or module table to register onto.
+        @param name the resolved target name (weld_as / style already applied). */
     template <auto Grp, class Target, std::size_t... I>
-    static void _register_named(Target& t, std::index_sequence<I...>) {
-        constexpr const char* name{
-            std::define_static_string(std::meta::identifier_of(Grp[0]))};
+    static void _register_named(Target& t, const char* name,
+                                std::index_sequence<I...>) {
         if constexpr (sizeof...(I) == 1)
             t[name] = &[:Grp[0]:];
         else
@@ -397,10 +398,10 @@ struct rod {
         `sol::readonly` (its setter would not compile). Lua has no property
         docstring, so a `[[=welder::doc]]` on the member is not surfaced at runtime
         (it belongs in a generated stub). */
-    template <std::meta::info Mem>
+    template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& ut) {
         constexpr const char* name{
-            std::define_static_string(std::meta::identifier_of(Mem))};
+            ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
             ut[name] = ::sol::readonly(&[:Mem:]);
         else
@@ -410,21 +411,27 @@ struct rod {
     /** Bind member function @a Fn as a method (`obj:name(…)`). Several C++ overloads
         of a name are gathered into one `sol::overload(…)`; the driver visits each
         overload, so the whole group is registered once, on its first member. */
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(auto& ut) {
         if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            _register_named<grp>(ut, std::make_index_sequence<grp.size()>{});
+            _register_named<grp>(
+                ut, ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
+                std::make_index_sequence<grp.size()>{});
         }
     }
 
     /** Bind static member function @a Fn as a class-table function (`T.name(…)`);
         overloads are grouped as in @ref add_method. */
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(auto& ut) {
         if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            _register_named<grp>(ut, std::make_index_sequence<grp.size()>{});
+            _register_named<grp>(
+                ut,
+                ::welder::name_of<Fn, language, Style,
+                                  ::welder::ent_kind::static_method>(),
+                std::make_index_sequence<grp.size()>{});
         }
     }
 
@@ -453,10 +460,10 @@ struct rod {
         enumerator is also mirrored onto the enclosing module, unqualified — the
         driver's `finish_enum` role, done incrementally here since the handle
         carries the parent. */
-    template <std::meta::info Enum>
+    template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(auto& e) {
         constexpr const char* name{
-            std::define_static_string(std::meta::identifier_of(Enum))};
+            ::welder::name_of<Enum, language, Style, ::welder::ent_kind::enumerator>()};
         const lua_Integer value{static_cast<lua_Integer>(std::to_underlying([:Enum:]))};
         e.values[name] = value;
         if (!e.scoped)
@@ -477,11 +484,14 @@ struct rod {
 
     /** Bind free function @a Fn as a module-level function; overloads are gathered
         into one `sol::overload(…)`, registered once on the group's first member. */
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m) {
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
-            _register_named<grp>(m, std::make_index_sequence<grp.size()>{});
+            _register_named<grp>(
+                m,
+                ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>(),
+                std::make_index_sequence<grp.size()>{});
         }
     }
 
@@ -490,9 +500,10 @@ struct rod {
         Both const and mutable variables snapshot for now; a live get/set property
         over the C++ global (via a metatable proxy on the module table) is a planned
         enhancement. */
-    template <std::meta::info Var>
+    template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&) {
-        m[std::define_static_string(std::meta::identifier_of(Var))] = [:Var:];
+        m[::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>()] =
+            [:Var:];
     }
 
     /** Create a submodule table named @a name under @a m. */

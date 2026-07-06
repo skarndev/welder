@@ -104,6 +104,7 @@ nav:
       - Inheritance: guide/inheritance.md
       - Namespaces & modules: guide/namespaces-modules.md
       - Docstrings: guide/docstrings.md
+      - Naming conventions: guide/naming.md
       - The bindability gate: guide/bindability.md
       - Trust & type casters: guide/trust-casters.md
       - Generating C++ docs: guide/cpp-docs.md

@@ -27,15 +27,17 @@ src/welder/
   annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary
   reflect.hpp           welded_for / policy_of / member_bound / trusted_for / public_bases — uses <meta>
   doc.hpp               doc_of / return_doc_of / param_docs / doc styles / function_docstring — uses <meta>
+  naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + the name_style concept (per-kind transform_* hooks) + weld_as_of / name_of (weld_as override → else style hook) — uses <meta>, depends on vocabulary (weld_as_spec), NOT annotations.hpp
   bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
   bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>
-  welder.hpp            the `welder::rod` concept (emission contract) + generic driver (bind_type / bind_namespace_driver / build_module_driver) + the `welder::welder<Rod>` public entry point (weld_type / weld_namespace / weld_namespace_as_submodule / weld_module)
+  welder.hpp            the `welder::rod` concept (emission contract) + generic driver (bind_type / bind_namespace_driver / build_module_driver) + the `welder::welder<Rod, Style=naming::none>` public entry point (weld_type / weld_namespace / weld_namespace_as_submodule / weld_module). Threads Style through the driver → every generated name goes through name_of (weld_as override, else the style hook)
   module.hpp            WELDER_MODULE(ns, rod) entry-point dispatch macro
   vocabulary.hpp        header-only vocabulary form: lang+annotations only (exactly what the module exports)
   welder.cppm           the single `export module welder;` (exports vocabulary only)
   rods/
     python/
       doc_style.hpp         Python docstring styles shared by both Python rods — welder::rods::python::google_style (moved out of doc.hpp, which keeps only the neutral doc_style concept + function_docstring)
+      naming.hpp            the PEP 8 name style shared by both Python rods — welder::rods::python::pep8 (inherits naming::snake_case, overrides class/enum → PascalCase, enumerators verbatim); mirrors doc_style.hpp/operators.hpp. The core naming machinery lives in <welder/naming.hpp>
       operators.hpp         C++-operator → Python dunder map shared by both Python rods — welder::rods::python::operator_dunder (identical across pybind11/nanobind; mirrors doc_style.hpp)
       pybind11/rod.hpp      pybind11 rod: struct welder::rods::pybind11::rod (public emission primitives + protected _ helpers), directly in its namespace beside `namespace py = ::pybind11`
       pybind11/module.hpp   the pybind11 WELDER_MODULE entry-point macro (WELDER_DETAIL_MODULE_ENTRY_pybind11); include only for full automation
@@ -120,16 +122,30 @@ headers instead of the struct: the Python dunder map into
   the one bindability fact the core can't know; the STL-wrapper recursion in
   `bindable.hpp` is shared.
 - **Type binding:** `make_class<T, Bases…>`, `add_default_ctor`, `add_constructor<Ctor>`,
-  `add_aggregate_constructor<T>`, `add_field<Mem>`, `add_method<Fn>`,
-  `add_static_method<Fn>`, `add_operator<Fn>`, and `consteval special_method_name(op)`
+  `add_aggregate_constructor<T>`, `add_field<Mem, Style>`, `add_method<Fn, Style>`,
+  `add_static_method<Fn, Style>`, `add_operator<Fn>`, and `consteval special_method_name(op)`
   (the operator→target-name map, e.g. pybind's `operator+`→`__add__`; nullptr =
   not exposed, which also gates operator eligibility in the driver).
-- **Enum binding:** `make_enum<E>`, `add_enumerator<Enum>`, `finish_enum<E>` (the
+- **Enum binding:** `make_enum<E>`, `add_enumerator<Enum, Style>`, `finish_enum<E>` (the
   whole-enum finalizer, e.g. pybind's `export_values()` for unscoped enums).
 - **Namespace/module binding:** `open_module`→ a per-(sub)module *session* (rod
   scratch state — pybind uses it to batch live variable properties), `set_module_doc`,
-  `add_function<Fn>`, `add_variable<Var>` (const→snapshot, else a live property),
-  `add_submodule`, `close_module` (finalize the session).
+  `add_function<Fn, Style>`, `add_variable<Var, Style>` (const→snapshot, else a live
+  property), `add_submodule`, `close_module` (finalize the session).
+
+**Naming (name styling + `weld_as`).** Every name-producing hook takes a trailing
+`class Style` (a `naming::name_style`, defaulted to `naming::none`); the rod resolves
+its own name via `::welder::name_of<Ent, language, Style, ent_kind::…>()`, which
+applies a `[[=welder::weld_as]]` verbatim override first and otherwise calls the
+style's per-kind hook (`transform_method`, `transform_field`, …). The driver threads
+`welder::welder<Rod, Style>`'s Style down and pre-styles the names it owns
+(class/enum → `make_class`/`make_enum`; submodule → `add_submodule`), so a rod never
+re-derives naming policy. `add_operator` keeps the fixed operator→special-name map
+(not styled). The core machinery is `<welder/naming.hpp>`; the shipped Python mix is
+`welder::rods::python::pep8` (`rods/python/naming.hpp`). One caveat: the LuaCATS stub
+styles declarations but its *type references / base lists* still use the C++ type
+name, so a style/`weld_as` that renames a **type** is not propagated into them (`pep8`
+keeps type names PascalCase, so this doesn't arise).
 
 The concept statically checks the associated types and the module machinery; the
 class/per-member hooks are templated on a reflection, so they are

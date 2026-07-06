@@ -8,6 +8,7 @@
 #include <welder/bind_traits.hpp> // what-binds selection layer
 #include <welder/bindable.hpp>    // bindability gate + caster_oracle
 #include <welder/doc.hpp>         // doc_of (class / namespace docstrings)
+#include <welder/naming.hpp>      // naming::none + name_of (weld_as + name styling)
 #include <welder/reflect.hpp>     // welded_for / policy_of / member_bound
 
 /** @file
@@ -53,7 +54,12 @@ namespace welder {
     template <class T> static constexpr bool has_native_caster;  // caster_oracle
     @endcode
 
-    **Type binding** (the class handle is whatever `make_class` returns; deduced):
+    **Type binding** (the class handle is whatever `make_class` returns; deduced).
+    The per-member hooks take a trailing `class Style` (a
+    @ref welder::naming::name_style) so the rod resolves its own name via
+    `welder::name_of<Mem, language, Style, ent_kind::…>()` — which also applies any
+    `[[=welder::weld_as]]` override. The class name is styled by the driver and
+    passed to `make_class` ready-made:
     @code
     template <class T, auto Bases, std::size_t... I>
       static auto make_class(module_type&, const char* name, const char* doc,
@@ -61,10 +67,10 @@ namespace welder {
     static void add_default_ctor(auto& cls);
     template <std::meta::info Ctor> static void add_constructor(auto& cls);
     template <class T>              static void add_aggregate_constructor(auto& cls);
-    template <std::meta::info Mem>  static void add_field(auto& cls);
-    template <std::meta::info Fn>   static void add_method(auto& cls);
-    template <std::meta::info Fn>   static void add_static_method(auto& cls);
-    template <std::meta::info Fn>   static void add_operator(auto& cls);
+    template <std::meta::info Mem, class Style> static void add_field(auto& cls);
+    template <std::meta::info Fn,  class Style> static void add_method(auto& cls);
+    template <std::meta::info Fn,  class Style> static void add_static_method(auto& cls);
+    template <std::meta::info Fn>   static void add_operator(auto& cls); // fixed op name
     static consteval const char* special_method_name(std::meta::info op_fn);
         // target special-method name for a member operator, or nullptr if the
         // backend does not expose it (drives add_operator eligibility)
@@ -74,7 +80,7 @@ namespace welder {
     @code
     template <class E> static auto make_enum(module_type&, const char* name,
                                              const char* doc);
-    template <std::meta::info Enum> static void add_enumerator(auto& e);
+    template <std::meta::info Enum, class Style> static void add_enumerator(auto& e);
     template <class E> static void finish_enum(auto& e); // e.g. export unscoped
     @endcode
 
@@ -83,9 +89,9 @@ namespace welder {
     @code
     static auto open_module(module_type&);              // -> session
     static void set_module_doc(module_type&, const char* doc);
-    template <std::meta::info Fn>  static void add_function(module_type&);
-    template <std::meta::info Var> static void add_variable(module_type&, session&);
-    static module_type add_submodule(module_type&, const char* name);
+    template <std::meta::info Fn,  class Style> static void add_function(module_type&);
+    template <std::meta::info Var, class Style> static void add_variable(module_type&, session&);
+    static module_type add_submodule(module_type&, const char* name); // name pre-styled
     static void close_module(module_type&, session&);   // finalize the session
     @endcode
 
@@ -110,12 +116,14 @@ concept rod =
 namespace detail {
 
 // bind_type and bind_namespace_driver are mutually recursive: a namespace member
-// that is a class type binds via bind_type, and a nested namespace recurses.
-template <rod B, class T>
+// that is a class type binds via bind_type, and a nested namespace recurses. Each
+// carries the name-style @a Style (see <welder/naming.hpp>) so every generated name
+// flows through it (the default naming::none binds C++ identifiers unchanged).
+template <rod B, class T, class Style = naming::none>
 auto bind_type(typename B::module_type& m, const char* name);
-template <rod B, class E>
+template <rod B, class E, class Style = naming::none>
 auto bind_enum(typename B::module_type& m, const char* name);
-template <rod B, std::meta::info Ns>
+template <rod B, std::meta::info Ns, class Style = naming::none>
 void bind_namespace_driver(typename B::module_type& m);
 
 /** Reflect over enum @a E and register it via rod @a B onto module @a m.
@@ -131,20 +139,20 @@ void bind_namespace_driver(typename B::module_type& m);
     @param name the target name, or `nullptr` to default to @a E's identifier.
     @return the rod's enum handle.
 */
-template <rod B, class E>
+template <rod B, class E, class Style>
 auto bind_enum(typename B::module_type& m, const char* name) {
     constexpr lang L{B::language};
     static_assert(welder::welded_for(^^E, L),
                   "welder: weld_type<E>: enum E is not welded for this backend's "
                   "language; annotate it with [[=welder::weld(...)]]");
     const char* enum_name{
-        name ? name : std::define_static_string(std::meta::identifier_of(^^E))};
+        name ? name : welder::name_of<^^E, L, Style, ent_kind::enum_>()};
     auto e{B::template make_enum<E>(m, enum_name, welder::doc_of<^^E>())};
     constexpr policy_kind pol{policy_of(^^E)};
     template for (constexpr auto en :
                   std::define_static_array(std::meta::enumerators_of(^^E))) {
         if constexpr (member_bound(en, L, pol))
-            B::template add_enumerator<en>(e);
+            B::template add_enumerator<en, Style>(e);
     }
     B::template finish_enum<E>(e);
     return e;
@@ -158,12 +166,13 @@ auto bind_enum(typename B::module_type& m, const char* name) {
     flattened (the derived type provides its own). A welded base is skipped here —
     it binds natively, as a base of the class handle (see `native_base_types`).
 
-    @tparam B   the rod.
-    @tparam Src a reflection of the (base or derived) type whose members to flatten.
-    @tparam Cls the rod's class-handle type.
+    @tparam B     the rod.
+    @tparam Src   a reflection of the (base or derived) type whose members to flatten.
+    @tparam Style the name style each member's name flows through.
+    @tparam Cls   the rod's class-handle type (deduced).
     @param cls the class handle to register onto.
 */
-template <rod B, std::meta::info Src, class Cls>
+template <rod B, std::meta::info Src, class Style, class Cls>
 void bind_members(Cls& cls) {
     constexpr lang L{B::language};
     constexpr auto ctx{std::meta::access_context::unchecked()};
@@ -171,7 +180,7 @@ void bind_members(Cls& cls) {
     template for (constexpr auto base :
                   std::define_static_array(welder::public_bases(Src))) {
         if constexpr (!welder::welded_for(base, L))
-            bind_members<B, base>(cls);
+            bind_members<B, base, Style>(cls);
     }
 
     constexpr policy_kind pol{policy_of(Src)};
@@ -180,7 +189,7 @@ void bind_members(Cls& cls) {
                       std::meta::nonstatic_data_members_of(Src, ctx))) {
         if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
             welder::assert_member_bindable<B, mem, L>();
-            B::template add_field<mem>(cls);
+            B::template add_field<mem, Style>(cls);
         }
     }
 
@@ -189,9 +198,9 @@ void bind_members(Cls& cls) {
         if constexpr (is_bindable_method(fn, L, pol)) {
             welder::assert_callable_bindable<B, fn, L>();
             if constexpr (std::meta::is_static_member(fn))
-                B::template add_static_method<fn>(cls);
+                B::template add_static_method<fn, Style>(cls);
             else
-                B::template add_method<fn>(cls);
+                B::template add_method<fn, Style>(cls);
         } else if constexpr (is_operator_candidate(fn, L, pol) &&
                              B::special_method_name(fn) != nullptr) {
             // A member operator binds like a method, under the backend's special-
@@ -220,7 +229,7 @@ void bind_members(Cls& cls) {
     @param name the target name, or `nullptr` to default to @a T's identifier.
     @return the rod's class handle, so callers can chain further registrations.
 */
-template <rod B, class T>
+template <rod B, class T, class Style>
 auto bind_type(typename B::module_type& m, const char* name) {
     constexpr lang L{B::language};
     static_assert(welder::welded_for(^^T, L),
@@ -229,7 +238,7 @@ auto bind_type(typename B::module_type& m, const char* name) {
     constexpr auto ctx{std::meta::access_context::unchecked()};
 
     const char* cls_name{
-        name ? name : std::define_static_string(std::meta::identifier_of(^^T))};
+        name ? name : welder::name_of<^^T, L, Style, ent_kind::class_>()};
 
     // Native (welded) bases → bases of the class handle; the user binds them first.
     constexpr auto bases{native_base_types<^^T, L>()};
@@ -253,7 +262,7 @@ auto bind_type(typename B::module_type& m, const char* name) {
         B::template add_aggregate_constructor<T>(cls);
 
     // Data members + methods + operators (T's own, plus flattened non-welded bases).
-    bind_members<B, ^^T>(cls);
+    bind_members<B, ^^T, Style>(cls);
 
     return cls;
 }
@@ -270,7 +279,7 @@ auto bind_type(typename B::module_type& m, const char* name) {
     @tparam Ns a reflection of the namespace.
     @param m the module handle to fill.
 */
-template <rod B, std::meta::info Ns>
+template <rod B, std::meta::info Ns, class Style>
 void bind_namespace_driver(typename B::module_type& m) {
     static_assert(std::meta::is_namespace(Ns),
                   "welder: weld_namespace<Ns>: Ns must reflect a namespace");
@@ -291,19 +300,19 @@ void bind_namespace_driver(typename B::module_type& m) {
                   std::define_static_array(std::meta::members_of(Ns, ctx))) {
         if constexpr (std::meta::is_type(mem) && std::meta::is_class_type(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol))
-                bind_type<B, typename [:mem:]>(m, nullptr);
+                bind_type<B, typename [:mem:], Style>(m, nullptr);
         } else if constexpr (std::meta::is_type(mem) && std::meta::is_enum_type(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol))
-                bind_enum<B, typename [:mem:]>(m, nullptr);
+                bind_enum<B, typename [:mem:], Style>(m, nullptr);
         } else if constexpr (std::meta::is_function(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol)) {
                 welder::assert_callable_bindable<B, mem, L>();
-                B::template add_function<mem>(m);
+                B::template add_function<mem, Style>(m);
             }
         } else if constexpr (std::meta::is_variable(mem)) {
             if constexpr (welder::welded_for(mem, L) && member_bound(mem, L, pol)) {
                 welder::assert_member_bindable<B, mem, L>();
-                B::template add_variable<mem>(m, session);
+                B::template add_variable<mem, Style>(m, session);
             }
         } else if constexpr (std::meta::is_namespace(mem)) {
             // A nested namespace resolves like a leaf under the parent policy (but
@@ -312,8 +321,8 @@ void bind_namespace_driver(typename B::module_type& m) {
             // resolved under its *own* policy).
             if constexpr (member_bound(mem, L, pol) && namespace_has_bound(mem, L)) {
                 auto sub{B::add_submodule(
-                    m, std::define_static_string(std::meta::identifier_of(mem)))};
-                bind_namespace_driver<B, mem>(sub);
+                    m, welder::name_of<mem, L, Style, ent_kind::submodule>())};
+                bind_namespace_driver<B, mem, Style>(sub);
             }
         }
     }
@@ -324,16 +333,17 @@ void bind_namespace_driver(typename B::module_type& m) {
 /** Fill an existing module out of top-level namespace @a Ns: pre hook, bind the
     namespace, post hook.
 
-    @tparam B    the rod.
-    @tparam Ns   a reflection of the (asserted top-level) namespace; its name is
-                 meant to be the module name.
-    @tparam Pre  the pre-hook callable type.
-    @tparam Post the post-hook callable type.
+    @tparam B     the rod.
+    @tparam Ns    a reflection of the (asserted top-level) namespace; its name is
+                  meant to be the module name.
+    @tparam Style the name style each generated name flows through.
+    @tparam Pre   the pre-hook callable type.
+    @tparam Post  the post-hook callable type.
     @param m    the module handle to fill.
     @param pre  invoked with @a m before the namespace is bound.
     @param post invoked with @a m after the namespace is bound.
 */
-template <rod B, std::meta::info Ns, class Pre, class Post>
+template <rod B, std::meta::info Ns, class Style, class Pre, class Post>
 void build_module_driver(typename B::module_type& m, Pre pre, Post post) {
     static_assert(std::meta::is_namespace(Ns),
                   "welder: weld_module<Ns>: Ns must reflect a namespace");
@@ -341,7 +351,7 @@ void build_module_driver(typename B::module_type& m, Pre pre, Post post) {
                   "welder: weld_module<Ns>: Ns must be a top-level namespace (its "
                   "name is meant to be the module name)");
     pre(m);
-    bind_namespace_driver<B, Ns>(m);
+    bind_namespace_driver<B, Ns, Style>(m);
     post(m);
 }
 
@@ -369,12 +379,20 @@ void build_module_driver(typename B::module_type& m, Pre pre, Post post) {
     (For zero hand-written entry-point code at all, each rod also ships a
     `module.hpp` with the `WELDER_MODULE` entry-point macro.)
 
-    @tparam B the rod to emit through (any type satisfying @ref welder::rod).
+    @tparam B     the rod to emit through (any type satisfying @ref welder::rod).
+    @tparam Style the name style every generated name flows through — a class,
+                  method, field, … is renamed into the target language's convention
+                  (see `<welder/naming.hpp>`). A `[[=welder::weld_as]]` override on an
+                  entity beats the style and is used verbatim. Defaults to
+                  @ref welder::naming::none (bind C++ identifiers unchanged); a Python
+                  binding might pass `welder::rods::python::pep8`.
 */
-template <rod B>
+template <rod B, class Style = naming::none>
 struct welder {
     /** The rod this instantiation emits through. */
     using rod_type = B;
+    /** The name style this instantiation renames through. */
+    using name_style = Style;
     /** The rod's module handle (`py::module_`, `sol::table`, …). */
     using module_type = typename B::module_type;
 
@@ -396,9 +414,9 @@ struct welder {
     template <class T>
     static auto weld_type(module_type& m, const char* name = nullptr) {
         if constexpr (std::is_enum_v<T>)
-            return detail::bind_enum<B, T>(m, name);
+            return detail::bind_enum<B, T, Style>(m, name);
         else
-            return detail::bind_type<B, T>(m, name);
+            return detail::bind_type<B, T, Style>(m, name);
     }
 
     /** Reflect over namespace @a Ns and expose its welded members on module @a m.
@@ -412,7 +430,7 @@ struct welder {
         @return @a m, for chaining. */
     template <std::meta::info Ns>
     static module_type& weld_namespace(module_type& m) {
-        detail::bind_namespace_driver<B, Ns>(m);
+        detail::bind_namespace_driver<B, Ns, Style>(m);
         return m;
     }
 
@@ -432,8 +450,9 @@ struct welder {
                       "namespace");
         module_type sub{B::add_submodule(
             m, name ? name
-                    : std::define_static_string(std::meta::identifier_of(Ns)))};
-        detail::bind_namespace_driver<B, Ns>(sub);
+                    : ::welder::name_of<Ns, B::language, Style,
+                                        ::welder::ent_kind::submodule>())};
+        detail::bind_namespace_driver<B, Ns, Style>(sub);
         return sub;
     }
 
@@ -458,7 +477,7 @@ struct welder {
               class Post = decltype(noop)>
     static module_type& weld_module(module_type& m, Pre pre = noop,
                                     Post post = noop) {
-        detail::build_module_driver<B, Ns>(m, pre, post);
+        detail::build_module_driver<B, Ns, Style>(m, pre, post);
         return m;
     }
 };

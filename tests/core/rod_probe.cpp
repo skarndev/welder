@@ -62,11 +62,14 @@ struct probe_rod {
     static void add_constructor(auto&) {}
     template <class T>
     static void add_aggregate_constructor(auto&) {}
-    template <std::meta::info Mem>
+    // The name-producing primitives take a trailing name-style parameter (the
+    // driver threads welder::welder's Style through); a real rod resolves its own
+    // name via welder::name_of<…, Style, …>. The probe ignores it.
+    template <std::meta::info Mem, class Style>
     static void add_field(auto&) {}
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style>
     static void add_method(auto&) {}
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style>
     static void add_static_method(auto&) {}
     template <std::meta::info Fn>
     static void add_operator(auto&) {}
@@ -76,7 +79,7 @@ struct probe_rod {
     static probe_class make_enum(module_type&, const char*, const char*) {
         return {};
     }
-    template <std::meta::info Enum>
+    template <std::meta::info Enum, class Style>
     static void add_enumerator(auto&) {}
     template <class E>
     static void finish_enum(auto&) {}
@@ -84,9 +87,9 @@ struct probe_rod {
     // --- namespace / module binding -----------------------------------------
     static probe_session open_module(module_type&) { return {}; }
     static void set_module_doc(module_type&, const char*) {}
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style>
     static void add_function(module_type&) {}
-    template <std::meta::info Var>
+    template <std::meta::info Var, class Style>
     static void add_variable(module_type&, probe_session&) {}
     static module_type add_submodule(module_type&, const char*) { return {}; }
     static void close_module(module_type&, probe_session&) {}

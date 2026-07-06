@@ -16,6 +16,7 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `doc("text")` | Docstring for a class / namespace / function / parameter. |
 | `returns("text")` | Documents a function's return value. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). |
+| `weld_as("name")` / `weld_as(lang, "name")` | Force this entity's target name **verbatim**, bypassing the [name style](naming.md). |
 
 ## `weld` — the discovery marker
 
@@ -109,4 +110,6 @@ A mask of `0` on an `exclude`/`include` spec is the sentinel for "all languages"
 
 The `doc` / `returns` / `tparam` annotations are covered in
 [Docstrings](docstrings.md); the two `trust_bindable` forms in
-[Trust & type casters](trust-casters.md).
+[Trust & type casters](trust-casters.md); and `weld_as` — the verbatim per-entity
+rename — in [Naming conventions](naming.md), alongside the pluggable name styles that
+reshape identifiers into a target language's convention.

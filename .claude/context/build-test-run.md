@@ -190,6 +190,7 @@ POST_BUILD, since its stubs are a separate custom target.) Key locations by feat
 - `tests/python/{pybind11,nanobind}/cpp/caster.hpp` + `tests/python/test_caster.py` — self-contained type casters
 - `tests/python/{pybind11,nanobind}/cpp/neg/` — bindability negative-compile (`negcompile.*` CTests, `WILL_FAIL`)
 - `tests/core/template_annotations.cpp` — template↔annotation semantics (compile-only)
+- `tests/core/naming.cpp` — name styling + `weld_as` resolution (`compile.naming`, compile-only static_asserts)
 - `tests/common/cpp/doc.hpp` `Gadget`/`combine` + `tests/python/test_doc.py` — docstrings (multiline/dedent)
 - `tests/doxyfilter/` — Doxygen filter goldens + e2e (run with the uv venv Python, pins `lark`)
 

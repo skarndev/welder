@@ -257,10 +257,10 @@ struct rod {
         (`def_ro`); a mutable one is read/write (`def_rw`). The doc, when present, is
         passed as the property docstring. There is deliberately no setter docstring:
         a Python `property` surfaces only the getter's `__doc__`. */
-    template <std::meta::info Mem>
+    template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& cls) {
         constexpr const char* name{
-            std::define_static_string(std::meta::identifier_of(Mem))};
+            ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
         constexpr const char* doc{::welder::doc_of<Mem>()};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
             // const member: read-only (def_rw's setter would not compile).
@@ -277,21 +277,19 @@ struct rod {
     }
 
     /** Bind member function @a Fn as a method. */
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(auto& cls) {
-        _def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
-                          [&cls](auto&&... a) {
-                              cls.def(std::forward<decltype(a)>(a)...);
-                          });
+        _def_function<Fn>(
+            ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
+            [&cls](auto&&... a) { cls.def(std::forward<decltype(a)>(a)...); });
     }
 
     /** Bind static member function @a Fn as a static method. */
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(auto& cls) {
-        _def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
-                          [&cls](auto&&... a) {
-                              cls.def_static(std::forward<decltype(a)>(a)...);
-                          });
+        _def_function<Fn>(
+            ::welder::name_of<Fn, language, Style, ::welder::ent_kind::static_method>(),
+            [&cls](auto&&... a) { cls.def_static(std::forward<decltype(a)>(a)...); });
     }
 
     /** Bind member operator @a Fn under its Python dunder. */
@@ -320,9 +318,11 @@ struct rod {
     }
 
     /** Add enumerator @a Enum to the enum handle. */
-    template <std::meta::info Enum>
+    template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(auto& e) {
-        e.value(std::define_static_string(std::meta::identifier_of(Enum)), [:Enum:]);
+        e.value(
+            ::welder::name_of<Enum, language, Style, ::welder::ent_kind::enumerator>(),
+            [:Enum:]);
     }
 
     /** Finalize enum @a E: export an unscoped enum's values into the enclosing scope. */
@@ -351,22 +351,21 @@ struct rod {
     }
 
     /** Bind free function @a Fn as a module-level function. */
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m) {
-        _def_function<Fn>(std::define_static_string(std::meta::identifier_of(Fn)),
-                          [&m](auto&&... a) {
-                              m.def(std::forward<decltype(a)>(a)...);
-                          });
+        _def_function<Fn>(
+            ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>(),
+            [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); });
     }
 
     /** Bind namespace variable @a Var as a module attribute.
 
         A const/constexpr variable becomes a value snapshot; a mutable one becomes a
         live get/set property over the C++ global (accumulated in @a live). */
-    template <std::meta::info Var>
+    template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, nb::dict& live) {
         constexpr const char* name{
-            std::define_static_string(std::meta::identifier_of(Var))};
+            ::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>()};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Var))) {
             m.attr(name) = [:Var:]; // immutable: a value snapshot at bind time
         } else {

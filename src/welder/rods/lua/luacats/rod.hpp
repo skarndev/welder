@@ -194,10 +194,10 @@ struct rod {
         w.ctors.push_back(std::move(o));
     }
 
-    template <std::meta::info Mem>
+    template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         w.fields += "---@field ";
-        w.fields += std::meta::identifier_of(Mem);
+        w.fields += ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>();
         w.fields += ' ';
         w.fields += lua_type(std::meta::type_of(Mem));
         std::string d{one_line(::welder::doc_of<Mem>())};
@@ -212,7 +212,7 @@ struct rod {
         w.fields += '\n';
     }
 
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(class_writer& w) {
         // A method is `Class:name(...)` (implicit self); reflection's parameters
         // already exclude self, so the arg list renders directly. Overloads are
@@ -224,11 +224,13 @@ struct rod {
             collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
             render_overload_group(
                 w.methods,
-                w.qualified + ":" + std::string{std::meta::identifier_of(Fn)}, sigs);
+                w.qualified + ":" +
+                    ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
+                sigs);
         }
     }
 
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(class_writer& w) {
         if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
@@ -236,7 +238,10 @@ struct rod {
             collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
             render_overload_group(
                 w.methods,
-                w.qualified + "." + std::string{std::meta::identifier_of(Fn)}, sigs);
+                w.qualified + "." +
+                    ::welder::name_of<Fn, language, Style,
+                                      ::welder::ent_kind::static_method>(),
+                sigs);
         }
     }
 
@@ -273,10 +278,11 @@ struct rod {
         return w;
     }
 
-    template <std::meta::info Enum>
+    template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(enum_writer& w) {
         w.values += "    ";
-        w.values += std::meta::identifier_of(Enum);
+        w.values +=
+            ::welder::name_of<Enum, language, Style, ::welder::ent_kind::enumerator>();
         w.values += " = ";
         constexpr long long v{static_cast<long long>(std::to_underlying([:Enum:]))};
         w.values += std::to_string(v);
@@ -294,7 +300,7 @@ struct rod {
         m.doc->declare_table(m.prefix, doc);
     }
 
-    template <std::meta::info Fn>
+    template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m) {
         // Free-function overloads group just like methods (see add_method).
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
@@ -304,12 +310,13 @@ struct rod {
             render_overload_group(
                 m.doc->body,
                 (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-                    std::string{std::meta::identifier_of(Fn)},
+                    ::welder::name_of<Fn, language, Style,
+                                      ::welder::ent_kind::function>(),
                 sigs);
         }
     }
 
-    template <std::meta::info Var>
+    template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&) {
         std::string& out{m.doc->body};
         emit_doc_comment(out, ::welder::doc_of<Var>());
@@ -317,7 +324,8 @@ struct rod {
         out += lua_type(std::meta::type_of(Var));
         out += '\n';
         out += (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-               std::string{std::meta::identifier_of(Var)} + " = nil\n\n";
+               ::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>() +
+               " = nil\n\n";
     }
 
     static module_type add_submodule(module_type& m, const char* name) {
@@ -340,10 +348,15 @@ struct rod {
         `welder::welder<…>::weld_namespace` is the document/writer setup and the
         final render, which is why the backend carries it.
 
-        @tparam Ns a reflection of the (top-level) namespace whose name is the
-                   module.
+        @tparam Ns    a reflection of the (top-level) namespace whose name is the
+                      module.
+        @tparam Style the name style to render member names with — pass the *same*
+                      style the sol2 runtime binding uses, so the stub matches the
+                      loaded module. (Defaults to @ref welder::naming::none. Note that
+                      a style renaming *type* names is not reflected in the stub's type
+                      references / base lists — only in the declarations.)
         @param os the stream to write the finished stub to. */
-    template <std::meta::info Ns>
+    template <std::meta::info Ns, class Style = ::welder::naming::none>
     static void generate(std::ostream& os) {
         static_assert(std::meta::is_namespace(Ns),
                       "welder: luacats::generate<Ns>: Ns must reflect a namespace");
@@ -351,7 +364,7 @@ struct rod {
         module_writer m{&doc,
                         std::define_static_string(qualified_name(Ns))};
         doc.declare_table(m.prefix, ::welder::doc_of<Ns>());
-        ::welder::welder<rod>::weld_namespace<Ns>(m);
+        ::welder::welder<rod, Style>::template weld_namespace<Ns>(m);
         os << doc.render();
     }
 };

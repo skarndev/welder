@@ -84,6 +84,18 @@ add_test(NAME compile.doc_cleandoc
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_doc_cleandoc --config $<CONFIG>)
 
+# Name-styling + weld_as semantics (compile-only): welder::naming reshapes an
+# identifier into a target convention whatever its source spelling, and
+# welder::name_of resolves the bound name (a [[=welder::weld_as]] override winning
+# verbatim over the style). static_asserts lock the word-splitting, restyling and
+# resolution; same compile-to-pass shape as above (no Python/Lua needed).
+add_library(welder_naming OBJECT EXCLUDE_FROM_ALL core/naming.cpp)
+target_compile_features(welder_naming PRIVATE cxx_std_26)
+target_link_libraries(welder_naming PRIVATE welder::headers)
+add_test(NAME compile.naming
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_naming --config $<CONFIG>)
+
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 
