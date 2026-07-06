@@ -25,8 +25,8 @@ still records. `bindable<B, T, L>()` folds these: a wrapper binds iff its value
 args do; a native/user-caster type binds as-is; otherwise it's a
 registration-needing class/enum, bound iff `welded_for`.
 
-## The one backend-specific leaf
-Native-vs-needs-registration is the backend's `has_native_caster<T>`
+## The one rod-specific leaf
+Native-vs-needs-registration is the rod's `has_native_caster<T>`
 (`caster_oracle`); pybind11 implements it as `!needs_registration<T>`, i.e. is T's
 caster the generic `type_caster_base` fallback (needs a `class_`/`enum_`) vs.
 native/self-contained? It is *conservative*: a compile-time read of T's caster
@@ -56,7 +56,7 @@ every type to a `sol::type` (number / boolean / string / table / poly / userdata
 strings (`std::string` is native without extra includes, unlike pybind's `stl.h`) /
 the sol wrapper types are native. Enums are folded into needs-registration even
 though sol2 would convert them as numbers, so a welded enum's name→value table is
-required and enum-typed members are gated on it — matching the Python backends. The
+required and enum-typed members are gated on it — matching the Python rods. The
 STL-wrapper recursion, trust hatches and assert messages are shared as usual.
 
 Negative-compile cases live in `tests/python/pybind11/cpp/neg/`, `tests/python/nanobind/cpp/neg/`

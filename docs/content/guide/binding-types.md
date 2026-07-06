@@ -1,11 +1,11 @@
 # Binding a type
 
-Every backend exposes the same entry point — `welder::<backend>::bind<T>(m)`
-(`welder::pybind11::bind`, `welder::nanobind::bind`, `welder::sol2::bind`) — which
-reflects `T` and emits its whole surface. This page covers what "whole surface"
-means for a class: data members, constructors, methods, and operators. **The
-annotations and the resolution are identical across backends;** only the emitted
-target-language surface differs. Each member obeys the
+Every rod goes through the same entry point — `welder::welder<Rod>::weld_type<T>(m)`,
+where `Rod` is `welder::rods::pybind11::rod`, `welder::rods::nanobind::rod`, or
+`welder::rods::sol2::rod` — which reflects `T` and emits its whole surface. This
+page covers what "whole surface" means for a class: data members, constructors,
+methods, and operators. **The annotations and the resolution are identical across
+rods;** only the emitted target-language surface differs. Each member obeys the
 [resolution rule](annotations.md#the-resolution-rule) — excludes, includes, and the
 type's policy decide what participates.
 
@@ -40,7 +40,7 @@ Point {
     ```
 
 Every bound member's type must pass the [bindability gate](bindability.md) — if the
-backend can't convert it to a meaningful value in the target language, you get a
+rod can't convert it to a meaningful value in the target language, you get a
 compile error naming the type, never a silent skip.
 
 ## Constructors
@@ -107,8 +107,8 @@ constructor is still callable positionally there.
 ## Methods and static methods
 
 Member functions bind as methods; `static` member functions as static/free
-functions on the type. Overloads are all registered on every backend — the Python
-backends (pybind11/nanobind) chain them, and the **sol2** backend groups a name's
+functions on the type. Overloads are all registered on every rod — the Python
+rods (pybind11/nanobind) chain them, and the **sol2** rod groups a name's
 overloads into one `sol::overload(…)` — so each overload dispatches on its arguments
 at call time.
 
@@ -155,7 +155,7 @@ metamethod, told apart unary vs. binary by arity. The mapping differs per langua
     | `operator()` | `__call__` | `operator<` | `__lt__` |
 
     Arithmetic, bitwise, comparison, call and subscript operators are covered.
-    See the [Python backend page](../backends/python.md#operators-become-dunders)
+    See the [Python rods page](../backends/python.md#operators-become-dunders)
     for the full table.
 
 === "Lua"
@@ -169,7 +169,7 @@ metamethod, told apart unary vs. binary by arity. The mapping differs per langua
 
     Lua's metamethod set is smaller and asymmetric — `!=`, `>`, `>=` are *derived*
     from `__eq`, `__lt`, `__le`, so you don't bind them. See the
-    [Lua backend page](../backends/lua.md#operators-become-metamethods) for the full
+    [Lua rod page](../backends/lua.md#operators-become-metamethods) for the full
     table.
 
 ```cpp

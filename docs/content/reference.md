@@ -22,13 +22,14 @@ docs come through, and themed to match this site.
 
 | You'll find | Examples |
 |---|---|
-| The `welder::backend` **concept** | the emission contract every backend satisfies |
+| The `welder::rod` **concept** | the emission contract every rod satisfies |
+| The **entry point** | `welder::welder<Rod>` (`weld_type` / `weld_namespace` / `weld_namespace_as_submodule` / `weld_module`) |
 | The **generic driver** | `bind_type`, `bind_namespace_driver`, `build_module_driver` |
 | The **reflection layer** | `reflect.hpp`, `bind_traits.hpp`, `bindable.hpp`, `doc.hpp` |
 | The **vocabulary** | `lang.hpp`, `annotations.hpp` |
-| The **pybind11 backend** | `backends/python/pybind11/backend.hpp` |
-| The **nanobind backend** | `backends/python/nanobind/backend.hpp` |
-| The shared **Python docstring styles** | `backends/python/doc_style.hpp` (`welder::python::google_style`) |
+| The **pybind11 rod** | `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod`) |
+| The **nanobind rod** | `rods/python/nanobind/rod.hpp` (`welder::rods::nanobind::rod`) |
+| The shared **Python docstring styles** | `rods/python/doc_style.hpp` (`welder::rods::python::google_style`) |
 | Internal helpers (`detail/`) | included — `EXTRACT_PRIVATE` / `INTERNAL_DOCS` are on |
 
 !!! tip "Guide first, reference second"

@@ -15,7 +15,7 @@ extensions, so MSVC/Clang can be added once they catch up.
 ## The module-vs-header boundary (important, gcc-16 specific)
 
 The **`welder` module exports only the std-free vocabulary** (`lang`,
-`annotations`); reflection (`reflect.hpp`) and backends are header-only and **not**
+`annotations`); reflection (`reflect.hpp`) and rods are header-only and **not**
 part of the module. Why: on gcc-16, any std header in a module unit's purview/GMF
 (even `<cstdint>`) makes every consumer that both `import`s it and textually
 `#include`s std headers fail with `conflicting imported declaration` errors (e.g.
@@ -23,14 +23,14 @@ part of the module. Why: on gcc-16, any std header in a module unit's purview/GM
 vocabulary stays std-free; anything touching `<meta>`/pybind11 stays a header.
 Partitioning doesn't help — it's std-in-purview, not partitioning. (Empirical;
 revisit if gcc fixes module/std merging or pybind11 becomes importable.)
-Consequently `reflect.hpp`/backends do **not** include the vocabulary headers
+Consequently `reflect.hpp`/rods do **not** include the vocabulary headers
 (that would redeclare what `import welder;` provides): provide the vocabulary first
-(`import welder;` *or* `#include <welder/welder.hpp>`), then the backend header.
+(`import welder;` *or* `#include <welder/vocabulary.hpp>`), then the rod header.
 
 This is also why welder does **not** modularize internally (no partitions, no
 per-component units): header-only is the source of truth and the fallback. The core
-has two equivalent forms — `import welder;` *or* `#include <welder/welder.hpp>`;
-backends are always header-only (e.g. `#include <welder/backends/python/pybind11/backend.hpp>`).
+has two equivalent forms — `import welder;` *or* `#include <welder/vocabulary.hpp>`;
+rods are always header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
 
 ## Toolchain gotchas
 

@@ -1,4 +1,4 @@
-# Binding features (pybind11 backend) — implementation detail
+# Binding features (pybind11 rod) — implementation detail
 
 Read when: working on what binds — data members, constructors, operators, enums,
 inheritance, namespaces, whole modules, or template↔annotation semantics. This is
@@ -27,20 +27,20 @@ binary told apart by arity so the two `operator-` forms map to `__neg__` /
 in-place compound assignment (`operator+=`) is intentionally not mapped (Python
 falls back to `a = a + b` via `__add__`), nor are `<=>`, `&&`, `||`, `++`, `--`,
 `operator=` (special member). *Free* (non-member) operators aren't bound yet.
-The operator→name map is the backend's `special_method_name(op)` (nullptr = not
+The operator→name map is the rod's `special_method_name(op)` (nullptr = not
 exposed, which also gates operator eligibility in the driver).
 
 ## Enums → `enum.IntEnum`
-A welded enum (scoped or unscoped) binds via `bind<E>` (dispatched from the public
-`bind<T>` by `is_enum_v`) or as a namespace/module member; the driver is
-`backend.hpp` `bind_enum`, the backend hooks `make_enum` / `add_enumerator` /
+A welded enum (scoped or unscoped) binds via `weld_type<E>` (dispatched from the
+public `weld_type<T>` by `is_enum_v`) or as a namespace/module member; the driver is
+`welder.hpp` `bind_enum`, the rod hooks `make_enum` / `add_enumerator` /
 `finish_enum`. Each **enumerator resolves like a data member** — the enum's
 `policy` (default automatic) plus per-enumerator `exclude`/`include` marks decide
 what binds (via the same `member_bound`); NB the C++ grammar puts an enumerator's
 annotation *after* its name (`South [[=welder::mark::exclude]]`). Excluding an
 enumerator does not renumber the rest. An **unscoped** enum also `export_values()`
 (enumerators visible unqualified on the enclosing module, mirroring C++); a
-**scoped** enum stays `E.Value`. The pybind11 backend binds via `py::native_enum`
+**scoped** enum stays `E.Value`. The pybind11 rod binds via `py::native_enum`
 (a stdlib `enum.IntEnum`; `py::enum_` is discouraged as of pybind11 3.0) — it is
 move-only and needs an explicit `.finalize()`, so `make_enum` returns a
 `unique_ptr` handle (the movable value `bind_enum` returns) and `finish_enum`
@@ -59,10 +59,10 @@ nearest welded ancestors reached *through* non-welded ones (deduplicated). A
 recursively (honoring its own marks/policy). Virtual diamonds work; a non-virtual
 diamond with a shared welded base is a C++ ambiguity (not worked around).
 
-## Whole-namespace binding — `bind_namespace<^^ns>(m)`
+## Whole-namespace binding — `weld_namespace<^^ns>(m)`
 `weld` gates *leaf entities only* (class type / free function / namespace-scope
 variable; namespaces are never welded); the namespace `policy` (default automatic)
-+ member marks then resolve. Binds classes (`bind<T>`), free functions (overloads
++ member marks then resolve. Binds classes (`weld_type<T>`), free functions (overloads
 included), and namespace variables as module attributes — a **value snapshot if
 const/constexpr, else a live get/set property** over the C++ global (via a
 `ModuleType` `__class__` swap). A **nested namespace** resolves under the
@@ -70,13 +70,13 @@ const/constexpr, else a live get/set property** over the C++ global (via a
 included — keeps `detail`/`impl` out) and becomes a submodule when it holds bound
 content. Declaration order.
 
-## Whole-module binding — `build_module<^^ns>(m, pre, post)`
-Fills an *existing* module (pre hook → `bind_namespace` → post hook; namespace
+## Whole-module binding — `weld_module<^^ns>(m, pre, post)`
+Fills an *existing* module (pre hook → `weld_namespace` → post hook; namespace
 `doc` → module doc). The C entry symbol `PyInit_<name>` must be preprocessor-pasted,
-so the backend-agnostic `WELDER_MODULE(ns, backend)` macro (`module.hpp`) wraps it
+so the rod-agnostic `WELDER_MODULE(ns, rod)` macro (`module.hpp`) wraps it
 (namespace token = module name, optional trailing `{ }` post-glue with the module
-handle in scope as `module`). One `WELDER_MODULE` per backend per TU; two Python
-backends collide (both emit `PyInit_<name>`).
+handle in scope as `module`). One `WELDER_MODULE` per rod per TU; two Python
+rods collide (both emit `PyInit_<name>`).
 
 ## Template ↔ annotation semantics
 Locked in by `tests/core/template_annotations.cpp` (compile-only static_asserts):
@@ -86,14 +86,15 @@ and including member, parameter and `weld`/mark annotations; `substitute()`d
 function/variable-template instantiations carry them too. Only the *uninstantiated*
 template (or concept) reflection refuses `annotations_of` (P2996 restriction) — but
 any instantiation handed to welder has full docs, and `weld` on a class template
-makes `bind<Welded<int>>(m, "name")` legitimate today — the explicit name is
+makes `weld_type<Welded<int>>(m, "name")` legitimate today — the explicit name is
 required (a specialization `has_identifier` == false; the `identifier_of` name
 default would throw).
 
-## Backends
-Three backends implement every feature above from the same driver: **pybind11**
-(`welder::pybind11`), **nanobind** (`welder::nanobind`) — both `lang::py` — and
-**sol2** (`welder::sol2`, `lang::lua`). nanobind's one behavioral gap is multiple
+## Rods
+Three rods implement every feature above from the same driver: **pybind11**
+(`welder::rods::pybind11::rod`), **nanobind** (`welder::rods::nanobind::rod`) — both
+`lang::py` — and **sol2** (`welder::rods::sol2::rod`, `lang::lua`). nanobind's one
+behavioral gap is multiple
 inheritance (single base per class), so a multi-base diamond binds under pybind11 +
 sol2 but not nanobind. Enums bind as `py::native_enum` (pybind11 → stdlib
 `enum.IntEnum`) / an `is_arithmetic` `nb::enum_` (nanobind → Python `IntEnum`) / a
@@ -112,14 +113,14 @@ The same annotated cases bind for `lang::lua`; the Lua-only differences (see
 - **Overloaded methods/functions/operators are grouped** into one `sol::overload(…)`
   (sol2 stores one value per name / metamethod slot), so every overload dispatches at
   call time rather than the last registered winning. The grouping is done in the sol2
-  backend — the driver visits each overload individually (suiting pybind11's chained
-  `.def`), and the backend gathers a name's siblings with the core selection
+  rod — the driver visits each overload individually (suiting pybind11's chained
+  `.def`), and the rod gathers a name's siblings with the core selection
   predicates, exactly as it already gathers a type's constructors. A same-named member
   in a derived class still hides the base's (C++ name-hiding), unchanged.
 - **Namespace variables snapshot** at load time (const and mutable alike); live
   get/set over a C++ global is a planned enhancement.
 - **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`) — they surface
-  instead in the generated **LuaCATS stub** (`welder::luacats` backend; see
+  instead in the generated **LuaCATS stub** (`welder::rods::luacats::rod`; see
   `docs-and-doxygen.md` and build-test-run.md). The stub reflects the same welded
   Lua types through the same driver and writes a `---@meta` file with `---@field`/
   `---@param`/`---@return`/`---@class`/`---@enum`/`---@operator` tags plus the docs.
@@ -136,8 +137,8 @@ Tested by the shared cases bound for `lua`, asserted by the busted specs in
 
 ## Not yet implemented
 Properties (getter/setter pairs) are designed-for but not yet implemented; so are
-further languages. (Enums, custom type converters, the Lua/sol2 backend, sol2
-overload grouping, and the LuaCATS stub emitter now are.) Remaining sol2 backend
+further languages. (Enums, custom type converters, the Lua/sol2 rod, sol2
+overload grouping, and the LuaCATS stub emitter now are.) Remaining sol2 rod
 enhancement noted above: live namespace variables (and LuaJIT's 5.1 operator-map
 branch). LuaCATS stub: overloaded methods/constructors/free functions now render as
 one documented `function` plus `---@overload fun(…)` lines (the primary — kept with

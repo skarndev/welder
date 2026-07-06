@@ -11,15 +11,16 @@ annotations come through.
 
 ## Where to start
 
-- **The `welder::backend` concept** (`backend.hpp`) — the emission contract every
-  backend satisfies, plus the generic driver (`bind_type`,
-  `bind_namespace_driver`, `build_module_driver`).
+- **The `welder::rod` concept + `welder::welder<Rod>` entry point** (`welder.hpp`) —
+  the emission contract every rod satisfies, the shared entry point (`weld_type`,
+  `weld_namespace`, `weld_namespace_as_submodule`, `weld_module`), and the generic
+  driver (`bind_type`, `bind_namespace_driver`, `build_module_driver`).
 - **The reflection layer** — `reflect.hpp` (`welded_for`, `member_bound`,
   `public_bases`), `bind_traits.hpp` (what binds), `bindable.hpp` (the bindability
   gate), `doc.hpp` (docstring folding).
 - **The vocabulary** — `lang.hpp`, `annotations.hpp` (std-free; the `welder` module
   exports exactly these).
-- **The pybind11 backend** — `backends/python/pybind11/backend.hpp`.
+- **The pybind11 rod** — `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod`).
 
 ## How this reference is built
 

@@ -53,7 +53,7 @@ both built from the *same* welder core:
 welder's promise is that **one annotated type binds to every language you weld it
 for**. Here is a struct welded for *both* Python and Lua — the default policy
 (`automatic`) reflects every member unless excluded. This C++ is identical no
-matter which backend you register it with:
+matter which rod you register it with:
 
 ```cpp
 struct
@@ -72,7 +72,7 @@ Point {
 2.  `mark::exclude` (no argument) hides `internal_id` from **all** welded
     languages. `mark::exclude(welder::lang::py)` would hide it from Python only.
 
-Then a small translation unit per backend registers it. The `#include`s and the
+Then a small translation unit per rod registers it. The `#include`s and the
 `bind` call differ; **the annotated type above does not.**
 
 === "Python (pybind11)"
@@ -84,13 +84,13 @@ Then a small translation unit per backend registers it. The `#include`s and the
 
     #include <pybind11/pybind11.h>
     #include <pybind11/stl.h>              // std::string conversion (1)
-    #include <welder/backends/python/pybind11/backend.hpp>
+    #include <welder/rods/python/pybind11/rod.hpp>
 
     // ... Point as above ...
 
     PYBIND11_MODULE(welder_poc, m) {
         m.doc() = "welder pybind11 proof-of-concept";
-        welder::pybind11::bind<Point>(m);  // (2)
+        welder::welder<welder::rods::pybind11::rod>::weld_type<Point>(m);  // (2)
     }
     ```
 
@@ -98,9 +98,12 @@ Then a small translation unit per backend registers it. The `#include`s and the
         `std::vector`, etc. across the boundary. welder's
         [bindability gate](bindability.md) reminds you at compile time if one is
         missing.
-    2.  `bind<T>` reflects `Point`, resolves which members bind, checks each is
-        representable, and emits the pybind11 registration. The bound name defaults
-        to `identifier_of(^^T)`; pass a second string to override it.
+    2.  `welder::welder<Rod>` is welder's one entry point, parameterized on a
+        **rod** (the backend that lays the bindings down); `weld_type<T>` reflects
+        `Point`, resolves which members bind, checks each is representable, and
+        emits the pybind11 registration. The bound name defaults to
+        `identifier_of(^^T)`; pass a second string to override it. (When you call
+        several times, alias it: `using weld = welder::welder<welder::rods::pybind11::rod>;`.)
 
     ```pycon
     >>> import welder_poc as w
@@ -116,17 +119,18 @@ Then a small translation unit per backend registers it. The `#include`s and the
     ```cpp title="shapes_lua.cpp"
     #include <cstdint>
     #include <string>
-    #include <welder/welder.hpp>          // vocabulary (header-only — see note)
+    #include <welder/vocabulary.hpp>          // vocabulary (header-only — see note)
 
     #include <sol/sol.hpp>
-    #include <welder/backends/lua/sol2/backend.hpp>
+    #include <welder/rods/lua/sol2/rod.hpp>
 
     // ... Point as above ...
 
     extern "C" int luaopen_shapes_lua(lua_State* L) {
         sol::state_view lua(L);
         sol::table m = lua.create_table();
-        welder::sol2::bind<Point>(m);      // same core, sol2 emission
+        // same core, sol2 emission
+        welder::welder<welder::rods::sol2::rod>::weld_type<Point>(m);
         return sol::stack::push(L, m);
     }
     ```
@@ -147,30 +151,30 @@ field binds, so `Point(1.0, 2.0)` also works — see
 
 welder is fundamentally **header-only**, with one optional module wrapper so you
 can `import welder;`. Pick whichever you prefer — they are equivalent — but always
-provide the vocabulary before the backend header:
+provide the vocabulary before the rod header:
 
 === "Module"
 
     ```cpp
     import welder;
-    #include <welder/backends/python/pybind11/backend.hpp>
+    #include <welder/rods/python/pybind11/rod.hpp>
     ```
 
 === "Header-only"
 
     ```cpp
-    #include <welder/welder.hpp>
-    #include <welder/backends/python/pybind11/backend.hpp>
+    #include <welder/vocabulary.hpp>
+    #include <welder/rods/python/pybind11/rod.hpp>
     ```
 
-Backends are *always* header-only.
+Rods are *always* header-only.
 
-!!! note "The Lua backend is header-only *only*"
+!!! note "The Lua rod is header-only *only*"
 
     sol2's `<luaconf.h>` doesn't survive C++20 module dependency scanning, so a Lua
-    TU must consume welder with `#include <welder/welder.hpp>`, never `import
-    welder;`. The Python backends work with either form. Details on the
-    [Lua backend page](../backends/lua.md).
+    TU must consume welder with `#include <welder/vocabulary.hpp>`, never `import
+    welder;`. The Python rods work with either form. Details on the
+    [Lua rod page](../backends/lua.md).
 
 Next: the [annotation vocabulary](annotations.md). When you're ready to pick or
-combine backends, see the [Backends](../backends/index.md) section.
+combine rods, see the [Rods](../backends/index.md) section.

@@ -1,7 +1,7 @@
 # Lua (sol2)
 
 welder binds the *same* annotated C++ to Lua as to Python — you add
-`welder::lang::lua` to a type's `weld` and register with the **sol2** backend. The
+`welder::lang::lua` to a type's `weld` and register with the **sol2** rod. The
 core (which members bind, inheritance, the [bindability
 gate](../guide/bindability.md), namespaces) is shared verbatim; only the emission
 differs. The result is a **loadable Lua C module**: a shared object Lua's `require`
@@ -13,10 +13,10 @@ Python's, and the LuaCATS stub that carries the docstrings Lua has no runtime sl
 for.
 
 ```cpp title="shapes_lua.cpp"
-#include <welder/welder.hpp>                       // vocabulary (header-only)
+#include <welder/vocabulary.hpp>                       // vocabulary (header-only)
 
 #include <sol/sol.hpp>
-#include <welder/backends/lua/sol2/backend.hpp>
+#include <welder/rods/lua/sol2/rod.hpp>
 
 struct
 [[=welder::weld(welder::lang::lua)]]
@@ -33,9 +33,10 @@ Rect {
 extern "C" int luaopen_shapes(lua_State* L) {
     sol::state_view lua(L);
     sol::table m = lua.create_table();
-    welder::sol2::bind<Rect>(m);       // one type
-    // welder::sol2::bind_namespace<^^ns>(m);  // or a whole namespace
-    return sol::stack::push(L, m);     // return the module table
+    using weld = welder::welder<welder::rods::sol2::rod>;
+    weld::weld_type<Rect>(m);               // one type
+    // weld::weld_namespace<^^ns>(m);       // or a whole namespace
+    return sol::stack::push(L, m);          // return the module table
 }
 ```
 
@@ -46,10 +47,10 @@ print(r:area())                -- 12.0  (methods use `:`)
 print((r + s.Rect(1, 1)).w)    -- 4.0   (operator+ -> __add)
 ```
 
-Or skip the boilerplate with the backend-agnostic
-[entry macro](../guide/namespaces-modules.md#binding-a-whole-module), which binds a
-whole namespace and emits the `luaopen_` symbol for you. The selector is the backend
-name **`sol2`**, not `lua`:
+Or skip the boilerplate with the rod-agnostic
+[entry macro](../guide/namespaces-modules.md#binding-a-whole-module) (from
+`welder/rods/lua/sol2/module.hpp`), which binds a whole namespace and emits the
+`luaopen_` symbol for you. The selector is the rod name **`sol2`**, not `lua`:
 
 ```cpp
 WELDER_MODULE(shapes_lua, sol2) {
@@ -76,7 +77,7 @@ The target name must match the namespace token in `WELDER_MODULE(shapes, sol2)` 
 !!! note "Header-only consumption only"
 
     A Lua binding TU consumes welder **header-only** (`#include
-    <welder/welder.hpp>`), not `import welder;`: sol2's `<luaconf.h>` does not
+    <welder/vocabulary.hpp>`), not `import welder;`: sol2's `<luaconf.h>` does not
     survive C++20 module dependency scanning. `welder_sol2_add_module` disables the
     scan for you (`CXX_SCAN_FOR_MODULES OFF`).
 
@@ -144,16 +145,16 @@ Because Lua drops docstrings at runtime, welder can emit a **LuaCATS
 [`.pyi` stubs](../guide/docstrings.md#stubs) — so the [Lua language
 server](https://luals.github.io/) gives you completion, type hints and the
 docstrings in your editor. Unlike the Python stubs (scraped from the *loaded*
-module), a Lua stub is **reflection-emitted at build time** by the `welder::luacats`
-backend, which walks the same welded types through the same core driver as sol2 and
-writes LuaCATS text — so it needs no sol2 or Lua at all, just the reflecting
-compiler.
+module), a Lua stub is **reflection-emitted at build time** by the
+`welder::rods::luacats::rod`, which walks the same welded types through the same
+core driver as sol2 and writes LuaCATS text — so it needs no sol2 or Lua at all,
+just the reflecting compiler.
 
 Write a tiny generator TU and let the entry macro provide `main()`:
 
 ```cpp title="shapes_stub.cpp"
-#include <welder/welder.hpp>
-#include <welder/backends/lua/luacats/backend.hpp>
+#include <welder/vocabulary.hpp>
+#include <welder/rods/lua/luacats/module.hpp>   // rod + WELDER_LUACATS_MAIN
 
 WELDER_LUACATS_MAIN(shapes)   // emit the ---@meta stub for namespace ^^shapes
 ```

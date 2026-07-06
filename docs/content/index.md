@@ -13,12 +13,12 @@ Generate language bindings for annotated C++ types straight from
 
 You mark a type with attributes describing *which languages* it should be exposed
 to and *which members* participate; welder reflects over it at **compile time** and
-emits the backend registration code (e.g. pybind11 `class_<T>` calls) directly.
+emits the binding registration code (e.g. pybind11 `class_<T>` calls) directly.
 
 ```cpp
 import welder;                              // annotation vocabulary
 #include <pybind11/pybind11.h>
-#include <welder/backends/python/pybind11/backend.hpp>     // the pybind11 backend
+#include <welder/rods/python/pybind11/rod.hpp>     // the pybind11 rod
 
 struct [[=welder::weld(welder::lang::py)]]  // expose to Python
 Point {
@@ -30,7 +30,8 @@ Point {
 };
 
 PYBIND11_MODULE(shapes, m) {
-    welder::pybind11::bind<Point>(m);       // reflects Point, emits the binding
+    // reflects Point, emits the binding
+    welder::welder<welder::rods::pybind11::rod>::weld_type<Point>(m);
 }
 ```
 
@@ -91,7 +92,7 @@ False
 ```mermaid
 flowchart LR
     A["Annotated C++ type<br/><code>[[=welder::weld(...)]]</code>"] --> B["welder core<br/>(reflection: what binds?)"]
-    B --> C["backend<br/>(pybind11 · nanobind · sol2)"]
+    B --> C["rod<br/>(pybind11 · nanobind · sol2)"]
     C --> D["Python & Lua modules"]
     A -.same annotations.-> E["Doxygen filter"]
     E --> F["C++ API reference"]
@@ -102,19 +103,20 @@ flowchart LR
 
 A language-agnostic **core** owns all the reflection work — deciding *what* binds,
 whether each type is *representable*, and walking types/namespaces/bases. A
-**backend** is a stateless policy struct supplying only the emission primitives
-(how to register a class/method/property in its framework). Adding a language is
-one backend struct; the core is reused verbatim. The *same* annotated type binds to
-**Python** (pybind11 or nanobind) and **Lua** (sol2) — you weld it once.
+**rod** (a welding rod: `welder::rods::<name>::rod`) is a stateless policy struct
+supplying only the emission primitives (how to register a class/method/property in
+its framework), driven through the one entry point `welder::welder<Rod>`. Adding a
+language is one rod struct; the core is reused verbatim. The *same* annotated type
+binds to **Python** (pybind11 or nanobind) and **Lua** (sol2) — you weld it once.
 
 [:octicons-arrow-right-24: Read the architecture](architecture.md){ .md-button }
-[:octicons-arrow-right-24: Explore the backends](backends/index.md){ .md-button }
+[:octicons-arrow-right-24: Explore the rods](backends/index.md){ .md-button }
 [:octicons-arrow-right-24: Browse the C++ reference](reference.md){ .md-button .md-button--primary }
 
 !!! warning "Early proof-of-concept"
 
     welder targets **C++26 and newer only**, and today **gcc-16 is the only
-    compiler** that implements P2996 + P3394. Three backends — **pybind11** and
+    compiler** that implements P2996 + P3394. Three rods — **pybind11** and
     **nanobind** (Python) and **sol2** (Lua) — are verified end-to-end against the
     *same* shared C++ cases; properties and further languages are designed-for but
     not yet implemented.

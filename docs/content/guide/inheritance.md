@@ -7,7 +7,7 @@ an independently-registered entity — rather than an inheritance directive.
 ```mermaid
 flowchart TD
     D["Derived<br/>(welded)"] --> Q{"is the base welded?"}
-    Q -- yes --> W["native backend base<br/>(bind Base separately, first)"]
+    Q -- yes --> W["native rod base<br/>(bind Base separately, first)"]
     Q -- no --> M["C++ mixin<br/>eligible members flattened in<br/>(honoring its own marks/policy)"]
     style D stroke:#e64a19,stroke-width:3px
     style W stroke:#e64a19,stroke-width:3px
@@ -18,7 +18,7 @@ flowchart TD
 
 A **welded** base becomes a native base class in the target framework (pybind11
 `class_<T, Base…>`, nanobind `class_<T, Base>`, sol2 `sol::bases<…>`). Bind it
-separately, and **first**, so the backend knows the base's class object:
+separately, and **first**, so the rod knows the base's class object:
 
 ```cpp
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
@@ -32,8 +32,9 @@ Circle : Shape {          // Shape is welded → a real base class in each langu
 };
 
 // bind order: base before derived
-bind<Shape>(m);
-bind<Circle>(m);          // welder::pybind11::bind / welder::sol2::bind / …
+using weld = welder::welder<welder::rods::pybind11::rod>;  // or ...::sol2::rod / …
+weld::weld_type<Shape>(m);
+weld::weld_type<Circle>(m);
 ```
 
 === "Python"
@@ -79,17 +80,17 @@ Record : Timestamps {                   // inherits Timestamps as a mixin
 
 How much of the C++ inheritance graph survives depends on the target framework:
 
-| Backend | Multiple welded bases | Virtual diamond |
+| Rod | Multiple welded bases | Virtual diamond |
 |---|---|---|
 | **pybind11** | ✅ | ✅ |
 | **sol2** (Lua) | ✅ | ✅ |
 | **nanobind** | ❌ single base only | ❌ |
 
-- A **virtual** diamond works on the backends that support multiple bases.
+- A **virtual** diamond works on the rods that support multiple bases.
 - A **non-virtual** diamond with a shared *welded* base is a genuine C++ ambiguity
   — welder does not work around it (nor should it; it's ambiguous in C++ too).
 - On **nanobind**, `nb::class_<T, Base>` takes a single base, so a multi-base type
   won't bind there. See the
-  [Python backends comparison](../backends/python.md#feature-comparison).
+  [Python rods comparison](../backends/python.md#feature-comparison).
 
 Next: [Namespaces & modules](namespaces-modules.md).

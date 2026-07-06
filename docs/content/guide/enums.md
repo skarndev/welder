@@ -53,7 +53,7 @@ enumerator stays qualified under the enum name:
 ## Unscoped enum — values exported
 
 An unscoped enum also mirrors its enumerators onto the enclosing module unqualified
-(pybind11 `export_values()`; the sol2 backend copies the names onto the module
+(pybind11 `export_values()`; the sol2 rod copies the names onto the module
 table), matching C++:
 
 ```cpp

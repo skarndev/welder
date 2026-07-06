@@ -1,8 +1,9 @@
 # Architecture
 
-welder is a language-agnostic **core** plus pluggable **backends**, joined by
-**static polymorphism**. The core owns *all* the reflection work; a backend supplies
-only *emission primitives*. The core never depends on a backend.
+welder is a language-agnostic **core** plus pluggable **rods** (welding rods — the
+backends that lay the bindings down), joined by **static polymorphism**. The core
+owns *all* the reflection work; a rod supplies only *emission primitives*. The core
+never depends on a rod.
 
 ```mermaid
 flowchart TB
@@ -10,19 +11,19 @@ flowchart TB
         R["reflect.hpp<br/>welded_for · member_bound · public_bases"]
         BT["bind_traits.hpp<br/>what binds: params/ctors/methods/operators"]
         BD["bindable.hpp<br/>the bindability gate (STL-wrapper recursion)"]
-        DR["backend.hpp<br/>the welder::backend concept + generic driver"]
+        DR["welder.hpp<br/>the welder::rod concept + driver + welder&lt;Rod&gt; entry point"]
         DC["doc.hpp<br/>doc/return/param folding + styles"]
     end
     subgraph voc["vocabulary (std-free, the module exports this)"]
         L["lang.hpp"]
         A["annotations.hpp"]
     end
-    subgraph be["backends (header-only)"]
-        P["backends/python/pybind11/backend.hpp"]
-        N["backends/python/nanobind/backend.hpp"]
-        DS["backends/python/doc_style.hpp — shared"]
-        LU["backends/lua/sol2/backend.hpp"]
-        LC["backends/lua/luacats/backend.hpp — build-time stub"]
+    subgraph be["rods (header-only)"]
+        P["rods/python/pybind11/rod.hpp"]
+        N["rods/python/nanobind/rod.hpp"]
+        DS["rods/python/doc_style.hpp — shared"]
+        LU["rods/lua/sol2/rod.hpp"]
+        LC["rods/lua/luacats/rod.hpp — build-time stub"]
     end
     voc --> core
     core --> be
@@ -30,7 +31,7 @@ flowchart TB
     style be stroke:#e64a19,stroke-width:3px
 ```
 
-## Core vs. backend
+## Core vs. rod
 
 The **core** decides:
 
@@ -38,10 +39,10 @@ The **core** decides:
   selectors, native-base collection);
 - whether each type is **representable** — `bindable.hpp` (the
   [bindability gate](guide/bindability.md));
-- how to **walk** types / namespaces / bases — `backend.hpp`'s generic driver.
+- how to **walk** types / namespaces / bases — `welder.hpp`'s generic driver.
 
-A **backend** is a stateless struct satisfying the `welder::backend` concept. It
-provides ~16 emission primitives and *nothing else*:
+A **rod** is a stateless struct (`welder::rods::<name>::rod`) satisfying the
+`welder::rod` concept. It provides ~16 emission primitives and *nothing else*:
 
 - **associated:** `language`, `module_type`, and `has_native_caster<T>` — the one
   bindability fact the core can't know;
@@ -52,16 +53,17 @@ provides ~16 emission primitives and *nothing else*:
 - **namespace/module binding:** `open_module`, `set_module_doc`, `add_function`,
   `add_variable`, `add_submodule`, `close_module`.
 
-The public `welder::pybind11::bind` / `bind_namespace` / `build_module` are one-line
-wrappers that plug `pybind11::detail::backend` into the generic driver.
+The public `welder::welder<Rod>` (`weld_type` / `weld_namespace` /
+`weld_namespace_as_submodule` / `weld_module`) is the single, shared entry point
+that plugs a rod into the generic driver — there are no per-rod wrapper functions.
 
 !!! quote "Adding a language"
 
-    …is writing one backend struct plus thin public wrappers. The nanobind backend
-    is nearly a copy of the pybind11 one (same class-handle model, sharing the
-    Python docstring styles); the sol2 Lua backend implements the same primitives
-    against Lua's C API. The core is reused verbatim — see the
-    [Backends](backends/index.md) section for each one. The **luacats** backend reuses
+    …is writing one rod struct; the `welder::welder<Rod>` entry point is shared. The
+    nanobind rod is nearly a copy of the pybind11 one (same class-handle model,
+    sharing the Python docstring styles); the sol2 Lua rod implements the same
+    primitives against Lua's C API. The core is reused verbatim — see the
+    [Rods](backends/index.md) section for each one. The **luacats** rod reuses
     the *same driver* for a different job: instead of emitting runtime registration,
     it walks the welded namespace and writes a LuaCATS `---@meta` stub at build time.
 
@@ -70,7 +72,7 @@ wrappers that plug `pybind11::detail::backend` into the generic driver.
 This is a gcc-16-specific constraint worth understanding:
 
 > The `welder` **module** exports only the std-free **vocabulary** (`lang`,
-> `annotations`). Reflection (`reflect.hpp`) and all backends are **header-only**
+> `annotations`). Reflection (`reflect.hpp`) and all rods are **header-only**
 > and *not* part of the module.
 
 Why: on gcc-16, any std header in a module unit's purview (even `<cstdint>`) makes
@@ -80,7 +82,7 @@ textually. So the vocabulary stays std-free and modular; anything touching `<met
 stays a header. Partitioning doesn't help (it's std-in-purview, not partitioning).
 
 The practical consequence: provide the vocabulary **first** (`import welder;` *or*
-`#include <welder/welder.hpp>`), then the backend header. The reflection/backend
+`#include <welder/vocabulary.hpp>`), then the rod header. The reflection and rod
 headers deliberately don't re-include the vocabulary — that would redeclare what
 `import welder;` provides.
 

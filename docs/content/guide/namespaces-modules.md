@@ -5,10 +5,10 @@ Binding types one at a time is fine, but welder can also bind a **whole namespac
 
 ## Binding a namespace
 
-`welder::<backend>::bind_namespace<^^ns>(m)` walks a namespace and binds its
+`welder::welder<Rod>::weld_namespace<^^ns>(m)` walks a namespace and binds its
 contents in **declaration order**:
 
-- classes (via `bind<T>`),
+- classes (via `weld_type<T>`),
 - free functions (overloads included),
 - namespace-scope variables.
 
@@ -31,7 +31,7 @@ double distance(const Point& a, const Point& b) { /* … */ }
 
     ```cpp
     PYBIND11_MODULE(geometry, m) {
-        welder::pybind11::bind_namespace<^^geometry>(m);
+        welder::welder<welder::rods::pybind11::rod>::weld_namespace<^^geometry>(m);
     }
     ```
 
@@ -41,7 +41,7 @@ double distance(const Point& a, const Point& b) { /* … */ }
     extern "C" int luaopen_geometry(lua_State* L) {
         sol::state_view lua(L);
         sol::table m = lua.create_table();
-        welder::sol2::bind_namespace<^^geometry>(m);
+        welder::welder<welder::rods::sol2::rod>::weld_namespace<^^geometry>(m);
         return sol::stack::push(L, m);
     }
     ```
@@ -51,8 +51,8 @@ double distance(const Point& a, const Point& b) { /* … */ }
 A namespace-scope variable binds as a module attribute:
 
 - **const / constexpr** → a *value snapshot*;
-- otherwise → on the **Python** backends, a **live get/set property** over the C++
-  global (via a `ModuleType` `__class__` swap). The **sol2** backend snapshots the
+- otherwise → on the **Python** rods, a **live get/set property** over the C++
+  global (via a `ModuleType` `__class__` swap). The **sol2** rod snapshots the
   value at load time (a live get/set property is planned).
 
 ### Nested namespaces
@@ -64,23 +64,24 @@ namespace becomes a **submodule** when it holds bound content.
 
 ## Binding a whole module
 
-`WELDER_MODULE(ns, backend)` emits the language's C entry symbol
+`WELDER_MODULE(ns, rod)` emits the language's C entry symbol
 (`PyInit_<name>` for Python, `luaopen_<name>` for Lua) and fills the module from the
-namespace — no `PYBIND11_MODULE`, no hand-written `luaopen_`, no per-type `bind`
+namespace — no `PYBIND11_MODULE`, no hand-written `luaopen_`, no per-type `weld_type`
 calls. The namespace token doubles as the module name, and the namespace `doc`
-becomes the module docstring (where the language has one).
+becomes the module docstring (where the language has one). Include the rod's
+`module.hpp` (not just its `rod.hpp`) to pull the macro in.
 
-The `backend` selector is the **backend name** (`pybind11`, `nanobind`, `sol2`), not
+The `rod` selector is the **rod name** (`pybind11`, `nanobind`, `sol2`), not
 the language. Everything above `WELDER_MODULE` — the namespace and its annotations
 — is identical; only the includes and the selector change:
 
 === "Python (pybind11)"
 
     ```cpp title="shapes.cpp"
-    #include <welder/welder.hpp>
+    #include <welder/vocabulary.hpp>
     #include <pybind11/pybind11.h>
     #include <pybind11/stl.h>
-    #include <welder/backends/python/pybind11/backend.hpp>
+    #include <welder/rods/python/pybind11/module.hpp>  // rod + WELDER_MODULE
 
     namespace
     [[=welder::doc("A small shapes module built by welder.")]]
@@ -130,9 +131,9 @@ the language. Everything above `WELDER_MODULE` — the namespace and its annotat
 === "Lua (sol2)"
 
     ```cpp title="shapes_lua.cpp"
-    #include <welder/welder.hpp>
+    #include <welder/vocabulary.hpp>
     #include <sol/sol.hpp>
-    #include <welder/backends/lua/sol2/backend.hpp>
+    #include <welder/rods/lua/sol2/module.hpp>  // rod + WELDER_MODULE
 
     // ... namespace shapes { Rect, scale } exactly as in the Python tab ...
 
@@ -151,15 +152,16 @@ the language. Everything above `WELDER_MODULE` — the namespace and its annotat
     print(shapes.VERSION)                   --> 1.0
     ```
 
-Under the hood, `WELDER_MODULE` wraps `build_module<^^ns>(m, pre, post)`: a *pre*
-hook, then `bind_namespace`, then a *post* hook (your trailing block).
+Under the hood, `WELDER_MODULE` wraps
+`welder::welder<Rod>::weld_module<^^ns>(m, pre, post)`: a *pre* hook, then
+`weld_namespace`, then a *post* hook (your trailing block).
 
-!!! warning "One `WELDER_MODULE` per backend per TU — but several backends can coexist"
+!!! warning "One `WELDER_MODULE` per rod per TU — but several rods can coexist"
 
-    Two backends that emit the *same* entry symbol collide — pybind11 and nanobind
-    both emit `PyInit_<name>`, so only one Python backend per TU. But a Python and a
+    Two rods that emit the *same* entry symbol collide — pybind11 and nanobind
+    both emit `PyInit_<name>`, so only one Python rod per TU. But a Python and a
     Lua `WELDER_MODULE` emit *different* symbols (`PyInit_shapes` vs
     `luaopen_shapes`), so one shared object can carry both. That's the basis for
-    [shipping the same module across backends](../backends/multiple.md).
+    [shipping the same module across rods](../backends/multiple.md).
 
 Next: [Docstrings](docstrings.md).

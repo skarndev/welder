@@ -1,27 +1,27 @@
-# Shipping multiple backends
+# Shipping multiple rods
 
-welder's whole premise is that the annotations are written **once** and each backend
+welder's whole premise is that the annotations are written **once** and each rod
 is just a different *compile* of the same types. So shipping one library to several
-languages — or letting your users choose a Python backend — is a build-system
+languages — or letting your users choose a Python rod — is a build-system
 question, not a code question. This page is the CMake recipe.
 
 ## The shape of it
 
-Keep the annotated types in a **backend-free header**, then give each backend a tiny
-translation unit that includes that header and the backend, and pick the backend in
-`WELDER_MODULE`. Nothing about the types changes between backends.
+Keep the annotated types in a **rod-free header**, then give each rod a tiny
+translation unit that includes that header and the rod, and pick the rod in
+`WELDER_MODULE`. Nothing about the types changes between rods.
 
 ```text
 shapes/
-  shapes.hpp        # the annotated namespace — no backend include
-  shapes_py.cpp     # + pybind11 (or nanobind) backend  → PyInit_shapes
-  shapes_lua.cpp    # + sol2 backend                     → luaopen_shapes
-  shapes_stub.cpp   # + luacats backend                  → shapes.lua (editor stub)
+  shapes.hpp        # the annotated namespace — no rod include
+  shapes_py.cpp     # + pybind11 (or nanobind) rod      → PyInit_shapes
+  shapes_lua.cpp    # + sol2 rod                         → luaopen_shapes
+  shapes_stub.cpp   # + luacats rod                      → shapes.lua (editor stub)
 ```
 
 ```cpp title="shapes/shapes.hpp"
 #pragma once
-#include <welder/welder.hpp>          // vocabulary, header-only (works for every backend)
+#include <welder/vocabulary.hpp>          // vocabulary, header-only (works for every rod)
 
 namespace
 [[=welder::doc("A small shapes library built by welder.")]]
@@ -42,7 +42,7 @@ Rect {
 }  // namespace shapes
 ```
 
-Each backend TU is three lines — include the header, include the backend, stamp the
+Each rod TU is three lines — include the header, include the rod's module.hpp, stamp the
 entry macro:
 
 === "shapes_py.cpp"
@@ -50,7 +50,7 @@ entry macro:
     ```cpp
     #include "shapes/shapes.hpp"
     #include <pybind11/pybind11.h>
-    #include <welder/backends/python/pybind11/backend.hpp>
+    #include <welder/rods/python/pybind11/module.hpp>
 
     WELDER_MODULE(shapes, pybind11) {}   // emits PyInit_shapes
     ```
@@ -60,7 +60,7 @@ entry macro:
     ```cpp
     #include "shapes/shapes.hpp"
     #include <sol/sol.hpp>
-    #include <welder/backends/lua/sol2/backend.hpp>
+    #include <welder/rods/lua/sol2/module.hpp>
 
     WELDER_MODULE(shapes, sol2) {}       // emits luaopen_shapes
     ```
@@ -69,28 +69,28 @@ entry macro:
 
     ```cpp
     #include "shapes/shapes.hpp"
-    #include <welder/backends/lua/luacats/backend.hpp>
+    #include <welder/rods/lua/luacats/module.hpp>
 
     WELDER_LUACATS_MAIN(shapes)          // generates shapes.lua at build time
     ```
 
 !!! tip "Use the header-only vocabulary in the shared header"
 
-    `shapes.hpp` includes `<welder/welder.hpp>` (header-only), not `import welder;`.
-    That single choice lets *every* backend TU include it — the Lua backend
+    `shapes.hpp` includes `<welder/vocabulary.hpp>` (header-only), not `import welder;`.
+    That single choice lets *every* rod TU include it — the Lua rod
     [cannot use the module form](lua.md#building-a-loadable-module), and header-only
-    works for the Python backends too. This is exactly how welder's own tests reuse
-    one C++ case tree across all backends.
+    works for the Python rods too. This is exactly how welder's own tests reuse
+    one C++ case tree across all rods.
 
 ## CMake: one library, several modules
 
-The annotated header becomes an INTERFACE target; each backend TU becomes its own
+The annotated header becomes an INTERFACE target; each rod TU becomes its own
 module target that links it. Because Python's `PyInit_shapes` and Lua's
 `luaopen_shapes` are **different symbols**, both modules can be named `shapes` and
 live side by side — you just put each on its own loader path.
 
 ```cmake
-# --- the shared, backend-free annotated API ---------------------------------
+# --- the shared, rod-free annotated API ---------------------------------
 add_library(shapes_api INTERFACE)
 target_include_directories(shapes_api INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(shapes_api INTERFACE cxx_std_26)
@@ -132,16 +132,16 @@ The target *names* (`shapes_py`, `shapes_lua`) only have to be unique in CMake; 
 `OUTPUT_NAME` (the file) and the `WELDER_MODULE` token (the entry symbol) that must
 equal the module name the loader asks for.
 
-## Choosing between the two Python backends
+## Choosing between the two Python rods
 
 pybind11 and nanobind **both** emit `PyInit_<name>`, so they can't share a module —
 but you can select which one to build at configure time. Point one TU at either
-backend header and branch in CMake:
+rod header and branch in CMake:
 
 ```cmake
-set(WELDER_PYTHON_BACKEND pybind11 CACHE STRING "pybind11 or nanobind")
+set(WELDER_PYTHON_ROD pybind11 CACHE STRING "pybind11 or nanobind")
 
-if(WELDER_PYTHON_BACKEND STREQUAL nanobind)
+if(WELDER_PYTHON_ROD STREQUAL nanobind)
     find_package(nanobind CONFIG REQUIRED)
     nanobind_add_module(shapes_py shapes_py.cpp)          # required for nanobind
     target_link_libraries(shapes_py PRIVATE shapes_api welder::nanobind)
@@ -153,12 +153,12 @@ endif()
 set_target_properties(shapes_py PROPERTIES OUTPUT_NAME shapes)
 ```
 
-Have `shapes_py.cpp` select the matching backend the same way (e.g. behind a
-`-DWELDER_PYTHON_BACKEND=…` compile definition, or two thin TUs), so
+Have `shapes_py.cpp` select the matching rod the same way (e.g. behind a
+`-DWELDER_PYTHON_ROD=…` compile definition, or two thin TUs), so
 `WELDER_MODULE(shapes, pybind11)` / `(shapes, nanobind)` matches the CMake branch.
-See the [Python backends comparison](python.md#feature-comparison) to pick.
+See the [Python rods comparison](python.md#feature-comparison) to pick.
 
-!!! note "Building both Python backends as variants"
+!!! note "Building both Python rods as variants"
 
     Because they collide on `PyInit_shapes`, you can't `import` both from one file.
     If you want both (say, to benchmark), build them as two separate modules with

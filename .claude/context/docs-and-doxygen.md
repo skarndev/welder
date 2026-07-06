@@ -16,8 +16,8 @@ entity, so its doc rides on the function as a *distinct* spec type
 re-breaking the style API) under a pluggable style; surfaced as Python `__doc__`.
 `doc.hpp` keeps only the neutral `doc_style` concept + `function_docstring` (no
 default style); the concrete `google_style` (→ `Args:`/`Returns:` blocks) lives in
-`<welder/backends/python/doc_style.hpp>` under `welder::python`, shared by both
-Python backends, which pass it explicitly.
+`<welder/rods/python/doc_style.hpp>` under `welder::python`, shared by both
+Python rods, which pass it explicitly.
 
 **Multiline docs work** — a `doc`/`returns`/param text is just a `const char[N]`,
 so a raw string literal (`R"(…)"`) with newlines/blank lines/quotes/backslashes
@@ -34,24 +34,24 @@ block's *continuation* lines so multiline entries stay readable (tested: `doc.hp
 textual and does not dedent — Doxygen does its own.
 
 **Data-member docs** land on the member's Python attribute: pybind11 binds members
-as *properties* (data descriptors), and `add_field` (`backends/python/pybind11/backend.hpp`) passes
+as *properties* (data descriptors), and `add_field` (`rods/python/pybind11/rod.hpp`) passes
 `doc_of<Mem>()` as the property docstring — so it reaches `__doc__` and the `.pyi`
 stubs. A **const** member is bound read-only (`def_readonly`; `def_readwrite`'s
 setter would not compile), a mutable one read/write (`def_readwrite`); only the
 getter's doc is surfaced (a Python `property` has one `__doc__`), so no setter
 docstring is emitted. Tested via `Circle.r` / `Marker` in `doc.hpp` + `test_doc.py`.
-**Namespace-variable** docs remain intentionally ignored by binding backends (a bound
+**Namespace-variable** docs remain intentionally ignored by binding rods (a bound
 module attribute has no `__doc__`); the Doxygen filter surfaces them on the C++ side.
 Doc text is stored *inline* (`fixed_string`) — a `const char*` to a literal isn't a
 permitted annotation constant on gcc-16.
 
-**Lua (sol2):** Lua has no runtime docstring slot, so the sol2 backend ignores
+**Lua (sol2):** Lua has no runtime docstring slot, so the sol2 rod ignores
 `doc`/`returns` at runtime (the same `doc_of` extraction still runs; there is just
 no sink). Their Lua home is a **generated LuaCATS (`---@meta`) definition file** —
 the `.pyi` analogue — *reflection-emitted at build time*, not scraped from a loaded
 module (a loaded sol2 usertype exposes nothing introspectable). **Implemented** as
-the `welder::luacats` backend (`src/welder/backends/lua/luacats/backend.hpp`): a
-text-emitting `welder::backend` that plugs the *same* generic driver as sol2 (so
+the `welder::rods::luacats::rod` (`src/welder/rods/lua/luacats/rod.hpp`): a
+text-emitting `welder::rod` that plugs the *same* generic driver as sol2 (so
 member selection / base flattening / policy-marks / the bindability gate are reused
 verbatim), swapping the emission primitives to append LuaCATS text — `--- ` summary
 lines, `---@field`/`---@param`/`---@return name type description` tags, `---@class X
@@ -59,7 +59,7 @@ lines, `---@field`/`---@param`/`---@return name type description` tags, `---@cla
 C++→LuaCATS type map (`lua_type_string`; see build-test-run.md). Overloaded
 methods/constructors/free functions collapse to one documented `function` + idiomatic
 `---@overload fun(…)` lines (grouped via the shared `*_overload_set` selectors in
-`backends/lua/overloads.hpp` — `welder::lua`, shared with the sol2 backend — since the
+`rods/lua/overloads.hpp` — `welder::rods::lua`, shared with the sol2 rod — since the
 driver still visits overloads one at a time; the primary is the first overload with a
 doc, so its `@param`/summary text survives); a const
 member's read-only-ness is a `(read-only)` description note (LuaCATS has no read-only

@@ -1,10 +1,10 @@
 # Python (pybind11 & nanobind)
 
-welder ships **two** Python backends over the same core:
-[pybind11](https://pybind11.readthedocs.io/) (`welder::pybind11`) and
-[nanobind](https://nanobind.readthedocs.io/) (`welder::nanobind`). They are close
-cousins — same class-handle model, the *same* Python docstring styles
-(`welder/backends/python/doc_style.hpp`), the same resolution and bindability rules
+welder ships **two** Python rods over the same core:
+[pybind11](https://pybind11.readthedocs.io/) (`welder::rods::pybind11::rod`) and
+[nanobind](https://nanobind.readthedocs.io/) (`welder::rods::nanobind::rod`). They
+are close cousins — same class-handle model, the *same* Python docstring styles
+(`welder/rods/python/doc_style.hpp`), the same resolution and bindability rules
 — so in welder terms nanobind is nearly a drop-in for pybind11. The difference is
 the framework each targets and a short list of feature trade-offs.
 
@@ -13,17 +13,17 @@ Python-specific detail.
 
 ## Registering a type
 
-The `bind` shape is identical; the module macro and namespace differ:
+The `weld_type` shape is identical; the module macro and rod type differ:
 
 === "pybind11"
 
     ```cpp
     #include <pybind11/pybind11.h>
     #include <pybind11/stl.h>
-    #include <welder/backends/python/pybind11/backend.hpp>
+    #include <welder/rods/python/pybind11/rod.hpp>
 
     PYBIND11_MODULE(shapes, m) {
-        welder::pybind11::bind<Point>(m);
+        welder::welder<welder::rods::pybind11::rod>::weld_type<Point>(m);
     }
     ```
 
@@ -32,27 +32,27 @@ The `bind` shape is identical; the module macro and namespace differ:
     ```cpp
     #include <nanobind/nanobind.h>
     #include <nanobind/stl/string.h>       // per-type STL converter headers
-    #include <welder/backends/python/nanobind/backend.hpp>
+    #include <welder/rods/python/nanobind/rod.hpp>
 
     NB_MODULE(shapes, m) {
-        welder::nanobind::bind<Point>(m);
+        welder::welder<welder::rods::nanobind::rod>::weld_type<Point>(m);
     }
     ```
 
-Or, backend-agnostically, [`WELDER_MODULE(shapes, pybind11)`](../guide/namespaces-modules.md#binding-a-whole-module)
-/ `WELDER_MODULE(shapes, nanobind)` to emit `PyInit_shapes` and bind a whole
-namespace in one line.
+Or, rod-agnostically, [`WELDER_MODULE(shapes, pybind11)`](../guide/namespaces-modules.md#binding-a-whole-module)
+/ `WELDER_MODULE(shapes, nanobind)` (from the rod's `module.hpp`) to emit
+`PyInit_shapes` and bind a whole namespace in one line.
 
-!!! warning "One Python backend per module"
+!!! warning "One Python rod per module"
 
     pybind11 and nanobind **both** emit `PyInit_<name>`, so they cannot coexist in
-    the same extension — pick one. (A Python backend *can* share a translation unit
-    with a Lua backend, whose symbol is `luaopen_<name>`; see
-    [Shipping multiple backends](multiple.md).)
+    the same extension — pick one. (A Python rod *can* share a translation unit
+    with a Lua rod, whose symbol is `luaopen_<name>`; see
+    [Shipping multiple rods](multiple.md).)
 
 ## Feature comparison
 
-Both backends run against welder's *same* shared C++ test cases as a cross-backend
+Both rods run against welder's *same* shared C++ test cases as a cross-rod
 consistency check, so behavior matches wherever the frameworks allow. Where they
 differ:
 
@@ -80,7 +80,7 @@ welder's shared inheritance test guards the diamond case behind
 ## Operators become dunders
 
 Every welded **member** operator binds to a Python special method ("dunder"), told
-apart unary vs. binary by arity. Both backends map the *identical* set — this is the
+apart unary vs. binary by arity. Both Python rods map the *identical* set — this is the
 complete list:
 
 | C++ | Python | | C++ | Python |
@@ -108,7 +108,7 @@ deliberately-excluded operators.
 
 Your `doc` text and signatures flow into generated
 [`.pyi` stubs](../guide/docstrings.md#stubs) so editors and type-checkers see the
-bound API — but the two backends source them differently:
+bound API — but the two rods source them differently:
 
 - **pybind11** → [pybind11-stubgen](https://github.com/pybind/pybind11-stubgen),
   wired through the CMake helper `welder_pybind11_generate_stubs()` (a `POST_BUILD`
@@ -133,7 +133,7 @@ Both are mypy-checked in welder's own tests.
 
     Python_add_library(shapes MODULE WITH_SOABI example.cpp)
     target_compile_features(shapes PRIVATE cxx_std_26)
-    # welder::module -> `import welder;`   welder::pybind11 -> the backend
+    # welder::module -> `import welder;`   welder::pybind11 -> the pybind11 rod
     target_link_libraries(shapes PRIVATE welder::module welder::pybind11)
     ```
 
@@ -160,5 +160,5 @@ Both are mypy-checked in welder's own tests.
     Gated by `WELDER_BUILD_NANOBIND`; conan package `nanobind/2.13.0`.)
 
 Because both consume the vocabulary, either can `import welder;` (the module form) or
-`#include <welder/welder.hpp>` (header-only) — provide the vocabulary before the
-backend header. See [the two consumption forms](../guide/getting-started.md#two-consumption-forms).
+`#include <welder/vocabulary.hpp>` (header-only) — provide the vocabulary before the
+rod header. See [the two consumption forms](../guide/getting-started.md#two-consumption-forms).

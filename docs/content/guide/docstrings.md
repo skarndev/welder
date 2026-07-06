@@ -2,7 +2,7 @@
 
 Documentation is part of the vocabulary. You write it **once**, on the C++
 declaration, and it reaches every audience welder can carry it to: the target
-language's runtime docstring (Python `__doc__`, via the binding backend), the C++
+language's runtime docstring (Python `__doc__`, via the binding rod), the C++
 API reference (via the [Doxygen filter](cpp-docs.md)), and generated stubs
 ([`.pyi`](#stubs) for Python, [LuaCATS `---@meta`](../backends/lua.md#stubs-luacats)
 for Lua — the latter is where Lua's docs live, since Lua has no runtime slot).
@@ -147,11 +147,11 @@ Box { T value; };
 ```
 
 `tparam` becomes an `@tparam` in the C++ docs, and is read back via
-`tparam_docs<Ent>()` off an instantiation for backend docstrings.
+`tparam_docs<Ent>()` off an instantiation for rod docstrings.
 
-## What backends ignore
+## What rods ignore
 
-- **Namespace variable docs** are ignored by binding backends — a bound module
+- **Namespace variable docs** are ignored by binding rods — a bound module
   attribute has no `__doc__`. (Class *data members* do carry docs, via properties —
   see [Data members](#data-members) above; and the Doxygen filter surfaces variable
   docs on the C++ side.)
@@ -173,6 +173,6 @@ the types your Python users' editors and type-checkers see.
 Lua has no runtime docstring slot, so there the docs live only in a stub: welder
 emits a **LuaCATS (`---@meta`) definition file** — reflection-generated at build
 time — carrying the same `doc`/`returns`/parameter text. See [Stubs
-(LuaCATS)](../backends/lua.md#stubs-luacats) in the Lua backend guide.
+(LuaCATS)](../backends/lua.md#stubs-luacats) in the Lua rod guide.
 
 Next: [The bindability gate](bindability.md).

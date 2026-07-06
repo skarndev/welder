@@ -1,7 +1,7 @@
 # The bindability gate
 
 Every surface welder is about to bind — a data member, a parameter, a return type,
-a namespace variable — must be a type the backend can convert to a **meaningful**
+a namespace variable — must be a type the rod can convert to a **meaningful**
 value in the target language. If it can't, welder makes it a **hard compile error**
 that names the offending type. Never a silent skip.
 
@@ -14,7 +14,7 @@ that names the offending type. Never a silent skip.
 The error (a `static_assert` in `assert_bindable`) names the type and points at the
 fix:
 
-> weld the type, give it a backend caster (a pybind11/nanobind `type_caster`, a sol2
+> weld the type, give it a rod caster (a pybind11/nanobind `type_caster`, a sol2
 > usertype), or `mark::exclude` the member.
 
 ## How it decides
@@ -50,14 +50,14 @@ So `std::vector<Unwelded>` is caught, not just a bare `Unwelded` — the recursi
 walks container / `optional` / `pair` / `tuple` / `variant` / smart-pointer value
 arguments.
 
-## The one backend-specific leaf
+## The one rod-specific leaf
 
 Everything above is shared. The single fact the core cannot know is
-**native vs. needs-registration**: can the backend convert `T` *without* welder
-registering a class for it? That's the backend's `has_native_caster<T>` (the
-`caster_oracle`), the one hook every backend must supply:
+**native vs. needs-registration**: can the rod convert `T` *without* welder
+registering a class for it? That's the rod's `has_native_caster<T>` (the
+`caster_oracle`), the one hook every rod must supply:
 
-| Backend | `has_native_caster<T>` reads |
+| Rod | `has_native_caster<T>` reads |
 |---|---|
 | **pybind11** | `!_needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? |
 | **nanobind** | `!nb::detail::is_base_caster_v<make_caster<T>>` — same question, nanobind's spelling |

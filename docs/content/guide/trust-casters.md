@@ -8,7 +8,7 @@ three ways to satisfy it.
 
 The first two — the `trust_bindable` marks — are **backend-agnostic vocabulary**;
 they suppress the gate wherever the type appears and leave the registration to you.
-The third is a **backend-native caster**, so its exact form depends on the backend.
+The third is a **rod-native caster**, so its exact form depends on the rod.
 
 ## 1. `mark::trust_bindable` — trust one member
 
@@ -58,10 +58,10 @@ TrustsType {
     appears in many places and is always registered elsewhere — it also clears
     `T*`, `const T&`, and `std::vector<T>` in one stroke.
 
-## 3. A self-contained backend caster — no trust needed
+## 3. A self-contained rod caster — no trust needed
 
-If you give `T` a **self-contained** caster in the backend's framework — one that
-does *not* derive from the backend's registration-needing base — it displaces the
+If you give `T` a **self-contained** caster in the rod's framework — one that
+does *not* derive from the rod's registration-needing base — it displaces the
 fallback caster. Now `has_native_caster<T>` reports true, the gate passes
 **automatically**, and the caster even names the type in generated stubs. No weld, no
 trust. The mechanism is standard for each framework:
@@ -116,7 +116,7 @@ trust. The mechanism is standard for each framework:
 |---|---|---|---|
 | `mark::trust_bindable` | ✅ vocabulary | one member / one signature | you (by hand, before the bind) |
 | `trust_bindable<T> = true` | ✅ vocabulary | `T` everywhere (incl. `T*`, `T&`, `vector<T>`) | you (by hand, before the bind) |
-| self-contained backend caster | ⚙️ per backend | `T` everywhere | the caster *is* the conversion |
+| self-contained rod caster | ⚙️ per rod | `T` everywhere | the caster *is* the conversion |
 
 A future `bindable_as<T>` mapping T to a stub type name is still TODO.
 

@@ -9,11 +9,11 @@ cmake --preset welder-gcc16 -DWELDER_LUA_DIR="$(brew --prefix lua@5.4)"
 cmake --build --preset welder-gcc16
 ```
 
-**Version knobs (provider-neutral):** conan supplies the C++ backend headers
+**Version knobs (provider-neutral):** conan supplies the C++ binding-framework headers
 (sol2/pybind11/nanobind), but the *language runtimes* come from the system/user via
 `find_package`, so a consumer can bring their own without conan. `WELDER_LUA_VERSION`
 (default `5.4`) + `WELDER_LUA_DIR` (a Lua install prefix) pick the Lua the sol2
-backend builds against and its tests run with; `WELDER_PYTHON_VERSION` (default
+rod builds against and its tests run with; `WELDER_PYTHON_VERSION` (default
 `3.14`) feeds `find_package(Python …)` + `uv sync --python`. Point `CMAKE_PREFIX_PATH`
 / these vars at your own installs to override the conan defaults.
 
@@ -33,9 +33,9 @@ local s = require("shapes_lua")
 local r = s.Rect(3.0, 4.0); print(r:area())   -- 12.0
 ```
 
-## Lua backend build/test (sol2)
+## Lua rod build/test (sol2)
 `welder::sol2` needs conan `with_sol2` (for the `sol2` C++ headers). **Lua itself is
-NOT from conan** — `src/welder/backends/CMakeLists.txt` finds it with CMake's builtin
+NOT from conan** — `src/welder/rods/CMakeLists.txt` finds it with CMake's builtin
 `FindLua`, pinned to `WELDER_LUA_DIR` so the user's install (not conan's transitive
 `lua`, which shadows the search via `CMAKE_PREFIX_PATH`) provides the headers. A Lua
 extension is created with `welder_sol2_add_module(<name> <sources>)`
@@ -78,12 +78,12 @@ welder docstrings flow into the stubs. pybind11-stubgen is pinned to its GitHub
 `[tool.uv.sources]`). Examples opt in via `-DWELDER_STUBGEN_PYTHON=<interp>`.
 
 ## LuaCATS stub generation (the Lua analogue of `.pyi`)
-Lua has no runtime docstring slot, so the sol2 backend drops `doc`/`returns` at
+Lua has no runtime docstring slot, so the sol2 rod drops `doc`/`returns` at
 load time; their home is a **generated LuaCATS (`---@meta`) definition file**,
-emitted by the `welder::luacats` backend (`src/welder/backends/lua/luacats/backend.hpp`).
+emitted by the `welder::rods::luacats::rod` (`src/welder/rods/lua/luacats/rod.hpp`).
 Unlike `.pyi` (pybind11-stubgen *imports* the built module), a Lua stub cannot be
 scraped from a loaded sol2 usertype, so it is **reflection-emitted at build time**:
-the stub backend is a real `welder::backend` that plugs the *same* generic driver
+the stub rod is a real `welder::rod` that plugs the *same* generic driver
 as sol2 but emits LuaCATS text instead of registering a live module — so member
 selection, base flattening, policy/marks and the bindability gate are reused
 verbatim; only the emission primitives differ. It is pure reflection + text —
@@ -135,23 +135,25 @@ Three test-side mypy gates:
 ## Test layout & harness
 Tests split by target language under `tests/`: the backend-neutral C++ case tree
 (`common/cpp/`) and compile-only core checks (`core/`) live at the top; the Python
-backends + their pytest specs under `python/`, the Lua backend + its busted specs
-under `lua/`. The LuaCATS stub backend has its own top-level tree `tests/luacats/`
+rods + their pytest specs under `python/`, the Lua rod + its busted specs
+under `lua/`. The LuaCATS stub rod has its own top-level tree `tests/luacats/`
 (compile + run + byte-exact golden + optional lint, needing only the compiler to
 build — it depends on neither sol2 nor Lua): `welder_luacats_generate_stub` builds
 `cpp/stub_gen.cpp` (a *dedicated doc-rich case*, since the shared cases are
 behavior-focused and mostly carry no `doc` — same reason `doc.hpp` is its own Python
 case) into `<bindir>/tests/luacats/stub/stubdemo.lua`, the `luacats.stub_golden`
 CTest compares it to `stub.golden.lua`, and — when a `lua-language-server` is found —
-`stubcheck.luacats` lints it (see the LuaCATS stubcheck note above). The **C++ case tree is shared across all three backends**
+`stubcheck.luacats` lints it (see the LuaCATS stubcheck note above). The **C++ case tree is shared across all three rods**
 (`common/cpp/`, welded for `lang::py` **and** `lang::lua`), reached only through
-three macros each `bindings.cpp` defines — `WELDER_TEST_BE` (backend namespace),
-`WELDER_TEST_MODULE_T` (module handle type) and `WELDER_TEST_SUBMODULE` (the one
-module-handle op the `register_*` helpers need: `def_submodule` for Python, a
-nested-table helper for sol2). `WELDER_TEST_MULTIPLE_INHERITANCE` gates the diamond
-case (pybind11 + sol2 — nanobind is single-inheritance, and the Python spec skips the
-diamond when `Bottom` is absent). Only the genuinely backend-specific case files
-(`trust.hpp` hand-registration, `caster.hpp` type_caster) are per-backend, under
+three macros each `bindings.cpp` defines — `WELDER_TEST_WELDER` (the
+`welder::welder<Rod>` entry-point instantiation, e.g.
+`::welder::welder<::welder::rods::pybind11::rod>`), `WELDER_TEST_MODULE_T` (module
+handle type) and `WELDER_TEST_SUBMODULE` (the one module-handle op the `register_*`
+helpers need: `def_submodule` for Python, a nested-table helper for sol2).
+`WELDER_TEST_MULTIPLE_INHERITANCE` gates the diamond case (pybind11 + sol2 —
+nanobind is single-inheritance, and the Python spec skips the diamond when `Bottom`
+is absent). Only the genuinely rod-specific case files (`trust.hpp`
+hand-registration, `caster.hpp` type_caster) are per-rod, under
 `tests/python/{pybind11,nanobind}/cpp/`.
 
 **Python trees** (`tests/python/`): uv + pytest + CTest; each extension is
@@ -179,7 +181,7 @@ package — `stubgen.py` is stdlib-only on Python ≥3.11, run via the build's
 `Python_EXECUTABLE`, which loads the extension by dynamic lookup), then
 `stubcheck.*` runs mypy over it. The `typingcases.*` type-level gate
 (`test_types.mypy-testing`, run via pytest-mypy-testing) now runs against **both**
-backends: each copies its module-form stub tree to the canonical name `welder_test`
+rods: each copies its module-form stub tree to the canonical name `welder_test`
 on `MYPYPATH` and asserts the same revealed types — rename-safe because both stub
 trees use only relative imports. (nanobind's copy hangs off its stub *target*'s
 POST_BUILD, since its stubs are a separate custom target.) Key locations by feature:
