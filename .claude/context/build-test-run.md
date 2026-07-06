@@ -152,8 +152,10 @@ handle type) and `WELDER_TEST_SUBMODULE` (the one module-handle op the `register
 helpers need: `def_submodule` for Python, a nested-table helper for sol2).
 `WELDER_TEST_MULTIPLE_INHERITANCE` gates the diamond case (pybind11 + sol2 —
 nanobind is single-inheritance, and the Python spec skips the diamond when `Bottom`
-is absent). Only the genuinely rod-specific case files (`trust.hpp`
-hand-registration, `caster.hpp` type_caster) are per-rod, under
+is absent). `WELDER_TEST_STYLED_WELDER` is a fourth seam, used only by `naming.hpp`:
+`welder::welder<Rod, Style>` with the backend's chosen name style (the runtime
+naming test; see the feature list below). Only the genuinely rod-specific case files
+(`trust.hpp` hand-registration, `caster.hpp` type_caster) are per-rod, under
 `tests/python/{pybind11,nanobind}/cpp/`.
 
 **Python trees** (`tests/python/`): uv + pytest + CTest; each extension is
@@ -191,6 +193,12 @@ POST_BUILD, since its stubs are a separate custom target.) Key locations by feat
 - `tests/python/{pybind11,nanobind}/cpp/neg/` — bindability negative-compile (`negcompile.*` CTests, `WILL_FAIL`)
 - `tests/core/template_annotations.cpp` — template↔annotation semantics (compile-only)
 - `tests/core/naming.cpp` — name styling + `weld_as` resolution (`compile.naming`, compile-only static_asserts)
+- `tests/common/cpp/naming.hpp` + `tests/python/test_naming.py` + `tests/lua/spec/naming_spec.lua` —
+  the *runtime* naming coverage: a `styling` namespace of camelCase members bound
+  through a **styled** welder (the extra seam `WELDER_TEST_STYLED_WELDER`, defined per
+  backend beside `WELDER_TEST_WELDER` — PEP 8 for the Python rods, `naming::snake_case`
+  for sol2), asserting the reshaped names and the per-language `weld_as` verbatim
+  override. luacats keeps its own dedicated `stub_gen.cpp`, so its golden is unaffected.
 - `tests/common/cpp/doc.hpp` `Gadget`/`combine` + `tests/python/test_doc.py` — docstrings (multiline/dedent)
 - `tests/doxyfilter/` — Doxygen filter goldens + e2e (run with the uv venv Python, pins `lark`)
 

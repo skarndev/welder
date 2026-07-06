@@ -28,12 +28,16 @@ import welder;
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <welder/rods/python/pybind11/rod.hpp>
+#include <welder/rods/python/naming.hpp> // the PEP 8 style for the naming group
 
 // Rod selection for the shared case headers (tests/common/cpp): they are
 // backend-neutral and reach the backend only through these two names, so the same
 // sources drive both the pybind11 and nanobind extensions. pybind11 supports
 // multiple inheritance, so the diamond case is enabled here.
 #define WELDER_TEST_WELDER ::welder::welder<::welder::rods::pybind11::rod>
+// The naming group binds through a styled welder (PEP 8 for Python).
+#define WELDER_TEST_STYLED_WELDER \
+    ::welder::welder<::welder::rods::pybind11::rod, ::welder::rods::python::pep8>
 #define WELDER_TEST_MODULE_T ::pybind11::module_
 #define WELDER_TEST_MULTIPLE_INHERITANCE 1
 // The one module-handle op the shared register_* helpers need; the Lua backend,
@@ -54,6 +58,7 @@ import welder;
 #include "trust.hpp"
 #include "caster.hpp"
 #include "enums.hpp"
+#include "naming.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -70,4 +75,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_trust(m);       // <-> test_trust.py
     register_caster(m);      // <-> test_caster.py
     register_enums(m);       // <-> test_enums.py
+    register_naming(m);      // <-> test_naming.py
 }

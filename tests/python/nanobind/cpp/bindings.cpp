@@ -32,11 +32,15 @@ import welder;
 #include <nanobind/stl/string.h> // std::string members / return values
 #include <nanobind/stl/vector.h> // std::vector<Handmade2> in trust.hpp
 #include <welder/rods/python/nanobind/rod.hpp>
+#include <welder/rods/python/naming.hpp> // the PEP 8 style for the naming group
 
 // Rod selection for the shared case headers (tests/common/cpp). nanobind binds
 // only single inheritance, so WELDER_TEST_MULTIPLE_INHERITANCE is deliberately left
 // undefined — the diamond case is skipped here and its Python spec skips too.
 #define WELDER_TEST_WELDER ::welder::welder<::welder::rods::nanobind::rod>
+// The naming group binds through a styled welder (PEP 8 for Python).
+#define WELDER_TEST_STYLED_WELDER \
+    ::welder::welder<::welder::rods::nanobind::rod, ::welder::rods::python::pep8>
 #define WELDER_TEST_MODULE_T ::nanobind::module_
 // The one module-handle op the shared register_* helpers need; the Lua backend,
 // whose handle is a sol::table with no def_submodule, defines it differently.
@@ -56,6 +60,7 @@ import welder;
 #include "trust.hpp"
 #include "caster.hpp"
 #include "enums.hpp"
+#include "naming.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -72,4 +77,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_trust(m);       // <-> test_trust.py
     register_caster(m);      // <-> test_caster.py
     register_enums(m);       // <-> test_enums.py
+    register_naming(m);      // <-> test_naming.py
 }
