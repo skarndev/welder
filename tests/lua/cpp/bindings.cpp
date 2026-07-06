@@ -11,20 +11,20 @@
 #include <cstdint>
 #include <string>
 
-#include <welder/welder.hpp>
+#include <welder/vocabulary.hpp>
 
 #include <sol/sol.hpp>
-#include <welder/backends/lua/sol2/backend.hpp>
+#include <welder/rods/lua/sol2/rod.hpp>
 
-// Backend selection for the shared case headers. sol2 supports multiple base
+// Rod selection for the shared case headers. sol2 supports multiple base
 // classes, so the multiple-inheritance diamond is enabled (like pybind11).
-#define WELDER_TEST_BE welder::sol2
+#define WELDER_TEST_WELDER ::welder::welder<::welder::rods::sol2::rod>
 #define WELDER_TEST_MODULE_T ::sol::table
 #define WELDER_TEST_MULTIPLE_INHERITANCE 1
 
 namespace {
 // The Lua form of the register_* helpers' submodule seam: a Lua submodule is just
-// a nested table. Mirrors what welder::sol2's own add_submodule does.
+// a nested table. Mirrors what the sol2 rod's own add_submodule does.
 inline ::sol::table welder_test_submodule(::sol::table& m, const char* name) {
     ::sol::table sub{::sol::state_view{m.lua_state()}.create_table()};
     m[name] = sub;

@@ -8,7 +8,7 @@
 # installed with luarocks into a build-local tree (the analogue of uv/pytest on the
 # Python side): nothing is vendored. Both the module ABI and the interpreter come
 # from the *same* user Lua (WELDER_LUA_DIR / WELDER_LUA_VERSION), found by FindLua
-# in src/welder/backends/CMakeLists.txt — welder::sol2 carries its headers.
+# in src/welder/rods/CMakeLists.txt — welder::sol2 carries its headers.
 find_package(sol2 REQUIRED)
 
 # The loadable module. Its name doubles as the luaopen_ symbol / require() name.

@@ -23,7 +23,7 @@
 #include <string>
 
 #ifdef WELDER_TEST_HEADER_ONLY
-#  include <welder/welder.hpp>
+#  include <welder/vocabulary.hpp>
 #else
 import welder;
 #endif
@@ -31,12 +31,12 @@ import welder;
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h> // std::string members / return values
 #include <nanobind/stl/vector.h> // std::vector<Handmade2> in trust.hpp
-#include <welder/backends/python/nanobind/backend.hpp>
+#include <welder/rods/python/nanobind/rod.hpp>
 
-// Backend selection for the shared case headers (tests/common/cpp). nanobind binds
+// Rod selection for the shared case headers (tests/common/cpp). nanobind binds
 // only single inheritance, so WELDER_TEST_MULTIPLE_INHERITANCE is deliberately left
 // undefined — the diamond case is skipped here and its Python spec skips too.
-#define WELDER_TEST_BE welder::nanobind
+#define WELDER_TEST_WELDER ::welder::welder<::welder::rods::nanobind::rod>
 #define WELDER_TEST_MODULE_T ::nanobind::module_
 // The one module-handle op the shared register_* helpers need; the Lua backend,
 // whose handle is a sol::table with no def_submodule, defines it differently.

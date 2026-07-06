@@ -5,7 +5,7 @@ import welder; // annotation vocabulary (module form)
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>                  // std::string conversion
-#include <welder/backends/python/pybind11/backend.hpp>    // pybind11 backend (needs the vocabulary above)
+#include <welder/rods/python/pybind11/rod.hpp>    // pybind11 backend (needs the vocabulary above)
 
 // A struct welded for Python. Default policy (automatic) reflects every member
 // unless excluded.
@@ -32,6 +32,7 @@ Label {
 
 PYBIND11_MODULE(welder_poc, m) {
     m.doc() = "welder pybind11 proof-of-concept";
-    welder::pybind11::bind<Point>(m);
-    welder::pybind11::bind<Label>(m);
+    using weld = welder::welder<welder::rods::pybind11::rod>;
+    weld::weld_type<Point>(m);
+    weld::weld_type<Label>(m);
 }

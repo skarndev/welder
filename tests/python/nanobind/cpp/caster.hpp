@@ -62,5 +62,5 @@ Sample {
 
 inline void register_caster(nanobind::module_& m) {
     auto sub{m.def_submodule("caster")};
-    welder::nanobind::bind_namespace<^^caster>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^caster>(sub);
 }

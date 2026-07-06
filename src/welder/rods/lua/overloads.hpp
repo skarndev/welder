@@ -27,14 +27,14 @@
     (shared by the Python backends).
 
     Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/welder.hpp>`), like the rest of the reflection layer.
+    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
 
     Each scope is walked on its own, so a same-named member in a derived class still
     hides the base's (C++ name-hiding), the way the driver's flatten-then-overwrite
     already behaves.
 */
 
-namespace welder::lua {
+namespace welder::rods::lua {
 
 /** The bound method overloads sharing @a fn's name and static-ness, from the class
     where @a fn is declared, in declaration order.
@@ -44,12 +44,12 @@ namespace welder::lua {
 consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn,
                                                            lang L) {
     const std::meta::info cls{std::meta::parent_of(fn)};
-    const policy_kind pol{welder::policy_of(cls)};
+    const policy_kind pol{::welder::policy_of(cls)};
     const auto name{std::meta::identifier_of(fn)};
     const bool is_static{std::meta::is_static_member(fn)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
-        if (welder::detail::is_bindable_method(m, L, pol) &&
+        if (::welder::detail::is_bindable_method(m, L, pol) &&
             std::meta::is_static_member(m) == is_static &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
@@ -65,13 +65,13 @@ consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn,
 consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
                                                              lang L) {
     const std::meta::info cls{std::meta::parent_of(fn)};
-    const policy_kind pol{welder::policy_of(cls)};
+    const policy_kind pol{::welder::policy_of(cls)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
-        if (welder::detail::is_operator_candidate(m, L, pol) &&
+        if (::welder::detail::is_operator_candidate(m, L, pol) &&
             std::meta::operator_of(m) == std::meta::operator_of(fn) &&
-            welder::detail::is_unary_operator(m) ==
-                welder::detail::is_unary_operator(fn))
+            ::welder::detail::is_unary_operator(m) ==
+                ::welder::detail::is_unary_operator(fn))
             out.push_back(m);
     return out;
 }
@@ -84,12 +84,12 @@ consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
 consteval std::vector<std::meta::info> function_overload_set(std::meta::info fn,
                                                              lang L) {
     const std::meta::info ns{std::meta::parent_of(fn)};
-    const policy_kind pol{welder::policy_of(ns)};
+    const policy_kind pol{::welder::policy_of(ns)};
     const auto name{std::meta::identifier_of(fn)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(ns, std::meta::access_context::unchecked()))
-        if (std::meta::is_function(m) && welder::welded_for(m, L) &&
-            welder::member_bound(m, L, pol) &&
+        if (std::meta::is_function(m) && ::welder::welded_for(m, L) &&
+            ::welder::member_bound(m, L, pol) &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
     return out;
@@ -128,4 +128,4 @@ consteval bool is_overload_leader(std::meta::info fn, lang L) {
     return !v.empty() && v.front() == fn;
 }
 
-} // namespace welder::lua
+} // namespace welder::rods::lua

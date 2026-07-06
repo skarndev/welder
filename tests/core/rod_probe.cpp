@@ -1,15 +1,16 @@
-// Backend-abstraction probe (backend-agnostic; must SUCCEED to compile).
+// Rod-abstraction probe (backend-agnostic; must SUCCEED to compile).
 //
-// A minimal, self-contained backend that satisfies `welder::backend` using ONLY
+// A minimal, self-contained rod that satisfies `welder::rod` using ONLY
 // welder's core headers — no pybind11, no Python, no framework at all. It is
-// driven through all three generic drivers (bind_type / bind_namespace_driver /
-// build_module_driver). The point is architectural, not behavioral: if this
+// driven through every welder::welder entry point (weld_type / weld_namespace /
+// weld_namespace_as_submodule / weld_module). The point is architectural, not
+// behavioral: if this
 // compiles, the core traversal/resolution/bindability machinery is genuinely
-// decoupled from any concrete backend, so a new backend (nanobind, lua, ...) only
+// decoupled from any concrete rod, so a new rod (nanobind, lua, ...) only
 // has to implement the emission primitives below. It is a regression guard against
 // re-coupling the core to pybind11.
 //
-// Compiled by the `compile.backend_probe` CTest (a plain build target, no
+// Compiled by the `compile.rod_probe` CTest (a plain build target, no
 // WILL_FAIL). Every emission primitive is a no-op: we exercise *instantiation* of
 // the drivers over the interface, not any real registration.
 #include <cstddef>
@@ -17,8 +18,8 @@
 #include <type_traits>
 #include <utility>
 
-#include <welder/welder.hpp>  // vocabulary + reflection + doc (header-only core)
-#include <welder/backend.hpp> // the backend concept + generic driver
+#include <welder/vocabulary.hpp> // annotation vocabulary (header-only form)
+#include <welder/welder.hpp>     // welder::welder + rod concept + driver
 
 namespace {
 
@@ -29,9 +30,9 @@ struct probe_module {};
 struct probe_class {};
 struct probe_session {};
 
-// A backend is a stateless policy struct. Every member below is required by
-// welder::backend (see <welder/backend.hpp>); the bodies do nothing.
-struct probe_backend {
+// A rod is a stateless policy struct. Every member below is required by
+// welder::rod (see <welder/welder.hpp>); the bodies do nothing.
+struct probe_rod {
     static constexpr welder::lang language{welder::lang::py};
     using module_type = probe_module;
 
@@ -92,8 +93,8 @@ struct probe_backend {
 };
 
 // The interface is satisfied purely statically — the core never mentions this type.
-static_assert(welder::caster_oracle<probe_backend>);
-static_assert(welder::backend<probe_backend>);
+static_assert(welder::caster_oracle<probe_rod>);
+static_assert(welder::rod<probe_rod>);
 
 } // namespace
 
@@ -136,16 +137,19 @@ struct [[=welder::weld(welder::lang::py)]] Inner {
 
 } // namespace probe
 
-// Force instantiation of all three drivers over the probe backend. Never called;
-// its purpose is to make the compiler type-check the driver body against the
-// interface. The static_asserts above already prove the concept holds.
+// Force instantiation of every welder::welder entry point over the probe
+// backend. Never called; its purpose is to make the compiler type-check the
+// driver body against the interface. The static_asserts above already prove the
+// concept holds.
 [[maybe_unused]] void welder_probe_exercise_drivers() {
-    probe_backend::module_type m{};
-    welder::detail::bind_type<probe_backend, probe::Widget>(m, nullptr);
-    welder::detail::bind_type<probe_backend, probe::Point>(m, nullptr);
-    welder::detail::bind_enum<probe_backend, probe::Mode>(m, nullptr);
-    welder::detail::bind_namespace_driver<probe_backend, ^^probe>(m);
-    welder::detail::build_module_driver<probe_backend, ^^probe>(
-        m, [](probe_backend::module_type&) {},
-        [](probe_backend::module_type&) {});
+    using weld = welder::welder<probe_rod>;
+    probe_rod::module_type m{};
+    weld::weld_type<probe::Widget>(m);
+    weld::weld_type<probe::Point>(m);
+    weld::weld_type<probe::Mode>(m); // enum dispatch
+    weld::weld_namespace<^^probe>(m);
+    weld::weld_namespace_as_submodule<^^probe::nested>(m);
+    weld::weld_module<^^probe>(
+        m, [](probe_rod::module_type&) {},
+        [](probe_rod::module_type&) {});
 }

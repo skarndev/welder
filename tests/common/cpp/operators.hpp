@@ -5,7 +5,7 @@
 // and subscript.
 //
 // The cases live in namespace `operators`, bound under an `operators` submodule
-// via WELDER_TEST_BE::bind_namespace so the Python package mirrors this file.
+// via WELDER_TEST_WELDER::weld_namespace so the Python package mirrors this file.
 // (The free operator+ below is non-welded, so bind_namespace skips it — which is
 // exactly the "free operators aren't bound yet" case it documents.)
 //
@@ -124,5 +124,5 @@ OpOptIn {
 inline void register_operators(WELDER_TEST_MODULE_T& m) {
     // Declaration order binds Feet before Meters (Meters::operator+ takes a Feet).
     auto sub{WELDER_TEST_SUBMODULE(m, "operators")};
-    WELDER_TEST_BE::bind_namespace<^^operators>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^operators>(sub);
 }

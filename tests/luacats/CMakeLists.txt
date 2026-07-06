@@ -5,7 +5,7 @@
 # definition file — the Lua analogue of the Python `.pyi` stubs, carrying the
 # docstrings the sol2 runtime backend drops. It depends on neither sol2 nor a Lua
 # runtime (pure reflection + text), so this lives at the top of tests/ (like the
-# backend_probe / cleandoc compile checks), NOT under the sol2-gated lua/ tree.
+# rod_probe / cleandoc compile checks), NOT under the sol2-gated lua/ tree.
 #
 # We dogfood the real user path — welder_luacats_generate_stub() builds a generator
 # executable from the doc-rich case (cpp/stub_gen.cpp) and runs it to produce the

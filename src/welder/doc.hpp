@@ -19,7 +19,7 @@
     `<welder/annotations.hpp>`: the vocabulary may instead arrive via `import
     welder;`, and including it textually as well would redeclare those entities.
     Provide the vocabulary first — `import welder;` or `#include
-    <welder/welder.hpp>` — then this header.
+    <welder/vocabulary.hpp>` — then this header.
 */
 
 namespace welder {
@@ -252,8 +252,8 @@ struct function_doc {
     It is the customization point for how documentation reads in the target
     language; swap it to emit Google-, NumPy-, or any house style. Any type with
     `static std::string format(const function_doc&)` qualifies. Concrete styles
-    live with the backends that share them (e.g. `welder::python::google_style` in
-    `<welder/backends/python/doc_style.hpp>`), keeping this core layer neutral.
+    live with the rods that share them (e.g. `welder::rods::python::google_style`
+    in `<welder/rods/python/doc_style.hpp>`), keeping this core layer neutral.
 
     @tparam S the candidate style type.
 */

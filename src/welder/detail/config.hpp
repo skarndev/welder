@@ -11,7 +11,7 @@
     it pulls those headers into the module purview.
 
     Why only the *vocabulary* is modularized: reflection (`<welder/reflect.hpp>`)
-    and backends (`<welder/backends/python/pybind11/backend.hpp>`) depend on `<meta>` and
+    and backends (`<welder/rods/python/pybind11/rod.hpp>`) depend on `<meta>` and
     pybind11, which pull the standard library in textually and do not coexist with
     gcc-16 module units (importing such a module conflicts with a consumer's own
     textual std includes). Those layers stay header-only. See CLAUDE.md.

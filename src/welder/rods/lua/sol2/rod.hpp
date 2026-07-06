@@ -1,9 +1,9 @@
 #pragma once
 /** @file
-    welder sol2 Lua backend (header-only).
+    welder sol2 Lua rod (header-only).
 
-    This is a *thin* backend: it implements welder's backend contract
-    (`<welder/backend.hpp>`) for [sol2](https://github.com/ThePhD/sol2) and hands
+    This is a *thin* rod: it implements welder's rod contract
+    (`<welder/welder.hpp>`) for [sol2](https://github.com/ThePhD/sol2) and hands
     the traversal/resolution off to welder's generic driver. All the
     language-agnostic work — deciding which members bind, gating bindability,
     walking bases and namespaces — lives in the core; only the sol2 emission
@@ -15,20 +15,23 @@
     interpreter).
 
     Requires the welder vocabulary to be available first, via either `import
-    welder;` (module form) or `#include <welder/welder.hpp>` (header-only). Then:
+    welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
+    This header exposes exactly one thing: the rod type
+    `welder::rods::sol2::rod`, to plug into `welder::welder`:
     @code
     #include <sol/sol.hpp>
-    #include <welder/backends/lua/sol2/backend.hpp>
+    #include <welder/rods/lua/sol2/rod.hpp>
     extern "C" int luaopen_mymod(lua_State* L) {
         sol::state_view lua(L);
         sol::table m = lua.create_table();
-        welder::sol2::bind<MyType>(m);
+        welder::welder<welder::rods::sol2::rod>::weld_type<MyType>(m);
         return sol::stack::push(L, m);
     }
     @endcode
-    or, more simply, via the backend-agnostic entry macro:
+    or, more simply, via the backend-agnostic entry macro (include this
+    directory's `module.hpp` instead):
     @code
-    WELDER_MODULE(mymod, sol2) {}   // binds namespace ^^mymod into luaopen_mymod
+    WELDER_MODULE(mymod, sol2) {}   // welds namespace ^^mymod into luaopen_mymod
     @endcode
 
     ## How Lua differs from the Python backends
@@ -69,21 +72,18 @@
 #include <utility>
 #include <vector>
 
-#include <welder/backend.hpp>          // the backend contract + generic driver
-#include <welder/backends/lua/overloads.hpp> // shared Lua overload-set selectors
-#include <welder/backends/lua/sol2/metamethods.hpp> // operator -> sol2 metamethod map
+#include <welder/welder.hpp>           // welder::welder + rod contract + driver
+#include <welder/rods/lua/overloads.hpp> // shared Lua overload-set selectors
+#include <welder/rods/lua/sol2/metamethods.hpp> // operator -> sol2 metamethod map
 #include <welder/bind_traits.hpp>      // is_bindable_constructor / aggregate_* helpers
-#include <welder/module.hpp>           // WELDER_MODULE dispatch (entry-point macro)
 
 #include <sol/sol.hpp>
 
-namespace welder::sol2 {
+namespace welder::rods::sol2 {
 
-// Note: the namespace is `welder::sol2`; the library namespace is `::sol`. They do
+// Note: the namespace is `welder::rods::sol2`; the library namespace is `::sol`. They do
 // not collide, so `sol::` below refers to the library without an alias (unlike the
 // Python backends, whose namespace shadowed the library's).
-
-namespace detail {
 
 /** The alias `T(A...)` — a constructor call signature, built by `substitute`
     (a namespace-scope alias so it can be reflected as `^^ctor_sig`). */
@@ -91,24 +91,24 @@ template <class T, class... A>
 using ctor_sig = T(A...);
 
 // The overload-set selectors are shared with the LuaCATS stub backend
-// (`<welder/backends/lua/overloads.hpp>`; both gather a name's C++ overloads that the
+// (`<welder/rods/lua/overloads.hpp>`; both gather a name's C++ overloads that the
 // driver visits one at a time) and reuse the core eligibility predicates, so a
 // group is exactly what the driver binds.
-using welder::lua::function_overload_set;
-using welder::lua::is_overload_leader;
-using welder::lua::method_overload_set;
-using welder::lua::operator_overload_set;
-using welder::lua::overload_group;
+using ::welder::rods::lua::function_overload_set;
+using ::welder::rods::lua::is_overload_leader;
+using ::welder::rods::lua::method_overload_set;
+using ::welder::rods::lua::operator_overload_set;
+using ::welder::rods::lua::overload_group;
 
-/** The sol2 backend: a stateless policy type satisfying @ref welder::backend.
+/** The sol2 rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the sol2 emission primitives welder's driver
     calls; the driver supplies all the reflection-derived decisions. See
-    `<welder/backend.hpp>` for the contract each member fulfills. The `protected`
+    `<welder/welder.hpp>` for the contract each member fulfills. The `protected`
     members below are sol2-specific implementation helpers (prefixed `_`), not part
     of the contract; the operator→metamethod map lives in `metamethods.hpp`.
 */
-struct backend {
+struct rod {
     static constexpr lang language{lang::lua}; /**< welder::lang::lua. */
     using module_type = ::sol::table;          /**< A Lua module is a table. */
 
@@ -117,7 +117,7 @@ struct backend {
     struct session {};
 
   protected:
-    // --- implementation helpers (not part of the welder::backend contract) --
+    // --- implementation helpers (not part of the welder::rod contract) --
 
     /** Whether sol2 can only convert @a T via *runtime usertype registration*.
 
@@ -182,15 +182,15 @@ struct backend {
         if (std::is_default_constructible_v<T>)
             sigs.push_back(sig({^^T}));
         for (auto c : std::meta::members_of(^^T, ctx))
-            if (welder::detail::is_bindable_constructor(c)) {
+            if (::welder::detail::is_bindable_constructor(c)) {
                 std::vector<std::meta::info> targs{^^T};
                 for (auto p : std::meta::parameters_of(c))
                     targs.push_back(std::meta::type_of(p));
                 sigs.push_back(sig(targs));
             }
-        if (welder::detail::aggregate_initializable<T, lang::lua>()) {
+        if (::welder::detail::aggregate_initializable<T, lang::lua>()) {
             std::vector<std::meta::info> targs{^^T};
-            for (auto fld : welder::detail::aggregate_fields<T>())
+            for (auto fld : ::welder::detail::aggregate_fields<T>())
                 targs.push_back(std::meta::type_of(fld));
             sigs.push_back(sig(targs));
         }
@@ -282,8 +282,8 @@ struct backend {
     */
     static consteval void _collect_welded_bases(
         std::meta::info type, lang L, std::vector<std::meta::info>& out) {
-        for (auto base : welder::public_bases(type)) {
-            const bool welded{welder::welded_for(base, L)};
+        for (auto base : ::welder::public_bases(type)) {
+            const bool welded{::welder::welded_for(base, L)};
             if (welded) {
                 bool seen{false};
                 for (auto e : out)
@@ -355,7 +355,7 @@ struct backend {
     }
 
   public:
-    // --- caster oracle + emission primitives (the welder::backend contract) --
+    // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** `caster_oracle`: @a T converts without welder registering a usertype iff
         sol2 does not classify it as needs-registration. @see _needs_registration */
@@ -506,101 +506,7 @@ struct backend {
     static void close_module(module_type&, session&) {}
 };
 
-static_assert(welder::backend<backend>,
-              "welder::sol2::detail::backend must satisfy welder::backend");
+static_assert(::welder::rod<rod>,
+              "welder::rods::sol2::rod must satisfy welder::rod");
 
-} // namespace detail
-
-/** Reflect over @a T and register it on module table @a m.
-
-    A class type becomes a `sol::usertype`; an enum becomes a name→value table (its
-    enumerators resolve like data members, honoring the enum's policy/marks). See
-    the driver in `<welder/backend.hpp>` for the full set of what is bound.
-
-    @tparam T the type to bind.
-    @param m    the module table.
-    @param name the Lua name, or `nullptr` to default to @a T's identifier.
-    @return the usertype/enum-binding handle, so callers can chain further work.
-*/
-template <class T>
-auto bind(::sol::table& m, const char* name = nullptr) {
-    if constexpr (std::is_enum_v<T>)
-        return welder::detail::bind_enum<detail::backend, T>(m, name);
-    else
-        return welder::detail::bind_type<detail::backend, T>(m, name);
-}
-
-/** Reflect over a whole namespace and expose its welded members on module @a m.
-
-    Classes bind via bind(), free functions and namespace variables become module
-    fields, and nested namespaces become submodule tables. Usage:
-    @code
-    extern "C" int luaopen_mymod(lua_State* L) {
-        sol::state_view lua(L);
-        sol::table m = lua.create_table();
-        welder::sol2::bind_namespace<^^myns>(m);
-        return sol::stack::push(L, m);
-    }
-    @endcode
-
-    @tparam Ns a reflection of the namespace.
-    @param m the module table.
-*/
-template <std::meta::info Ns>
-void bind_namespace(::sol::table& m) {
-    welder::detail::bind_namespace_driver<detail::backend, Ns>(m);
-}
-
-/** A do-nothing module hook; the default for build_module()'s pre/post callbacks. */
-inline constexpr auto noop = [](::sol::table&) {};
-
-/** Build a whole Lua module out of top-level C++ namespace @a Ns.
-
-    Runs @a pre, binds the namespace into @a m, then runs @a post. The hooks fold
-    hand-written bindings in around welder's generated body. This fills an existing
-    module table; pair it with an entry point that emits `luaopen_<name>` and
-    returns the table (welder's `WELDER_MODULE(ns, sol2)` does both):
-    @code
-    WELDER_MODULE(shapes, sol2) {}
-    @endcode
-
-    @tparam Ns   a reflection of the top-level namespace.
-    @tparam Pre  the pre-hook callable type.
-    @tparam Post the post-hook callable type.
-    @param m    the module table to fill.
-    @param pre  invoked with @a m before binding (defaults to noop).
-    @param post invoked with @a m after binding (defaults to noop).
-*/
-template <std::meta::info Ns, class Pre = decltype(noop), class Post = decltype(noop)>
-void build_module(::sol::table& m, Pre pre = noop, Post post = noop) {
-    welder::detail::build_module_driver<detail::backend, Ns>(m, pre, post);
-}
-
-} // namespace welder::sol2
-
-/** @def WELDER_DETAIL_MODULE_ENTRY_sol2
-    sol2's expansion of the backend-agnostic `WELDER_MODULE(ns, sol2)`.
-
-    Emits the `luaopen_<ns>` C entry point Lua's `require` calls: it views the
-    borrowed `lua_State*` with a `sol::state_view`, creates the module table, binds
-    namespace `^^ns` into it, runs the optional trailing `{ }` block as post-glue
-    (with the module table named `module` in scope), and returns the table to Lua.
-    The block is supplied as the body of a forward-declared, internally-linked glue
-    function (the technique the Python backends' entry macros use), so both
-    `WELDER_MODULE(ns, sol2) { … }` and `WELDER_MODULE(ns, sol2) {}` work. Defined at
-    file scope (macros ignore namespaces); see `<welder/module.hpp>`.
-    @param ns the namespace / module name token (doubles as the `luaopen_` symbol).
-*/
-#define WELDER_DETAIL_MODULE_ENTRY_sol2(ns)                                       \
-    static void welder_glue_##ns##_sol2(::sol::table&);                           \
-    extern "C" int luaopen_##ns(lua_State* welder_lua_state_) {                   \
-        ::sol::state_view welder_lua_{welder_lua_state_};                         \
-        ::sol::table welder_module_var_{welder_lua_.create_table()};             \
-        ::welder::sol2::build_module<^^ns>(                                       \
-            welder_module_var_, ::welder::sol2::noop,                             \
-            [](::sol::table& welder_glue_m_) {                                    \
-                welder_glue_##ns##_sol2(welder_glue_m_);                          \
-            });                                                                   \
-        return ::sol::stack::push(welder_lua_state_, welder_module_var_);         \
-    }                                                                             \
-    static void welder_glue_##ns##_sol2(::sol::table& module)
+} // namespace welder::rods::sol2

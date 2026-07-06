@@ -79,5 +79,5 @@ inline void register_trust(nanobind::module_& m) {
     nb::class_<trust::Handmade2>(sub, "Handmade2")
         .def(nb::init<>())
         .def_rw("n", &trust::Handmade2::n);
-    welder::nanobind::bind_namespace<^^trust>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^trust>(sub);
 }

@@ -17,7 +17,7 @@
 // ill-formed-NDR; keep the caster ahead of the bind.
 //
 // The cases live in namespace `caster`, bound under a `caster` submodule via
-// welder::pybind11::bind_namespace so the Python package mirrors this file. The
+// WELDER_TEST_WELDER::weld_namespace so the Python package mirrors this file. The
 // namespace is split around the type_caster, which must sit in pybind11::detail.
 //
 // #included by bindings.cpp after the welder vocabulary + pybind11 backend, which
@@ -66,5 +66,5 @@ Sample {
 
 inline void register_caster(pybind11::module_& m) {
     auto sub{m.def_submodule("caster")};
-    welder::pybind11::bind_namespace<^^caster>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^caster>(sub);
 }

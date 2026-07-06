@@ -1,9 +1,9 @@
 #pragma once
 /** @file
-    welder nanobind backend (header-only).
+    welder nanobind rod (header-only).
 
-    This is a *thin* backend: it implements welder's backend contract
-    (`<welder/backend.hpp>`) for nanobind and hands the traversal/resolution off to
+    This is a *thin* rod: it implements welder's rod contract
+    (`<welder/welder.hpp>`) for nanobind and hands the traversal/resolution off to
     welder's generic driver. All the language-agnostic work — deciding which
     members bind, gating bindability, folding docstrings, walking bases and
     namespaces — lives in the core; only the nanobind emission primitives are here.
@@ -13,12 +13,18 @@
     docstrings set through `__doc__`, and the `is_base_caster` bindability probe.
 
     Requires the welder vocabulary to be available first, via either `import
-    welder;` (module form) or `#include <welder/welder.hpp>` (header-only). Then:
+    welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
+    This header exposes exactly one thing: the rod type
+    `welder::rods::nanobind::rod`, to plug into `welder::welder`:
     @code
     #include <nanobind/nanobind.h>
-    #include <welder/backends/python/nanobind/backend.hpp>
-    NB_MODULE(mymod, m) { welder::nanobind::bind<MyType>(m); }
+    #include <welder/rods/python/nanobind/rod.hpp>
+    NB_MODULE(mymod, m) {
+        welder::welder<welder::rods::nanobind::rod>::weld_type<MyType>(m);
+    }
     @endcode
+    (For the `WELDER_MODULE` entry-point macro, include this directory's
+    `module.hpp` instead.)
 
     @note nanobind supports only *single* inheritance at the binding level (one C++
     base per `nb::class_`). welder's driver may hand this backend more than one
@@ -32,38 +38,35 @@
 #include <type_traits>
 #include <utility>
 
-#include <welder/backend.hpp>    // the backend contract + generic driver
-#include <welder/backends/python/doc_style.hpp> // welder::python::google_style
-#include <welder/backends/python/operators.hpp> // welder::python::operator_dunder
+#include <welder/welder.hpp>     // welder::welder + the rod contract + driver
+#include <welder/rods/python/doc_style.hpp> // welder::rods::python::google_style
+#include <welder/rods/python/operators.hpp> // welder::rods::python::operator_dunder
 #include <welder/bind_traits.hpp>// param_types / param_names / aggregate_fields
 #include <welder/doc.hpp>        // function_docstring
-#include <welder/module.hpp>     // WELDER_MODULE dispatch (entry-point macro)
 
 #include <nanobind/nanobind.h>
 
-namespace welder::nanobind {
+namespace welder::rods::nanobind {
 
-// Inside `welder::nanobind`, the unqualified name `nanobind` resolves to *this*
+// Inside `welder::rods::nanobind`, the unqualified name `nanobind` resolves to *this*
 // namespace, not the library. Alias the real one once — the way nanobind's own
 // docs spell it — and use `nb::` for every library reference below.
 namespace nb = ::nanobind;
 
-namespace detail {
-
-/** The nanobind backend: a stateless policy type satisfying @ref welder::backend.
+/** The nanobind rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the nanobind emission primitives welder's driver
     calls; the driver supplies all the reflection-derived decisions. See
-    `<welder/backend.hpp>` for the contract each member fulfills. The `protected`
+    `<welder/welder.hpp>` for the contract each member fulfills. The `protected`
     members below are nanobind-specific implementation helpers (prefixed `_`), not
     part of the contract.
 */
-struct backend {
+struct rod {
     static constexpr lang language{lang::py}; /**< welder::lang::py. */
     using module_type = nb::module_;          /**< nanobind's module handle. */
 
   protected:
-    // --- implementation helpers (not part of the welder::backend contract) --
+    // --- implementation helpers (not part of the welder::rod contract) --
 
     /** Whether nanobind can only convert @a T via *runtime class registration*.
 
@@ -103,10 +106,10 @@ struct backend {
     template <std::meta::info Fn, class Def, std::size_t... I>
     static void _def_function(const char* name, Def def_into,
                               std::index_sequence<I...>) {
-        static constexpr auto names{welder::detail::param_names<Fn>()};
+        static constexpr auto names{::welder::detail::param_names<Fn>()};
         const std::string doc{
-            welder::function_docstring<Fn, welder::python::google_style>()};
-        if constexpr (welder::detail::all_params_named<Fn>()) {
+            ::welder::function_docstring<Fn, ::welder::rods::python::google_style>()};
+        if constexpr (::welder::detail::all_params_named<Fn>()) {
             if (doc.empty())
                 def_into(name, &[:Fn:], nb::arg(names[I])...);
             else
@@ -136,9 +139,9 @@ struct backend {
     */
     template <std::meta::info Ctor, std::size_t... I>
     static void _def_init(auto& cls, std::index_sequence<I...>) {
-        static constexpr auto params{welder::detail::param_types<Ctor>()};
-        static constexpr auto names{welder::detail::param_names<Ctor>()};
-        if constexpr (welder::detail::all_params_named<Ctor>())
+        static constexpr auto params{::welder::detail::param_types<Ctor>()};
+        static constexpr auto names{::welder::detail::param_names<Ctor>()};
+        if constexpr (::welder::detail::all_params_named<Ctor>())
             cls.def(nb::init<typename [:params[I]:]...>(), nb::arg(names[I])...);
         else
             cls.def(nb::init<typename [:params[I]:]...>());
@@ -157,7 +160,7 @@ struct backend {
     */
     template <class T, std::size_t... I>
     static void _def_aggregate_init(auto& cls, std::index_sequence<I...>) {
-        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         cls.def(
             "__init__",
             [](T* self, typename [:std::meta::type_of(fields[I]):]... args) {
@@ -208,7 +211,7 @@ struct backend {
     }
 
   public:
-    // --- caster oracle + emission primitives (the welder::backend contract) --
+    // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** `caster_oracle`: @a T is convertible without welder registering a class for
         it iff nanobind does *not* fall back to runtime class registration. */
@@ -217,7 +220,7 @@ struct backend {
 
     /** Map a member operator to its Python dunder (`nullptr` = not exposed). */
     static consteval const char* special_method_name(std::meta::info op_fn) {
-        return welder::python::operator_dunder(op_fn);
+        return ::welder::rods::python::operator_dunder(op_fn);
     }
 
     // --- class binding ------------------------------------------------------
@@ -242,7 +245,7 @@ struct backend {
     /** Bind the synthesized aggregate field constructor. @see _def_aggregate_init */
     template <class T>
     static void add_aggregate_constructor(auto& cls) {
-        constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
     }
 
@@ -258,7 +261,7 @@ struct backend {
     static void add_field(auto& cls) {
         constexpr const char* name{
             std::define_static_string(std::meta::identifier_of(Mem))};
-        constexpr const char* doc{welder::doc_of<Mem>()};
+        constexpr const char* doc{::welder::doc_of<Mem>()};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
             // const member: read-only (def_rw's setter would not compile).
             if constexpr (doc)
@@ -294,7 +297,7 @@ struct backend {
     /** Bind member operator @a Fn under its Python dunder. */
     template <std::meta::info Fn>
     static void add_operator(auto& cls) {
-        _def_function<Fn>(welder::python::operator_dunder(Fn),
+        _def_function<Fn>(::welder::rods::python::operator_dunder(Fn),
                           [&cls](auto&&... a) {
                               cls.def(std::forward<decltype(a)>(a)...);
                           });
@@ -391,93 +394,7 @@ struct backend {
     }
 };
 
-static_assert(welder::backend<backend>,
-              "welder::nanobind::detail::backend must satisfy welder::backend");
+static_assert(::welder::rod<rod>,
+              "welder::rods::nanobind::rod must satisfy welder::rod");
 
-} // namespace detail
-
-/** Reflect over @a T and register it on module @a m.
-
-    A class type becomes an `nb::class_`; an enum becomes an `nb::enum_` (its
-    enumerators resolve like data members, honoring the enum's policy/marks). See
-    the driver in `<welder/backend.hpp>` for the full set of what is bound.
-
-    @tparam T the type to bind.
-    @param m    the module handle.
-    @param name the Python name, or `nullptr` to default to @a T's identifier.
-    @return the `class_`/`enum_` handle, so callers can chain further registrations.
-*/
-template <class T>
-auto bind(nb::module_& m, const char* name = nullptr) {
-    if constexpr (std::is_enum_v<T>)
-        return welder::detail::bind_enum<detail::backend, T>(m, name);
-    else
-        return welder::detail::bind_type<detail::backend, T>(m, name);
-}
-
-/** Reflect over a whole namespace and expose its welded members on module @a m.
-
-    Classes bind via bind(), free functions, namespace variables, and nested
-    namespaces as submodules. Usage:
-    @code
-    NB_MODULE(mymod, m) { welder::nanobind::bind_namespace<^^myns>(m); }
-    @endcode
-
-    @tparam Ns a reflection of the namespace.
-    @param m the module handle.
-*/
-template <std::meta::info Ns>
-void bind_namespace(nb::module_& m) {
-    welder::detail::bind_namespace_driver<detail::backend, Ns>(m);
-}
-
-/** A do-nothing module hook; the default for build_module()'s pre/post callbacks. */
-inline constexpr auto noop = [](nb::module_&) {};
-
-/** Build a whole Python module out of top-level C++ namespace @a Ns.
-
-    Runs @a pre, binds the namespace into @a m (adopting a namespace-level
-    `[[=welder::doc]]` as the module docstring), then runs @a post. The hooks fold
-    hand-written bindings in around welder's generated body. This fills an
-    *existing* `nb::module_`; pair it with an entry-point macro (nanobind's own, or
-    welder's `WELDER_MODULE`) that emits the module's C entry symbol:
-    @code
-    NB_MODULE(shapes, m) { welder::nanobind::build_module<^^shapes>(m); }
-    @endcode
-
-    @tparam Ns   a reflection of the top-level namespace.
-    @tparam Pre  the pre-hook callable type.
-    @tparam Post the post-hook callable type.
-    @param m    the module handle to fill.
-    @param pre  invoked with @a m before binding (defaults to noop).
-    @param post invoked with @a m after binding (defaults to noop).
-*/
-template <std::meta::info Ns, class Pre = decltype(noop), class Post = decltype(noop)>
-void build_module(nb::module_& m, Pre pre = noop, Post post = noop) {
-    welder::detail::build_module_driver<detail::backend, Ns>(m, pre, post);
-}
-
-} // namespace welder::nanobind
-
-/** @def WELDER_DETAIL_MODULE_ENTRY_nanobind
-    nanobind's expansion of the backend-agnostic `WELDER_MODULE(ns, nanobind)`.
-
-    Emits nanobind's module entry point, binds namespace `^^ns` into it, then runs
-    the optional trailing `{ }` block as post-glue with the module handle named
-    `module` in scope. The block is supplied as the body of a forward-declared,
-    internally-linked glue function (the same technique nanobind's `NB_MODULE`
-    itself uses for its body), so `WELDER_MODULE(ns, nanobind) { … }` and
-    `WELDER_MODULE(ns, nanobind) {}` both work. Defined at file scope (macros ignore
-    namespaces); see `<welder/module.hpp>` for the `WELDER_MODULE` dispatch.
-    @param ns the namespace / module name token.
-*/
-#define WELDER_DETAIL_MODULE_ENTRY_nanobind(ns)                                   \
-    static void welder_glue_##ns##_nanobind(::nanobind::module_&);                \
-    NB_MODULE(ns, welder_module_var_) {                                           \
-        ::welder::nanobind::build_module<^^ns>(                                   \
-            welder_module_var_, ::welder::nanobind::noop,                         \
-            [](::nanobind::module_& welder_glue_m_) {                             \
-                welder_glue_##ns##_nanobind(welder_glue_m_);                      \
-            });                                                                   \
-    }                                                                             \
-    static void welder_glue_##ns##_nanobind(::nanobind::module_& module)
+} // namespace welder::rods::nanobind

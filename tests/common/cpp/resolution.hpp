@@ -12,7 +12,7 @@
 #include <string>
 
 // The cases live in namespace `resolution`, bound under a `resolution` submodule
-// via WELDER_TEST_BE::bind_namespace so the Python package mirrors this file.
+// via WELDER_TEST_WELDER::weld_namespace so the Python package mirrors this file.
 namespace resolution {
 
 // --- automatic policy: bind everything unless excluded ----------------------
@@ -113,5 +113,5 @@ protected:
 
 inline void register_resolution(WELDER_TEST_MODULE_T& m) {
     auto sub{WELDER_TEST_SUBMODULE(m, "resolution")};
-    WELDER_TEST_BE::bind_namespace<^^resolution>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^resolution>(sub);
 }

@@ -10,12 +10,12 @@
 // failure.
 #include <vector>
 
-#include <welder/welder.hpp>
+#include <welder/vocabulary.hpp>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/vector.h>
 
-#include <welder/backends/python/nanobind/backend.hpp>
+#include <welder/rods/python/nanobind/rod.hpp>
 
 struct Unwelded {  // deliberately not welded
     int v{0};
@@ -25,4 +25,4 @@ struct [[=welder::weld(welder::lang::py)]] Bag {
     std::vector<Unwelded> items;
 };
 
-void bind_it(nanobind::module_& m) { welder::nanobind::bind<Bag>(m); }
+void bind_it(nanobind::module_& m) { welder::welder<welder::rods::nanobind::rod>::weld_type<Bag>(m); }

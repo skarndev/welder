@@ -47,18 +47,18 @@ if(WELDER_TEST_VENV_PYTHON)
     WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
 endif()
 
-# Backend-abstraction probe (backend-agnostic): a minimal in-file backend that
-# satisfies welder::backend using ONLY the core headers (no pybind11), driven
-# through all three generic drivers. Proves the core stays decoupled from any
-# concrete backend. Built as an EXCLUDE_FROM_ALL object library that must SUCCEED
+# Rod-abstraction probe (backend-agnostic): a minimal in-file rod that
+# satisfies welder::rod using ONLY the core headers (no pybind11), driven
+# through every welder::welder entry point. Proves the core stays decoupled from
+# any concrete rod. Built as an EXCLUDE_FROM_ALL object library that must SUCCEED
 # to compile; the CTest builds just that target (no WILL_FAIL). Needs only the
 # compiler — no Python — so it is registered before the uv-env gate.
-add_library(welder_backend_probe OBJECT EXCLUDE_FROM_ALL core/backend_probe.cpp)
-target_compile_features(welder_backend_probe PRIVATE cxx_std_26)
-target_link_libraries(welder_backend_probe PRIVATE welder::headers)
-add_test(NAME compile.backend_probe
+add_library(welder_rod_probe OBJECT EXCLUDE_FROM_ALL core/rod_probe.cpp)
+target_compile_features(welder_rod_probe PRIVATE cxx_std_26)
+target_link_libraries(welder_rod_probe PRIVATE welder::headers)
+add_test(NAME compile.rod_probe
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
-          --target welder_backend_probe --config $<CONFIG>)
+          --target welder_rod_probe --config $<CONFIG>)
 
 # Template ↔ annotation semantics (compile-only): annotations on a template
 # declaration are readable through every *instantiation* (primary / partial /

@@ -61,7 +61,7 @@ namespace welder {
     irrelevant here". Any complete type would do; the value it answers is never
     inspected.
 
-    @tparam B the backend type.
+    @tparam B the rod type.
 */
 template <class B>
 concept caster_oracle = requires {
@@ -147,7 +147,7 @@ consteval std::array<std::meta::info, N> leading_args() {
 }
 
 /** Whether every one of a wrapper's value arguments (spliced back to types) binds.
-    @tparam B    the backend.
+    @tparam B    the rod.
     @tparam L    the target language.
     @tparam Args the static array of value-argument reflections.
     @tparam I    the index pack over @a Args.
@@ -163,7 +163,7 @@ consteval bool args_bindable(std::index_sequence<I...>) {
     A listed wrapper is bindable iff its value arguments are; a type with a
     native/user converter binds as-is; otherwise it is a program-defined class/enum
     the backend must register, so it binds iff it is welded for @a L.
-    @tparam B the backend.
+    @tparam B the rod.
     @tparam T the type to test.
     @tparam L the target language.
 */
@@ -199,7 +199,7 @@ consteval bool bindable() {
 } // namespace detail
 
 /** Is @a T bindable to language @a L under backend @a B? (public spelling.)
-    @tparam B the backend.
+    @tparam B the rod.
     @tparam T the type to test.
     @tparam L the target language.
 */
@@ -212,7 +212,7 @@ consteval bool bindable() {
 
     The offending type is the template argument of the failing instantiation, so it
     is named in the diagnostic backtrace.
-    @tparam B the backend.
+    @tparam B the rod.
     @tparam T the type being bound.
     @tparam L the target language.
 */
@@ -229,7 +229,7 @@ consteval void assert_bindable() {
 namespace detail {
 
 /** Assert every parameter type of @a Fn binds.
-    @tparam B  the backend.
+    @tparam B  the rod.
     @tparam Fn a reflection of the function.
     @tparam L  the target language.
     @tparam I  the index pack over the parameters.
@@ -246,7 +246,7 @@ consteval void assert_params_bindable(std::index_sequence<I...>) {
 
     So the function/method/operator/constructor can round-trip through the target
     language. A constructor has no return type.
-    @tparam B  the backend.
+    @tparam B  the rod.
     @tparam Fn a reflection of the callable.
     @tparam L  the target language.
 */
@@ -274,7 +274,7 @@ consteval void assert_signature_bindable() {
 // folded into bindable() itself, above, so it needs no per-site handling.)
 
 /** Assert the type of a data member / namespace variable binds, unless trusted.
-    @tparam B      the backend.
+    @tparam B      the rod.
     @tparam Member a reflection of the data member or variable.
     @tparam L      the target language.
 */
@@ -285,7 +285,7 @@ consteval void assert_member_bindable() {
 }
 
 /** Assert a function/method/operator/constructor signature binds, unless trusted.
-    @tparam B  the backend.
+    @tparam B  the rod.
     @tparam Fn a reflection of the callable.
     @tparam L  the target language.
 */

@@ -11,7 +11,7 @@
 // type is a hard error (tests/pybind11/cpp/neg/); with it, it compiles and binds.
 //
 // The cases live in namespace `trust`, bound under a `trust` submodule via
-// welder::pybind11::bind_namespace so the Python package mirrors this file.
+// WELDER_TEST_WELDER::weld_namespace so the Python package mirrors this file.
 //
 // #included by bindings.cpp *after* the welder vocabulary and the pybind11 backend
 // are in scope; this header deliberately does not include them itself.
@@ -79,5 +79,5 @@ inline void register_trust(pybind11::module_& m) {
     py::class_<trust::Handmade2>(sub, "Handmade2")
         .def(py::init<>())
         .def_readwrite("n", &trust::Handmade2::n);
-    welder::pybind11::bind_namespace<^^trust>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^trust>(sub);
 }

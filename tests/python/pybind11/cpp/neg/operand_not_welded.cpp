@@ -7,11 +7,11 @@
 // Built by the `negcompile.operand_not_welded` CTest, which expects failure. The
 // TU is otherwise valid, so the only thing that can fail is the bindability
 // static_assert.
-#include <welder/welder.hpp>
+#include <welder/vocabulary.hpp>
 
 #include <pybind11/pybind11.h>
 
-#include <welder/backends/python/pybind11/backend.hpp>
+#include <welder/rods/python/pybind11/rod.hpp>
 
 struct RawTag {  // deliberately not welded
     int id{0};
@@ -24,4 +24,4 @@ struct [[=welder::weld(welder::lang::py)]] Tagged {
     Tagged operator+(const RawTag& t) const { return Tagged{id + t.id}; }
 };
 
-void bind_it(pybind11::module_& m) { welder::pybind11::bind<Tagged>(m); }
+void bind_it(pybind11::module_& m) { welder::welder<welder::rods::pybind11::rod>::weld_type<Tagged>(m); }

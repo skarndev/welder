@@ -1,6 +1,6 @@
 #pragma once
 /** @file
-    welder LuaCATS stub backend (header-only, text-emitting).
+    welder LuaCATS stub rod (header-only, text-emitting).
 
     Lua has no runtime docstring slot, so the sol2 backend drops every
     `[[=welder::doc]]` / `returns` / parameter annotation at load time — a loaded
@@ -14,8 +14,8 @@
     Unlike Python's `.pyi` (pybind11-stubgen *loads* the built module and
     introspects it), a Lua stub cannot be scraped from a loaded module — so it is
     **reflection-emitted at build time**. This is a genuine welder @ref
-    welder::backend "backend": it plugs the *same* generic driver
-    (`<welder/backend.hpp>`) that pybind11/nanobind/sol2 use, so member selection,
+    welder::rod "rod": it plugs the *same* generic driver
+    (`<welder/welder.hpp>`) that pybind11/nanobind/sol2 use, so member selection,
     base-class flattening, policy/mark resolution and the bindability gate are
     reused verbatim. Only the emission primitives differ — instead of registering a
     live class they append LuaCATS text to a growing document. A tiny generator
@@ -23,27 +23,28 @@
     (`welder_luacats_generate_stub`) captures it to `<name>.lua`.
 
     The emission primitives are thin: the C++→LuaCATS **type map** and the small
-    text helpers live in `<welder/backends/lua/luacats/type_map.hpp>`, and the
+    text helpers live in `<welder/rods/lua/luacats/type_map.hpp>`, and the
     document assembler (signature rendering + the `*_writer` handle types the
     driver's module/class/enum handles deduce to) in
-    `<welder/backends/lua/luacats/document.hpp>`. The backend struct below only wires
+    `<welder/rods/lua/luacats/document.hpp>`. The rod struct below only wires
     those to the driver contract.
 
     Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/welder.hpp>`). Then:
+    <welder/vocabulary.hpp>`). This header exposes exactly one thing: the rod type
+    `welder::rods::luacats::rod`. Drive it by hand:
     @code
-    #include <welder/backends/lua/luacats/backend.hpp>
-    WELDER_LUACATS_MAIN(mymod)   // main(): print the ---@meta stub for namespace ^^mymod
+    #include <welder/rods/lua/luacats/rod.hpp>
+    welder::rods::luacats::rod::generate<^^mymod>(std::cout);
     @endcode
-    or drive it by hand:
+    or through the generator-`main()` macro (include this directory's
+    `module.hpp` instead):
     @code
-    welder::luacats::generate<^^mymod>(std::cout);
+    #include <welder/rods/lua/luacats/module.hpp>
+    WELDER_LUACATS_MAIN(mymod)   // main(): print the ---@meta stub for ^^mymod
     @endcode
 */
 
 #include <cstddef>
-#include <fstream>  // WELDER_LUACATS_MAIN: write the stub to an output-path argument
-#include <iostream> // WELDER_LUACATS_MAIN: default to stdout
 #include <meta>
 #include <ostream>
 #include <string>
@@ -51,42 +52,39 @@
 #include <utility>
 #include <vector>
 
-#include <welder/backend.hpp>          // the backend contract + generic driver
-#include <welder/backends/lua/luacats/document.hpp> // the document + writer handles
-#include <welder/backends/lua/luacats/type_map.hpp> // lua_type / operator map / text
-#include <welder/backends/lua/overloads.hpp> // shared Lua overload-set selectors
+#include <welder/welder.hpp>           // welder::welder + rod contract + driver
+#include <welder/rods/lua/luacats/document.hpp> // the document + writer handles
+#include <welder/rods/lua/luacats/type_map.hpp> // lua_type / operator map / text
+#include <welder/rods/lua/overloads.hpp> // shared Lua overload-set selectors
 #include <welder/bind_traits.hpp>      // aggregate_fields / is_unary_operator
 #include <welder/doc.hpp>              // doc_of / param_docs / return_doc_of
-#include <welder/module.hpp>           // WELDER_MODULE dispatch (unused entry, kept parallel)
 
-namespace welder::luacats {
-
-namespace detail {
+namespace welder::rods::luacats {
 
 // The overload-set selectors are shared with the sol2 backend
-// (`<welder/backends/lua/overloads.hpp>`; both gather a name's C++ overloads that the
+// (`<welder/rods/lua/overloads.hpp>`; both gather a name's C++ overloads that the
 // generic driver visits one at a time). The LuaCATS stub renders the group as one
 // documented `function` plus `---@overload` lines.
-using welder::lua::function_overload_set;
-using welder::lua::is_overload_leader;
-using welder::lua::method_overload_set;
-using welder::lua::overload_group;
+using ::welder::rods::lua::function_overload_set;
+using ::welder::rods::lua::is_overload_leader;
+using ::welder::rods::lua::method_overload_set;
+using ::welder::rods::lua::overload_group;
 
-/** The LuaCATS stub backend: a stateless policy satisfying @ref welder::backend
+/** The LuaCATS stub rod: a stateless policy satisfying @ref welder::rod
     that emits text instead of registering a live module.
 
     Its public static members are the emission primitives welder's driver calls;
     they wire the type map (`type_map.hpp`) and document assembler (`document.hpp`)
     to the driver contract. The `protected` members below are the few helpers that
     are purely internal to the struct (prefixed `_`). */
-struct backend {
+struct rod {
     static constexpr lang language{lang::lua}; /**< Stubs are for the Lua binding. */
     using module_type = module_writer;
 
     struct session {}; /**< No deferred module state. */
 
   protected:
-    // --- implementation helpers (not part of the welder::backend contract) --
+    // --- implementation helpers (not part of the welder::rod contract) --
 
     /** The comma-joined LuaCATS names of a class's welded bases (for
         `---@class X : …`). */
@@ -107,7 +105,7 @@ struct backend {
     template <class T, std::size_t... J>
     static void _aggregate_param_lines(std::string& out, std::string& args,
                                        std::index_sequence<J...>) {
-        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         static constexpr const char* names[]{
             std::define_static_string(std::meta::identifier_of(fields[J]))...};
         static constexpr const char* types[]{
@@ -127,7 +125,7 @@ struct backend {
         (its `---@overload` line). Same field source as @ref _aggregate_param_lines. */
     template <class T, std::size_t... J>
     static std::string _aggregate_fun_params(std::index_sequence<J...>) {
-        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         static constexpr const char* names[]{
             std::define_static_string(std::meta::identifier_of(fields[J]))...};
         static constexpr const char* types[]{
@@ -144,7 +142,7 @@ struct backend {
     }
 
   public:
-    // --- caster oracle + emission primitives (the welder::backend contract) --
+    // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** @ref is_native_lua drives the shared bindability gate. */
     template <class T>
@@ -188,7 +186,7 @@ struct backend {
     static void add_aggregate_constructor(class_writer& w) {
         // C++26 aggregate field constructor: one `.new` param per field.
         static constexpr auto seq{
-            std::make_index_sequence<welder::detail::aggregate_fields<T>().size()>{}};
+            std::make_index_sequence<::welder::detail::aggregate_fields<T>().size()>{}};
         func_overload o{};
         _aggregate_param_lines<T>(o.params, o.args, seq);
         o.ret_line = "---@return " + w.qualified + '\n';
@@ -202,7 +200,7 @@ struct backend {
         w.fields += std::meta::identifier_of(Mem);
         w.fields += ' ';
         w.fields += lua_type(std::meta::type_of(Mem));
-        std::string d{one_line(welder::doc_of<Mem>())};
+        std::string d{one_line(::welder::doc_of<Mem>())};
         // LuaCATS has no read-only/const field modifier (an open feature request on
         // lua-language-server), so a const member's immutability — which the sol2
         // runtime backend enforces with sol::readonly — is surfaced as a description
@@ -248,7 +246,7 @@ struct backend {
         const char* op{operator_luacats(Fn)};
         w.fields += "---@operator ";
         w.fields += op;
-        if constexpr (!welder::detail::is_unary_operator(Fn)) {
+        if constexpr (!::welder::detail::is_unary_operator(Fn)) {
             constexpr auto types{param_lua_types<Fn>()};
             w.fields += "(";
             w.fields += types[0];
@@ -314,7 +312,7 @@ struct backend {
     template <std::meta::info Var>
     static void add_variable(module_type& m, session&) {
         std::string& out{m.doc->body};
-        emit_doc_comment(out, welder::doc_of<Var>());
+        emit_doc_comment(out, ::welder::doc_of<Var>());
         out += "---@type ";
         out += lua_type(std::meta::type_of(Var));
         out += '\n';
@@ -330,51 +328,35 @@ struct backend {
     }
 
     static void close_module(module_type&, session&) {}
+
+    // --- whole-stub generation (this backend's extra entry point) -----------
+
+    /** Emit the LuaCATS `---@meta` stub for top-level namespace @a Ns to @a os.
+
+        Runs welder's generic driver over @a Ns with this text-emitting backend, so
+        the stub covers exactly what the sol2 backend binds — classes, enums, free
+        functions, namespace variables and nested namespaces — now carrying the
+        types and docstrings Lua drops at runtime. The stub-specific extra over
+        `welder::welder<…>::weld_namespace` is the document/writer setup and the
+        final render, which is why the backend carries it.
+
+        @tparam Ns a reflection of the (top-level) namespace whose name is the
+                   module.
+        @param os the stream to write the finished stub to. */
+    template <std::meta::info Ns>
+    static void generate(std::ostream& os) {
+        static_assert(std::meta::is_namespace(Ns),
+                      "welder: luacats::generate<Ns>: Ns must reflect a namespace");
+        document doc{};
+        module_writer m{&doc,
+                        std::define_static_string(qualified_name(Ns))};
+        doc.declare_table(m.prefix, ::welder::doc_of<Ns>());
+        ::welder::welder<rod>::weld_namespace<Ns>(m);
+        os << doc.render();
+    }
 };
 
-static_assert(welder::backend<backend>,
-              "welder::luacats::detail::backend must satisfy welder::backend");
+static_assert(::welder::rod<rod>,
+              "welder::rods::luacats::rod must satisfy welder::rod");
 
-} // namespace detail
-
-/** Emit the LuaCATS `---@meta` stub for top-level namespace @a Ns to @a os.
-
-    Runs welder's generic driver over @a Ns with the text-emitting backend, so the
-    stub covers exactly what the sol2 backend binds — classes, enums, free
-    functions, namespace variables and nested namespaces — now carrying the types
-    and docstrings Lua drops at runtime.
-
-    @tparam Ns a reflection of the (top-level) namespace whose name is the module.
-    @param os the stream to write the finished stub to. */
-template <std::meta::info Ns>
-void generate(std::ostream& os) {
-    static_assert(std::meta::is_namespace(Ns),
-                  "welder: luacats::generate<Ns>: Ns must reflect a namespace");
-    detail::document doc{};
-    detail::module_writer m{&doc,
-                            std::define_static_string(detail::qualified_name(Ns))};
-    doc.declare_table(m.prefix, welder::doc_of<Ns>());
-    welder::detail::bind_namespace_driver<detail::backend, Ns>(m);
-    os << doc.render();
-}
-
-} // namespace welder::luacats
-
-/** @def WELDER_LUACATS_MAIN
-    Define a `main()` that emits the LuaCATS stub for namespace @a ns.
-
-    Writes to the file named by the first command-line argument, or to stdout when
-    none is given. The build-time analogue of a backend entry point: a generator
-    executable links this and `welder_luacats_generate_stub` runs it with the
-    output path to produce `<ns>.lua`.
-    @param ns the top-level namespace / module name token. */
-#define WELDER_LUACATS_MAIN(ns)                                                   \
-    int main(int argc, char** argv) {                                             \
-        if (argc > 1) {                                                           \
-            ::std::ofstream welder_out_{argv[1]};                                 \
-            ::welder::luacats::generate<^^ns>(welder_out_);                       \
-        } else {                                                                  \
-            ::welder::luacats::generate<^^ns>(::std::cout);                       \
-        }                                                                         \
-        return 0;                                                                 \
-    }
+} // namespace welder::rods::luacats

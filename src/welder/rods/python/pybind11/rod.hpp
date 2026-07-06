@@ -1,21 +1,27 @@
 #pragma once
 /** @file
-    welder pybind11 backend (header-only).
+    welder pybind11 rod (header-only).
 
-    This is a *thin* backend: it implements welder's backend contract
-    (`<welder/backend.hpp>`) for pybind11 and hands the traversal/resolution off to
+    This is a *thin* rod: it implements welder's rod contract
+    (`<welder/welder.hpp>`) for pybind11 and hands the traversal/resolution off to
     welder's generic driver. All the language-agnostic work — deciding which
     members bind, gating bindability, folding docstrings, walking bases and
     namespaces — lives in the core; only the pybind11 emission primitives are here.
-    A future nanobind / lua backend mirrors this file against its own framework.
+    The nanobind / lua backends mirror this file against their own frameworks.
 
     Requires the welder vocabulary to be available first, via either `import
-    welder;` (module form) or `#include <welder/welder.hpp>` (header-only). Then:
+    welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
+    This header exposes exactly one thing: the rod type
+    `welder::rods::pybind11::rod`, to plug into `welder::welder`:
     @code
     #include <pybind11/pybind11.h>
-    #include <welder/backends/python/pybind11/backend.hpp>
-    PYBIND11_MODULE(mymod, m) { welder::pybind11::bind<MyType>(m); }
+    #include <welder/rods/python/pybind11/rod.hpp>
+    PYBIND11_MODULE(mymod, m) {
+        welder::welder<welder::rods::pybind11::rod>::weld_type<MyType>(m);
+    }
     @endcode
+    (For the `WELDER_MODULE` entry-point macro, include this directory's
+    `module.hpp` instead.)
 */
 #include <array>
 #include <cstddef>
@@ -25,39 +31,36 @@
 #include <type_traits>
 #include <utility>
 
-#include <welder/backend.hpp>    // the backend contract + generic driver
-#include <welder/backends/python/doc_style.hpp> // welder::python::google_style
-#include <welder/backends/python/operators.hpp> // welder::python::operator_dunder
+#include <welder/welder.hpp>     // welder::welder + the rod contract + driver
+#include <welder/rods/python/doc_style.hpp> // welder::rods::python::google_style
+#include <welder/rods/python/operators.hpp> // welder::rods::python::operator_dunder
 #include <welder/bind_traits.hpp>// param_types / param_names / aggregate_fields
 #include <welder/doc.hpp>        // function_docstring
-#include <welder/module.hpp>     // WELDER_MODULE dispatch (entry-point macro)
 
 #include <pybind11/pybind11.h>
 #include <pybind11/native_enum.h> // py::native_enum (stdlib enum binding)
 
-namespace welder::pybind11 {
+namespace welder::rods::pybind11 {
 
-// Inside `welder::pybind11`, the unqualified name `pybind11` resolves to *this*
+// Inside `welder::rods::pybind11`, the unqualified name `pybind11` resolves to *this*
 // namespace, not the library. Alias the real one once — the way pybind11's own
 // docs spell it — and use `py::` for every library reference below.
 namespace py = ::pybind11;
 
-namespace detail {
-
-/** The pybind11 backend: a stateless policy type satisfying @ref welder::backend.
+/** The pybind11 rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the pybind11 emission primitives welder's driver
     calls; the driver supplies all the reflection-derived decisions. See
-    `<welder/backend.hpp>` for the contract each member fulfills. The `protected`
+    `<welder/welder.hpp>` for the contract each member fulfills. The `protected`
     members below are pybind11-specific implementation helpers (prefixed `_`), not
     part of the contract.
 */
-struct backend {
+struct rod {
     static constexpr lang language{lang::py}; /**< welder::lang::py. */
     using module_type = py::module_;          /**< pybind11's module handle. */
 
   protected:
-    // --- implementation helpers (not part of the welder::backend contract) --
+    // --- implementation helpers (not part of the welder::rod contract) --
 
     /** Whether pybind11 can only convert @a T via *runtime class registration*.
 
@@ -110,10 +113,10 @@ struct backend {
     template <std::meta::info Fn, class Def, std::size_t... I>
     static void _def_function(const char* name, Def def_into,
                               std::index_sequence<I...>) {
-        static constexpr auto names{welder::detail::param_names<Fn>()};
+        static constexpr auto names{::welder::detail::param_names<Fn>()};
         const std::string doc{
-            welder::function_docstring<Fn, welder::python::google_style>()};
-        if constexpr (welder::detail::all_params_named<Fn>()) {
+            ::welder::function_docstring<Fn, ::welder::rods::python::google_style>()};
+        if constexpr (::welder::detail::all_params_named<Fn>()) {
             if (doc.empty())
                 def_into(name, &[:Fn:], py::arg(names[I])...);
             else
@@ -143,9 +146,9 @@ struct backend {
     */
     template <std::meta::info Ctor, std::size_t... I>
     static void _def_init(auto& cls, std::index_sequence<I...>) {
-        static constexpr auto params{welder::detail::param_types<Ctor>()};
-        static constexpr auto names{welder::detail::param_names<Ctor>()};
-        if constexpr (welder::detail::all_params_named<Ctor>())
+        static constexpr auto params{::welder::detail::param_types<Ctor>()};
+        static constexpr auto names{::welder::detail::param_names<Ctor>()};
+        if constexpr (::welder::detail::all_params_named<Ctor>())
             cls.def(py::init<typename [:params[I]:]...>(), py::arg(names[I])...);
         else
             cls.def(py::init<typename [:params[I]:]...>());
@@ -162,7 +165,7 @@ struct backend {
     */
     template <class T, std::size_t... I>
     static void _def_aggregate_init(auto& cls, std::index_sequence<I...>) {
-        static constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         cls.def(py::init([](typename [:std::meta::type_of(fields[I]):]... args) {
                     return T{std::move(args)...};
                 }),
@@ -209,7 +212,7 @@ struct backend {
     }
 
   public:
-    // --- caster oracle + emission primitives (the welder::backend contract) --
+    // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** `caster_oracle`: @a T is convertible without welder registering a class for
         it iff pybind11 does *not* fall back to runtime class registration. */
@@ -218,7 +221,7 @@ struct backend {
 
     /** Map a member operator to its Python dunder (`nullptr` = not exposed). */
     static consteval const char* special_method_name(std::meta::info op_fn) {
-        return welder::python::operator_dunder(op_fn);
+        return ::welder::rods::python::operator_dunder(op_fn);
     }
 
     // --- class binding ------------------------------------------------------
@@ -243,7 +246,7 @@ struct backend {
     /** Bind the synthesized aggregate field constructor. @see _def_aggregate_init */
     template <class T>
     static void add_aggregate_constructor(auto& cls) {
-        constexpr auto fields{welder::detail::aggregate_fields<T>()};
+        constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
     }
 
@@ -260,7 +263,7 @@ struct backend {
     static void add_field(auto& cls) {
         constexpr const char* name{
             std::define_static_string(std::meta::identifier_of(Mem))};
-        constexpr const char* doc{welder::doc_of<Mem>()};
+        constexpr const char* doc{::welder::doc_of<Mem>()};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
             // const member: read-only (def_readwrite's setter would not compile).
             if constexpr (doc)
@@ -296,7 +299,7 @@ struct backend {
     /** Bind member operator @a Fn under its Python dunder. */
     template <std::meta::info Fn>
     static void add_operator(auto& cls) {
-        _def_function<Fn>(welder::python::operator_dunder(Fn),
+        _def_function<Fn>(::welder::rods::python::operator_dunder(Fn),
                           [&cls](auto&&... a) {
                               cls.def(std::forward<decltype(a)>(a)...);
                           });
@@ -420,96 +423,7 @@ struct backend {
     }
 };
 
-static_assert(welder::backend<backend>,
-              "welder::pybind11::detail::backend must satisfy welder::backend");
+static_assert(::welder::rod<rod>,
+              "welder::rods::pybind11::rod must satisfy welder::rod");
 
-} // namespace detail
-
-/** Reflect over @a T and register it on module @a m.
-
-    A class type becomes a `py::class_`; an enum becomes a stdlib `enum.IntEnum` via
-    `py::native_enum` (its enumerators resolve like data members, honoring the enum's
-    policy/marks). See the driver in `<welder/backend.hpp>` for the full set of what
-    is bound.
-
-    @tparam T the type to bind.
-    @param m    the module handle.
-    @param name the Python name, or `nullptr` to default to @a T's identifier.
-    @return for a class, the `py::class_` handle (chain further registrations onto
-            it); for an enum, the owning `enum_handle` for the already-finalized
-            `py::native_enum`.
-*/
-template <class T>
-auto bind(py::module_& m, const char* name = nullptr) {
-    if constexpr (std::is_enum_v<T>)
-        return welder::detail::bind_enum<detail::backend, T>(m, name);
-    else
-        return welder::detail::bind_type<detail::backend, T>(m, name);
-}
-
-/** Reflect over a whole namespace and expose its welded members on module @a m.
-
-    Classes bind via bind(), free functions, namespace variables, and nested
-    namespaces as submodules. Usage:
-    @code
-    PYBIND11_MODULE(mymod, m) { welder::pybind11::bind_namespace<^^myns>(m); }
-    @endcode
-
-    @tparam Ns a reflection of the namespace.
-    @param m the module handle.
-*/
-template <std::meta::info Ns>
-void bind_namespace(py::module_& m) {
-    welder::detail::bind_namespace_driver<detail::backend, Ns>(m);
-}
-
-/** A do-nothing module hook; the default for build_module()'s pre/post callbacks. */
-inline constexpr auto noop = [](py::module_&) {};
-
-/** Build a whole Python module out of top-level C++ namespace @a Ns.
-
-    Runs @a pre, binds the namespace into @a m (adopting a namespace-level
-    `[[=welder::doc]]` as the module docstring), then runs @a post. The hooks fold
-    hand-written bindings in around welder's generated body. This fills an
-    *existing* `py::module_`; pair it with an entry-point macro (pybind11's own, or
-    welder's `WELDER_MODULE`) that emits the module's C entry symbol:
-    @code
-    PYBIND11_MODULE(shapes, m) { welder::pybind11::build_module<^^shapes>(m); }
-    @endcode
-
-    @tparam Ns   a reflection of the top-level namespace.
-    @tparam Pre  the pre-hook callable type.
-    @tparam Post the post-hook callable type.
-    @param m    the module handle to fill.
-    @param pre  invoked with @a m before binding (defaults to noop).
-    @param post invoked with @a m after binding (defaults to noop).
-*/
-template <std::meta::info Ns, class Pre = decltype(noop), class Post = decltype(noop)>
-void build_module(py::module_& m, Pre pre = noop, Post post = noop) {
-    welder::detail::build_module_driver<detail::backend, Ns>(m, pre, post);
-}
-
-} // namespace welder::pybind11
-
-/** @def WELDER_DETAIL_MODULE_ENTRY_pybind11
-    pybind11's expansion of the backend-agnostic `WELDER_MODULE(ns, pybind11)`.
-
-    Emits the `PyInit_<ns>` entry point, binds namespace `^^ns` into it, then runs
-    the optional trailing `{ }` block as post-glue with the module handle named
-    `module` in scope. The block is supplied as the body of a forward-declared,
-    internally-linked glue function (the same technique `PYBIND11_MODULE` itself
-    uses for its body), so `WELDER_MODULE(ns, pybind11) { … }` and
-    `WELDER_MODULE(ns, pybind11) {}` both work. Defined at file scope (macros ignore
-    namespaces); see `<welder/module.hpp>` for the `WELDER_MODULE` dispatch.
-    @param ns the namespace / module name token.
-*/
-#define WELDER_DETAIL_MODULE_ENTRY_pybind11(ns)                                   \
-    static void welder_glue_##ns##_pybind11(::pybind11::module_&);                \
-    PYBIND11_MODULE(ns, welder_module_var_) {                                     \
-        ::welder::pybind11::build_module<^^ns>(                                   \
-            welder_module_var_, ::welder::pybind11::noop,                         \
-            [](::pybind11::module_& welder_glue_m_) {                             \
-                welder_glue_##ns##_pybind11(welder_glue_m_);                      \
-            });                                                                   \
-    }                                                                             \
-    static void welder_glue_##ns##_pybind11(::pybind11::module_& module)
+} // namespace welder::rods::pybind11

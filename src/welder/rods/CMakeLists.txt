@@ -1,11 +1,12 @@
-# Header-only language backends. Each backend is a thin adapter consuming the
+# Header-only language rods (backends). Each rod is a thin adapter consuming the
 # same core resolution API (welded_for / member_bound / public_bases) plus its
-# own target framework. Each backend struct keeps the welder::backend contract
-# public and its framework-specific helpers protected (prefixed _); cross-backend
-# maps are factored into shared headers next to the backends (Python: doc_style.hpp
-# + operators.hpp; sol2: metamethods.hpp; luacats: type_map.hpp + document.hpp).
+# own target framework. Each rod struct (welder::rods::<name>::rod) keeps the
+# welder::rod contract public and its framework-specific helpers protected
+# (prefixed _); cross-rod maps are factored into shared headers next to the rods
+# (Python: doc_style.hpp + operators.hpp; sol2: metamethods.hpp; luacats:
+# type_map.hpp + document.hpp).
 
-# --- welder::pybind11 : pybind11 Python backend ------------------------------
+# --- welder::pybind11 : pybind11 Python rod ----------------------------------
 if(WELDER_BUILD_PYBIND11)
   find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
   find_package(pybind11 REQUIRED)
@@ -16,7 +17,7 @@ if(WELDER_BUILD_PYBIND11)
     welder_headers pybind11::headers Python::Module)
 endif()
 
-# --- welder::nanobind : nanobind Python backend ------------------------------
+# --- welder::nanobind : nanobind Python rod ------------------------------
 # nanobind ships its runtime as source compiled *into* each extension via its own
 # `nanobind_add_module()` (from nanobind-config.cmake), not as a plain link
 # library — so this INTERFACE target only surfaces the welder + nanobind headers;
@@ -33,7 +34,7 @@ if(WELDER_BUILD_NANOBIND)
   target_include_directories(welder_nanobind SYSTEM INTERFACE ${NB_DIR}/include)
 endif()
 
-# --- welder::sol2 : sol2 Lua backend -----------------------------------------
+# --- welder::sol2 : sol2 Lua rod -----------------------------------------
 # A loadable Lua C module is a shared object that Lua's `require` finds on
 # `package.cpath` and enters through `luaopen_<name>`; it resolves the `lua_*`
 # symbols from the *host* interpreter at load time and must NOT bundle its own
@@ -84,8 +85,8 @@ if(WELDER_BUILD_SOL2)
   target_compile_definitions(welder_sol2 INTERFACE SOL_ALL_SAFETIES_ON=1)
 endif()
 
-# --- welder::luacats : LuaCATS `---@meta` stub backend -----------------------
-# The Lua counterpart of the Python `.pyi` stubs: a text-emitting backend that
+# --- welder::luacats : LuaCATS `---@meta` stub rod -----------------------
+# The Lua counterpart of the Python `.pyi` stubs: a text-emitting rod that
 # reflects the same welded types (via the same generic driver as sol2) and writes
 # a LuaCATS definition file carrying the docstrings Lua drops at runtime. It is
 # pure reflection + text — it does NOT depend on sol2 or a Lua runtime — so this

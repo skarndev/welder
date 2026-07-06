@@ -20,7 +20,7 @@
     @note Like `<welder/reflect.hpp>`, this depends on the welder vocabulary
     (`lang`, `policy_kind`, …) but does NOT include `<welder/annotations.hpp>`:
     provide the vocabulary first (`import welder;` or `#include
-    <welder/welder.hpp>`), then this.
+    <welder/vocabulary.hpp>`), then this.
 */
 
 namespace welder::detail {
@@ -115,7 +115,7 @@ consteval bool is_bindable_method(std::meta::info f, lang L, policy_kind pol) {
 
     Public, non-deleted, not a special member, `member_bound`. Whether it maps to
     something in the target language — and under what name — is a backend decision
-    (see `backend::special_method_name`); this is the language-agnostic half.
+    (see `rod::special_method_name`); this is the language-agnostic half.
     @param f   a reflection of the operator function.
     @param L   the target language.
     @param pol the enclosing type's policy.

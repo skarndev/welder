@@ -16,10 +16,10 @@
     it calls @ref welder::function_docstring.
 
     Requires the welder vocabulary to be available first (via `import welder;` or
-    `#include <welder/welder.hpp>`), like the rest of the reflection layer.
+    `#include <welder/vocabulary.hpp>`), like the rest of the reflection layer.
 */
 
-namespace welder::python {
+namespace welder::rods::python {
 
 /** Google-style docstring assembly.
 
@@ -37,7 +37,7 @@ struct google_style {
     /** Assemble @a d into a Google-style docstring.
         @param d the documentation pieces.
         @return the formatted docstring (possibly empty). */
-    static std::string format(const welder::function_doc& d) {
+    static std::string format(const ::welder::function_doc& d) {
         std::string out{};
         // Separate a new block from preceding content by exactly one blank line,
         // whether or not that content already ended in a newline (the Args block
@@ -92,6 +92,6 @@ struct google_style {
     }
 };
 
-static_assert(welder::doc_style<google_style>);
+static_assert(::welder::doc_style<google_style>);
 
-} // namespace welder::python
+} // namespace welder::rods::python

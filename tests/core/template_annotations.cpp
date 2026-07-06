@@ -27,7 +27,9 @@
 // hands it — or that appears as a member/parameter type — has full docs.
 #include <meta>
 
-#include <welder/welder.hpp> // vocabulary + reflection (header-only core)
+#include <welder/vocabulary.hpp> // annotation vocabulary (header-only form)
+#include <welder/reflect.hpp>    // welded_for / excluded_for
+#include <welder/doc.hpp>        // doc_of / return_doc_of / param_docs
 
 namespace probe {
 

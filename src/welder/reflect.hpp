@@ -10,7 +10,7 @@
     `lang`, …) but deliberately does NOT include `<welder/annotations.hpp>`: the
     vocabulary may instead arrive via `import welder;`, and including it textually
     as well would redeclare those entities. Provide the vocabulary first — either
-    `import welder;` or `#include <welder/welder.hpp>` — then include this header.
+    `import welder;` or `#include <welder/vocabulary.hpp>` — then include this header.
 */
 
 namespace welder {

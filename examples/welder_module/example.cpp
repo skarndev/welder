@@ -4,15 +4,15 @@
 // __doc__ (namespace -> module doc, class/function docs, Google-style arg docs).
 //
 // Header-only consumption (welder::headers); the macro and backend come from
-// <welder/backends/python/pybind11/backend.hpp>.
+// <welder/rods/python/pybind11/module.hpp>.
 #include <cstdint>
 #include <string>
 
-#include <welder/welder.hpp>
+#include <welder/vocabulary.hpp>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <welder/backends/python/pybind11/backend.hpp>
+#include <welder/rods/python/pybind11/module.hpp>
 
 // The namespace name doubles as the module name (import shapes). Its doc becomes
 // the module docstring.

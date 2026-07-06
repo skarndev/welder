@@ -8,11 +8,11 @@
 // Built by the `negcompile.container_of_unwelded` CTest, which expects failure.
 #include <vector>
 
-#include <welder/welder.hpp>
+#include <welder/vocabulary.hpp>
 
 #include <pybind11/pybind11.h>
 
-#include <welder/backends/python/pybind11/backend.hpp>
+#include <welder/rods/python/pybind11/rod.hpp>
 
 struct Unwelded {  // deliberately not welded
     int v{0};
@@ -22,4 +22,4 @@ struct [[=welder::weld(welder::lang::py)]] Bag {
     std::vector<Unwelded> items;
 };
 
-void bind_it(pybind11::module_& m) { welder::pybind11::bind<Bag>(m); }
+void bind_it(pybind11::module_& m) { welder::welder<welder::rods::pybind11::rod>::weld_type<Bag>(m); }

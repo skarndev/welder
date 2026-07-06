@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include <welder/backends/lua/luacats/type_map.hpp> // lua_type / text helpers
+#include <welder/rods/lua/luacats/type_map.hpp> // lua_type / text helpers
 #include <welder/bind_traits.hpp>                    // param_types / aggregate_fields
 #include <welder/doc.hpp> // doc_of / param_docs / return_doc_of
 
@@ -17,7 +17,7 @@
     The LuaCATS document assembler: how a `---@meta` stub is built up in memory.
 
     Two layers sit here, both above the type map
-    (`<welder/backends/lua/luacats/type_map.hpp>`) and below the backend:
+    (`<welder/rods/lua/luacats/type_map.hpp>`) and below the backend:
     - **signature rendering** — turning a reflected function/constructor into its
       `---@param`/`---@return` lines and `fun(…)` signature, and grouping overloads
       into the idiomatic one-symbol/`---@overload` shape;
@@ -29,10 +29,10 @@
     as their own unit rather than as free functions surrounding the backend struct.
 
     Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/welder.hpp>`), like the rest of the reflection layer.
+    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
 */
 
-namespace welder::luacats::detail {
+namespace welder::rods::luacats {
 
 // --- signature rendering ----------------------------------------------------
 
@@ -48,7 +48,7 @@ consteval auto param_lua_types() {
     constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
     std::array<const char*, n> out{};
     if constexpr (n != 0) {
-        constexpr auto types{welder::detail::param_types<Fn>()};
+        constexpr auto types{::welder::detail::param_types<Fn>()};
         for (std::size_t i{0}; i < n; ++i)
             out[i] = std::define_static_string(lua_type_string(types[i]));
     }
@@ -61,7 +61,7 @@ consteval auto param_lua_types() {
     @return the argument-name list (e.g. `"x, y"`). */
 template <std::meta::info Fn>
 std::string arg_list() {
-    static constexpr auto pds{welder::param_docs<Fn>()};
+    static constexpr auto pds{::welder::param_docs<Fn>()};
     std::string out{};
     for (std::size_t i{0}; i < pds.size(); ++i) {
         if (i)
@@ -77,7 +77,7 @@ std::string arg_list() {
     @param out the buffer to append the `---@param` lines to. */
 template <std::meta::info Fn>
 void emit_params(std::string& out) {
-    static constexpr auto pds{welder::param_docs<Fn>()};
+    static constexpr auto pds{::welder::param_docs<Fn>()};
     static constexpr auto types{param_lua_types<Fn>()};
     for (std::size_t i{0}; i < pds.size(); ++i) {
         out += "---@param ";
@@ -102,7 +102,7 @@ void emit_params(std::string& out) {
     @return the `fun(…)` signature string. */
 template <std::meta::info Fn>
 std::string fun_signature(const std::string& ret_override) {
-    static constexpr auto pds{welder::param_docs<Fn>()};
+    static constexpr auto pds{::welder::param_docs<Fn>()};
     static constexpr auto types{param_lua_types<Fn>()};
     std::string s{"fun("};
     for (std::size_t i{0}; i < pds.size(); ++i) {
@@ -145,7 +145,7 @@ struct func_overload {
 template <std::meta::info Fn>
 func_overload build_overload(const std::string& ret_override) {
     func_overload o{};
-    if (const char* d{welder::doc_of<Fn>()})
+    if (const char* d{::welder::doc_of<Fn>()})
         o.doc = d;
     emit_params<Fn>(o.params);
     if (!ret_override.empty()) {
@@ -155,7 +155,7 @@ func_overload build_overload(const std::string& ret_override) {
         if constexpr (!std::is_void_v<R>) {
             o.ret_line = "---@return ";
             o.ret_line += lua_type(std::meta::return_type_of(Fn));
-            const std::string d{one_line(welder::return_doc_of<Fn>())};
+            const std::string d{one_line(::welder::return_doc_of<Fn>())};
             if (!d.empty())
                 o.ret_line += ' ' + d;
             o.ret_line += '\n';
@@ -338,4 +338,4 @@ struct enum_writer {
     }
 };
 
-} // namespace welder::luacats::detail
+} // namespace welder::rods::luacats

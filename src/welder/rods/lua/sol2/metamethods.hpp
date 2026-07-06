@@ -10,16 +10,16 @@
 
     Lua's metamethod model differs from Python's dunders, so this map lives beside
     the sol2 backend rather than in a shared Python header — the sol2 analogue of
-    `<welder/backends/python/operators.hpp>`. The backend calls @ref
-    welder::sol2::detail::operator_mm from its `special_method_name` (the `__name`
+    `<welder/rods/python/operators.hpp>`. The backend calls @ref
+    ::welder::rods::sol2::operator_mm from its `special_method_name` (the `__name`
     that gates operator eligibility) and its `add_operator` (the `sol::meta_function`
     slot).
 
     Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/welder.hpp>`) and `<sol/sol.hpp>`.
+    <welder/vocabulary.hpp>`) and `<sol/sol.hpp>`.
 */
 
-namespace welder::sol2::detail {
+namespace welder::rods::sol2 {
 
 /** A member operator's Lua metamethod, or `{…, nullptr}` if welder does not expose
     it. */
@@ -53,7 +53,7 @@ struct metamethod {
 consteval metamethod operator_mm(std::meta::info f) {
     using std::meta::operators;
     using mf = ::sol::meta_function;
-    const bool unary{welder::detail::is_unary_operator(f)};
+    const bool unary{::welder::detail::is_unary_operator(f)};
     const metamethod none{mf::index, nullptr};
     switch (std::meta::operator_of(f)) {
         case operators::op_plus:
@@ -93,4 +93,4 @@ consteval metamethod operator_mm(std::meta::info f) {
     }
 }
 
-} // namespace welder::sol2::detail
+} // namespace welder::rods::sol2

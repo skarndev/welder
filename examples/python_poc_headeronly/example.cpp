@@ -3,11 +3,11 @@
 #include <cstdint>
 #include <string>
 
-#include <welder/welder.hpp> // annotation vocabulary + reflection (header-only)
+#include <welder/vocabulary.hpp> // annotation vocabulary (header-only form)
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <welder/backends/python/pybind11/backend.hpp> // pybind11 backend
+#include <welder/rods/python/pybind11/rod.hpp> // pybind11 backend
 
 struct
 [[=welder::weld(welder::lang::py)]]
@@ -30,6 +30,7 @@ Label {
 
 PYBIND11_MODULE(welder_poc_ho, m) {
     m.doc() = "welder pybind11 POC (header-only consumption)";
-    welder::pybind11::bind<Point>(m);
-    welder::pybind11::bind<Label>(m);
+    using weld = welder::welder<welder::rods::pybind11::rod>;
+    weld::weld_type<Point>(m);
+    weld::weld_type<Label>(m);
 }

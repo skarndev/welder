@@ -13,7 +13,7 @@
     The low-level rendering primitives of the LuaCATS stub backend: the C++→LuaCATS
     **type map**, the C++-operator → `---@operator` name map, the "native" caster
     trait, and the small text helpers the document assembler
-    (`<welder/backends/lua/luacats/document.hpp>`) and the backend share.
+    (`<welder/rods/lua/luacats/document.hpp>`) and the backend share.
 
     The runtime sol2 backend only needed a yes/no caster oracle; a stub needs the
     actual LuaCATS **type name** for every C++ type, which is the one thing living
@@ -21,10 +21,10 @@
     and the document assembler read as distinct layers rather than one soup.
 
     Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/welder.hpp>`), like the rest of the reflection layer.
+    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
 */
 
-namespace welder::luacats::detail {
+namespace welder::rods::luacats {
 
 // --- small text helpers -----------------------------------------------------
 
@@ -214,7 +214,7 @@ inline constexpr bool is_native_lua =
     @return the `---@operator` name (static storage), or `nullptr`. */
 consteval const char* operator_luacats(std::meta::info f) {
     using std::meta::operators;
-    const bool unary{welder::detail::is_unary_operator(f)};
+    const bool unary{::welder::detail::is_unary_operator(f)};
     switch (std::meta::operator_of(f)) {
         case operators::op_plus:    return unary ? nullptr : "add";
         case operators::op_minus:   return unary ? "unm" : "sub";
@@ -233,4 +233,4 @@ consteval const char* operator_luacats(std::meta::info f) {
     }
 }
 
-} // namespace welder::luacats::detail
+} // namespace welder::rods::luacats

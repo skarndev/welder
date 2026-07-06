@@ -10,16 +10,16 @@
     pybind11 and nanobind expose the *same* Python object model, so a member
     operator maps to the same dunder in both (`operator+` → `__add__`, …). This
     header holds that one map so neither backend re-derives it — the Python analogue
-    of `<welder/backends/lua/overloads.hpp>` and `<welder/backends/python/doc_style.hpp>`.
-    A backend calls @ref welder::python::operator_dunder from its
+    of `<welder/rods/lua/overloads.hpp>` and `<welder/rods/python/doc_style.hpp>`.
+    A backend calls @ref welder::rods::python::operator_dunder from its
     `special_method_name` (the map that both gates operator eligibility and names the
     slot) and its `add_operator`.
 
     Requires the welder vocabulary to be available first (via `import welder;` or
-    `#include <welder/welder.hpp>`), like the rest of the reflection layer.
+    `#include <welder/vocabulary.hpp>`), like the rest of the reflection layer.
 */
 
-namespace welder::python {
+namespace welder::rods::python {
 
 /** The Python special-method ("dunder") name for a member operator, or `nullptr`
     if welder does not expose that operator.
@@ -38,7 +38,7 @@ namespace welder::python {
 */
 consteval const char* operator_dunder(std::meta::info f) {
     using std::meta::operators;
-    const bool unary{welder::detail::is_unary_operator(f)};
+    const bool unary{::welder::detail::is_unary_operator(f)};
     switch (std::meta::operator_of(f)) {
         case operators::op_plus:    return unary ? "__pos__" : "__add__";
         case operators::op_minus:   return unary ? "__neg__" : "__sub__";
@@ -63,4 +63,4 @@ consteval const char* operator_dunder(std::meta::info f) {
     }
 }
 
-} // namespace welder::python
+} // namespace welder::rods::python

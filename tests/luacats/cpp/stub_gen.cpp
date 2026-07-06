@@ -17,8 +17,8 @@
 #include <string>
 #include <vector>
 
-#include <welder/welder.hpp>
-#include <welder/backends/lua/luacats/backend.hpp>
+#include <welder/vocabulary.hpp>
+#include <welder/rods/lua/luacats/module.hpp>
 
 namespace [[=welder::doc("A tiny geometry module for the LuaCATS stub test.")]]
 stubdemo {

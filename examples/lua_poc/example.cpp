@@ -4,7 +4,7 @@
 // drive the Python backends drive this one; only the backend header differs.
 //
 // Header-only consumption (welder::headers); the macro and backend come from
-// <welder/backends/lua/sol2/backend.hpp>. Build with welder_sol2_add_module() so
+// <welder/rods/lua/sol2/module.hpp>. Build with welder_sol2_add_module() so
 // the output is a `require`-able `shapes_lua.so` (see this dir's CMakeLists.txt).
 //
 // [[=welder::doc]] annotations have no runtime home in Lua (no __doc__), but they
@@ -12,10 +12,10 @@
 // emitter would surface to the Lua language server.
 #include <cstdint>
 
-#include <welder/welder.hpp>
+#include <welder/vocabulary.hpp>
 
 #include <sol/sol.hpp>
-#include <welder/backends/lua/sol2/backend.hpp>
+#include <welder/rods/lua/sol2/module.hpp>
 
 // The namespace name doubles as the module name (require "shapes_lua").
 namespace

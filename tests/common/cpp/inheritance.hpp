@@ -5,7 +5,7 @@
 // (pybind11 requires a native base to be registered first).
 //
 // The cases live in namespace `inheritance`, bound under an `inheritance`
-// submodule via WELDER_TEST_BE::bind_namespace so the Python package mirrors
+// submodule via WELDER_TEST_WELDER::weld_namespace so the Python package mirrors
 // this file. bind_namespace visits members in declaration order, so each welded
 // base is registered before the types that derive from it.
 //
@@ -143,5 +143,5 @@ Bottom : public Left, public Right {
 inline void register_inheritance(WELDER_TEST_MODULE_T& m) {
     // Declaration order registers each native base before its derived types.
     auto sub{WELDER_TEST_SUBMODULE(m, "inheritance")};
-    WELDER_TEST_BE::bind_namespace<^^inheritance>(sub);
+    WELDER_TEST_WELDER::weld_namespace<^^inheritance>(sub);
 }

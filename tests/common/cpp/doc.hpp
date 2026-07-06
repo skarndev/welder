@@ -2,7 +2,7 @@
 // Documentation — mirrors tests/test_doc.py (same sections, same order). Exercises
 // the [[=welder::doc]] annotation across a class, its methods, free functions and
 // their parameters, and a namespace docstring, plus the whole-module entry point
-// WELDER_TEST_BE::build_module (pre/post hooks + namespace-doc adoption).
+// WELDER_TEST_WELDER::weld_module (pre/post hooks + namespace-doc adoption).
 //
 // Everything lives in the top-level namespace `documented` so it can be bound as
 // one module via build_module (which requires a top-level namespace). It is bound
@@ -155,7 +155,7 @@ inline void register_doc(WELDER_TEST_MODULE_T& m) {
     // pre/post hooks and the namespace -> module docstring adoption. The hooks
     // drop marker attributes the Python side checks for.
     auto sub{WELDER_TEST_SUBMODULE(m, "documented")};
-    WELDER_TEST_BE::build_module<^^documented>(
+    WELDER_TEST_WELDER::weld_module<^^documented>(
         sub,
         [](WELDER_TEST_MODULE_T& mm) { mm.attr("pre_marker") = 1; },
         [](WELDER_TEST_MODULE_T& mm) { mm.attr("post_marker") = 2; });

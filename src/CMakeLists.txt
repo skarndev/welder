@@ -1,11 +1,11 @@
 # welder is header-only at its core, with an optional single importable module
-# and header-only language backends. Everything lives under one tree (src/welder)
-# so user includes always start from <welder/...>.
+# and header-only language rods (backends). Everything lives under one tree
+# (src/welder) so user includes always start from <welder/...>.
 
 # --- welder::headers : the header-only core (source of truth) ----------------
 add_library(welder_headers INTERFACE)
 add_library(welder::headers ALIAS welder_headers)
-# src/ is the include root, so <welder/welder.hpp>, <welder/backends/python/pybind11/backend.hpp>
+# src/ is the include root, so <welder/welder.hpp>, <welder/rods/python/pybind11/rod.hpp>
 # and friends all resolve from here.
 target_include_directories(welder_headers INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -27,5 +27,5 @@ if(WELDER_BUILD_MODULE)
   target_link_libraries(welder_module PUBLIC welder_headers welder_flags)
 endif()
 
-# --- language backends (header-only adapters over the core resolution API) ----
-add_subdirectory(welder/backends)
+# --- language rods (header-only adapters over the core resolution API) --------
+add_subdirectory(welder/rods)

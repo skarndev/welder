@@ -1,7 +1,7 @@
 #pragma once
 // Namespace introspection — mirrors tests/test_namespace.py (same sections, same
 // order). The whole C++ namespace `catalog` is exposed under a `catalog`
-// submodule via WELDER_TEST_BE::bind_namespace.
+// submodule via WELDER_TEST_WELDER::weld_namespace.
 //
 // #included by bindings.cpp after the welder vocabulary + the active Python backend.
 #include <string>
@@ -179,5 +179,5 @@ inline void register_namespace(WELDER_TEST_MODULE_T& m) {
     // A whole namespace, bound under a submodule to keep names tidy. (The local
     // must not be named `catalog`, or it would shadow the namespace in `^^`.)
     auto catalog_mod{WELDER_TEST_SUBMODULE(m, "catalog")};
-    WELDER_TEST_BE::bind_namespace<^^catalog>(catalog_mod);
+    WELDER_TEST_WELDER::weld_namespace<^^catalog>(catalog_mod);
 }

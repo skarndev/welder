@@ -13,7 +13,8 @@
 // that must compile — same compile-to-pass shape as the other core tests.
 #include <string_view>
 
-#include <welder/welder.hpp> // vocabulary + reflection (brings in doc.hpp)
+#include <welder/vocabulary.hpp> // annotation vocabulary (header-only form)
+#include <welder/doc.hpp>        // welder::cleandoc
 
 using namespace std::string_view_literals;
 
