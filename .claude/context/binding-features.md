@@ -109,11 +109,18 @@ them for free):
   default (identity). The shipped Python mix is `welder::rods::python::pep8`
   (`rods/python/naming.hpp`): PascalCase types, snake_case everything else,
   enumerators verbatim.
-- **`weld_as`** (`annotations.hpp`, std-free): the ultimate per-entity override. On an
-  entity, `[[=welder::weld_as("name")]]` (all langs) or `[[=welder::weld_as(lang,
-  "name")]]` (one lang, repeatable) forces the target name **verbatim** — it never
-  flows through `Style`. Stored as a templated `weld_as_spec<N>` (mask + `fixed_string`,
-  like `doc_spec`); read by `weld_as_of<Ent, L>()`, which `name_of` checks first.
+- **`weld_as`** (`annotations.hpp`, std-free): the ultimate per-entity override. The
+  name is the **last** argument, preceded by zero or more `lang` markers:
+  `[[=welder::weld_as("name")]]` (all langs), `…weld_as(lang, "name")` (one), or
+  `…weld_as(lang, lang, …, "name")` (several at once); repeat the annotation for a
+  different name per language. It forces the target name **verbatim** — never through
+  `Style`. Stored as a templated `weld_as_spec<N>` (mask + `fixed_string`, like
+  `doc_spec`); read by `weld_as_of<Ent, L>()`, which `name_of` checks first. A pack
+  can't precede a deduced trailing string, so the multi-marker form is a single
+  forwarding-pack overload with two `detail` helpers (`weld_as_mask`/`weld_as_name`)
+  that walk the args — mask the leading `lang`s, peel to the name (bound by reference
+  so its extent survives). The bare all-languages `weld_as("name")` keeps its own
+  more-specialized overload.
 - **LuaCATS type references:** a type rename (style or `weld_as`) reaches the stub's
   type *references* / `---@class` base lists / container element types, not just
   declarations. The type map still emits the raw C++ name (it has only a

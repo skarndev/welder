@@ -63,6 +63,11 @@ struct [[=welder::weld(welder::lang::py, welder::lang::lua)]] FileProcessor {
     [[=welder::weld_as("do_it")]]
     void doItYourself() {}
 
+    // Several language markers before the name: one verbatim name for py AND lua
+    // (but not any other language), in a single annotation.
+    [[=welder::weld_as(welder::lang::py, welder::lang::lua, "flush_all")]]
+    void flushEverything() {}
+
     void computeChecksum() {}
 };
 } // namespace demo
@@ -85,6 +90,19 @@ static_assert(name_is(
     welder::name_of<^^demo::FileProcessor::doItYourself, lang::py, nm::snake_case,
                     ent_kind::method>(),
     "do_it"sv));
+// A multi-language weld_as (several markers, one name) covers each listed language.
+static_assert(name_is(
+    welder::name_of<^^demo::FileProcessor::flushEverything, lang::py, nm::snake_case,
+                    ent_kind::method>(),
+    "flush_all"sv));
+static_assert(name_is(
+    welder::name_of<^^demo::FileProcessor::flushEverything, lang::lua, nm::snake_case,
+                    ent_kind::method>(),
+    "flush_all"sv));
+static_assert(
+    std::string_view{
+        welder::weld_as_of<^^demo::FileProcessor::flushEverything, lang::lua>()} ==
+    "flush_all"sv);
 
 // No weld_as: the per-kind style hook reshapes the identifier.
 static_assert(name_is(

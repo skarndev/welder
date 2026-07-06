@@ -135,12 +135,18 @@ FileProcessor {
 
     [[=welder::mark::include, =welder::weld_as("VERSION")]]  // every language, verbatim
     static const char* version_string();
+
+    [[=welder::mark::include]]
+    [[=welder::weld_as(welder::lang::py, welder::lang::lua, "flush")]]  // both, one name
+    void flushEverything();
 };
 ```
 
-`weld_as(lang, "name")` scopes the override to one language (repeat it for a
-different name per language); the bare `weld_as("name")` covers every language. Being
-verbatim, it bypasses the name style entirely — welder does not touch the string.
+The name is always the **last** argument; any languages it applies to come first.
+`weld_as("name")` (no marker) covers every language; `weld_as(lang, "name")` scopes it
+to one; `weld_as(lang, lang, …, "name")` names several at once. Repeat the annotation
+to give a *different* name per language (as `processImpl` does above). Being verbatim,
+it bypasses the name style entirely — welder does not touch the string.
 
 A style or `weld_as` that renames a **type** is honoured everywhere it appears —
 its declaration, and every reference to it: field/parameter/return types, base-class

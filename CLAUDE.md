@@ -71,7 +71,7 @@ PYBIND11_MODULE(mymod, m) {
 | `doc("text")` | Docstring for a class, namespace, function, function parameter, or data member. Surfaced as `__doc__` by the Python rods (a data member's rides on its property; const → read-only); ignored on namespace variables. Lua has no runtime docstring slot, so the sol2 rod ignores it at runtime — its home there is the generated **LuaCATS (`---@meta`) stub** (`welder::rods::luacats::rod`). |
 | `returns("text")` | Documents a function's return value (a `Returns:` block). Distinct from the summary `doc`. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). Rides on the template itself; becomes `@tparam` in C++ docs, read back via `tparam_docs<Ent>()`. |
-| `weld_as("name")` / `weld_as(lang, "name")` | Force this entity's target-language name **verbatim** (bypasses the name style). All languages, or one; repeat per language for a different name each. |
+| `weld_as([lang…,] "name")` | Force this entity's target-language name **verbatim** (bypasses the name style). The name is last; zero or more `lang` markers precede it — none = all languages, one or several scope it. Repeat the annotation for a different name per language. |
 
 `policy::auto` from the original sketch is spelled `policy::automatic` (`auto` is
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for

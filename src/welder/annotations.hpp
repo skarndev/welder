@@ -294,11 +294,14 @@ consteval tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M])
     Where a code-style transformer (see `<welder/naming.hpp>`) reshapes an
     entity's C++ identifier into the target language's convention, `weld_as` is the
     ultimate override — the string is used **verbatim**, bypassing the transformer
-    entirely. Scope it to one language or (bare) to all of them, so a member can
-    read `process` in Python and `Process` in Lua at once:
+    entirely. The name is always the **last** argument; any languages naming it come
+    first. Give no language and it covers all of them; give one or several to scope
+    it, and repeat the annotation to use a different name per language — so a member
+    can read `process` in Python and `Process` in Lua at once:
     @code
-    [[=welder::weld_as("id")]]                     // every language
-    [[=welder::weld_as(welder::lang::py, "id")]]   // Python only
+    [[=welder::weld_as("id")]]                                   // every language
+    [[=welder::weld_as(welder::lang::py, "id")]]                 // Python only
+    [[=welder::weld_as(welder::lang::py, welder::lang::lua, "id")]] // Python + Lua
     @endcode
 
     The name is captured inline (a @ref fixed_string), like `doc`, so it can live in
@@ -311,30 +314,70 @@ struct weld_as_spec {
     fixed_string<N> name; /**< The verbatim target-language name. */
 };
 
-/** Force @a s as the target name in every welded language.
+/** Force @a s as the target name in **every** welded language.
 
-    Usage: `[[=welder::weld_as("do_thing")]]`.
-    @tparam N the name length (deduced).
+    The bare, all-languages form of @ref weld_as — the common case, spelled as its own
+    overload (like `welder::weld()` with no languages) so a plain
+    `[[=welder::weld_as("do_thing")]]` needs none of the variadic marker machinery. A
+    single string argument is more specialized than the variadic form below, so it is
+    the one chosen here.
+    @tparam N the name length including the terminator (deduced).
     @param s the verbatim name.
-    @return a weld_as_spec covering all languages.
+    @return a weld_as_spec with mask `0` (all languages).
 */
 template <decltype(sizeof(0)) N>
 consteval weld_as_spec<N> weld_as(const char (&s)[N]) {
     return weld_as_spec<N>{0u, fixed_string<N>{s}};
 }
 
-/** Force @a s as the target name in language @a l only.
+namespace detail {
+// The `weld_as(langs…, "name")` argument list is a run of `lang` markers followed
+// by the verbatim name. A parameter pack cannot precede a deduced trailing string
+// (the pack would not deduce), so `weld_as` takes one forwarding pack and these two
+// helpers walk it: one ORs the leading markers, the other peels down to the name —
+// binding the string by reference so its extent N survives (a by-value array decays
+// to a pointer and loses its length). No std headers, so the vocabulary stays
+// module-exportable.
 
-    Usage: `[[=welder::weld_as(welder::lang::py, "do_thing")]]`. Repeat the
-    annotation to give an entity a different verbatim name per language.
-    @tparam N the name length (deduced).
-    @param l the language this override applies to.
-    @param s the verbatim name.
-    @return a weld_as_spec scoped to @a l.
-*/
+/** The language mask of a `weld_as` argument list: the OR of its leading `lang`
+    markers (the trailing name contributes nothing; no markers → `0` = all). */
+consteval unsigned weld_as_mask() { return 0u; }
 template <decltype(sizeof(0)) N>
-consteval weld_as_spec<N> weld_as(lang l, const char (&s)[N]) {
-    return weld_as_spec<N>{lang_bit(l), fixed_string<N>{s}};
+consteval unsigned weld_as_mask(const char (&)[N]) { return 0u; }
+template <class... Rest>
+consteval unsigned weld_as_mask(lang l, Rest&&... rest) {
+    return lang_bit(l) | weld_as_mask(static_cast<Rest&&>(rest)...);
+}
+
+/** The verbatim name of a `weld_as` argument list: the trailing string, reached by
+    dropping the leading `lang` markers (its extent N preserved by reference). */
+template <decltype(sizeof(0)) N>
+consteval fixed_string<N> weld_as_name(const char (&s)[N]) { return fixed_string<N>{s}; }
+template <class... Rest>
+consteval auto weld_as_name(lang, Rest&&... rest) {
+    return weld_as_name(static_cast<Rest&&>(rest)...);
+}
+} // namespace detail
+
+/** Force a verbatim target name, optionally scoped to one or more languages.
+
+    The verbatim name is the **last** argument; zero or more `lang` markers precede
+    it. With no marker the name covers every welded language; with one or several it
+    is scoped to those. Repeat the annotation to give an entity a different verbatim
+    name per language.
+    @code
+    [[=welder::weld_as("do_thing")]]                          // all languages
+    [[=welder::weld_as(welder::lang::py, "do_thing")]]        // Python only
+    [[=welder::weld_as(welder::lang::py, welder::lang::lua, "do_thing")]] // both
+    @endcode
+    @tparam Args the leading `lang` markers then the `const char[N]` name (deduced).
+    @param args the language markers (if any) followed by the verbatim name.
+    @return a weld_as_spec carrying the mask of the named languages and the name.
+*/
+template <class... Args>
+consteval auto weld_as(Args&&... args) {
+    return weld_as_spec{detail::weld_as_mask(static_cast<Args&&>(args)...),
+                        detail::weld_as_name(static_cast<Args&&>(args)...)};
 }
 
 } // namespace welder

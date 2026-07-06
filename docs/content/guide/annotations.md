@@ -16,7 +16,7 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `doc("text")` | Docstring for a class / namespace / function / parameter. |
 | `returns("text")` | Documents a function's return value. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). |
-| `weld_as("name")` / `weld_as(lang, "name")` | Force this entity's target name **verbatim**, bypassing the [name style](naming.md). |
+| `weld_as([lang…,] "name")` | Force this entity's target name **verbatim**, bypassing the [name style](naming.md). The name is last; any languages it applies to come first (none = all). |
 
 ## `weld` — the discovery marker
 
