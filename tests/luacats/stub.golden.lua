@@ -24,22 +24,22 @@ stubdemo.Color = {
 }
 
 --- A shape.
----@class stubdemo.Shape
+---@class stubdemo.Figure
 ---@field label string A human-readable label.
 ---@field dims integer Number of spatial dimensions. (read-only)
-stubdemo.Shape = {}
+stubdemo.Figure = {}
 
----@return stubdemo.Shape
-function stubdemo.Shape.new() end
+---@return stubdemo.Figure
+function stubdemo.Figure.new() end
 
 --- The area of the shape.
 ---@return number square units
-function stubdemo.Shape:area() end
+function stubdemo.Figure:area() end
 
 --- A circle.
 --- 
 --- A round shape with one radius.
----@class stubdemo.Circle : stubdemo.Shape
+---@class stubdemo.Circle : stubdemo.Figure
 ---@field radius number The radius, in units.
 ---@operator mul(number): stubdemo.Circle
 stubdemo.Circle = {}
@@ -75,24 +75,24 @@ stubdemo.Mask = {}
 function stubdemo.Mask.new() end
 
 --- Axis-aligned box (aggregate).
----@class stubdemo.Box
+---@class stubdemo.Rect
 ---@field width number Width in units.
 ---@field height number Height in units.
-stubdemo.Box = {}
+stubdemo.Rect = {}
 
----@return stubdemo.Box
----@overload fun(width: number, height: number): stubdemo.Box
-function stubdemo.Box.new() end
+---@return stubdemo.Rect
+---@overload fun(width: number, height: number): stubdemo.Rect
+function stubdemo.Rect.new() end
 
 --- A polygon.
 ---@class stubdemo.Polygon
----@field corners stubdemo.Box[] The corner points, as [x, y] pairs.
+---@field corners stubdemo.Rect[] The corner points, as [x, y] pairs.
 ---@field name string? Optional name.
----@field anchors table<string, stubdemo.Box> Named anchor points.
+---@field anchors table<string, stubdemo.Rect> Named anchor points.
 stubdemo.Polygon = {}
 
 ---@return stubdemo.Polygon
----@overload fun(corners: stubdemo.Box[], name: string?, anchors: table<string, stubdemo.Box>): stubdemo.Polygon
+---@overload fun(corners: stubdemo.Rect[], name: string?, anchors: table<string, stubdemo.Rect>): stubdemo.Polygon
 function stubdemo.Polygon.new() end
 
 --- Sum a list of areas.

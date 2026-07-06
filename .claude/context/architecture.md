@@ -142,10 +142,13 @@ style's per-kind hook (`transform_method`, `transform_field`, …). The driver t
 (class/enum → `make_class`/`make_enum`; submodule → `add_submodule`), so a rod never
 re-derives naming policy. `add_operator` keeps the fixed operator→special-name map
 (not styled). The core machinery is `<welder/naming.hpp>`; the shipped Python mix is
-`welder::rods::python::pep8` (`rods/python/naming.hpp`). One caveat: the LuaCATS stub
-styles declarations but its *type references / base lists* still use the C++ type
-name, so a style/`weld_as` that renames a **type** is not propagated into them (`pep8`
-keeps type names PascalCase, so this doesn't arise).
+`welder::rods::python::pep8` (`rods/python/naming.hpp`). A type rename (style or
+`weld_as`) propagates into the LuaCATS stub's *type references / base lists* too: the
+type map still emits the raw C++ name (it sees only a `std::meta::info`, no Style /
+`weld_as`), but `make_class`/`make_enum` register each type's raw→styled name into the
+`document`, and `render()` reconciles references in one final pass
+(`document.hpp` `apply_type_renames`) — deferring to render means declaration order is
+irrelevant.
 
 The concept statically checks the associated types and the module machinery; the
 class/per-member hooks are templated on a reflection, so they are

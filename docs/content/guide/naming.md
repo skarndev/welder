@@ -142,9 +142,9 @@ FileProcessor {
 different name per language); the bare `weld_as("name")` covers every language. Being
 verbatim, it bypasses the name style entirely — welder does not touch the string.
 
-!!! note "Type renames and the LuaCATS stub"
-    A style (or `weld_as`) that renames a **type** is honoured at its *declaration*
-    everywhere. In the generated LuaCATS (`---@meta`) stub, however, type *references*
-    and base-class lists still use the C++ type name, so a type rename is not
-    propagated into them. The shipped `pep8` style leaves type names as PascalCase, so
-    this does not arise in practice.
+A style or `weld_as` that renames a **type** is honoured everywhere it appears —
+its declaration, and every reference to it: field/parameter/return types, base-class
+lists, and inside container types (`Rect[]`, `table<string, Rect>`). This holds for
+the runtime bindings and for the generated LuaCATS (`---@meta`) stub alike; in the
+stub, references are emitted with the raw C++ name and reconciled with their
+declarations in a final pass, so declaration order never matters.

@@ -166,6 +166,11 @@ struct rod {
                                        : m.prefix + "." + name;
         w.cls_doc = doc ? doc : "";
         w.bases = _bases_string<Bases>(seq);
+        // Register raw C++ name -> this styled/weld_as declaration, so references to
+        // T elsewhere (fields, params, returns, bases, containers) are reconciled at
+        // render(). qualified_name(^^T) is exactly what the type map emits for them.
+        m.doc->record_type_name(std::define_static_string(qualified_name(^^T)),
+                                w.qualified);
         return w;
     }
 
@@ -275,6 +280,10 @@ struct rod {
         w.qualified = m.prefix.empty() ? std::string{name}
                                        : m.prefix + "." + name;
         w.enum_doc = doc ? doc : "";
+        // Register raw -> styled so references to E (e.g. a field of enum type) are
+        // reconciled at render(); see the same call in make_class.
+        m.doc->record_type_name(std::define_static_string(qualified_name(^^E)),
+                                w.qualified);
         return w;
     }
 
@@ -352,9 +361,12 @@ struct rod {
                       module.
         @tparam Style the name style to render member names with — pass the *same*
                       style the sol2 runtime binding uses, so the stub matches the
-                      loaded module. (Defaults to @ref welder::naming::none. Note that
-                      a style renaming *type* names is not reflected in the stub's type
-                      references / base lists — only in the declarations.)
+                      loaded module. (Defaults to @ref welder::naming::none.) A style
+                      or `weld_as` that renames a *type* is reflected in the stub's
+                      type references and base lists as well as its declarations —
+                      references carry the raw C++ name until @ref
+                      welder::rods::luacats::apply_type_renames reconciles them at
+                      render().
         @param os the stream to write the finished stub to. */
     template <std::meta::info Ns, class Style = ::welder::naming::none>
     static void generate(std::ostream& os) {

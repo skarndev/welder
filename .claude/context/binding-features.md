@@ -114,15 +114,23 @@ them for free):
   "name")]]` (one lang, repeatable) forces the target name **verbatim** — it never
   flows through `Style`. Stored as a templated `weld_as_spec<N>` (mask + `fixed_string`,
   like `doc_spec`); read by `weld_as_of<Ent, L>()`, which `name_of` checks first.
-- **Caveat (LuaCATS):** the stub styles *declarations*, but type *references* /
-  `---@class` base lists still use the C++ type name, so a style/`weld_as` renaming a
-  **type** is not propagated into them. `pep8` keeps type names PascalCase, so it
-  doesn't bite. `luacats::rod::generate<Ns, Style>` forwards a style so a styled stub
-  can match a styled sol2 binding.
+- **LuaCATS type references:** a type rename (style or `weld_as`) reaches the stub's
+  type *references* / `---@class` base lists / container element types, not just
+  declarations. The type map still emits the raw C++ name (it has only a
+  `std::meta::info`), but `make_class`/`make_enum` register raw→styled into the
+  `document` and `render()` reconciles references in one final pass
+  (`document.hpp` `apply_type_renames`, tokenizing on the identifier+`.` class so a
+  dotted name is remapped atomically) — order-independent because it runs after all
+  types are declared. `luacats::rod::generate<Ns, Style>` forwards a style so a styled
+  stub matches a styled sol2 binding.
 - **Tests:** `tests/core/naming.cpp` (compile-only static_asserts: word-splitting,
   restyle across conventions, `name_of`/`weld_as_of` incl. per-language overrides and
-  style-bypass). All four rods compile against the threaded contract (`rod_probe.cpp`
-  updated with the trailing `Style` hook param).
+  style-bypass); runtime `tests/python/test_naming.py` + `tests/lua/spec/naming_spec.lua`
+  (styled binding via the `WELDER_TEST_STYLED_WELDER` seam); the LuaCATS reference
+  reconciliation is covered by the `stub_gen.cpp` golden — `Shape`/`Box` carry a
+  `weld_as` reached only through a base list and `vector`/`map` references. All four
+  rods compile against the threaded contract (`rod_probe.cpp` updated with the trailing
+  `Style` hook param).
 
 ## Rods
 Three rods implement every feature above from the same driver: **pybind11**

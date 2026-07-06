@@ -206,6 +206,57 @@ inline void render_overload_group(std::string& out, const std::string& callee,
 
 // --- the document + its writer handles --------------------------------------
 
+/** Rewrite every whole dotted-name token of @a text that is a key in @a renames to
+    its mapped value.
+
+    A LuaCATS type *reference* (a `---@field`/`---@param`/`---@return` type, a
+    `---@class … : Base` base, a `T[]`/`table<K, V>`/`T?` element) is emitted from
+    the type map as the referenced type's *raw* C++ dotted name (@ref
+    qualified_name) — the type map sees only a `std::meta::info`, with no access to
+    the name style or the referenced type's `weld_as`, both of which need the type as
+    a constant. So references are reconciled here instead: each welded class/enum
+    registers its raw→styled name as it is declared (where the type *is* a constant),
+    and this final pass maps the references to match. Deferring to render() means
+    declaration order is irrelevant — every type is registered before any reference
+    is rewritten.
+
+    Tokenizing on the identifier+`.` character class makes each qualified name
+    atomic, so `geometry.Point` is remapped as a unit: it neither collides with a
+    longer name (`geometry.Point3`) nor with a substring (`Point` inside it), and a
+    styled declaration name (never a key) is left untouched. Keys are always dotted
+    (every welded type sits under the module table), so ordinary prose in a docstring
+    is not at risk unless it spells a fully-qualified type path verbatim.
+    @param text    the assembled document text.
+    @param renames the raw→styled name map (may be empty — then @a text is returned).
+    @return the reconciled text. */
+inline std::string apply_type_renames(
+    std::string_view text,
+    const std::vector<std::pair<std::string, std::string>>& renames) {
+    if (renames.empty())
+        return std::string{text};
+    auto is_name_char = [](char c) {
+        return c == '.' || c == '_' || (c >= 'A' && c <= 'Z') ||
+               (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+    };
+    std::string out{};
+    out.reserve(text.size());
+    for (std::size_t i{0}; i < text.size();) {
+        if (!is_name_char(text[i])) {
+            out += text[i++];
+            continue;
+        }
+        std::size_t j{i};
+        while (j < text.size() && is_name_char(text[j]))
+            ++j;
+        const std::string_view tok{text.substr(i, j - i)};
+        const auto it{std::find_if(renames.begin(), renames.end(),
+                                   [&](const auto& r) { return r.first == tok; })};
+        out += (it != renames.end()) ? std::string_view{it->second} : tok;
+        i = j;
+    }
+    return out;
+}
+
 /** A module/submodule table to declare (`prefix = {}`), with its optional doc. */
 struct table_decl {
     std::string prefix{}; /**< The dotted table path, e.g. `"geometry.detail"`. */
@@ -219,6 +270,10 @@ struct table_decl {
 struct document {
     std::vector<table_decl> tables{};
     std::string body{};
+    /** Raw C++ dotted name → styled/`weld_as` bound name, for reconciling type
+        *references* with their declarations at @ref render (see @ref
+        apply_type_renames). Populated by @ref record_type_name as each type is made. */
+    std::vector<std::pair<std::string, std::string>> type_renames{};
 
     /** Record (once) a module table to declare, updating its doc if given.
         @param prefix the dotted table path to declare.
@@ -231,6 +286,21 @@ struct document {
                 return;
             }
         tables.push_back({std::string{prefix}, doc ? doc : ""});
+    }
+
+    /** Register a welded type's declared name so references to it are reconciled at
+        @ref render. A no-op when the name is unchanged (the @ref
+        welder::naming::none default, or a type the style/`weld_as` leaves alone), so
+        the default stub is emitted byte-for-byte as before.
+        @param raw    the type's raw C++ dotted name (@ref qualified_name).
+        @param styled the type's declared LuaCATS name (its `class_writer::qualified`). */
+    void record_type_name(std::string_view raw, std::string_view styled) {
+        if (raw == styled)
+            return;
+        for (const auto& [r, s] : type_renames)
+            if (r == raw)
+                return;
+        type_renames.emplace_back(std::string{raw}, std::string{styled});
     }
 
     /** The finished stub text: the `---@meta` header, the module tables shallowest
@@ -251,7 +321,9 @@ struct document {
             out += d.prefix + " = {}\n\n";
         }
         out += body;
-        return out;
+        // Reconcile type *references* (raw C++ names, as the type map emits them)
+        // with their styled/weld_as declarations, now that every type is registered.
+        return apply_type_renames(out, type_renames);
     }
 };
 

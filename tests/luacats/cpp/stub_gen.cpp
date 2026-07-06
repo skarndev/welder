@@ -30,7 +30,11 @@ Direction { North, East, South, West };
 enum class [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Named colors.")]]
 Color { Red, Green = 2, Blue };
 
+// weld_as renames the *type*: the stub must carry `Figure` at the declaration AND
+// wherever Shape is referenced (here, as Circle's base) — exercising the type
+// map's reference reconciliation, not just the declaration.
 struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A shape.")]]
+       [[=welder::weld_as(welder::lang::lua, "Figure")]]
 Shape {
     [[=welder::doc("A human-readable label.")]] std::string label;
     [[=welder::doc("Number of spatial dimensions.")]] const std::uint32_t dims{2};
@@ -79,7 +83,11 @@ Mask {
     Mask operator>>(unsigned n) const;
 };
 
+// Another type rename, this one reached only through *container* references:
+// Polygon's `vector<Box>` and `map<string, Box>` must render `Rect[]` /
+// `table<string, Rect>`, proving the reconciliation reaches inside the STL wrappers.
 struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Axis-aligned box (aggregate).")]]
+       [[=welder::weld_as(welder::lang::lua, "Rect")]]
 Box {
     [[=welder::doc("Width in units.")]] double width;
     [[=welder::doc("Height in units.")]] double height;
