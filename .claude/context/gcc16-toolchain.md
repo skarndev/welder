@@ -23,6 +23,11 @@ part of the module. Why: on gcc-16, any std header in a module unit's purview/GM
 vocabulary stays std-free; anything touching `<meta>`/pybind11 stays a header.
 Partitioning doesn't help — it's std-in-purview, not partitioning. (Empirical;
 revisit if gcc fixes module/std merging or pybind11 becomes importable.)
+Re-confirmed 2026-07-07 now that `import std;` works: switching a std-carrying
+module to `import std;` in its purview (instead of textual GMF includes) does
+**not** rescue the pybind consumer — it still conflicts under `-freflection`
+(the amplifier; see gotchas). Only a genuinely **std-free** module survives a
+`-freflection` pybind TU. So the boundary rule is unchanged.
 Consequently `reflect.hpp`/rods do **not** include the vocabulary headers
 (that would redeclare what `import welder;` provides): provide the vocabulary first
 (`import welder;` *or* `#include <welder/vocabulary.hpp>`), then the rod header.
@@ -34,9 +39,24 @@ rods are always header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp
 
 ## Toolchain gotchas
 
-- **`import std;` is broken** on this Homebrew gcc-16 bottle (ships empty 1-byte
-  `bits/std.cc` — Homebrew issue #289142). welder does not use it; we use textual
-  includes. Deferred.
+- **`import std;` now works on this machine** — the empty-1-byte `bits/std.cc`
+  bottle bug (Homebrew #289142) was fixed locally (upstream PR + patched brew
+  formula; `bits/std.cc` is now ~113 KB, `std.gcm` builds to ~33 MB). Plain
+  C++26 code can `import std;`. **But welder still uses textual std includes,**
+  because welder compiles every TU with `-freflection` and includes a std-heavy
+  backend (pybind11) — see the `-freflection` conflict below.
+- **`-freflection` × `import std` × textual std includes conflict** (verified
+  2026-07-07, `scratchpad/modtest` research project). A single TU that combines
+  `-freflection`, a std-carrying `import` (either `import std;` directly, or an
+  imported module whose interface/GMF pulls in std), *and* textual std includes
+  (pybind11 / Python.h / macOS SDK `<arm/_types.h>`) fails with
+  `conflicting imported declaration '__mbstate_t'` / `std::streampos` /
+  `std::wstreampos`. Drop `-freflection` and the same code compiles (gcc merges
+  BMI-std with textual-std cleanly — the import-std fix works there); keep it and
+  the merge breaks on the foundational `__mbstate_t` typedef. Looks like a
+  distinct gcc bug, separate from the (fixed) empty-`std.cc` bottle bug —
+  worth an upstream report. Consequence: welder consumers/examples/tests use
+  textual std includes, not `import std;`.
 - pybind11 2.13's `pybind11_add_module` CMake helper is incompatible with the very
   new CMake/FindPython here; examples use CMake-native `Python_add_library` +
   `pybind11::headers` instead.
