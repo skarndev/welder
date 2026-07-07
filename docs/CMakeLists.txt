@@ -133,9 +133,12 @@ configure_file(${_docs_src}/Doxyfile.in ${_docs_bin}/Doxyfile @ONLY)
 # --- 6. Targets --------------------------------------------------------------
 # welder-docs: Doxygen reference into content/api *first*, then mkdocs build,
 # which copies content/api into the site alongside the guide (order matters, so
-# both are steps of one target).
+# both are steps of one target). content/api is wiped before each run — Doxygen
+# overwrites files it re-emits but never prunes ones it no longer does, so a
+# renamed/removed symbol would otherwise leave an orphaned .html behind.
 add_custom_target(welder-docs
   COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_docs_content}/api"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_content}/api
   COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
   COMMAND ${CMAKE_COMMAND} -E echo "welder: building mkdocs site (guide + reference) -> ${_site}"
   COMMAND ${WELDER_DOCS_PYTHON} -m mkdocs build
@@ -149,6 +152,7 @@ add_custom_target(welder-docs
 # snapshot (rerun the target to refresh it).
 add_custom_target(welder-docs-serve
   COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_docs_content}/api"
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_content}/api
   COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
   COMMAND ${WELDER_DOCS_PYTHON} -m mkdocs serve --config-file ${_docs_src}/mkdocs.yml
   WORKING_DIRECTORY ${_docs_bin}
