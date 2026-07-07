@@ -53,9 +53,11 @@
     - **No runtime docstrings.** Lua has no `__doc__` slot, so `[[=welder::doc]]` /
       `returns` are not surfaced at runtime; their home is a generated LuaCATS
       (`---@meta`) stub, a separate emitter (not part of this binding backend).
-    - **Namespace variables snapshot.** A namespace variable binds as a value
-      snapshot at load time (const and mutable alike); live get/set over a C++ global
-      is a planned enhancement (a metatable proxy over the module table).
+    - **Namespace variables: snapshot or live.** A const/constexpr variable binds as
+      a value snapshot at load time; a mutable one binds as a **live get/set** over
+      the C++ global via a metatable proxy on the module table (`__index`/`__newindex`
+      routing absent keys through per-variable getters/setters), so reads see the
+      current value and writes flow back — matching the Python backends.
 
     @note Overloaded methods, static methods, free functions and operators: sol2
     stores one value per name (and per metamethod slot), so welder gathers a name's
@@ -112,9 +114,20 @@ struct rod {
     static constexpr lang language{lang::lua}; /**< welder::lang::lua. */
     using module_type = ::sol::table;          /**< A Lua module is a table. */
 
-    /** An unused per-module session (Lua needs no deferred module state yet;
-        namespace variables bind eagerly as snapshots). */
-    struct session {};
+    /** Per-module session: the deferred state for *live* namespace variables.
+
+        A mutable variable is not stored on the module table directly; instead its
+        `name → getter`/`name → setter` closures accumulate here, and `close_module`
+        installs a `__index`/`__newindex` metatable proxy that routes reads/writes of
+        those absent keys through them (see @ref add_variable). `getters`/`setters`
+        stay nil (default-constructed) until the first mutable variable, so a module
+        with only snapshots or types pays nothing. Const variables never reach here —
+        they snapshot as plain table entries. */
+    struct session {
+        ::sol::table getters{}; /**< name → `fun(): value` (live reads). */
+        ::sol::table setters{}; /**< name → `fun(value)` (live writes). */
+        bool has_live{false};   /**< any mutable variable registered? */
+    };
 
   protected:
     // --- implementation helpers (not part of the welder::rod contract) --
@@ -355,6 +368,83 @@ struct rod {
             t[slot] = ::sol::overload(&[:Grp[I]:]...);
     }
 
+    // --- live namespace-variable proxy --------------------------------------
+
+    /** Route a missing-key *read* on the module to a captured previous `__index`
+        (function or table form), or nil when there was none. Used as the fallback
+        when the requested key is not one of our live getters. */
+    static ::sol::object _prev_index(::sol::this_state ts, const ::sol::object& prev,
+                                     const ::sol::table& self, const ::sol::object& key) {
+        if (prev.get_type() == ::sol::type::function)
+            return prev.as<::sol::function>()(self, key);
+        if (prev.get_type() == ::sol::type::table)
+            return prev.as<::sol::table>()[key];
+        return ::sol::make_object(ts, ::sol::lua_nil);
+    }
+
+    /** Route a missing-key *write* on the module to a captured previous
+        `__newindex` (function or table form); with none, do a raw set — the normal
+        new-key assignment, raw so it does not recurse back through this metamethod. */
+    static void _prev_newindex(const ::sol::object& prev, ::sol::table self,
+                               const ::sol::object& key, const ::sol::object& value) {
+        if (prev.get_type() == ::sol::type::function) {
+            prev.as<::sol::function>()(self, key, value);
+            return;
+        }
+        if (prev.get_type() == ::sol::type::table) {
+            prev.as<::sol::table>()[key] = value;
+            return;
+        }
+        self.raw_set(key, value);
+    }
+
+    /** Install (or extend) the module table's metatable so absent keys in @a getters
+        / @a setters read and write the underlying C++ globals live.
+
+        Only *absent* keys trigger a metamethod, so this coexists with the module's
+        ordinary entries (types, functions, snapshots, enum names) untouched — they
+        are present keys and never reach here. Any metatable already on @a m (e.g. a
+        prior live-variable install from another `weld_*` onto the same table) is
+        chained: its `__index`/`__newindex` become the fallback, so earlier live
+        variables keep working. A live key is deliberately never `rawset`, so it stays
+        routed through the proxy across repeated reads and writes. */
+    static void _install_live_variables(module_type& m, ::sol::table getters,
+                                        ::sol::table setters) {
+        lua_State* L{m.lua_state()};
+        ::sol::state_view lua{L};
+        // Fetch any existing metatable via the raw C API: reading it through a
+        // checked sol::table would fail SOL_ALL_SAFETIES_ON when there is none (nil
+        // is not a table). A pre-existing metatable (a prior live-variable install
+        // onto the same table) is reused and chained; otherwise a fresh one is made.
+        m.push();                                        // [module]
+        const bool had_mt{lua_getmetatable(L, -1) != 0}; // [module, mt?]
+        ::sol::table mt{had_mt ? ::sol::stack::pop<::sol::table>(L)
+                               : lua.create_table()};
+        lua_pop(L, 1);                                    // pop [module]
+        // Capture any metamethods to chain (a state-bound nil when absent, so the
+        // fallback helpers can safely query get_type()).
+        ::sol::object prev_index{mt["__index"]};
+        ::sol::object prev_newindex{mt["__newindex"]};
+
+        mt["__index"] = [getters, prev_index](::sol::this_state ts, ::sol::table self,
+                                              ::sol::object key) -> ::sol::object {
+            ::sol::object g{getters[key]};
+            if (g.get_type() == ::sol::type::function)
+                return g.as<::sol::function>()(); // live read of the C++ global
+            return _prev_index(ts, prev_index, self, key);
+        };
+        mt["__newindex"] = [setters, prev_newindex](::sol::table self, ::sol::object key,
+                                                    ::sol::object value) {
+            ::sol::object s{setters[key]};
+            if (s.get_type() == ::sol::type::function) {
+                s.as<::sol::function>()(value); // live write through to the C++ global
+                return;                         // no rawset: the key stays live
+            }
+            _prev_newindex(prev_newindex, self, key, value);
+        };
+        m[::sol::metatable_key] = mt;
+    }
+
   public:
     // --- caster oracle + emission primitives (the welder::rod contract) --
 
@@ -476,7 +566,9 @@ struct rod {
 
     // --- namespace / module binding -----------------------------------------
 
-    /** Open the (empty) per-module session. */
+    /** Open a per-module session. The live-variable registry tables are created
+        lazily (on the first mutable variable), so a plain type/function module never
+        allocates them. */
     static session open_module(module_type&) { return {}; }
 
     /** No runtime module docstring in Lua (its home is a generated stub). */
@@ -500,17 +592,37 @@ struct rod {
         }
     }
 
-    /** Bind namespace variable @a Var as a value snapshot at load time.
+    /** Bind namespace variable @a Var onto the module.
 
-        Both const and mutable variables snapshot for now; a live get/set property
-        over the C++ global (via a metatable proxy on the module table) is a planned
-        enhancement. A non-null @a name overrides the resolved name (including any
-        `weld_as`), used verbatim; `nullptr` falls back to the styled/`weld_as` name. */
+        A const/constexpr variable becomes a **value snapshot** — a plain table entry
+        frozen at load time (it can never change, so the snapshot is exact). A mutable
+        variable becomes a **live get/set** over the C++ global: its getter/setter
+        closures are accumulated in @a s and `close_module` wires them into a metatable
+        proxy, so Lua reads see the current C++ value and Lua writes flow back to it
+        (matching the Python backends). To keep the key routed through the proxy it is
+        deliberately *not* stored on the table (a present key would bypass `__index`).
+
+        A non-null @a name overrides the resolved name (including any `weld_as`), used
+        verbatim; `nullptr` falls back to the styled/`weld_as` name. */
     template <std::meta::info Var, class Style = ::welder::naming::none>
-    static void add_variable(module_type& m, session&, const char* name = nullptr) {
-        m[name ? name
-               : ::welder::name_of<Var, language, Style,
-                                   ::welder::ent_kind::variable>()] = [:Var:];
+    static void add_variable(module_type& m, session& s, const char* name = nullptr) {
+        const char* key{name ? name
+                             : ::welder::name_of<Var, language, Style,
+                                                 ::welder::ent_kind::variable>()};
+        if constexpr (std::meta::is_const_type(std::meta::type_of(Var))) {
+            m[key] = [:Var:]; // immutable: a value snapshot at load time
+        } else {
+            if (!s.has_live) {
+                ::sol::state_view lua{m.lua_state()};
+                s.getters = lua.create_table();
+                s.setters = lua.create_table();
+                s.has_live = true;
+            }
+            s.getters[key] = [] { return [:Var:]; };
+            s.setters[key] = [](typename [:std::meta::type_of(Var):] v) {
+                [:Var:] = v;
+            };
+        }
     }
 
     /** Create a submodule table named @a name under @a m. */
@@ -520,8 +632,12 @@ struct rod {
         return sub;
     }
 
-    /** Close the session (nothing deferred). */
-    static void close_module(module_type&, session&) {}
+    /** Close the session: install the live-variable metatable proxy, if any
+        mutable variable was welded onto @a m. */
+    static void close_module(module_type& m, session& s) {
+        if (s.has_live)
+            _install_live_variables(m, s.getters, s.setters);
+    }
 };
 
 static_assert(::welder::rod<rod>,

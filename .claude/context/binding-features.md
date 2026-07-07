@@ -166,8 +166,13 @@ The same annotated cases bind for `lang::lua`; the Lua-only differences (see
   `.def`), and the rod gathers a name's siblings with the core selection
   predicates, exactly as it already gathers a type's constructors. A same-named member
   in a derived class still hides the base's (C++ name-hiding), unchanged.
-- **Namespace variables snapshot** at load time (const and mutable alike); live
-  get/set over a C++ global is a planned enhancement.
+- **Namespace variables: const snapshots, mutable live.** A const/constexpr variable
+  binds as a value snapshot; a mutable one binds as a live get/set over the C++ global
+  via a metatable proxy on the module table (`__index`/`__newindex` route the absent
+  key through per-variable getter/setter closures, accumulated in the sol2 `session`
+  and installed by `close_module`; the proxy chains any pre-existing metatable, and a
+  live key is never `rawset` so it stays routed). Matches the Python backends
+  (`rod::add_variable`/`_install_live_variables`). Asserted by `namespace_spec.lua`.
 - **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`) — they surface
   instead in the generated **LuaCATS stub** (`welder::rods::luacats::rod`; see
   `docs-and-doxygen.md` and build-test-run.md). The stub reflects the same welded
@@ -187,9 +192,8 @@ Tested by the shared cases bound for `lua`, asserted by the busted specs in
 ## Not yet implemented
 Properties (getter/setter pairs) are designed-for but not yet implemented; so are
 further languages. (Enums, custom type converters, the Lua/sol2 rod, sol2
-overload grouping, and the LuaCATS stub emitter now are.) Remaining sol2 rod
-enhancement noted above: live namespace variables (and LuaJIT's 5.1 operator-map
-branch). LuaCATS stub: overloaded methods/constructors/free functions now render as
+overload grouping, live sol2 namespace variables, and the LuaCATS stub emitter now
+are.) Remaining sol2 rod enhancement: LuaJIT's 5.1 operator-map branch. LuaCATS stub: overloaded methods/constructors/free functions now render as
 one documented `function` plus `---@overload fun(…)` lines (the primary — kept with
 its full `@param`/summary docs — is the first overload carrying a doc); a **const**
 member's read-only-ness is surfaced as a `(read-only)` description note, since

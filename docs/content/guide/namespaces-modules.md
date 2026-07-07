@@ -51,9 +51,10 @@ double distance(const Point& a, const Point& b) { /* … */ }
 A namespace-scope variable binds as a module attribute:
 
 - **const / constexpr** → a *value snapshot*;
-- otherwise → on the **Python** rods, a **live get/set property** over the C++
-  global (via a `ModuleType` `__class__` swap). The **sol2** rod snapshots the
-  value at load time (a live get/set property is planned).
+- otherwise → a **live get/set** over the C++ global: a read returns the current
+  value and a write flows back to the global. The **Python** rods implement it with
+  a `ModuleType` `__class__` swap; the **sol2** rod with a metatable proxy
+  (`__index`/`__newindex`) on the module table.
 
 ### Nested namespaces
 

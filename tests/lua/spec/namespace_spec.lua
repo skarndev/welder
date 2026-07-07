@@ -23,8 +23,18 @@ describe("namespace", function()
     assert.are.equal(100, m.LIMIT)             -- constexpr snapshot
     assert.are.equal("catalog", m.TAG)         -- const std::string -> lua string
     assert.is_nil(m.PRIVATE_LIMIT)             -- not welded
-    assert.are.equal(0, m.counter)             -- mutable var: value snapshot
-    assert.is_function(m.bump)                 -- (liveness is a planned enhancement)
+    assert.are.equal(0, m.counter)             -- mutable var: initial live value
+    assert.is_function(m.bump)
+  end)
+
+  it("exposes mutable variables as live get/set", function()
+    local start = m.counter
+    m.bump()
+    m.bump()
+    assert.are.equal(start + 2, m.counter)     -- live read: reflects the C++ global
+    m.counter = 500                            -- live write: flows back to C++
+    m.bump()                                   -- C++ increments the same global
+    assert.are.equal(501, m.counter)
   end)
 
   it("binds nested and pruned namespaces", function()
@@ -47,7 +57,15 @@ describe("freestanding", function()
 
   it("binds a constant via weld_variable", function()
     assert.are.equal(42, man.MANUAL_CONST)     -- constexpr snapshot
-    assert.are.equal(0, man.manual_counter)    -- mutable var: value snapshot (sol2)
+    assert.are.equal(0, man.manual_counter)    -- mutable var: initial live value
+  end)
+
+  it("binds a mutable variable as live get/set via weld_variable", function()
+    man.manual_bump()
+    assert.are.equal(1, man.manual_counter)    -- live read after C++ mutation
+    man.manual_counter = 41                     -- live write through to C++
+    man.manual_bump()
+    assert.are.equal(42, man.manual_counter)
   end)
 
   it("honours a call-site name override", function()

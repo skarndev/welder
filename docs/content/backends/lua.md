@@ -130,7 +130,10 @@ Note C++ `operator^` is bitwise-xor → `__bxor` (**not** `__pow`/power).
   the enclosing module, mirroring C++.
 - **No runtime docstrings.** Lua has no `__doc__`, so `doc`/`returns` annotations are
   ignored *at runtime*. Their home is the generated [LuaCATS stub](#stubs-luacats).
-- **Namespace variables snapshot** at load time (a live get/set property is planned).
+- **Namespace variables: snapshot or live.** A `const`/`constexpr` variable binds as
+  a value snapshot at load time; a mutable one binds as a **live get/set** over the
+  C++ global (a metatable proxy on the module table), so a Lua read sees the current
+  value and a Lua write flows back to C++ — matching the Python backends.
 - **Overloaded methods, functions and operators** are grouped into a single
   `sol::overload(…)` (sol2 stores one value per name / metamethod slot), so every
   overload of a name dispatches at call time — `c:sum(a)` and `c:sum(a, b)` both work.
