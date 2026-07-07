@@ -25,10 +25,10 @@ temp_*
 # uv / virtualenv
 .venv/
 
-# Generated Doxygen reference (built into mkdocs' docs_dir by docs/CMakeLists.txt)
-/docs/content/api/
-
-# Rendered mkdocs site output (built by `mkdocs build` / docs/CMakeLists.txt)
+# Rendered mkdocs site output (a hand-run `mkdocs build` in docs/ defaults here;
+# the CMake targets build out-of-source into <bin>/site). The Doxygen reference is
+# generated out-of-source too and grafted into the site by docs/inject_reference.py,
+# so it never lands in the worktree.
 /docs/site/
 
 # Stray CTest run artifacts (created if ctest is invoked in the source tree)

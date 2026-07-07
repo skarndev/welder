@@ -1,17 +1,15 @@
 # The documentation site: a mkdocs-material guide + a Doxygen C++ reference,
 # presented as one site. Two toolchains, cleanly separated:
 #
-#   * Doxygen renders src/welder/** (through welder's own INPUT_FILTER, themed
-#     with doxygen-awesome-css) into an `api/` dir *inside* mkdocs' docs_dir, so
-#     mkdocs serves it as static files (no dead /api link) — hence it runs first.
-#   * mkdocs-material renders the guide markdown + copies that reference -> <bin>/site/
+#   * Doxygen renders src/welder/** (through welder's own INPUT_FILTER, themed with
+#     doxygen-awesome-css) into an out-of-source dir under the build tree.
+#   * mkdocs-material renders the guide markdown (docs/content) -> <bin>/site/, and
+#     the inject_reference hook grafts the Doxygen reference into <site>/api.
 #
-# `docs_dir` need not be the worktree, only *contain* both parts at build time, so
-# the `build` path stages everything out-of-source (<bin>/content + a sibling
-# <bin>/mkdocs.yml whose `docs_dir: content` resolves next to it) and never writes
-# into the tree. `serve` is the one exception: native live-reload only watches the
-# real docs_dir, so it generates the (gitignored, pruned) reference into
-# docs/content/api to reload the guide as you edit. Both run out of an isolated uv
+# The reference never sits inside mkdocs' docs_dir, so docs_dir stays the real
+# worktree (docs/content) — nothing is generated into the tree, in *either* build or
+# serve, and serve's native live-reload still watches the guide as you edit. The
+# reference is a snapshot (rerun to refresh). Both run out of an isolated uv
 # environment (docs/pyproject.toml), opt-in behind WELDER_BUILD_DOCS. Targets:
 #
 #   welder-docs        build the whole site into <bin>/site (worktree untouched)
@@ -122,54 +120,47 @@ else()
   set(DOXYGEN_HAVE_DOT NO)
 endif()
 
-# --- 5. Configure the Doxyfile(s) -------------------------------------------
-# The reference is generated into an `api/` dir inside mkdocs' docs_dir (Doxygen
-# runs before mkdocs so the files exist to copy). Two variants differ only in
-# where that docs_dir is:
-#   * build -> an out-of-source staging tree, <bin>/content, so the worktree is
-#             never written to.
-#   * serve -> the in-tree docs/content, so `mkdocs serve` live-reloads the guide
-#             natively (its api/ is gitignored and pruned each run).
-set(_docs_content ${_docs_src}/content)  # in-tree docs_dir (serve)
-set(_docs_stage ${_docs_bin}/content)    # out-of-source docs_dir (build)
+# --- 5. Configure the Doxyfile ----------------------------------------------
+# Doxygen writes out-of-source, into <bin>/reference/api (HTML_OUTPUT = api under
+# OUTPUT_DIRECTORY = <bin>/reference). The inject_reference mkdocs hook then grafts
+# that into <site>/api, so it need not live inside docs_dir and the worktree is
+# never touched. WELDER_DOXYGEN_API (below) points the hook at it.
+set(_docs_content ${_docs_src}/content)      # mkdocs docs_dir = the worktree guide
+set(_docs_ref ${_docs_bin}/reference)        # out-of-source Doxygen output root
+set(WELDER_DOXYGEN_API ${_docs_ref}/api)     # HTML_OUTPUT dir the hook injects
+set(DOXYGEN_OUTPUT_DIR ${_docs_ref})
 set(DOXYGEN_MAINPAGE ${_docs_src}/api_mainpage.md)
 set(WELDER_LOGO ${_docs_src}/welder-logo.svg)
-
-set(DOXYGEN_OUTPUT_DIR ${_docs_stage})    # HTML_OUTPUT = api -> <bin>/content/api
-configure_file(${_docs_src}/Doxyfile.in ${_docs_bin}/Doxyfile.build @ONLY)
-set(DOXYGEN_OUTPUT_DIR ${_docs_content})  # HTML_OUTPUT = api -> docs/content/api
-configure_file(${_docs_src}/Doxyfile.in ${_docs_bin}/Doxyfile.serve @ONLY)
+configure_file(${_docs_src}/Doxyfile.in ${_docs_bin}/Doxyfile @ONLY)
 
 # --- 6. Targets --------------------------------------------------------------
-# welder-docs: assemble the whole site out-of-source. The guide is copied beside a
-# freshly-generated Doxygen reference under <bin>/content (a staging docs_dir), and
-# a sibling <bin>/mkdocs.yml (docs_dir: content, resolved next to itself) builds
-# from it — so nothing is written into the worktree. The stage is rebuilt each run,
-# so Doxygen can't accumulate orphaned pages from renamed/removed symbols.
+# The Doxygen output dir is wiped and regenerated each run, so it can't accumulate
+# orphaned pages from renamed/removed symbols. WELDER_DOXYGEN_API is exported to the
+# mkdocs process so the inject_reference hook grafts the reference into <site>/api —
+# in both build and serve, with nothing written into the worktree.
+#
+# welder-docs: build the whole site (guide + reference) into <bin>/site.
 add_custom_target(welder-docs
-  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_stage}
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${_docs_content} ${_docs_stage}
-  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_stage}/api  # drop any api/ copied from a serve run
-  COMMAND ${CMAKE_COMMAND} -E copy ${_docs_src}/mkdocs.yml ${_docs_bin}/mkdocs.yml
-  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_docs_stage}/api"
-  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile.build
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_ref}
+  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${WELDER_DOXYGEN_API}"
+  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
   COMMAND ${CMAKE_COMMAND} -E echo "welder: building mkdocs site (guide + reference) -> ${_site}"
-  COMMAND ${WELDER_DOCS_PYTHON} -m mkdocs build
-          --config-file ${_docs_bin}/mkdocs.yml --site-dir ${_site} --clean
+  COMMAND ${CMAKE_COMMAND} -E env WELDER_DOXYGEN_API=${WELDER_DOXYGEN_API}
+          ${WELDER_DOCS_PYTHON} -m mkdocs build
+          --config-file ${_docs_src}/mkdocs.yml --site-dir ${_site} --clean
   WORKING_DIRECTORY ${_docs_bin}
   COMMENT "welder: documentation site -> ${_site}/index.html"
   USES_TERMINAL VERBATIM)
 
-# welder-docs-serve: live-reload the guide while writing prose. Native live-reload
-# only watches the real docs_dir, so this variant generates the reference into
-# docs/content/api (gitignored) — the one path that touches the worktree, by design,
-# for the editing workflow. Wiped first so it can't accumulate orphaned pages; it is
-# a static snapshot (rerun the target to refresh it).
+# welder-docs-serve: live-reload the guide while writing prose. docs_dir is the real
+# worktree, so mkdocs watches it natively; the reference (a snapshot, rerun to
+# refresh) is grafted into each rebuild's site by the hook — still nothing in the tree.
 add_custom_target(welder-docs-serve
-  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_content}/api
-  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${_docs_content}/api"
-  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile.serve
-  COMMAND ${WELDER_DOCS_PYTHON} -m mkdocs serve --config-file ${_docs_src}/mkdocs.yml
+  COMMAND ${CMAKE_COMMAND} -E rm -rf ${_docs_ref}
+  COMMAND ${CMAKE_COMMAND} -E echo "welder: building Doxygen reference -> ${WELDER_DOXYGEN_API}"
+  COMMAND ${WELDER_DOXYGEN} ${_docs_bin}/Doxyfile
+  COMMAND ${CMAKE_COMMAND} -E env WELDER_DOXYGEN_API=${WELDER_DOXYGEN_API}
+          ${WELDER_DOCS_PYTHON} -m mkdocs serve --config-file ${_docs_src}/mkdocs.yml
   WORKING_DIRECTORY ${_docs_bin}
   COMMENT "welder: serving the docs at http://127.0.0.1:8000/ (guide live-reloads)"
   USES_TERMINAL VERBATIM)

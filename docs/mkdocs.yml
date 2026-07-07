@@ -5,9 +5,14 @@ site_description: >-
 site_author: welder authors
 copyright: Built from the real sources by welder's own Doxygen filter.
 
-# Content lives in content/; the site is assembled by CMake (mkdocs build -d …),
-# which also drops the Doxygen C++ reference into <site>/reference/.
+# Content lives in content/; the site is assembled by CMake (mkdocs build -d …).
+# The Doxygen C++ reference is grafted into <site>/api by the inject_reference hook
+# (from an out-of-source dir named by WELDER_DOXYGEN_API), so it never has to sit
+# inside docs_dir — keeping the worktree clean while serve live-reloads the guide.
 docs_dir: content
+
+hooks:
+  - inject_reference.py
 
 theme:
   name: material
