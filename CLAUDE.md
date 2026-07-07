@@ -11,10 +11,19 @@ The unit that lays those bindings down for a given framework is a **rod** (a
 welding rod): a stateless policy struct, `welder::rods::<name>::rod`. You drive it
 through the one public entry point, `welder::welder<Rod>`, whose static members
 automate the boring, backend-agnostic boilerplate at whichever stage of the usual
-hand-binding flow you want — a single type (`weld_type`), a namespace into an
-existing module (`weld_namespace`), a namespace as a fresh submodule
-(`weld_namespace_as_submodule`), or a whole module (`weld_module`) — leaving the
-rest ordinary hand-written binding code.
+hand-binding flow you want — a single type (`weld_type`), a single free function or
+global/constant (`weld_function` / `weld_variable`, the semi-manual route), a
+namespace into an existing module (`weld_namespace`), a namespace as a fresh
+submodule (`weld_namespace_as_submodule`), or a whole module (`weld_module`) —
+leaving the rest ordinary hand-written binding code. `weld_type` / `weld_function` /
+`weld_variable` / `weld_namespace_as_submodule` take an optional trailing `name`
+override (used verbatim, beats `weld_as`). The actual traversal lives in an injectable
+**carriage** (`welder::welder`'s defaulted third template arg): the default
+`welder::stitch_welding_carriage` binds only where welder's markers direct, while
+`welder::tack_welding_carriage` binds an **unmarked** third-party library greedily
+(ignoring the missing `weld` markers, still enforcing bindability). Each `weld_*`
+entry point is a one-line forward to the carriage, so a user can also subclass
+`welder::welder` to compose bespoke routines from the same gated building blocks.
 
 **Delivery model (Boost-style):** header-only (`src/welder/…`), with one optional
 C++20 module wrapper (`src/welder/welder.cppm`). Two equivalent vocabulary forms —

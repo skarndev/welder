@@ -58,6 +58,8 @@ extern "C" int luaopen_welder_test_sol2(lua_State* L) {
     register_methods(m);     // <-> methods.hpp
     register_inheritance(m); // <-> inheritance.hpp
     register_namespace(m);   // <-> namespace.hpp
+    register_freestanding(m); // <-> namespace_spec.lua (semi-manual weld_function/variable)
+    register_foreign(m);     // <-> namespace_spec.lua (tack-welding an unmarked namespace)
     register_operators(m);   // <-> operators.hpp
     register_enums(m);       // <-> enums.hpp
     register_naming(m);      // <-> naming_spec.lua

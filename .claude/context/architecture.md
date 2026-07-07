@@ -30,7 +30,7 @@ src/welder/
   naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + the name_style concept (per-kind transform_* hooks) + weld_as_of / name_of (weld_as override → else style hook) — uses <meta>, depends on vocabulary (weld_as_spec), NOT annotations.hpp
   bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
   bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>
-  welder.hpp            the `welder::rod` concept (emission contract) + generic driver (bind_type / bind_namespace_driver / build_module_driver) + the `welder::welder<Rod, Style=naming::none>` public entry point (weld_type / weld_namespace / weld_namespace_as_submodule / weld_module). Threads Style through the driver → every generated name goes through name_of (weld_as override, else the style hook)
+  welder.hpp            the `welder::rod` concept (emission contract) + the **carriage** (`detail::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). + the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
   module.hpp            WELDER_MODULE(ns, rod) entry-point dispatch macro
   vocabulary.hpp        header-only vocabulary form: lang+annotations only (exactly what the module exports)
   welder.cppm           the single `export module welder;` (exports vocabulary only)
@@ -91,12 +91,48 @@ layering (a gcc-16 std-in-purview leak).
 ## The rod interface (static polymorphism)
 
 A rod is a stateless struct `B` satisfying `welder::rod` (`welder.hpp`), exposed as
-`welder::rods::<name>::rod`. The core's generic driver
-(`welder::detail::bind_type` / `bind_namespace_driver` / `build_module_driver`) is
-templated on `B` and calls its members; the public `welder::welder<B>` (weld_type /
-weld_namespace / weld_namespace_as_submodule / weld_module) is the shared, one-and-
-only entry point that plugs `B` into that driver — there are no per-rod wrapper
-functions.
+`welder::rods::<name>::rod`. The core's traversal driver — the **carriage**
+(`detail::basic_carriage<Resolution>`, a stateless struct of static member templates
+`bind_type` / `bind_enum` / `bind_function` / `bind_variable` / `bind_namespace` /
+`bind_namespace_as_submodule` / `build_module`, + private `bind_members`) — is templated
+on `B` and calls its members; the public `welder::welder<B, Style, Carriage=carriage>`
+(weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule
+/ weld_module) is the shared, one-and-only entry point that plugs `B` into the carriage
+— each entry point is a one-line forward to `Carriage::bind_*`, no per-rod wrappers.
+`weld_function<^^fn>` / `weld_variable<^^var>` are the **semi-manual** route (bind one
+free-standing function / global directly onto a module handle — the free-standing analogue
+of `weld_type`, via the carriage's `bind_function` / `bind_variable`, which reuse the same
+`add_function` / `add_variable` rod primitives the namespace walk uses per member,
+`bind_variable` opening its own one-shot session around the call). The carriage carries the
+welded + bindability gates; the entry points hold *no* reflection logic themselves.
+
+**Resolution = stitch vs tack.** The carriage delegates the *which entities participate*
+decision to its `Resolution` policy (in `welder::detail`), keeping it separate from *how*
+they're emitted (the carriage body) and *whether* they're representable (the bindability
+gate, shared by both). `marker_resolution` → **stitch welding** (honor `weld`/`policy`/
+marks; the default `welder::stitch_welding_carriage`). `greedy_resolution` → **tack
+welding** (`welder::tack_welding_carriage`): ignore the `weld` markers entirely — every
+reflectable type/function/global participates, namespaces recurse greedily
+(`namespace_has_bindable`, the welded_for-free twin of `namespace_has_bound` in
+bind_traits), and every public base is *flattened* (Resolution::is_native_base = false, so
+no reliance on a base being separately registered) — for welding a third-party library
+with no welder annotations. Bindability is **still enforced** in tack mode, so a
+non-representable member reachable from a bound entity is a hard error (hatch with
+`trust_bindable`); any `mark::exclude` that happens to be present is still honored (via
+`member_bound`). The sol2/luacats free-function overload gathering
+(`rods/lua/overloads.hpp` `function_overload_set`) is resolution-agnostic by gathering
+siblings that share `fn`'s *welded-ness* — so an all-unmarked (tack) group gathers fully
+and an all-welded (stitch) group is unchanged, without the selector knowing the resolution.
+
+**Two seams, both defaulted.** (1) The **name override**: weld_type / weld_function /
+weld_variable / weld_namespace_as_submodule all take an optional trailing `const char*
+name`, used verbatim and taking precedence over any `weld_as` (threaded to the rod's
+`add_*` primitives, which fall back to `name_of` on `nullptr`). (2) The **carriage**:
+`welder::welder`'s third template argument, so a user can inject a replacement traversal
+driver (stitch/tack/bespoke `basic_carriage<Resolution>`) while reusing the rods.
+`welder::welder` itself is all-static/non-virtual, so "subclassing" it means a user's own
+driver type inherits the entry points (plus the bound Rod/Style/Carriage via `rod_type`/
+`name_style`/`carriage_type`) to compose bespoke routines — not runtime polymorphism.
 
 **Struct convention (all rods).** Each `rod` struct reads as one unit: the
 associated types up top, then a `protected:` block of framework-specific
@@ -130,17 +166,24 @@ headers instead of the struct: the Python dunder map into
   whole-enum finalizer, e.g. pybind's `export_values()` for unscoped enums).
 - **Namespace/module binding:** `open_module`→ a per-(sub)module *session* (rod
   scratch state — pybind uses it to batch live variable properties), `set_module_doc`,
-  `add_function<Fn, Style>`, `add_variable<Var, Style>` (const→snapshot, else a live
-  property), `add_submodule`, `close_module` (finalize the session).
+  `add_function<Fn, Style>(m, name=nullptr)`, `add_variable<Var, Style>(m, session,
+  name=nullptr)` (const→snapshot, else a live property), `add_submodule`, `close_module`
+  (finalize the session). The trailing `const char* name` on `add_function`/`add_variable`
+  is the verbatim override (nullptr → `name_of`); the semi-manual carriage entry points
+  thread the user's `weld_function`/`weld_variable` name through it, the namespace walk
+  passes nullptr.
 
 **Naming (name styling + `weld_as`).** Every name-producing hook takes a trailing
 `class Style` (a `naming::name_style`, defaulted to `naming::none`); the rod resolves
 its own name via `::welder::name_of<Ent, language, Style, ent_kind::…>()`, which
 applies a `[[=welder::weld_as]]` verbatim override first and otherwise calls the
-style's per-kind hook (`transform_method`, `transform_field`, …). The driver threads
-`welder::welder<Rod, Style>`'s Style down and pre-styles the names it owns
-(class/enum → `make_class`/`make_enum`; submodule → `add_submodule`), so a rod never
-re-derives naming policy. `add_operator` keeps the fixed operator→special-name map
+style's per-kind hook (`transform_method`, `transform_field`, …). A **call-site name
+override** (the `const char* name` on weld_type / weld_function / weld_variable /
+weld_namespace_as_submodule) beats even `weld_as`: it is passed as the resolved name
+directly (class/enum/submodule) or threaded to `add_function`/`add_variable`, which use
+it in place of `name_of`. The driver threads `welder::welder<Rod, Style>`'s Style down
+and pre-styles the names it owns (class/enum → `make_class`/`make_enum`; submodule →
+`add_submodule`), so a rod never re-derives naming policy. `add_operator` keeps the fixed operator→special-name map
 (not styled). The core machinery is `<welder/naming.hpp>`; the shipped Python mix is
 `welder::rods::python::pep8` (`rods/python/naming.hpp`). A type rename (style or
 `weld_as`) propagates into the LuaCATS stub's *type references / base lists* too: the

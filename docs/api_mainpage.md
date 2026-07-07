@@ -13,8 +13,11 @@ annotations come through.
 
 - **The `welder::rod` concept + `welder::welder<Rod>` entry point** (`welder.hpp`) —
   the emission contract every rod satisfies, the shared entry point (`weld_type`,
-  `weld_namespace`, `weld_namespace_as_submodule`, `weld_module`), and the generic
-  driver (`bind_type`, `bind_namespace_driver`, `build_module_driver`).
+  `weld_function`, `weld_variable`, `weld_namespace`, `weld_namespace_as_submodule`,
+  `weld_module`), and the injectable traversal driver — the **carriage**
+  (`basic_carriage<Resolution>`, shipped as `welder::stitch_welding_carriage` and
+  `welder::tack_welding_carriage`: `bind_type`, `bind_enum`, `bind_function`,
+  `bind_variable`, `bind_namespace`, `build_module`).
 - **The reflection layer** — `reflect.hpp` (`welded_for`, `member_bound`,
   `public_bases`), `bind_traits.hpp` (what binds), `bindable.hpp` (the bindability
   gate), `doc.hpp` (docstring folding).

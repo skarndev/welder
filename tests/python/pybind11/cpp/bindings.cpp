@@ -70,6 +70,8 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_methods(m);     // <-> test_methods.py
     register_inheritance(m); // <-> test_inheritance.py
     register_namespace(m);   // <-> test_namespace.py
+    register_freestanding(m); // <-> test_namespace.py (semi-manual weld_function/variable)
+    register_foreign(m);     // <-> test_namespace.py (tack-welding an unmarked namespace)
     register_doc(m);         // <-> test_doc.py
     register_operators(m);   // <-> test_operators.py
     register_trust(m);       // <-> test_trust.py

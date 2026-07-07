@@ -22,6 +22,20 @@ def cat(mod: ModuleType) -> ModuleType:
     return cast(ModuleType, mod.catalog)
 
 
+@pytest.fixture()
+def manual(mod: ModuleType) -> ModuleType:
+    # The `manual` submodule is filled the semi-manual way — weld_function /
+    # weld_variable on hand-picked entities — instead of welding a whole namespace.
+    return cast(ModuleType, mod.manual)
+
+
+@pytest.fixture()
+def foreign(mod: ModuleType) -> ModuleType:
+    # The `foreign` submodule is an *unmarked* C++ namespace bound greedily by the
+    # tack-welding carriage (no weld() annotations anywhere in it).
+    return cast(ModuleType, mod.foreign)
+
+
 # --- classes ----------------------------------------------------------------
 def test_welded_class_is_exposed(cat: ModuleType) -> None:
     assert cat.Item(7).get_id() == 7
@@ -109,3 +123,47 @@ def test_opt_in_parent_recurses_nested_namespace_only_if_included(cat: ModuleTyp
 def test_excluded_namespace_is_pruned(cat: ModuleType) -> None:
     # Under the (automatic) parent, a namespace recurses unless excluded.
     assert not hasattr(cat, "secret")
+
+
+# --- semi-manual binding (weld_function / weld_variable) ---------------------
+def test_weld_function_binds_a_single_free_function(manual: ModuleType) -> None:
+    assert manual.scale(6, 7) == 42
+
+
+def test_weld_variable_binds_a_constant_snapshot(manual: ModuleType) -> None:
+    assert manual.MANUAL_CONST == 42
+
+
+def test_weld_variable_binds_a_live_mutable_global(manual: ModuleType) -> None:
+    start = manual.manual_counter
+    manual.manual_bump()  # a directly welded free function mutating the C++ global
+    manual.manual_bump()
+    assert manual.manual_counter == start + 2  # live property, not a snapshot
+
+
+def test_call_site_name_override_wins(manual: ModuleType) -> None:
+    # A verbatim `name` argument to weld_function / weld_variable is used as-is,
+    # taking precedence over the entity's own identifier/styled/weld_as name.
+    assert manual.renamed_fn(5) == 6
+    assert manual.RENAMED_CONST == 99
+    assert not hasattr(manual, "renamable")  # bound only under the override name
+    assert not hasattr(manual, "RENAMABLE")
+
+
+# --- tack welding: bind an unmarked namespace greedily ----------------------
+def test_tack_binds_unmarked_class(foreign: ModuleType) -> None:
+    w = foreign.Widget()
+    assert w.size == 3
+    assert w.doubled() == 6  # a method, bound with no weld() on the class
+
+
+def test_tack_binds_unmarked_free_function(foreign: ModuleType) -> None:
+    assert foreign.add(2, 5) == 7
+
+
+def test_tack_binds_unmarked_constant(foreign: ModuleType) -> None:
+    assert foreign.VERSION == 7
+
+
+def test_tack_recurses_unmarked_nested_namespace(foreign: ModuleType) -> None:
+    assert foreign.nested.Gadget().id == 5

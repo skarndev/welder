@@ -78,6 +78,14 @@ consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
 
 /** The bound free-function overloads sharing @a fn's name, from @a fn's declaring
     namespace, in declaration order.
+
+    Overloads are gathered by `member_bound` (the policy/marks filter), and — so the
+    set matches whichever resolution the carriage used to reach @a fn — only siblings
+    sharing @a fn's *welded-ness*: under stitch welding @a fn is welded and the welded
+    overloads group; under tack welding (an unmarked library) @a fn is unwelded and
+    the unwelded overloads group. This keeps the leader (see is_overload_leader) a
+    member the carriage actually binds, without the selector needing to know the
+    resolution.
     @param fn a reflection of one bound namespace-scope function.
     @param L  the target language.
     @return the overload set (always contains @a fn). */
@@ -86,10 +94,11 @@ consteval std::vector<std::meta::info> function_overload_set(std::meta::info fn,
     const std::meta::info ns{std::meta::parent_of(fn)};
     const policy_kind pol{::welder::policy_of(ns)};
     const auto name{std::meta::identifier_of(fn)};
+    const bool welded{::welder::welded_for(fn, L)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(ns, std::meta::access_context::unchecked()))
-        if (std::meta::is_function(m) && ::welder::welded_for(m, L) &&
-            ::welder::member_bound(m, L, pol) &&
+        if (std::meta::is_function(m) && ::welder::member_bound(m, L, pol) &&
+            ::welder::welded_for(m, L) == welded &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
     return out;

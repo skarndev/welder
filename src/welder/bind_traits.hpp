@@ -240,6 +240,31 @@ consteval bool namespace_has_bound(std::meta::info ns, lang L) {
     return false;
 }
 
+/** The **greedy** twin of namespace_has_bound: whether @a ns holds any *bindable
+    kind* (ignoring the `weld` marker), directly or nested.
+
+    Used by the tack-welding resolution to decide whether an unmarked namespace is
+    worth turning into a submodule. Same shape as namespace_has_bound but with the
+    `welded_for` gate dropped — a member counts if it is a bindable kind resolving as
+    bound under the (marker-less) policy.
+    @param ns a reflection of the namespace.
+    @param L  the target language.
+    @return `true` iff some member (possibly nested) is a bindable kind that binds.
+*/
+consteval bool namespace_has_bindable(std::meta::info ns, lang L) {
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    const policy_kind pol{policy_of(ns)};
+    for (auto mem : std::meta::members_of(ns, ctx)) {
+        if (std::meta::is_namespace(mem)) {
+            if (member_bound(mem, L, pol) && namespace_has_bindable(mem, L))
+                return true;
+        } else if (is_bindable_kind(mem) && member_bound(mem, L, pol)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // --- inheritance: native bases ----------------------------------------------
 //
 // `weld` marks a type as an independently-registered, module-discoverable entity,

@@ -181,3 +181,91 @@ inline void register_namespace(WELDER_TEST_MODULE_T& m) {
     auto catalog_mod{WELDER_TEST_SUBMODULE(m, "catalog")};
     WELDER_TEST_WELDER::weld_namespace<^^catalog>(catalog_mod);
 }
+
+// Entities exercised only through the semi-manual route below. Kept in their own
+// namespace that is *never* weld_namespace'd, so each binds exactly once (into the
+// `manual` submodule) — no double-binding to trip stub generators, and no shared
+// mutable state with the `catalog` cases.
+namespace freestanding {
+
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+int scale(int x, int factor) {
+    return x * factor;
+}
+
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+inline constexpr int MANUAL_CONST{42};
+
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+inline int manual_counter{0};
+
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+void manual_bump() {
+    ++manual_counter;
+}
+
+// Bound under a call-site name override, to check the verbatim name beats the
+// entity's own identifier.
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+int renamable(int x) {
+    return x + 1;
+}
+
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+inline constexpr int RENAMABLE{99};
+
+} // namespace freestanding
+
+// A stand-in for a third-party library that carries NO welder markers — no `weld`,
+// no `policy`, no marks anywhere. It is bound greedily by the tack-welding carriage
+// (see register_foreign), which ignores the missing annotations but still enforces
+// bindability (every member here is representable).
+namespace foreign {
+
+struct Widget {
+    int size{3};
+    int doubled() const {
+        return size * 2;
+    }
+};
+
+int add(int a, int b) {
+    return a + b;
+}
+
+inline constexpr int VERSION{7};
+
+// greedily recursed into a submodule
+namespace nested {
+struct Gadget {
+    int id{5};
+};
+} // namespace nested
+
+} // namespace foreign
+
+// The semi-manual route: bind a hand-picked function/variable directly onto a
+// module, without welding the whole enclosing namespace. Mirrors what namespace
+// binding does per member, but one entity at a time.
+inline void register_freestanding(WELDER_TEST_MODULE_T& m) {
+    auto manual_mod{WELDER_TEST_SUBMODULE(m, "manual")};
+    WELDER_TEST_WELDER::weld_function<^^freestanding::scale>(manual_mod);
+    WELDER_TEST_WELDER::weld_function<^^freestanding::manual_bump>(manual_mod);
+    WELDER_TEST_WELDER::weld_variable<^^freestanding::MANUAL_CONST>(manual_mod);
+    WELDER_TEST_WELDER::weld_variable<^^freestanding::manual_counter>(manual_mod);
+    // A verbatim name override, given directly at the call site — takes precedence
+    // over the identifier/weld_as/style name the entity would otherwise resolve to.
+    WELDER_TEST_WELDER::weld_function<^^freestanding::renamable>(manual_mod, "renamed_fn");
+    WELDER_TEST_WELDER::weld_variable<^^freestanding::RENAMABLE>(manual_mod, "RENAMED_CONST");
+}
+
+// Tack welding: bind the unmarked `foreign` library greedily. The tack welder is the
+// same rod + style as WELDER_TEST_WELDER, only with the tack-welding carriage swapped
+// in — reachable backend-neutrally through the entry point's type aliases.
+inline void register_foreign(WELDER_TEST_MODULE_T& m) {
+    using tack = ::welder::welder<WELDER_TEST_WELDER::rod_type,
+                                  WELDER_TEST_WELDER::name_style,
+                                  ::welder::tack_welding_carriage>;
+    auto foreign_mod{WELDER_TEST_SUBMODULE(m, "foreign")};
+    tack::weld_namespace<^^foreign>(foreign_mod);
+}

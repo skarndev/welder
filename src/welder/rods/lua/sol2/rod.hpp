@@ -483,14 +483,19 @@ struct rod {
     static void set_module_doc(module_type&, const char*) {}
 
     /** Bind free function @a Fn as a module-level function; overloads are gathered
-        into one `sol::overload(…)`, registered once on the group's first member. */
+        into one `sol::overload(…)`, registered once on the group's first member.
+
+        A non-null @a name overrides the resolved name (including any `weld_as`), used
+        verbatim; `nullptr` falls back to the styled/`weld_as` name. */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
-    static void add_function(module_type& m) {
+    static void add_function(module_type& m, const char* name = nullptr) {
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
             _register_named<grp>(
                 m,
-                ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>(),
+                name ? name
+                     : ::welder::name_of<Fn, language, Style,
+                                         ::welder::ent_kind::function>(),
                 std::make_index_sequence<grp.size()>{});
         }
     }
@@ -499,11 +504,13 @@ struct rod {
 
         Both const and mutable variables snapshot for now; a live get/set property
         over the C++ global (via a metatable proxy on the module table) is a planned
-        enhancement. */
+        enhancement. A non-null @a name overrides the resolved name (including any
+        `weld_as`), used verbatim; `nullptr` falls back to the styled/`weld_as` name. */
     template <std::meta::info Var, class Style = ::welder::naming::none>
-    static void add_variable(module_type& m, session&) {
-        m[::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>()] =
-            [:Var:];
+    static void add_variable(module_type& m, session&, const char* name = nullptr) {
+        m[name ? name
+               : ::welder::name_of<Var, language, Style,
+                                   ::welder::ent_kind::variable>()] = [:Var:];
     }
 
     /** Create a submodule table named @a name under @a m. */

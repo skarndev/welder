@@ -310,8 +310,9 @@ struct rod {
     }
 
     template <std::meta::info Fn, class Style = ::welder::naming::none>
-    static void add_function(module_type& m) {
-        // Free-function overloads group just like methods (see add_method).
+    static void add_function(module_type& m, const char* name = nullptr) {
+        // Free-function overloads group just like methods (see add_method). A
+        // non-null `name` overrides the leaf name (beating any `weld_as`).
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
             std::vector<func_overload> sigs{};
@@ -319,21 +320,24 @@ struct rod {
             render_overload_group(
                 m.doc->body,
                 (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-                    ::welder::name_of<Fn, language, Style,
-                                      ::welder::ent_kind::function>(),
+                    (name ? name
+                          : ::welder::name_of<Fn, language, Style,
+                                              ::welder::ent_kind::function>()),
                 sigs);
         }
     }
 
     template <std::meta::info Var, class Style = ::welder::naming::none>
-    static void add_variable(module_type& m, session&) {
+    static void add_variable(module_type& m, session&, const char* name = nullptr) {
         std::string& out{m.doc->body};
         emit_doc_comment(out, ::welder::doc_of<Var>());
         out += "---@type ";
         out += lua_type(std::meta::type_of(Var));
         out += '\n';
         out += (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-               ::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>() +
+               (name ? name
+                     : ::welder::name_of<Var, language, Style,
+                                         ::welder::ent_kind::variable>()) +
                " = nil\n\n";
     }
 

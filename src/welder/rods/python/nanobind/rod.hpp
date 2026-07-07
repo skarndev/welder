@@ -172,19 +172,28 @@ struct rod {
 
     /** Give module @a m live get/set semantics for the names in @a props.
 
-        Reassigns @a m's Python class to a fresh `ModuleType` subclass carrying
-        @a props (name → property). Python modules don't support properties
+        Reassigns @a m's Python class to a fresh subclass of its *current* class
+        carrying @a props (name → property). Python modules don't support properties
         directly, but a module's `__class__` may be swapped for a `ModuleType`
-        subclass. Used only when a namespace exposes a mutable variable.
+        subclass. Used only when a (sub)module exposes a mutable variable.
+
+        Subclassing the module's current class — rather than `ModuleType` outright —
+        means repeated installs onto the same handle *accumulate*: welding a standalone
+        variable and then a whole namespace onto the same module each add a layer, and
+        the earlier properties survive in the MRO instead of being clobbered.
         @param m     the module handle.
         @param props a dict of name → `property`.
     */
     static void _install_live_properties(nb::module_& m, nb::dict props) {
         auto builtins{nb::module_::import_("builtins")};
-        auto types{nb::module_::import_("types")};
         auto subclass{builtins.attr("type")(
             nb::str("welder_live_module"),
-            nb::make_tuple(types.attr("ModuleType")), props)};
+            nb::make_tuple(m.attr("__class__")), props)};
+        // Stamp the module's own name onto the dynamically-created class, which would
+        // otherwise carry `__module__ == "_frozen_importlib"` (the module-init frame).
+        // Keeps functions welded onto `m` after this swap (e.g. a `weld_function`
+        // following a mutable `weld_variable`) correctly attributed in stubs.
+        subclass.attr("__module__") = m.attr("__name__");
         m.attr("__class__") = subclass;
     }
 
@@ -350,22 +359,31 @@ struct rod {
         m.attr("__doc__") = doc;
     }
 
-    /** Bind free function @a Fn as a module-level function. */
+    /** Bind free function @a Fn as a module-level function.
+
+        A non-null @a name overrides the resolved name (including any `weld_as`),
+        used verbatim; `nullptr` falls back to the styled/`weld_as` name. */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
-    static void add_function(module_type& m) {
+    static void add_function(module_type& m, const char* name = nullptr) {
         _def_function<Fn>(
-            ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>(),
+            name ? name
+                 : ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>(),
             [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); });
     }
 
     /** Bind namespace variable @a Var as a module attribute.
 
         A const/constexpr variable becomes a value snapshot; a mutable one becomes a
-        live get/set property over the C++ global (accumulated in @a live). */
+        live get/set property over the C++ global (accumulated in @a live). A non-null
+        @a name_override is used verbatim (beating any `weld_as`); `nullptr` falls back
+        to the styled/`weld_as` name. */
     template <std::meta::info Var, class Style = ::welder::naming::none>
-    static void add_variable(module_type& m, nb::dict& live) {
-        constexpr const char* name{
-            ::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>()};
+    static void add_variable(module_type& m, nb::dict& live,
+                             const char* name_override = nullptr) {
+        const char* name{
+            name_override
+                ? name_override
+                : ::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>()};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Var))) {
             m.attr(name) = [:Var:]; // immutable: a value snapshot at bind time
         } else {

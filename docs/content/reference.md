@@ -23,8 +23,8 @@ docs come through, and themed to match this site.
 | You'll find | Examples |
 |---|---|
 | The `welder::rod` **concept** | the emission contract every rod satisfies |
-| The **entry point** | `welder::welder<Rod>` (`weld_type` / `weld_namespace` / `weld_namespace_as_submodule` / `weld_module`) |
-| The **generic driver** | `bind_type`, `bind_namespace_driver`, `build_module_driver` |
+| The **entry point** | `welder::welder<Rod, Style, Carriage>` (`weld_type` / `weld_function` / `weld_variable` / `weld_namespace` / `weld_namespace_as_submodule` / `weld_module`) |
+| The **carriage** (traversal driver) | `welder::stitch_welding_carriage` (default) / `welder::tack_welding_carriage` — `basic_carriage<Resolution>` (`bind_type`, `bind_enum`, `bind_function`, `bind_variable`, `bind_namespace`, `build_module`) |
 | The **reflection layer** | `reflect.hpp`, `bind_traits.hpp`, `bindable.hpp`, `doc.hpp` |
 | The **vocabulary** | `lang.hpp`, `annotations.hpp` |
 | The **pybind11 rod** | `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod`) |
