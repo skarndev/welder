@@ -12,6 +12,11 @@ sol2-specific detail — how the entry point works, where Lua's surface differs 
 Python's, and the LuaCATS stub that carries the docstrings Lua has no runtime slot
 for.
 
+!!! tip "There is a second Lua rod"
+    welder also ships a **[LuaBridge3](luabridge.md)** rod for Lua — same welded
+    C++, same tests, but a dependency-free header and support for newer Lua (5.5,
+    LuaJIT, Luau). See [Lua (LuaBridge3)](luabridge.md) for how it differs.
+
 ```cpp title="shapes_lua.cpp"
 #include <welder/vocabulary.hpp>                       // vocabulary (header-only)
 

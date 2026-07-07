@@ -117,6 +117,7 @@ nav:
       - backends/index.md
       - Python (pybind11 & nanobind): backends/python.md
       - Lua (sol2): backends/lua.md
+      - Lua (LuaBridge3): backends/luabridge.md
       - Shipping to multiple languages: backends/multiple.md
   - Architecture: architecture.md
   - C++ API Reference: reference.md

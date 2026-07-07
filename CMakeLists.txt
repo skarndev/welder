@@ -9,6 +9,7 @@ option(WELDER_BUILD_MODULE "Build the importable `welder` C++20 module wrapper" 
 option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_NANOBIND "Build the nanobind Python backend" ON)
 option(WELDER_BUILD_SOL2 "Build the sol2 Lua backend" ON)
+option(WELDER_BUILD_LUABRIDGE "Build the LuaBridge3 Lua backend" ON)
 option(WELDER_BUILD_EXAMPLES "Build examples" ON)
 option(WELDER_BUILD_TESTS "Build tests" ON)
 option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ON)
@@ -28,10 +29,21 @@ interpreter and luarocks target; empty = search the system")
 set(WELDER_PYTHON_VERSION "3.14" CACHE STRING
   "Python minor the Python backends build against and their uv env targets")
 
+# The LuaBridge3 rod builds against its OWN Lua (LuaBridge3 supports Lua 5.1–5.5 +
+# LuaJIT/Luau, unlike sol2/3.5.0 which caps at 5.4), so it gets independent version
+# knobs — but they default to the sol2 ones, so a single Lua install serves both.
+# Point these at, e.g., `brew --prefix lua@5.5` to exercise the LuaBridge3 rod on a
+# newer Lua than sol2 can use, without disturbing the sol2 build.
+set(WELDER_LUABRIDGE_LUA_VERSION "${WELDER_LUA_VERSION}" CACHE STRING
+  "Lua minor the LuaBridge3 backend builds against and its tests run with")
+set(WELDER_LUABRIDGE_LUA_DIR "${WELDER_LUA_DIR}" CACHE PATH
+  "Lua install prefix for the LuaBridge3 backend; empty = search the system")
+
 # Reusable CMake helpers (e.g. welder_pybind11_generate_stubs).
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(WelderPybind11Stubgen)
 include(WelderSol2Module)
+include(WelderLuaBridgeModule)
 include(WelderLuaCATSStub)
 
 # All toolchain-specific flags for C++26 reflection + annotations live here, so
@@ -48,6 +60,54 @@ else()
     "welder: C++26 reflection flags are only wired for GNU (gcc-16). "
     "Compiler '${CMAKE_CXX_COMPILER_ID}' is not supported yet; the build will "
     "almost certainly fail until P2996/P3394 land there.")
+endif()
+
+# --- LuaBridge3 provisioning ---------------------------------------------------
+# LuaBridge3 has no Conan Center package and ships no CMake config, so — per the
+# project's provider-neutral stance — a *consumer* brings their own (find it via
+# WELDER_LUABRIDGE_DIR, or a system install), while *our* build fetches a pinned
+# copy for the tests/examples. Either way this resolves to LuaBridge3's own
+# `LuaBridge` INTERFACE target, which the welder::luabridge rod links.
+set(WELDER_LUABRIDGE_GIT_TAG "534a639d4857e64512e2b1ebcd7eb5dc8e728c08" CACHE STRING
+  "LuaBridge3 git tag/commit to FetchContent when it is not found locally")
+set(WELDER_LUABRIDGE_DIR "" CACHE PATH
+  "LuaBridge3 source/install prefix (containing LuaBridge/LuaBridge.h); empty = search")
+set(WELDER_LUABRIDGE_FETCH ${WELDER_BUILD_TESTS} CACHE BOOL
+  "Fetch LuaBridge3 via FetchContent when it is not found locally")
+
+if(WELDER_BUILD_LUABRIDGE AND NOT TARGET LuaBridge)
+  # Consumer path: a user-provided or system LuaBridge3 (header-only). Try a CMake
+  # package first (in case a future distribution ships one), then a header search.
+  find_package(LuaBridge3 CONFIG QUIET)
+  if(NOT TARGET LuaBridge)
+    if(WELDER_LUABRIDGE_DIR)
+      find_path(WELDER_LUABRIDGE_INCLUDE_DIR NAMES LuaBridge/LuaBridge.h
+        PATHS "${WELDER_LUABRIDGE_DIR}" "${WELDER_LUABRIDGE_DIR}/Source" NO_DEFAULT_PATH)
+    else()
+      find_path(WELDER_LUABRIDGE_INCLUDE_DIR NAMES LuaBridge/LuaBridge.h)
+    endif()
+    if(WELDER_LUABRIDGE_INCLUDE_DIR)
+      add_library(LuaBridge INTERFACE IMPORTED)
+      target_include_directories(LuaBridge SYSTEM INTERFACE ${WELDER_LUABRIDGE_INCLUDE_DIR})
+    endif()
+  endif()
+  # Testing/example convenience: fetch a pinned copy when nothing was provided.
+  if(NOT TARGET LuaBridge AND WELDER_LUABRIDGE_FETCH)
+    message(STATUS "welder: fetching LuaBridge3 (${WELDER_LUABRIDGE_GIT_TAG})...")
+    include(FetchContent)
+    FetchContent_Declare(LuaBridge3
+      GIT_REPOSITORY https://github.com/kunitoki/LuaBridge3.git
+      GIT_TAG ${WELDER_LUABRIDGE_GIT_TAG}
+      GIT_SHALLOW FALSE)
+    set(LUABRIDGE_TESTING OFF CACHE BOOL "" FORCE) # don't build LuaBridge3's own tests
+    FetchContent_MakeAvailable(LuaBridge3)         # defines the `LuaBridge` target
+  endif()
+  if(NOT TARGET LuaBridge)
+    message(WARNING "welder: LuaBridge3 not found; the LuaBridge3 backend "
+      "(welder::luabridge) is disabled. Provide it with -DWELDER_LUABRIDGE_DIR=<dir> "
+      "or allow fetching with -DWELDER_LUABRIDGE_FETCH=ON.")
+    set(WELDER_BUILD_LUABRIDGE OFF)
+  endif()
 endif()
 
 add_subdirectory(src)

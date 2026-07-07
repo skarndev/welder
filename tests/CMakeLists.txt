@@ -106,11 +106,12 @@ add_subdirectory(luacats)
 
 # Per-language test trees. python/ builds the pybind11 + nanobind extensions and
 # runs the shared pytest specs against each (a cross-backend consistency check);
-# lua/ builds the sol2 extension and runs the busted specs against it. Both bind
-# the *same* shared C++ cases (tests/common/cpp).
+# lua/ builds the sol2 and/or LuaBridge3 extensions and runs the *same* busted specs
+# against each (a cross-backend consistency check). All bind the *same* shared C++
+# cases (tests/common/cpp).
 if(WELDER_BUILD_PYBIND11 OR WELDER_BUILD_NANOBIND)
   add_subdirectory(python)
 endif()
-if(WELDER_BUILD_SOL2)
+if(WELDER_BUILD_SOL2 OR WELDER_BUILD_LUABRIDGE)
   add_subdirectory(lua)
 endif()

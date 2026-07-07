@@ -15,3 +15,7 @@ endif()
 if(WELDER_BUILD_SOL2)
   add_subdirectory(lua_poc) # whole-module Lua binding via WELDER_MODULE(_, sol2)
 endif()
+
+if(WELDER_BUILD_LUABRIDGE)
+  add_subdirectory(luabridge_poc) # whole-module Lua binding via WELDER_MODULE(_, luabridge)
+endif()

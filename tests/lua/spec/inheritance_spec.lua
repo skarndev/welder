@@ -1,6 +1,8 @@
 -- Inheritance (mirrors tests/python/test_inheritance.py): welded bases, non-welded
--- mixin flattening, a welded base reached through a non-welded bridge, and — since
--- sol2 supports several bases — a multiple/virtual diamond.
+-- mixin flattening, a welded base reached through a non-welded bridge, and — for a
+-- backend that supports several/virtual bases (sol2) — a multiple/virtual diamond.
+-- LuaBridge3 has no virtual-base support, so it omits the diamond (Bottom absent)
+-- and the diamond case below is skipped, mirroring the Python spec's nanobind skip.
 local h = require("helper")
 local m = h.mod.inheritance
 
@@ -39,6 +41,9 @@ describe("inheritance", function()
   end)
 
   it("binds multiple and virtual bases", function()
+    if not m.Bottom then
+      return -- backend without virtual-base support (e.g. LuaBridge3)
+    end
     local b = m.Bottom.new()                 -- Bottom -> Left, Right -> virtual Apex
     assert.are.equal(23, b.bottom_field)
     assert.are.equal(21, b.left_field)

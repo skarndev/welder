@@ -68,6 +68,28 @@ registration; one shared instance is the intended model (like the pytest conftes
 fixture). `LUA_PATH`/`LUA_CPATH` (set by the CMakeLists) reach `helper.lua` and the
 `.so`.
 
+## LuaBridge3 rod build/test (a second Lua runtime rod)
+`welder::luabridge` is the LuaBridge3 counterpart of `welder::sol2` — same
+loadable-module story (`welder_luabridge_add_module()`, host-symbol link model,
+`CXX_SCAN_FOR_MODULES OFF`, header-only consumption). Two things differ:
+- **Sourcing (split, no Conan package for LuaBridge3):** the *rod* is consumer-facing
+  via `find_package(LuaBridge3)` / `-DWELDER_LUABRIDGE_DIR=<dir with LuaBridge/…>`; the
+  *tests/examples* FetchContent a pinned commit (`WELDER_LUABRIDGE_GIT_TAG`) when nothing
+  is found, gated by `WELDER_LUABRIDGE_FETCH` (default = `WELDER_BUILD_TESTS`). Both
+  resolve to LuaBridge3's own `LuaBridge` INTERFACE target. Provisioning is at the top
+  level (before `add_subdirectory(src)`) so the rod target can link it.
+- **Its own Lua version:** LuaBridge3 supports Lua 5.1–5.5 + LuaJIT/Luau (sol2/3.5.0
+  caps at 5.4), so it has independent knobs `WELDER_LUABRIDGE_LUA_VERSION` /
+  `WELDER_LUABRIDGE_LUA_DIR` (defaulting to the sol2 ones, so one Lua install serves
+  both). Point them at, e.g., `brew --prefix lua@5.5` to exercise it on a newer Lua
+  without touching the sol2 build. The same segfault-guarding minor check applies.
+
+**Known limitation:** LuaBridge3 supports non-virtual multiple inheritance but **not
+virtual bases** (its base-cast offset is plain pointer arithmetic that a virtual base
+breaks — registering one crashes at load), so the shared *virtual* diamond case is
+gated off for it (no `WELDER_TEST_MULTIPLE_INHERITANCE`), like nanobind's single-
+inheritance gating; the busted inheritance spec skips the diamond when `Bottom` is absent.
+
 ## `.pyi` stub generation
 Via [pybind11-stubgen](https://github.com/pybind/pybind11-stubgen) (build-time):
 `cmake/WelderPybind11Stubgen.cmake` → `welder_pybind11_generate_stubs(<target>
@@ -168,8 +190,15 @@ use it for `lark`) but manages the pyproject that now lives in `python/`.
 **Lua tree** (`tests/lua/`): **busted** (installed via luarocks, nothing vendored —
 see the sol2 section above) is the Lua counterpart of uv+pytest. The shared
 `common/cpp` groups (all but `doc.hpp`, whose `__doc__`/`attr` hooks are
-Python-only) build into `welder_test_sol2.so`; per-group busted specs
-(`spec/*_spec.lua`, mirroring the `.py` files) assert them in one `busted` run.
+Python-only) build into a `.so` per enabled Lua rod — `welder_test_sol2.so`
+(`cpp/bindings.cpp`) and `welder_test_luabridge.so` (`cpp/bindings_luabridge.cpp`) —
+and the **same** per-group busted specs (`spec/*_spec.lua`) assert **both**: the spec
+`helper.lua` picks the module by the `WELDER_TEST_LUA_MODULE` env var (set per CTest
+`luatest.sol2` / `luatest.luabridge`), the Lua analogue of the Python specs'
+`WELDER_TEST_MODULE`. A shared busted install is reused across rods that target the
+same Lua minor; each rod also has a `negcompile.<rod>_unwelded` WILL_FAIL CTest.
+Where a case carries per-language marks, both Lua rods see the same lua-resolved binding;
+where a backend can't represent a feature (LuaBridge3's virtual diamond) the spec skips it.
 Where a case carries per-language marks, Lua sees the lua-resolved binding, which
 differs from Python by design. `LUA_PATH`/`LUA_CPATH` (set by the CMakeLists) reach
 `helper.lua` (which `require`s the `.so` once) and the built module. CTests

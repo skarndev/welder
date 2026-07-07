@@ -140,39 +140,52 @@ them for free):
   `Style` hook param).
 
 ## Rods
-Three rods implement every feature above from the same driver: **pybind11**
+Four rods implement every feature above from the same driver: **pybind11**
 (`welder::rods::pybind11::rod`), **nanobind** (`welder::rods::nanobind::rod`) — both
-`lang::py` — and **sol2** (`welder::rods::sol2::rod`, `lang::lua`). nanobind's one
-behavioral gap is multiple
-inheritance (single base per class), so a multi-base diamond binds under pybind11 +
-sol2 but not nanobind. Enums bind as `py::native_enum` (pybind11 → stdlib
+`lang::py` — and **sol2** (`welder::rods::sol2::rod`) + **LuaBridge3**
+(`welder::rods::luabridge::rod`) — both `lang::lua`. Behavioral inheritance gaps:
+nanobind is single-base-only, and LuaBridge3 supports non-virtual multiple inheritance
+but **not virtual bases**, so a *virtual* diamond binds under pybind11 + sol2 but not
+nanobind or LuaBridge3. Enums bind as `py::native_enum` (pybind11 → stdlib
 `enum.IntEnum`) / an `is_arithmetic` `nb::enum_` (nanobind → Python `IntEnum`) / a
-name→value **table** (sol2 — Lua has no
-enum type).
+name→value **table** (both Lua rods — Lua has no enum type).
 
-## Lua specifics (sol2)
-The same annotated cases bind for `lang::lua`; the Lua-only differences (see
-`architecture.md` for the full list):
+## Lua specifics (sol2 + LuaBridge3)
+The same annotated cases bind for `lang::lua` under **both** Lua rods, asserted by the
+*same* busted specs (selected via `WELDER_TEST_LUA_MODULE`). The Lua-only differences
+below apply to both unless noted; where the two Lua frameworks diverge, LuaBridge3's
+differences are called out (see `architecture.md` for the full per-rod list):
 - **Operators → Lua metamethods**, a smaller/asymmetric map: `+`/`-`(binary/unary)/
   `*`/`/`/`%` → `__add`/`__sub`/`__unm`/`__mul`/`__div`/`__mod`; `==`→`__eq`,
   `<`→`__lt`, `<=`→`__le`; **`!=`, `>`, `>=` map to *nothing*** — Lua derives `~=`,
   `>`, `>=` from `__eq`/`__lt`/`__le`. `^`(XOR)→`__bxor`, `&`/`|`/`~`/`<<`/`>>` →
-  the bitwise metamethods, all `#if LUA_VERSION_NUM >= 503`. `[]`→`__index` (a sol2
-  fallback that coexists with member/method access), `()`→`__call`.
-- **Overloaded methods/functions/operators are grouped** into one `sol::overload(…)`
-  (sol2 stores one value per name / metamethod slot), so every overload dispatches at
-  call time rather than the last registered winning. The grouping is done in the sol2
-  rod — the driver visits each overload individually (suiting pybind11's chained
-  `.def`), and the rod gathers a name's siblings with the core selection
-  predicates, exactly as it already gathers a type's constructors. A same-named member
-  in a derived class still hides the base's (C++ name-hiding), unchanged.
+  the bitwise metamethods, all `#if LUA_VERSION_NUM >= 503`. `[]`→`__index` (a
+  fallback that coexists with member/method access), `()`→`__call`. The operator→`__name`
+  map is shared by both Lua rods (`rods/lua/metamethods.hpp`); sol2 pairs each name with
+  its `sol::meta_function` slot, LuaBridge3 registers by the name string. **LuaBridge3
+  `[]` divergence:** LuaBridge3 *reserves* `__index` for member/property resolution, so
+  `operator[]` is registered as its `addIndexMetaMethod` *fallback* (consulted first,
+  returns nil for non-subscript keys) and the adapter coerces LuaBridge3's stringified
+  numeric key.
+- **Overloaded methods/functions/operators are grouped** (each Lua slot holds one
+  value): sol2 into one `sol::overload(…)`, LuaBridge3 into one variadic
+  `addFunction(name, f1, f2, …)`. Either way every overload dispatches at call time
+  rather than the last registered winning. The grouping is done in the rod — the driver
+  visits each overload individually (suiting pybind11's chained `.def`), and the rod
+  gathers a name's siblings with the shared `rods/lua/overloads.hpp` selectors, exactly
+  as it already gathers a type's constructors. A same-named member in a derived class
+  still hides the base's (C++ name-hiding), unchanged.
+- **Constructors, all at once** (both Lua rods want the whole set): sol2 via
+  `sol::constructors`, LuaBridge3 via `addConstructor<Sig…>()`. Both expose the call
+  form `T(…)` **and** `T.new(…)` (LuaBridge3 adds `.new` as a variadic static function
+  over factory functions). Aggregates ride C++26 parenthesized init.
 - **Namespace variables: const snapshots, mutable live.** A const/constexpr variable
-  binds as a value snapshot; a mutable one binds as a live get/set over the C++ global
-  via a metatable proxy on the module table (`__index`/`__newindex` route the absent
-  key through per-variable getter/setter closures, accumulated in the sol2 `session`
-  and installed by `close_module`; the proxy chains any pre-existing metatable, and a
-  live key is never `rawset` so it stays routed). Matches the Python backends
-  (`rod::add_variable`/`_install_live_variables`). Asserted by `namespace_spec.lua`.
+  binds as a value snapshot; a mutable one binds as a live get/set over the C++ global.
+  sol2 has no per-variable property, so it routes the absent key through a metatable
+  proxy (`__index`/`__newindex` → getter/setter closures accumulated in its `session`,
+  installed by `close_module`, chaining any pre-existing metatable). **LuaBridge3 is
+  simpler**: native `addProperty(name, get, set)` — no proxy, and its session is a
+  no-op. Both match the Python backends. Asserted by `namespace_spec.lua`.
 - **`doc`/`returns` are ignored at runtime** (no Lua `__doc__`) — they surface
   instead in the generated **LuaCATS stub** (`welder::rods::luacats::rod`; see
   `docs-and-doxygen.md` and build-test-run.md). The stub reflects the same welded

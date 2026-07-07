@@ -63,6 +63,11 @@ entry macro:
     #include <welder/rods/lua/sol2/module.hpp>
 
     WELDER_MODULE(shapes, sol2) {}       // emits luaopen_shapes
+
+    // The LuaBridge3 rod is a drop-in alternative for Lua — swap the two lines:
+    //   #include <welder/rods/lua/luabridge/module.hpp>
+    //   WELDER_MODULE(shapes, luabridge) {}
+    // (pick one Lua rod per module name — both emit the same luaopen_shapes symbol).
     ```
 
 === "shapes_stub.cpp"

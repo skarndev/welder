@@ -85,6 +85,61 @@ if(WELDER_BUILD_SOL2)
   target_compile_definitions(welder_sol2 INTERFACE SOL_ALL_SAFETIES_ON=1)
 endif()
 
+# --- welder::luabridge : LuaBridge3 Lua rod ------------------------------
+# A second Lua runtime rod alongside sol2, over LuaBridge3 instead of sol2. Same
+# loadable-module story: a shared object Lua's `require` finds on `package.cpath`
+# and enters via `luaopen_<name>`, resolving `lua_*` from the *host* interpreter —
+# so this INTERFACE target surfaces only the LuaBridge3 + Lua *headers* and does not
+# link a Lua library. Create an extension with welder_luabridge_add_module().
+#
+# LuaBridge3 (the header-only C++ wrapper) is provisioned by the top-level
+# CMakeLists (find/dir for consumers, FetchContent for our build) as the `LuaBridge`
+# target. Lua itself comes from the *system/user* via its own knobs
+# (WELDER_LUABRIDGE_LUA_DIR / WELDER_LUABRIDGE_LUA_VERSION, defaulting to the sol2
+# ones) — LuaBridge3 supports newer Lua minors than sol2, so it can point at a
+# different install without disturbing welder::sol2.
+if(WELDER_BUILD_LUABRIDGE AND TARGET LuaBridge)
+  # Resolve the LuaBridge3 Lua headers independently of sol2's LUA_INCLUDE_DIR (the
+  # two rods may target different Lua minors), into a private cache var. Header-only:
+  # like sol2 it never links liblua (host-symbol model).
+  if(WELDER_LUABRIDGE_LUA_DIR)
+    find_path(WELDER_LUABRIDGE_LUA_INCLUDE_DIR lua.h
+      PATHS "${WELDER_LUABRIDGE_LUA_DIR}/include"
+      PATH_SUFFIXES "lua${WELDER_LUABRIDGE_LUA_VERSION}" lua ""
+      NO_DEFAULT_PATH)
+  else()
+    find_path(WELDER_LUABRIDGE_LUA_INCLUDE_DIR lua.h
+      PATH_SUFFIXES "lua${WELDER_LUABRIDGE_LUA_VERSION}" lua "")
+  endif()
+  if(NOT WELDER_LUABRIDGE_LUA_INCLUDE_DIR)
+    message(FATAL_ERROR "welder: could not find lua.h for the LuaBridge3 backend. "
+      "Set -DWELDER_LUABRIDGE_LUA_DIR to a Lua install prefix "
+      "(e.g. `brew --prefix lua@${WELDER_LUABRIDGE_LUA_VERSION}`).")
+  endif()
+  # Guard the found Lua minor against the requested one: LuaBridge3 has no cross-minor
+  # ABI, so a mismatch would segfault the interpreter that loads the module (same
+  # hazard as sol2). lua.h carries the version as string macros.
+  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_major
+    REGEX "^#define[ \t]+LUA_VERSION_MAJOR[ \t]+\"[0-9]+\"")
+  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_minor
+    REGEX "^#define[ \t]+LUA_VERSION_MINOR[ \t]+\"[0-9]+\"")
+  string(REGEX REPLACE ".*\"([0-9]+)\".*" "\\1" _wlb_major "${_wlb_major}")
+  string(REGEX REPLACE ".*\"([0-9]+)\".*" "\\1" _wlb_minor "${_wlb_minor}")
+  if(NOT "${_wlb_major}.${_wlb_minor}" STREQUAL WELDER_LUABRIDGE_LUA_VERSION)
+    message(FATAL_ERROR
+      "welder: found Lua ${_wlb_major}.${_wlb_minor} for the LuaBridge3 backend but "
+      "WELDER_LUABRIDGE_LUA_VERSION is ${WELDER_LUABRIDGE_LUA_VERSION}. A module built "
+      "against one Lua minor segfaults in another; point -DWELDER_LUABRIDGE_LUA_DIR at "
+      "a matching install or set -DWELDER_LUABRIDGE_LUA_VERSION.")
+  endif()
+
+  add_library(welder_luabridge INTERFACE)
+  add_library(welder::luabridge ALIAS welder_luabridge)
+  target_link_libraries(welder_luabridge INTERFACE welder_headers LuaBridge)
+  target_include_directories(welder_luabridge SYSTEM INTERFACE
+    ${WELDER_LUABRIDGE_LUA_INCLUDE_DIR})
+endif()
+
 # --- welder::luacats : LuaCATS `---@meta` stub rod -----------------------
 # The Lua counterpart of the Python `.pyi` stubs: a text-emitting rod that
 # reflects the same welded types (via the same generic driver as sol2) and writes

@@ -128,7 +128,7 @@ purpose, it does not try to:
 ```mermaid
 flowchart LR
     A["Annotated C++ type<br/><code>[[=welder::weld(...)]]</code>"] --> B["welder core<br/>(reflection: what binds?)"]
-    B --> C["a rod = one backend<br/>pybind11 · nanobind · sol2"]
+    B --> C["a rod = one backend<br/>pybind11 · nanobind · sol2 · LuaBridge3"]
     C --> D["Python & Lua modules"]
     A -.same annotations.-> E["Doxygen filter"]
     E --> F["C++ API reference"]
@@ -143,7 +143,8 @@ whether each type is *representable*, and walking types/namespaces/bases. A
 supplying only the emission primitives (how to register a class/method/property in
 its framework), driven through the one entry point `welder::welder<Rod>`. Adding a
 language is one rod struct; the core is reused verbatim. The *same* annotated type
-binds to **Python** (pybind11 or nanobind) and **Lua** (sol2) — you weld it once.
+binds to **Python** (pybind11 or nanobind) and **Lua** (sol2 or LuaBridge3) — you
+weld it once.
 
 [:octicons-arrow-right-24: Read the architecture](architecture.md){ .md-button }
 [:octicons-arrow-right-24: Explore the languages](backends/index.md){ .md-button }

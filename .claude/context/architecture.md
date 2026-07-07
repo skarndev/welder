@@ -44,19 +44,23 @@ src/welder/
       nanobind/rod.hpp      nanobind rod: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
       nanobind/module.hpp   the nanobind WELDER_MODULE entry-point macro
     lua/
-      overloads.hpp         Overload-set selectors shared by BOTH Lua rods — welder::rods::lua::{method,operator,function}_overload_set / is_overload_leader / overload_group; both gather a name's overloads (sol2 → sol::overload, luacats → ---@overload) because the driver visits overloads one at a time. Mirrors rods/python/doc_style.hpp.
+      overloads.hpp         Overload-set selectors shared by ALL Lua rods — welder::rods::lua::{method,operator,function}_overload_set / is_overload_leader / overload_group; all gather a name's overloads (sol2 → sol::overload, luabridge → variadic addFunction, luacats → ---@overload) because the driver visits overloads one at a time. Mirrors rods/python/doc_style.hpp.
+      metamethods.hpp       C++-operator → Lua metamethod NAME map shared by BOTH runtime Lua rods — welder::rods::lua::lua_metamethod_name (the asymmetric set: no __ne/__gt/__ge; ^→__bxor; 5.3-gated bitwise). sol2 pairs each name with its sol::meta_function slot; luabridge registers by the name string directly.
       sol2/rod.hpp          sol2 Lua rod: struct welder::rods::sol2::rod (emission primitives + protected _ helpers: constructor-set gathering, welded-base closure, overload registration), against sol2's API (module_type = sol::table; usertype/new_usertype; enums as name→value tables)
       sol2/module.hpp       the sol2 WELDER_MODULE entry-point macro (emits luaopen_<ns>)
-      sol2/metamethods.hpp  C++-operator → sol2/Lua metamethod map (welder::rods::sol2::operator_mm) split out of the sol2 rod — the sol2 analogue of rods/python/operators.hpp (Lua's asymmetric set: no __ne/__gt/__ge; ^→__bxor; 5.3-gated bitwise)
+      sol2/metamethods.hpp  C++-operator → sol2 metamethod SLOT map (welder::rods::sol2::operator_mm); sources the __name from the shared rods/lua/metamethods.hpp and adds the sol::meta_function slot
+      luabridge/rod.hpp     LuaBridge3 Lua rod: struct welder::rods::luabridge::rod (emission primitives + protected _ helpers), against LuaBridge3's move-based fluent registrar. module_type = a copyable {lua_State*, namespace-path} handle (re-open-by-path model); getGlobalNamespace/beginNamespace/beginClass/deriveClass; ctors via addConstructor + a `.new` factory static fn; enums as nested value namespaces; blanket Stack<Enum> spec. Includes <lua.hpp> before <LuaBridge/LuaBridge.h> itself.
+      luabridge/module.hpp  the LuaBridge3 WELDER_MODULE entry-point macro (emits luaopen_<ns>; builds under _G[ns], returns the table + clears the _G binding)
       luacats/rod.hpp       LuaCATS `---@meta` stub rod: text-emitting welder::rod over the SAME driver (no sol2/Lua dep); struct welder::rods::luacats::rod wires the type map + document assembler to the driver; ---@overload grouping; the whole-stub generate<^^Ns>(os) static
       luacats/module.hpp    the WELDER_LUACATS_MAIN generator-main() macro; include only for a stub-generator TU
       luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
       luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
-    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luacats
+    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats
 src/CMakeLists.txt      targets: welder::headers / welder::module
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
   WelderSol2Module.cmake       welder_sol2_add_module() — build a loadable Lua .so (bare name, host-symbol link model, module-scan OFF)
+  WelderLuaBridgeModule.cmake  welder_luabridge_add_module() — same, for the LuaBridge3 rod (links welder::luabridge)
   WelderLuaCATSStub.cmake      welder_luacats_generate_stub() — build a generator exe (welder::luacats) + run it → <name>.lua (ALL target)
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
@@ -240,13 +244,58 @@ the interesting part:
 - entry point: `WELDER_MODULE(ns, sol2)` (from `rods/lua/sol2/module.hpp`) emits
   `extern "C" luaopen_<ns>` returning the module table.
 
+The **LuaBridge3 (Lua)** rod is the second Lua runtime rod — same language, a very
+different framework, which is where the emission contract stretches in new ways:
+- **A move-based fluent registrar vs. the driver's stable handle.** LuaBridge3
+  registers through `getGlobalNamespace(L).beginNamespace(…).beginClass<T>(…)…` where
+  `beginClass`/`beginNamespace` *move-consume* their parent and only one registrar may
+  be "active". welder's driver instead holds a `module_type& m` and mutates class/module
+  handles across many separate `add_*` calls. The bridge is a **re-open-by-path** model:
+  `module_type` is a light, copyable `{lua_State*, namespace-path}`, and every emission
+  primitive re-walks the namespace chain in one chained expression and lets it unwind.
+  `beginNamespace` reuses an existing namespace table (no wipe) and `beginClass<T>`
+  re-opens a class preserving prior registration, so the repeated open/close is correct
+  (a few extra table lookups per member, at load time only).
+- **module_type is a named `_G` namespace.** LuaBridge3 registers into globals, so the
+  `luaopen_` macro builds the module under `_G[<ns>]`, returns that table, and clears the
+  `_G` binding (`require` wants a table, not a global). module_type is copyable
+  (no live stack ownership), and `add_submodule` just extends the path.
+- **caster oracle** reads `luabridge::detail::IsUserdata<T>` (true for any class type ⇒
+  needs registration); enums forced needs-registration, matching sol2.
+- **operators → metamethods by NAME string** (`addFunction("__add", …)`), from the shared
+  `rods/lua/metamethods.hpp`. **`operator[]` is special**: it maps to `__index`, which
+  LuaBridge3 reserves for member/property resolution, so it is registered as the
+  `addIndexMetaMethod` *fallback* (consulted first, returns nil for non-subscript keys so
+  member access still resolves). The fallback also coerces a stringified numeric key
+  (LuaBridge3's index metamethod runs `lua_tostring` on the key first).
+- **constructors, all at once** (like sol2) in `make_class`: `addConstructor<Sig…>()`
+  for the call form `T(…)` **plus** a variadic `.new` static function over `make_object`
+  factories for the idiomatic `T.new(…)` — the two forms sol2 also exposes; the driver's
+  per-constructor hooks are no-ops. Aggregates ride C++26 parenthesized init.
+- **inheritance: nearest welded ancestors** (like pybind11, *unlike* sol2's full closure)
+  via `deriveClass<T, Base…>` — LuaBridge3 chains `__index` transitively and computes each
+  base's cast offset. It supports **non-virtual** multiple inheritance but **not virtual
+  bases** (its cast-offset is plain pointer arithmetic that a virtual base breaks —
+  registering one crashes at load), so the shared *virtual* diamond is gated off for it
+  (like nanobind's single-inheritance gating).
+- **enums are nested value namespaces** (`E.Value` via `addVariable`); an unscoped enum's
+  names are also mirrored onto the module. A blanket `Stack<E> : Enum<E>` specialization
+  (in `namespace luabridge`, in the rod header) makes enums cross as integers.
+- **namespace variables** are *easier* than sol2: const → `addVariable` snapshot; mutable
+  → native `addProperty` get/set (no metatable proxy). `open_module`/`close_module` and the
+  session are no-ops.
+- entry point: `WELDER_MODULE(ns, luabridge)` (from `rods/lua/luabridge/module.hpp`).
+
 **Rod namespaces.** Each rod lives in `welder::rods::<name>` and exposes one struct,
 `rod`: `welder::rods::pybind11::rod` and `welder::rods::nanobind::rod` (both target
-`lang::py`), `welder::rods::sol2::rod` (target `lang::lua`). Inside the Python rods,
+`lang::py`), `welder::rods::sol2::rod` and `welder::rods::luabridge::rod` (both target
+`lang::lua`). Inside the Python rods,
 unqualified `pybind11` / `nanobind` would resolve to the rod namespace, so each
 aliases `namespace py = ::pybind11;` / `namespace nb = ::nanobind;` and uses `py::`
 / `nb::` throughout. `welder::rods::sol2` does *not* shadow the library's `::sol`
-namespace, so it uses `sol::` directly (no alias). The **`welder::rods::luacats::rod`**
+namespace, so it uses `sol::` directly (no alias); `welder::rods::luabridge` *would*
+shadow `::luabridge`, so it aliases `namespace lb = ::luabridge;` (like the Python rods).
+The **`welder::rods::luacats::rod`**
 stub rod also targets `lang::lua` (it emits the Lua *type stub*, so it reflects the
 same `weld(…, lang::lua)` types), but is a *build-time text emitter*, not a runtime
 binding — see below and `docs-and-doxygen.md`. (`welder::rods` is deliberately a
@@ -277,6 +326,18 @@ framework's own mechanisms, separately from core resolution — design pending.
   `LLONG_MAX` under p1689 module scanning — a header-unit macro-visibility issue, so
   a Lua binding TU is header-only, never `import welder;`). Gated by
   `WELDER_BUILD_SOL2`; needs `sol2` + `lua` (conan `with_sol2`).
+- **`welder::luabridge`** — INTERFACE, the LuaBridge3 Lua rod. Same host-symbol,
+  header-only story as `welder::sol2` (surfaces the LuaBridge3 + Lua headers, links no
+  `liblua`). Create an extension with `welder_luabridge_add_module()`
+  (cmake/WelderLuaBridgeModule.cmake). **LuaBridge3 has no Conan package and ships no
+  CMake config**, so it is provisioned at the top level as the `LuaBridge` target:
+  *consumers* bring their own via `find_package(LuaBridge3)` / `-DWELDER_LUABRIDGE_DIR`;
+  *our* build FetchContents a pinned commit (`WELDER_LUABRIDGE_GIT_TAG`, gated by
+  `WELDER_LUABRIDGE_FETCH`, default = building tests). Lua itself comes from the
+  system/user via its **own** version knobs — `WELDER_LUABRIDGE_LUA_VERSION` /
+  `WELDER_LUABRIDGE_LUA_DIR` (defaulting to the sol2 ones), since LuaBridge3 supports
+  newer Lua minors (5.5+) than sol2 can — with the same segfault-guarding minor check.
+  Gated by `WELDER_BUILD_LUABRIDGE`.
 - **`welder::luacats`** — INTERFACE, the LuaCATS `---@meta` stub rod. Unlike the
   runtime rods it depends on neither a framework nor a language runtime (pure
   reflection → text), so it is **unconditional** — just `welder::headers`. Emit a

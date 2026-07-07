@@ -33,16 +33,17 @@ core `<welder/welder.hpp>`). We deliberately do *not* modularize internally — 
 `.claude/context/gcc16-toolchain.md` for why.
 
 **Status:** early POC, verified end-to-end (both consumption forms → an importable
-Python module; a `require`-able Lua module). Three *runtime* rods are implemented —
-two **Python** (**pybind11**, **nanobind**) and one **Lua** (**sol2**) — all
-sharing the same core and the *same* backend-neutral C++ test cases, which each rod
-binds and asserts (pytest for Python, `.lua` for Lua) as a cross-rod consistency
-check. A fourth, **`welder::rods::luacats::rod`**, is a *build-time* rod that
-reflects the same welded Lua types through the same driver and emits a **LuaCATS
-(`---@meta`) stub file** — the Lua analogue of the Python `.pyi` stubs, carrying
-the docstrings Lua has no runtime slot for. Further languages are designed-for but
-not yet implemented. For the feature-by-feature detail and test locations, see the
-context files below.
+Python module; a `require`-able Lua module). Four *runtime* rods are implemented —
+two **Python** (**pybind11**, **nanobind**) and two **Lua** (**sol2**,
+**LuaBridge3**) — all sharing the same core and the *same* backend-neutral C++ test
+cases, which each rod binds and asserts (pytest for Python, busted `.lua` specs for
+Lua) as a cross-rod consistency check. The two Lua rods run the *same* busted specs
+(selected by `WELDER_TEST_LUA_MODULE`). A fifth, **`welder::rods::luacats::rod`**, is
+a *build-time* rod that reflects the same welded Lua types through the same driver and
+emits a **LuaCATS (`---@meta`) stub file** — the Lua analogue of the Python `.pyi`
+stubs, carrying the docstrings Lua has no runtime slot for. Further languages are
+designed-for but not yet implemented. For the feature-by-feature detail and test
+locations, see the context files below.
 
 ## The idea / public API
 
