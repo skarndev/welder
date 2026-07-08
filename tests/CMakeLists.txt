@@ -3,6 +3,14 @@
 # their pytest specs live under python/, the Lua backend + its busted specs under
 # lua/. The C++ cases are shared across all three backends (welded for both
 # lang::py and lang::lua) as a cross-backend consistency check.
+# The type-level cases (test_types.mypy-testing) assert mypy's exact reveal_type
+# spelling, which is pinned to a specific mypy (2.x). Turn them off where that mypy
+# can't be installed — notably the mingw python, where mypy 2.x won't build (its
+# Rust build dep has no mingw wheel). The stubs those cases check are byte-identical
+# across platforms (same pybind11-stubgen), so Linux/macOS cover them fully; Windows
+# still runs stubcheck (stub well-formedness) and the behavioral specs.
+option(WELDER_TEST_TYPINGCASES "Run the mypy-version-sensitive type-level cases" ON)
+
 find_program(UV_EXECUTABLE uv)
 
 # A ready-made interpreter already carrying the test deps (pytest, mypy,

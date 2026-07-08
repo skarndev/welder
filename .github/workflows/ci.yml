@@ -111,6 +111,7 @@ jobs:
             mingw-w64-ucrt-x86_64-python-conan
             mingw-w64-ucrt-x86_64-python-pip
             mingw-w64-ucrt-x86_64-python-pytest
+            mingw-w64-ucrt-x86_64-mypy
             mingw-w64-ucrt-x86_64-python-lark-parser
 
       - name: Toolchain versions
@@ -122,19 +123,18 @@ jobs:
 
       - name: Prepare Python test deps
         # uv can't manage the mingw python ("Unknown operating system: mingw_..."),
-        # so install the test deps into it directly. pytest/lark come from pacman
-        # above; the rest via pip. mypy is pinned to the same version the uv.lock
-        # env uses (2.1.0) — NOT pacman's, whose older reveal_type spelling
-        # ("builtins.int" vs 2.1's "int") fails the type-level cases. MYPY_USE_MYPYC=0
-        # keeps it a pure-Python (no-compile) install. The base mingw python then
-        # serves as the test interpreter — its ABI matches the gcc-built extensions —
-        # handed to the harness via WELDER_TEST_VENV_PYTHON (which bypasses uv). (No
-        # venv: MSYS2's venv layout varies and a bin/python without .exe won't run
-        # under native CTest.)
+        # so install the test deps into it directly. pytest/mypy/lark come from
+        # pacman above (no source builds); pip adds only the two pure-Python extras.
+        # (mypy is pacman's 1.19.x — the pinned mypy 2.x can't build here, its Rust
+        # build dep has no mingw wheel; the type-level cases that need 2.x's exact
+        # reveal_type spelling are turned off below via WELDER_TEST_TYPINGCASES.)
+        # The base mingw python then serves as the test interpreter — its ABI matches
+        # the gcc-built extensions — handed to the harness via WELDER_TEST_VENV_PYTHON
+        # (which bypasses uv). (No venv: MSYS2's venv layout varies and a bin/python
+        # without .exe won't run under native CTest.)
         run: |
           set -euo pipefail
-          MYPY_USE_MYPYC=0 python -m pip install --break-system-packages --quiet \
-            "mypy==2.1.0" \
+          python -m pip install --break-system-packages --quiet \
             pytest-mypy-testing \
             "pybind11-stubgen @ git+https://github.com/pybind/pybind11-stubgen@main"
           echo "WELDER_TEST_VENV_PYTHON=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")" \
@@ -165,6 +165,7 @@ jobs:
             -DWELDER_PYTHON_VERSION="$PYVER" \
             -DPython_EXECUTABLE="$PYEXE" \
             -DWELDER_TEST_VENV_PYTHON="$WELDER_TEST_VENV_PYTHON" \
+            -DWELDER_TEST_TYPINGCASES=OFF \
             -DWELDER_BUILD_SOL2=OFF \
             -DWELDER_BUILD_LUABRIDGE=OFF
           # The Python rods run their full specs + stubs here against the mingw-ABI

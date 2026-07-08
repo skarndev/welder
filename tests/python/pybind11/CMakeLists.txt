@@ -89,7 +89,7 @@ endforeach()
 # `welder_test` and asserts revealed types, so a wrong stub type fails. Expose the
 # generated stubs under that canonical name (rename-safe — the tree uses only
 # relative imports) and run the shared cases against them via pytest-mypy-testing.
-if(WELDER_BUILD_STUBS)
+if(WELDER_BUILD_STUBS AND WELDER_TEST_TYPINGCASES)
   set(_canon_stubs ${CMAKE_CURRENT_BINARY_DIR}/typing-stubs)
   add_custom_command(TARGET welder_test_pybind11 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${_canon_stubs}/welder_test

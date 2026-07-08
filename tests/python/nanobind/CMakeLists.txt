@@ -110,7 +110,7 @@ endforeach()
 # POST_BUILD (not the extension's): nanobind generates stubs in a separate custom
 # target that only DEPENDS on the extension, so copying from the extension's
 # POST_BUILD could race ahead of stub generation.
-if(WELDER_BUILD_STUBS)
+if(WELDER_BUILD_STUBS AND WELDER_TEST_TYPINGCASES)
   set(_canon_stubs ${CMAKE_CURRENT_BINARY_DIR}/typing-stubs)
   add_custom_command(TARGET welder_test_nanobind_stub POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${_canon_stubs}/welder_test
