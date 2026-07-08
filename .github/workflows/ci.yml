@@ -103,14 +103,14 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-lua
             mingw-w64-ucrt-x86_64-python
-            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-conan
 
-      - name: Install Conan + uv
+      - name: Toolchain versions
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install conan uv
           gcc --version
+          conan --version
+          python --version
 
       - name: Cache Conan packages
         uses: actions/cache@v4
@@ -127,10 +127,15 @@ jobs:
       - name: Configure
         run: |
           set -euo pipefail
+          # The project defaults WELDER_PYTHON_VERSION to 3.14, but MSYS2 ships an
+          # earlier minor; match find_package(Python) to the mingw interpreter so
+          # the extensions build against (and would import in) the same ABI.
+          PYVER=$(python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')")
           cmake --preset welder-gcc16 \
+            -DWELDER_PYTHON_VERSION="$PYVER" \
+            -DPython_EXECUTABLE="$(which python)" \
             -DWELDER_LUA_DIR="$MSYSTEM_PREFIX" \
-            -DWELDER_LUABRIDGE_LUA_DIR="$MSYSTEM_PREFIX" \
-            -DPython_EXECUTABLE="$(which python)"
+            -DWELDER_LUABRIDGE_LUA_DIR="$MSYSTEM_PREFIX"
 
       - name: Build
         run: cmake --build --preset welder-gcc16
