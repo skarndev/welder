@@ -1,0 +1,5 @@
+# Normalize line endings to LF on checkout across all platforms. welder is
+# developed on macOS/Linux and has byte-exact text goldens (the Doxygen filter
+# corpus/expected files, the LuaCATS stub golden); a CRLF checkout on Windows
+# breaks the byte compare (and the filter's lark parse), so pin LF everywhere.
+* text=auto eol=lf
