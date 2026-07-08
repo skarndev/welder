@@ -5,6 +5,18 @@
 # lang::py and lang::lua) as a cross-backend consistency check.
 find_program(UV_EXECUTABLE uv)
 
+# Interpreter uv builds the test env from. Default: a uv-managed CPython of
+# WELDER_PYTHON_VERSION (uv rejects the build's Homebrew framework Python — its
+# platform.mac_ver() is empty — and that's fine: our extensions load in any
+# ABI-compatible CPython of the same minor via dynamic symbol lookup). Override it
+# where the managed CPython is the *wrong ABI* for the built extensions: on
+# Windows/mingw a gcc-built .pyd can't be imported by uv's MSVC-ABI managed
+# CPython, so point this at the mingw python that find_package(Python) built them
+# with (uv then syncs from that system interpreter).
+set(WELDER_TEST_PYTHON "" CACHE FILEPATH
+  "System python uv builds the test env from; empty = a uv-managed CPython of \
+WELDER_PYTHON_VERSION")
+
 # Handed down to the language subdirectories. WELDER_TEST_VENV_PYTHON stays empty
 # if the uv env can't be prepared: backends then still *build* their extensions
 # (a compile check) but skip registering CTest entries. WELDER_TEST_COMMON_CPP is
@@ -18,19 +30,24 @@ set(WELDER_TEST_VENV_PYTHON "")
 if(NOT UV_EXECUTABLE)
   message(WARNING "welder: 'uv' not found; Python tests will be skipped.")
 else()
-  # Prepare the (shared) uv environment once. We deliberately use uv's managed
-  # CPython rather than the build's Homebrew framework Python: uv rejects the
-  # latter (its platform.mac_ver() is empty). That's fine for importing our
-  # extensions — on macOS they use dynamic symbol lookup (no libpython link), so
-  # they load in any ABI-compatible CPython of the same minor (WELDER_PYTHON_VERSION).
-  message(STATUS "welder: syncing uv test environment (Python ${WELDER_PYTHON_VERSION})...")
+  if(WELDER_TEST_PYTHON)
+    set(_uv_python --python ${WELDER_TEST_PYTHON} --python-preference only-system)
+    message(STATUS "welder: syncing uv test environment (system ${WELDER_TEST_PYTHON})...")
+  else()
+    set(_uv_python --python ${WELDER_PYTHON_VERSION} --python-preference only-managed)
+    message(STATUS "welder: syncing uv test environment (Python ${WELDER_PYTHON_VERSION})...")
+  endif()
   execute_process(
-    COMMAND ${UV_EXECUTABLE} sync --project ${WELDER_TEST_PYDIR}
-            --python ${WELDER_PYTHON_VERSION} --python-preference only-managed
+    COMMAND ${UV_EXECUTABLE} sync --project ${WELDER_TEST_PYDIR} ${_uv_python}
     RESULT_VARIABLE _uv_res
     OUTPUT_VARIABLE _uv_out ERROR_VARIABLE _uv_out)
   if(_uv_res EQUAL 0)
-    set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/bin/python)
+    # uv lays the venv out per-OS: Scripts/ on Windows, bin/ elsewhere.
+    if(WIN32)
+      set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/Scripts/python.exe)
+    else()
+      set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/bin/python)
+    endif()
   else()
     message(WARNING "welder: 'uv sync' failed; Python tests will be skipped:\n${_uv_out}")
   endif()

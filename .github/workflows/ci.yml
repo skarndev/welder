@@ -109,6 +109,7 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-conan
+            mingw-w64-ucrt-x86_64-uv
 
       - name: Toolchain versions
         run: |
@@ -139,15 +140,16 @@ jobs:
           cmake --preset welder-gcc16 \
             -DWELDER_PYTHON_VERSION="$PYVER" \
             -DPython_EXECUTABLE="$(which python)" \
+            -DWELDER_TEST_PYTHON="$(which python)" \
             -DWELDER_BUILD_SOL2=OFF \
-            -DWELDER_BUILD_LUABRIDGE=OFF \
-            -DWELDER_BUILD_STUBS=OFF
-          # TODO(windows-lua): port the loadable Lua module link model (macOS uses
-          #   -undefined dynamic_lookup) and source a Lua 5.4 for sol2, then re-enable
-          #   WELDER_BUILD_SOL2 / WELDER_BUILD_LUABRIDGE (+ lua-luarocks busted specs).
-          # TODO(windows-pytest): add a mingw-ABI pytest path so the Python runtime
-          #   specs run (uv's managed CPython is MSVC-ABI and can't import a mingw .pyd),
-          #   then re-enable WELDER_BUILD_STUBS.
+            -DWELDER_BUILD_LUABRIDGE=OFF
+          # The Python rods run their full specs + stubs here: uv builds the test
+          # env from the mingw python (WELDER_TEST_PYTHON), so the gcc-built .pyd
+          # imports cleanly (uv's managed CPython would be MSVC-ABI).
+          # TODO(windows-lua): the Lua runtime rods are still off — port the loadable
+          #   Lua module link model for Windows PE and provision a runtime Lua, then
+          #   re-enable WELDER_BUILD_LUABRIDGE (+ lua-luarocks busted specs). sol2
+          #   stays off on Windows: ucrt64 ships only Lua 5.5, which sol2 3.5.0 rejects.
 
       - name: Build
         run: cmake --build --preset welder-gcc16
