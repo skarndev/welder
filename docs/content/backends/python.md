@@ -71,11 +71,41 @@ differ:
 | `.pyi` stub generation | via `pybind11-stubgen` | **bundled** `nanobind_add_stub` |
 | Self-contained caster escape hatch | `PYBIND11_TYPE_CASTER` | `NB_TYPE_CASTER` |
 | Runtime footprint | larger | smaller / faster |
+| Stable-ABI (`abi3`) build — one `.pyd` across Python minors **and** compilers | ❌ | ✅ `WELDER_NANOBIND_STABLE_ABI` |
 
 The one behavioral gap to plan around is **inheritance**: `nb::class_<T, Base>` takes
 a single base, so a multi-base or diamond type binds under pybind11 but not nanobind.
 welder's shared inheritance test guards the diamond case behind
 `WELDER_TEST_MULTIPLE_INHERITANCE` for exactly this reason.
+
+!!! tip "Windows: build nanobind against the stable ABI to load in a stock CPython"
+
+    welder currently compiles only with **gcc-16** (the sole compiler with P2996
+    reflection). On Windows that means MinGW gcc — and a normal MinGW-built `.pyd`
+    **cannot be imported by a stock MSVC-built CPython** (e.g. the official
+    python.org interpreter), because it links a version- and compiler-specific
+    `pythonXY.dll`.
+
+    nanobind's **stable ABI (`abi3`)** bridges that gap: enable
+    `-DWELDER_NANOBIND_STABLE_ABI=ON` and the extension is built against
+    `Py_LIMITED_API`, linking `python3.dll` instead. The limited API is a **C ABI**,
+    so the resulting `.pyd` loads both **across Python minors** *and* **across the
+    GCC/MSVC boundary** — a UCRT-MinGW gcc build imports cleanly into a stock MSVC
+    CPython. This is the practical way to distribute a welder binding on Windows
+    today, and it is **nanobind-only** — pybind11 has no `abi3` equivalent.
+
+    Requirements and notes:
+
+    - Python **≥ 3.12** and CMake **≥ 3.26** (`Development.SABIModule`); below 3.12
+      nanobind silently ignores `STABLE_ABI`.
+    - On MinGW, also statically fold in the gcc runtimes so the `.pyd` is
+      self-contained (`target_link_options(<mod> PRIVATE -static -static-libgcc
+      -static-libstdc++)` — no `libstdc++-6.dll` etc. on the host's PATH), and put
+      `-O2` on the binding TU (`target_compile_options(<mod> PRIVATE -O2)`) to
+      sidestep a gcc-16.1 `-Os` codegen bug on `std::string`'s move constructor.
+    - welder's CI proves this end to end: the `windows-abi3` job builds the nanobind
+      bindings with UCRT-MinGW gcc, then imports the `.pyd` under a stock MSVC
+      CPython and runs the full spec suite.
 
 ## Operators become dunders
 
