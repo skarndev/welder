@@ -284,8 +284,25 @@ jobs:
           fi
           echo "OK: abi3 (python3.dll) + self-contained"
 
-      # The decisive check: run welder's shared nanobind specs under the MSVC
-      # CPython, importing the mingw-built abi3 .pyd.
+      # Prove — unambiguously, outside msys2 — that the importer is the MSVC-built
+      # CPython (not the mingw python): assert 'MSC' is in sys.version, then import
+      # the mingw-built abi3 .pyd under it.
+      - name: Prove the importer is MSVC CPython
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "$PWD\build\welder-gcc16\tests\python\nanobind"
+          & "${{ steps.py.outputs.python-path }}" -c @"
+          import sys
+          print('interpreter:', sys.executable)
+          print('version    :', sys.version)
+          assert 'MSC' in sys.version, 'importer is NOT an MSVC build: ' + sys.version
+          import welder_test_nanobind as m
+          print('imported   :', m.__file__)
+          "@
+
+      # The decisive check: run welder's shared nanobind specs under that same MSVC
+      # CPython, importing the mingw-built abi3 .pyd. WELDER_TEST_VENV_PYTHON was set
+      # to the setup-python interpreter, so ctest runs `<MSVC python> -m pytest`.
       - name: Run nanobind specs under the MSVC CPython
         shell: msys2 {0}
         run: ctest --preset welder-gcc16 -R '^pytest.welder_test_nanobind$' --output-on-failure
