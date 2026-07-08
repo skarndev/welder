@@ -17,12 +17,12 @@ rod builds against and its tests run with; `WELDER_PYTHON_VERSION` (default
 `3.14`) feeds `find_package(Python …)` + `uv sync --python`. Point `CMAKE_PREFIX_PATH`
 / these vars at your own installs to override the conan defaults.
 
-Both example Python modules are then importable:
+The example Python module is then importable:
 ```bash
 PYTHONPATH=build/welder-gcc16/examples/python_poc \
   python3 -c "import welder_poc as w; p=w.Point(); p.x=1.5; print(p.x)"
-PYTHONPATH=build/welder-gcc16/examples/python_poc_headeronly \
-  python3 -c "import welder_poc_ho as w; print(hasattr(w.Label(), 'cache'))"  # False
+PYTHONPATH=build/welder-gcc16/examples/python_poc \
+  python3 -c "import welder_poc as w; print(hasattr(w.Label(), 'cache'))"  # False
 ```
 
 The Lua example (`examples/lua_poc` → `shapes_lua.so`) is a `require`-able module
@@ -41,8 +41,8 @@ NOT from conan** — `src/welder/rods/CMakeLists.txt` finds it with CMake's buil
 extension is created with `welder_sol2_add_module(<name> <sources>)`
 (cmake/WelderSol2Module.cmake): bare `<name>.so`, host-symbol link model, and
 **`CXX_SCAN_FOR_MODULES OFF`** (sol2's `<luaconf.h>` fails p1689 module scanning — a
-header-unit macro-visibility issue with `LLONG_MAX`; so a Lua TU is header-only,
-never `import welder;`). Gated by `WELDER_BUILD_SOL2` (default ON).
+header-unit macro-visibility issue with `LLONG_MAX`; a Lua TU is header-only
+regardless). Gated by `WELDER_BUILD_SOL2` (default ON).
 
 **Lua-version matching (important):** the module is built against `WELDER_LUA_DIR`'s
 headers and loads its `lua_*` from the *host* interpreter; Lua has NO cross-minor ABI
@@ -180,12 +180,13 @@ naming test; see the feature list below). Only the genuinely rod-specific case f
 (`trust.hpp` hand-registration, `caster.hpp` type_caster) are per-rod, under
 `tests/python/{pybind11,nanobind}/cpp/`.
 
-**Python trees** (`tests/python/`): uv + pytest + CTest; each extension is
-dual-variant (module + header-only). The behavioral specs (`test_*.py` +
-`conftest.py`) are backend-agnostic and select the module at runtime via
-`WELDER_TEST_MODULE`, so the same specs run against pybind11 *and* nanobind. The uv
-env is still prepared by the top `tests/CMakeLists.txt` (the doxyfilter tests also
-use it for `lark`) but manages the pyproject that now lives in `python/`.
+**Python trees** (`tests/python/`): uv + pytest + CTest; welder is header-only, so
+each backend builds a single extension (consuming `<welder/vocabulary.hpp>`). The
+behavioral specs (`test_*.py` + `conftest.py`) are backend-agnostic and select the
+module at runtime via `WELDER_TEST_MODULE`, so the same specs run against pybind11
+*and* nanobind. The uv env is still prepared by the top `tests/CMakeLists.txt` (the
+doxyfilter tests also use it for `lark`) but manages the pyproject that now lives in
+`python/`.
 
 **Lua tree** (`tests/lua/`): **busted** (installed via luarocks, nothing vendored —
 see the sol2 section above) is the Lua counterpart of uv+pytest. The shared
@@ -212,7 +213,7 @@ package — `stubgen.py` is stdlib-only on Python ≥3.11, run via the build's
 `Python_EXECUTABLE`, which loads the extension by dynamic lookup), then
 `stubcheck.*` runs mypy over it. The `typingcases.*` type-level gate
 (`test_types.mypy-testing`, run via pytest-mypy-testing) now runs against **both**
-rods: each copies its module-form stub tree to the canonical name `welder_test`
+rods: each copies its generated stub tree to the canonical name `welder_test`
 on `MYPYPATH` and asserts the same revealed types — rename-safe because both stub
 trees use only relative imports. (nanobind's copy hangs off its stub *target*'s
 POST_BUILD, since its stubs are a separate custom target.) Key locations by feature:

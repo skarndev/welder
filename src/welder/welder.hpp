@@ -32,9 +32,8 @@
     want to automate (a single type, a namespace into an existing module, a
     namespace as a fresh submodule, or a whole module).
 
-    Provide the vocabulary first — `import welder;` or
-    `#include <welder/vocabulary.hpp>` — then this header (each backend header
-    includes it for you).
+    Provide the vocabulary first — `#include <welder/vocabulary.hpp>` — then this
+    header (each backend header includes it for you).
 */
 
 namespace welder {

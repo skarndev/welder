@@ -12,30 +12,35 @@ extensions, so MSVC/Clang can be added once they catch up.
 - Packages: Conan 2 (`conanfile.py`) → pybind11
 - Python: Homebrew python3 (for the pybind11 module + Python.h)
 
-## The module-vs-header boundary (important, gcc-16 specific)
+## Header-only for now, and the vocabulary boundary (important, gcc-16 specific)
 
-The **`welder` module exports only the std-free vocabulary** (`lang`,
-`annotations`); reflection (`reflect.hpp`) and rods are header-only and **not**
-part of the module. Why: on gcc-16, any std header in a module unit's purview/GMF
-(even `<cstdint>`) makes every consumer that both `import`s it and textually
-`#include`s std headers fail with `conflicting imported declaration` errors (e.g.
-`std::wstreampos`/`__mbstate_t`) — and `<meta>`/pybind11 include std textually. So
-vocabulary stays std-free; anything touching `<meta>`/pybind11 stays a header.
-Partitioning doesn't help — it's std-in-purview, not partitioning. (Empirical;
-revisit if gcc fixes module/std merging or pybind11 becomes importable.)
-Re-confirmed 2026-07-07 now that `import std;` works: switching a std-carrying
-module to `import std;` in its purview (instead of textual GMF includes) does
-**not** rescue the pybind consumer — it still conflicts under `-freflection`
-(the amplifier; see gotchas). Only a genuinely **std-free** module survives a
-`-freflection` pybind TU. So the boundary rule is unchanged.
-Consequently `reflect.hpp`/rods do **not** include the vocabulary headers
-(that would redeclare what `import welder;` provides): provide the vocabulary first
-(`import welder;` *or* `#include <welder/vocabulary.hpp>`), then the rod header.
+**welder ships header-only.** The optional C++20 `import welder;` module wrapper
+(`welder.cppm` + the `welder::module` target) was **removed** — it worked only in
+gcc-16's experimental `-freflection` mode, and even there the module path conflicts
+with a real pybind11 TU (below). No new compiler consumes it (Clang has only an
+experimental P2996 fork; MSVC none). The user-facing writeup is
+`docs/content/guide/header-only.md`. Reintroduce the wrapper once (a) a released
+gcc-16 carries the PR123810 backport and PR99000 is resolved, and (b) Clang or MSVC
+implements P2996 so a module is portable.
 
-This is also why welder does **not** modularize internally (no partitions, no
-per-component units): header-only is the source of truth and the fallback. The core
-has two equivalent forms — `import welder;` *or* `#include <welder/vocabulary.hpp>`;
-rods are always header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
+The **vocabulary/`<meta>` split is kept anyway** so the wrapper can return unchanged:
+`lang.hpp` + `annotations.hpp` stay std-free (module-ready); reflection
+(`reflect.hpp`) and rods are the `<meta>`-using headers. Why the split matters: on
+gcc-16, any std header in a module unit's purview/GMF (even `<cstdint>`) makes every
+consumer that both `import`s it and textually `#include`s std headers fail with
+`conflicting imported declaration` errors (e.g. `std::wstreampos`/`__mbstate_t`) —
+and `<meta>`/pybind11 include std textually. Partitioning doesn't help — it's
+std-in-purview, not partitioning. Re-confirmed 2026-07-07 now that `import std;`
+works: switching a std-carrying module to `import std;` in its purview does **not**
+rescue the pybind consumer — it still conflicts under `-freflection` (the amplifier;
+see gotchas). Only a genuinely **std-free** module survives a `-freflection` pybind
+TU.
+
+Consequently `reflect.hpp`/rods do **not** include the vocabulary headers (that would
+redeclare them): provide the vocabulary first (`#include <welder/vocabulary.hpp>`),
+then the rod header. welder also does **not** modularize internally (no partitions,
+no per-component units) — header-only is the source of truth. Rods are always
+header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
 
 ## Toolchain gotchas
 

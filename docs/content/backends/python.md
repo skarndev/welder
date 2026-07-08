@@ -133,8 +133,8 @@ Both are mypy-checked in welder's own tests.
 
     Python_add_library(shapes MODULE WITH_SOABI example.cpp)
     target_compile_features(shapes PRIVATE cxx_std_26)
-    # welder::module -> `import welder;`   welder::pybind11 -> the pybind11 rod
-    target_link_libraries(shapes PRIVATE welder::module welder::pybind11)
+    # welder::headers -> the header-only core   welder::pybind11 -> the pybind11 rod
+    target_link_libraries(shapes PRIVATE welder::headers welder::pybind11)
     ```
 
     (`welder::pybind11` is a small INTERFACE target: welder headers + `pybind11::headers`
@@ -159,6 +159,5 @@ Both are mypy-checked in welder's own tests.
     headers — the runtime, visibility and link flags come from `nanobind_add_module`.
     Gated by `WELDER_BUILD_NANOBIND`; conan package `nanobind/2.13.0`.)
 
-Because both consume the vocabulary, either can `import welder;` (the module form) or
-`#include <welder/vocabulary.hpp>` (header-only) — provide the vocabulary before the
-rod header. See [the two consumption forms](../guide/getting-started.md#two-consumption-forms).
+Both consume the vocabulary the same way: `#include <welder/vocabulary.hpp>` before
+the rod header (welder is [header-only](../header-only.md) for now).

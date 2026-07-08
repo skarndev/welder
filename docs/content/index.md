@@ -16,7 +16,7 @@ to and *which members* participate; welder reflects over it at **compile time** 
 emits the binding registration code (e.g. pybind11 `class_<T>` calls) directly.
 
 ```cpp
-import welder;                              // annotation vocabulary
+#include <welder/vocabulary.hpp>            // annotation vocabulary
 #include <pybind11/pybind11.h>
 #include <welder/rods/python/pybind11/rod.hpp>     // the pybind11 rod
 

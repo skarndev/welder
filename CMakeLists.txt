@@ -1,11 +1,13 @@
-cmake_minimum_required(VERSION 3.28) # FILE_SET CXX_MODULES
+cmake_minimum_required(VERSION 3.28)
 project(welder VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(WELDER_BUILD_MODULE "Build the importable `welder` C++20 module wrapper" ON)
+# welder ships header-only for now — the optional C++20 module wrapper was removed
+# until the gcc-16 -freflection/modules bugs are fixed and other toolchains catch
+# up (see docs "Header-only for now").
 option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
 option(WELDER_BUILD_NANOBIND "Build the nanobind Python backend" ON)
 option(WELDER_BUILD_SOL2 "Build the sol2 Lua backend" ON)

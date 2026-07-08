@@ -19,8 +19,7 @@
 
     @note Like `<welder/reflect.hpp>`, this depends on the welder vocabulary
     (`lang`, `policy_kind`, …) but does NOT include `<welder/annotations.hpp>`:
-    provide the vocabulary first (`import welder;` or `#include
-    <welder/vocabulary.hpp>`), then this.
+    provide the vocabulary first (`#include <welder/vocabulary.hpp>`), then this.
 */
 
 namespace welder::detail {

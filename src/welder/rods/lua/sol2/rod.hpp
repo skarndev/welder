@@ -14,8 +14,7 @@
     `sol::state_view` over the *borrowed* `lua_State*` (welder does not own the
     interpreter).
 
-    Requires the welder vocabulary to be available first, via either `import
-    welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`).
     This header exposes exactly one thing: the rod type
     `welder::rods::sol2::rod`, to plug into `welder::welder`:
     @code

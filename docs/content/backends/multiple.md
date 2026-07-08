@@ -79,13 +79,12 @@ entry macro:
     WELDER_LUACATS_MAIN(shapes)          // generates shapes.lua at build time
     ```
 
-!!! tip "Use the header-only vocabulary in the shared header"
+!!! tip "Bring in the vocabulary from the shared header"
 
-    `shapes.hpp` includes `<welder/vocabulary.hpp>` (header-only), not `import welder;`.
-    That single choice lets *every* rod TU include it — the Lua rod
-    [cannot use the module form](lua.md#building-a-loadable-module), and header-only
-    works for the Python rods too. This is exactly how welder's own tests reuse
-    one C++ case tree across all rods.
+    `shapes.hpp` includes `<welder/vocabulary.hpp>`. welder is
+    [header-only](../header-only.md) today, so that one include serves *every*
+    rod TU — the Python rods and the Lua rod alike. This is exactly how welder's own
+    tests reuse one C++ case tree across all rods.
 
 ## CMake: one library, several modules
 

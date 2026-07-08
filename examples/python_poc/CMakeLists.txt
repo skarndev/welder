@@ -1,4 +1,5 @@
-# Builds an importable Python extension module from an annotated struct.
+# Builds an importable Python extension module from an annotated struct, consuming
+# welder header-only (welder::headers + the pybind11 rod).
 #
 # CMake-native Python_add_library + pybind11::headers (rather than
 # pybind11_add_module) because pybind11 2.13's CMake helper is incompatible with
@@ -9,8 +10,7 @@ find_package(pybind11 REQUIRED)
 
 Python_add_library(welder_poc MODULE WITH_SOABI example.cpp)
 target_compile_features(welder_poc PRIVATE cxx_std_26)
-# welder::module  -> `import welder;`   welder::pybind11 -> the pybind11 backend
-target_link_libraries(welder_poc PRIVATE welder::module welder::pybind11)
+target_link_libraries(welder_poc PRIVATE welder::headers welder::pybind11)
 
 # Opt-in .pyi stubs (see examples/CMakeLists.txt for WELDER_STUBGEN_PYTHON).
 if(WELDER_BUILD_STUBS AND WELDER_STUBGEN_PYTHON)

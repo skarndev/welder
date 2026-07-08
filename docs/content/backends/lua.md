@@ -79,12 +79,13 @@ target_link_libraries(shapes PRIVATE welder::headers)
 The target name must match the namespace token in `WELDER_MODULE(shapes, sol2)` so
 `luaopen_shapes` is the loaded entry point.
 
-!!! note "Header-only consumption only"
+!!! note "Header-only consumption"
 
-    A Lua binding TU consumes welder **header-only** (`#include
-    <welder/vocabulary.hpp>`), not `import welder;`: sol2's `<luaconf.h>` does not
-    survive C++20 module dependency scanning. `welder_sol2_add_module` disables the
-    scan for you (`CXX_SCAN_FOR_MODULES OFF`).
+    welder is [header-only](../header-only.md) today, so a Lua binding TU
+    brings the vocabulary in with `#include <welder/vocabulary.hpp>`. Even if the
+    planned `import welder;` module wrapper lands, a Lua TU could not use it: sol2's
+    `<luaconf.h>` does not survive C++20 module dependency scanning.
+    `welder_sol2_add_module` disables the scan for you (`CXX_SCAN_FOR_MODULES OFF`).
 
 !!! warning "Match the Lua minor version"
 

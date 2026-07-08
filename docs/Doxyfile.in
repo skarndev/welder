@@ -22,8 +22,6 @@ INPUT                  = @WELDER_SRC@ \
 RECURSIVE              = YES
 FILE_PATTERNS          = *.hpp *.md
 USE_MDFILE_AS_MAINPAGE = @DOXYGEN_MAINPAGE@
-# The C++20 module unit is not Doxygen-parseable and only re-exports vocabulary.
-EXCLUDE_PATTERNS       = */welder.cppm
 
 # Read welder annotations via the INPUT_FILTER (needs a Python with `lark`).
 INPUT_FILTER           = "@WELDER_FILTER_PYTHON@ @WELDER_FILTER@"
@@ -50,9 +48,7 @@ BUILTIN_STL_SUPPORT    = YES
 ENABLE_PREPROCESSING   = YES
 MACRO_EXPANSION        = YES
 EXPAND_ONLY_PREDEF     = YES
-# Strip the module-export marker so it doesn't shadow the following declaration.
-PREDEFINED             = "WELDER_EXPORT=" \
-                         "__cpp_reflection=1"
+PREDEFINED             = "__cpp_reflection=1"
 
 # --- Diagnostics: internals are intentionally under-documented ---------------
 QUIET                  = YES

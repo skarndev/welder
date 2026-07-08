@@ -39,28 +39,22 @@ welding rod — the backend that lays a framework's bindings down):
   its framework. It never re-implements the traversal or the annotation semantics.
   You drive it through one entry point, `welder::welder<Rod>`.
 
-Everything you write lives in the annotations; the two consumption forms are
-equivalent:
+Everything you write lives in the annotations. welder ships **header-only**, so a
+consuming TU brings the vocabulary in with a single include:
 
-=== "Module (`import welder;`)"
-
-    ```cpp
-    import welder;
-    #include <pybind11/pybind11.h>
-    #include <welder/rods/python/pybind11/rod.hpp>
-    ```
-
-=== "Header-only"
-
-    ```cpp
-    #include <welder/vocabulary.hpp>
-    #include <pybind11/pybind11.h>
-    #include <welder/rods/python/pybind11/rod.hpp>
-    ```
+```cpp
+#include <welder/vocabulary.hpp>
+#include <pybind11/pybind11.h>
+#include <welder/rods/python/pybind11/rod.hpp>
+```
 
 !!! note "Order matters"
 
-    The vocabulary must arrive **first** — via `import welder;` *or*
-    `#include <welder/vocabulary.hpp>` — *then* the rod header. The rod header
-    (which pulls in `<meta>` and pybind11) deliberately does not redeclare the
-    vocabulary. See [the module/header boundary](../architecture.md#the-module-vs-header-boundary).
+    The vocabulary must arrive **first** — `#include <welder/vocabulary.hpp>` —
+    *then* the rod header. The rod header (which pulls in `<meta>` and pybind11)
+    deliberately does not redeclare the vocabulary.
+
+!!! info "Header-only, for now"
+
+    An `import welder;` C++20 module wrapper is planned but currently deferred —
+    see [Header-only for now](../header-only.md) for the toolchain reasons why.

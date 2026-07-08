@@ -7,10 +7,9 @@
     predicates and never re-implement the annotation semantics.
 
     @note This header depends on the welder vocabulary (`welder::weld_spec`,
-    `lang`, …) but deliberately does NOT include `<welder/annotations.hpp>`: the
-    vocabulary may instead arrive via `import welder;`, and including it textually
-    as well would redeclare those entities. Provide the vocabulary first — either
-    `import welder;` or `#include <welder/vocabulary.hpp>` — then include this header.
+    `lang`, …) but deliberately does NOT include `<welder/annotations.hpp>`.
+    Provide the vocabulary first — `#include <welder/vocabulary.hpp>` — then
+    include this header.
 */
 
 namespace welder {

@@ -11,9 +11,8 @@
     `luaopen_<name>`, but it lays the bindings down with LuaBridge3's fluent
     registrar instead of sol2's usertypes.
 
-    Requires the welder vocabulary first, via either `import welder;` (module form)
-    or `#include <welder/vocabulary.hpp>` (header-only). This header exposes exactly
-    one thing to plug into `welder::welder`: the rod type
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`). This
+    header exposes exactly one thing to plug into `welder::welder`: the rod type
     `welder::rods::luabridge::rod`.
     @code
     #include <LuaBridge/LuaBridge.h>

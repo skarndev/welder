@@ -31,9 +31,8 @@ src/welder/
   bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
   bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>
   welder.hpp            the `welder::rod` concept (emission contract) + the **carriage** (`detail::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). + the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
-  module.hpp            WELDER_MODULE(ns, rod) entry-point dispatch macro
-  vocabulary.hpp        header-only vocabulary form: lang+annotations only (exactly what the module exports)
-  welder.cppm           the single `export module welder;` (exports vocabulary only)
+  module.hpp            WELDER_MODULE(ns, rod) binding-module entry-point dispatch macro (NOT a C++20 module)
+  vocabulary.hpp        the single include a consuming TU uses for the vocabulary: lang+annotations only (welder is header-only; no C++20 `import welder;` today)
   rods/
     python/
       doc_style.hpp         Python docstring styles shared by both Python rods — welder::rods::python::google_style (moved out of doc.hpp, which keeps only the neutral doc_style concept + function_docstring)
@@ -56,7 +55,7 @@ src/welder/
       luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
       luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
     CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats
-src/CMakeLists.txt      targets: welder::headers / welder::module
+src/CMakeLists.txt      target: welder::headers (the header-only core; the C++20 `welder::module` wrapper was removed — see gcc16-toolchain.md)
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
   WelderSol2Module.cmake       welder_sol2_add_module() — build a loadable Lua .so (bare name, host-symbol link model, module-scan OFF)
@@ -66,8 +65,7 @@ tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
 examples/
-  python_poc/             consumes `import welder;`
-  python_poc_headeronly/  consumes welder header-only
+  python_poc/             weld_type<T> on individual annotated structs (header-only)
   welder_module/          whole-module binding via WELDER_MODULE
 docs/                     the documentation site (gated by WELDER_BUILD_DOCS, OFF)
   CMakeLists.txt          targets welder-docs / welder-docs-serve; provisions the uv env, fetches doxygen-awesome, patches the Doxygen header
@@ -83,14 +81,16 @@ docs/                     the documentation site (gated by WELDER_BUILD_DOCS, OF
 ## Layering rules
 
 `bind_traits.hpp`, `bindable.hpp` and `welder.hpp` are part of the reflection
-layer (like `reflect.hpp`/`doc.hpp`): header-only, `<meta>`-using, **not** part of
-the `welder` module, and they do **not** include `annotations.hpp` (the vocabulary
-arrives first via `import welder;` or `vocabulary.hpp`). `doc.hpp` follows the same
-rule. `module.hpp` is macro-only and rod-agnostic; each rod's `module.hpp` defines
-its `WELDER_DETAIL_MODULE_ENTRY_<rod>` expansion.
+layer (like `reflect.hpp`/`doc.hpp`): header-only, `<meta>`-using, and they do
+**not** include `annotations.hpp` (the vocabulary arrives first via
+`vocabulary.hpp`). `doc.hpp` follows the same rule. `module.hpp` is macro-only and
+rod-agnostic; each rod's `module.hpp` defines its `WELDER_DETAIL_MODULE_ENTRY_<rod>`
+expansion.
 
-See `gcc16-toolchain.md` for the module-vs-header boundary that forces this
-layering (a gcc-16 std-in-purview leak).
+welder is header-only today; the vocabulary/`<meta>` split is kept anyway so a
+future `import welder;` module wrapper can re-export the std-free vocabulary
+unchanged. See `gcc16-toolchain.md` for that boundary (a gcc-16 std-in-purview leak)
+and why the module wrapper is currently deferred.
 
 ## The rod interface (static polymorphism)
 
@@ -308,9 +308,10 @@ framework's own mechanisms, separately from core resolution — design pending.
 ## CMake targets
 
 - **`welder::headers`** — INTERFACE, the header-only core (include path + flags).
-- **`welder::module`** — STATIC, builds `src/welder/welder.cppm`; provides `import welder;`.
-  (Target names keep their framework spelling — `welder::pybind11` etc. — even
-  though the rod type is now `welder::rods::pybind11::rod`.)
+  This is the only core target; the STATIC `welder::module` C++20 wrapper (built from
+  `src/welder/welder.cppm`) was **removed** while the module path is unusable (see
+  gcc16-toolchain.md). (Target names keep their framework spelling —
+  `welder::pybind11` etc. — even though the rod type is `welder::rods::pybind11::rod`.)
 - **`welder::pybind11`** — INTERFACE, the pybind11 rod (links headers + pybind11 + Python).
   Gated by `WELDER_BUILD_PYBIND11`.
 - **`welder::nanobind`** — INTERFACE, the nanobind rod. nanobind compiles its
@@ -324,7 +325,7 @@ framework's own mechanisms, separately from core resolution — design pending.
   sets the bare `<name>.so`, the host-symbol link model (`-undefined dynamic_lookup`
   on macOS), and `CXX_SCAN_FOR_MODULES OFF` (sol2's `<luaconf.h>` can't see
   `LLONG_MAX` under p1689 module scanning — a header-unit macro-visibility issue, so
-  a Lua binding TU is header-only, never `import welder;`). Gated by
+  a Lua binding TU is header-only regardless). Gated by
   `WELDER_BUILD_SOL2`; needs `sol2` + `lua` (conan `with_sol2`).
 - **`welder::luabridge`** — INTERFACE, the LuaBridge3 Lua rod. Same host-symbol,
   header-only story as `welder::sol2` (surfaces the LuaBridge3 + Lua headers, links no

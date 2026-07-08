@@ -28,9 +28,9 @@
       `__bnot`, `__shl`, `__shr`) — absent on Lua 5.1 / LuaJIT — so they are
       `#if`-gated on `LUA_VERSION_NUM`.
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`) and the Lua headers (`<lua.h>`, pulled in by
-    `<sol/sol.hpp>` / `<LuaBridge/LuaBridge.h>`) so `LUA_VERSION_NUM` is visible.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`) and
+    the Lua headers (`<lua.h>`, pulled in by `<sol/sol.hpp>` /
+    `<LuaBridge/LuaBridge.h>`) so `LUA_VERSION_NUM` is visible.
 */
 
 namespace welder::rods::lua {

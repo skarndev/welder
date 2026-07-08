@@ -14,7 +14,7 @@ flowchart TB
         DR["welder.hpp<br/>the welder::rod concept + driver + welder&lt;Rod&gt; entry point"]
         DC["doc.hpp<br/>doc/return/param folding + styles"]
     end
-    subgraph voc["vocabulary (std-free, the module exports this)"]
+    subgraph voc["vocabulary (std-free; ready for a future module)"]
         L["lang.hpp"]
         A["annotations.hpp"]
     end
@@ -67,24 +67,30 @@ that plugs a rod into the generic driver — there are no per-rod wrapper functi
     the *same driver* for a different job: instead of emitting runtime registration,
     it walks the welded namespace and writes a LuaCATS `---@meta` stub at build time.
 
-## The module-vs-header boundary
+## Header-only, and the vocabulary boundary
 
-This is a gcc-16-specific constraint worth understanding:
+welder ships **header-only** today. A C++20 `import welder;` module wrapper is
+planned but currently deferred — the toolchain reasons (a gcc-16 `-freflection` ×
+modules conflict, and no P2996 support yet in Clang/MSVC) are laid out on the
+[Header-only for now](header-only.md) page.
 
-> The `welder` **module** exports only the std-free **vocabulary** (`lang`,
-> `annotations`). Reflection (`reflect.hpp`) and all rods are **header-only**
-> and *not* part of the module.
+The header layout still reflects the boundary that a future module would export:
 
-Why: on gcc-16, any std header in a module unit's purview (even `<cstdint>`) makes
-every consumer that both `import`s it *and* textually `#include`s std headers fail
-with `conflicting imported declaration` errors — and `<meta>` / pybind11 include std
-textually. So the vocabulary stays std-free and modular; anything touching `<meta>`
-stays a header. Partitioning doesn't help (it's std-in-purview, not partitioning).
+> The std-free **vocabulary** (`lang`, `annotations`) is kept separate from
+> everything that touches `<meta>`. Reflection (`reflect.hpp`) and all rods are the
+> `<meta>`-using layer.
 
-The practical consequence: provide the vocabulary **first** (`import welder;` *or*
-`#include <welder/vocabulary.hpp>`), then the rod header. The reflection and rod
-headers deliberately don't re-include the vocabulary — that would redeclare what
-`import welder;` provides.
+Why the split survives even without a module: on gcc-16, any std header in a module
+unit's purview (even `<cstdint>`) makes every consumer that both `import`s it *and*
+textually `#include`s std headers fail with `conflicting imported declaration`
+errors — and `<meta>` / pybind11 include std textually. So the vocabulary is kept
+std-free (module-ready), while anything touching `<meta>` stays a header. Once the
+`-freflection`/modules bugs are fixed, `lang.hpp` + `annotations.hpp` can be
+re-exported by a module wrapper unchanged.
+
+The practical consequence for a consuming TU: provide the vocabulary **first**
+(`#include <welder/vocabulary.hpp>`), then the rod header. The reflection and rod
+headers deliberately don't re-include the vocabulary — that would redeclare it.
 
 ## Documentation
 

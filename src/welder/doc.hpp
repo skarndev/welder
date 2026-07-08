@@ -16,9 +16,7 @@
 
     @note Like `<welder/reflect.hpp>`, this depends on the welder vocabulary
     (`welder::doc_spec`, `fixed_string`) but deliberately does NOT include
-    `<welder/annotations.hpp>`: the vocabulary may instead arrive via `import
-    welder;`, and including it textually as well would redeclare those entities.
-    Provide the vocabulary first — `import welder;` or `#include
+    `<welder/annotations.hpp>`. Provide the vocabulary first — `#include
     <welder/vocabulary.hpp>` — then this header.
 */
 

@@ -5,9 +5,9 @@
 // per-language marks) is checked by the LuaUnit specs in tests/lua/, not pytest.
 //
 // Header-only consumption (welder::headers); the sol2 backend + Lua headers come
-// through welder::sol2. There is no module-form variant: sol2's <luaconf.h> does
-// not survive C++20 module dependency scanning, so a Lua binding TU is always
-// header-only (see cmake/WelderSol2Module.cmake).
+// through welder::sol2. welder is header-only today; and even were a C++20 module
+// wrapper reintroduced, a Lua binding TU could not use it — sol2's <luaconf.h> does
+// not survive C++20 module dependency scanning (see cmake/WelderSol2Module.cmake).
 #include <cstdint>
 #include <string>
 

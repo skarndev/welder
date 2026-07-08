@@ -1,7 +1,6 @@
-// Test extension exercising every member-resolution case. Built twice — once
-// consuming `import welder;` and once consuming welder header-only — from this
-// single source, selected by WELDER_TEST_HEADER_ONLY. The module name comes from
-// WELDER_TEST_MODNAME so each build produces a distinct importable module.
+// Test extension exercising every member-resolution case. welder is consumed
+// header-only (via <welder/vocabulary.hpp>). The module name comes from
+// WELDER_TEST_MODNAME so the build produces a distinctly importable module.
 //
 // The cases are split into one header per Python test file, in the same order and
 // with section banners that line up with the .py side. Each header wraps its cases
@@ -19,11 +18,7 @@
 #include <cstdint>
 #include <string>
 
-#ifdef WELDER_TEST_HEADER_ONLY
-#  include <welder/vocabulary.hpp>
-#else
-import welder;
-#endif
+#include <welder/vocabulary.hpp>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -51,10 +46,9 @@ import welder;
 #define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)
 
 // Case groups. These must come after the vocabulary + backend above: they use
-// both and deliberately do not re-include them (in the module build the
-// vocabulary arrives via `import welder;`, which must not be textually included).
-// The backend-neutral groups live in tests/common/cpp (on the include path); the
-// two backend-specific ones (trust, caster) live alongside this file.
+// both and deliberately do not re-include them. The backend-neutral groups live
+// in tests/common/cpp (on the include path); the two backend-specific ones
+// (trust, caster) live alongside this file.
 #include "resolution.hpp"
 #include "methods.hpp"
 #include "inheritance.hpp"

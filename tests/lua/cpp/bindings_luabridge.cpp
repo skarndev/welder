@@ -6,8 +6,8 @@
 // consistency check between the two Lua rods.
 //
 // Header-only consumption (welder::headers); the LuaBridge3 backend + Lua headers
-// come through welder::luabridge. There is no module-form variant (see
-// cmake/WelderLuaBridgeModule.cpp — a Lua binding TU is always header-only).
+// come through welder::luabridge. welder is header-only today; a Lua binding TU
+// stays header-only regardless (see cmake/WelderLuaBridgeModule.cmake).
 #include <cstdint>
 #include <string>
 

@@ -15,8 +15,8 @@
     `special_method_name` (the map that both gates operator eligibility and names the
     slot) and its `add_operator`.
 
-    Requires the welder vocabulary to be available first (via `import welder;` or
-    `#include <welder/vocabulary.hpp>`), like the rest of the reflection layer.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`), like
+    the rest of the reflection layer.
 */
 
 namespace welder::rods::python {

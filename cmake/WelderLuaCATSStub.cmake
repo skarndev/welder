@@ -33,9 +33,9 @@ function(welder_luacats_generate_stub name)
   add_executable(${_gen} ${S_SOURCES})
   target_link_libraries(${_gen} PRIVATE welder::luacats)
   target_compile_features(${_gen} PRIVATE cxx_std_26)
-  # The generator is header-only welder (no `import welder;`) and pulls in no Lua
-  # headers, but keep module scanning off to match the other Lua-side TUs and stay
-  # clear of the gcc-16 header-unit macro-visibility issues (see WelderSol2Module).
+  # The generator is header-only welder and pulls in no Lua headers, but keep
+  # module scanning off to match the other Lua-side TUs and stay clear of the
+  # gcc-16 header-unit macro-visibility issues (see WelderSol2Module).
   set_target_properties(${_gen} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
 
   add_custom_command(

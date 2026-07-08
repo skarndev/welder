@@ -119,5 +119,7 @@ nav:
       - Lua (sol2): backends/lua.md
       - Lua (LuaBridge3): backends/luabridge.md
       - Shipping to multiple languages: backends/multiple.md
-  - Architecture: architecture.md
+  - Architecture:
+      - architecture.md
+      - Header-only for now: header-only.md
   - C++ API Reference: reference.md

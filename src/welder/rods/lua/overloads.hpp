@@ -26,8 +26,8 @@
     LuaCATS backends stay separate. The layout mirrors `backends/python/doc_style.hpp`
     (shared by the Python backends).
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`), like
+    the rest of the reflection layer.
 
     Each scope is walked on its own, so a same-named member in a derived class still
     hides the base's (C++ name-hiding), the way the driver's flatten-then-overwrite

@@ -28,8 +28,8 @@
     Kept out of `backend.hpp` so those handle types and their shared rendering read
     as their own unit rather than as free functions surrounding the backend struct.
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`), like
+    the rest of the reflection layer.
 */
 
 namespace welder::rods::luacats {

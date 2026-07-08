@@ -20,8 +20,8 @@
     here that sol2 did not require. Kept separate from the backend so the type map
     and the document assembler read as distinct layers rather than one soup.
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`), like
+    the rest of the reflection layer.
 */
 
 namespace welder::rods::luacats {

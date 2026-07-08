@@ -33,8 +33,8 @@
     — `std::format` is not `constexpr` in the standard library (as of gcc-16), so a
     `constexpr` docstring builder cannot call it.
 
-    Requires the welder vocabulary to be available first (via `import welder;` or
-    `#include <welder/vocabulary.hpp>`), like the rest of the reflection layer.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`), like
+    the rest of the reflection layer.
 */
 
 namespace welder::rods::python {

@@ -1,11 +1,10 @@
-# nanobind backend tests. Build the test extension twice from one source —
-# module-form (`import welder;`) and header-only — then run the *shared* behavioral
-# specs (tests/test_*.py) against each, exactly as the pybind11 tree does. The specs
-# are backend-agnostic and select the module under test via WELDER_TEST_MODULE, so
-# they double as a cross-backend consistency check. The C++ case groups are the
-# shared tree in tests/common/cpp; only trust.hpp / caster.hpp are nanobind-specific
-# (here in cpp/). The target name doubles as the importable module name
-# (NB_MODULE(WELDER_TEST_MODNAME)).
+# nanobind backend tests. Build the test extension from one source (welder is
+# header-only) and run the *shared* behavioral specs (tests/test_*.py) against it,
+# exactly as the pybind11 tree does. The specs are backend-agnostic and select the
+# module under test via WELDER_TEST_MODULE, so they double as a cross-backend
+# consistency check. The C++ case groups are the shared tree in tests/common/cpp;
+# only trust.hpp / caster.hpp are nanobind-specific (here in cpp/). The target name
+# doubles as the importable module name (NB_MODULE(WELDER_TEST_MODNAME)).
 #
 # nanobind ships its runtime as source compiled into each extension via
 # nanobind_add_module (not a plain link library), so the extensions are created
@@ -14,7 +13,6 @@ find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Dev
 find_package(nanobind CONFIG REQUIRED)
 
 function(welder_add_nanobind_test_module tgt)
-  cmake_parse_arguments(A "HEADER_ONLY" "" "" ${ARGN})
   # bindings.cpp is the only TU; the case headers it #includes are listed so they
   # show in IDEs (header deps are tracked via compiler depfiles). The backend-neutral
   # groups live in ../common/cpp (shared with pybind11); trust and caster are
@@ -28,21 +26,11 @@ function(welder_add_nanobind_test_module tgt)
   target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
-  if(A_HEADER_ONLY)
-    target_compile_definitions(${tgt} PRIVATE WELDER_TEST_HEADER_ONLY)
-    target_link_libraries(${tgt} PRIVATE welder::headers welder::nanobind)
-  else()
-    target_link_libraries(${tgt} PRIVATE welder::module welder::nanobind)
-  endif()
+  target_link_libraries(${tgt} PRIVATE welder::headers welder::nanobind)
 endfunction()
 
-# Header-only variant is always available; module variant needs the module build.
-set(_variants welder_test_nanobind_ho)
-welder_add_nanobind_test_module(welder_test_nanobind_ho HEADER_ONLY)
-if(WELDER_BUILD_MODULE)
-  welder_add_nanobind_test_module(welder_test_nanobind)
-  list(APPEND _variants welder_test_nanobind)
-endif()
+set(_variants welder_test_nanobind)
+welder_add_nanobind_test_module(welder_test_nanobind)
 
 # Negative-compile cases: welder must *reject*, with a hard compile error, any
 # attempt to bind a type nanobind cannot convert to a meaningful Python value. Each
@@ -116,14 +104,13 @@ endforeach()
 
 # Type-level cases: tests/test_types.mypy-testing imports the backend-neutral name
 # `welder_test` and asserts revealed types, so a wrong stub type fails. Expose the
-# module-form stubs under that canonical name (rename-safe — nanobind's stub tree
+# generated stubs under that canonical name (rename-safe — nanobind's stub tree
 # uses only relative imports, `from . import ...`) and run the shared cases against
-# them via pytest-mypy-testing. Skip when only the header-only variant is built (no
-# module-form stubs). The copy is attached to the stub *target*'s POST_BUILD (not
-# the extension's): nanobind generates stubs in a separate custom target that only
-# DEPENDS on the extension, so copying from the extension's POST_BUILD could race
-# ahead of stub generation.
-if(WELDER_BUILD_STUBS AND WELDER_BUILD_MODULE)
+# them via pytest-mypy-testing. The copy is attached to the stub *target*'s
+# POST_BUILD (not the extension's): nanobind generates stubs in a separate custom
+# target that only DEPENDS on the extension, so copying from the extension's
+# POST_BUILD could race ahead of stub generation.
+if(WELDER_BUILD_STUBS)
   set(_canon_stubs ${CMAKE_CURRENT_BINARY_DIR}/typing-stubs)
   add_custom_command(TARGET welder_test_nanobind_stub POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${_canon_stubs}/welder_test

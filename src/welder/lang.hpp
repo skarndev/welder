@@ -1,16 +1,17 @@
 #pragma once
-#include <welder/detail/config.hpp>
 
 /** @file
     Target-language vocabulary — the set of languages welder can bind to.
 
-    @note Intentionally free of any standard-library include: this header is
-    exported by the `welder` module, and std headers in a module unit's
-    purview/GMF leak into every importer (conflicting with their textual std
-    includes on gcc-16).
+    @note Intentionally free of any standard-library include. welder ships
+    header-only today, but the vocabulary is kept std-include-free so it can be
+    re-exported by a future `welder` C++20 module without a std-leak: std headers
+    in a module unit's purview/GMF leak into every importer (conflicting with
+    their textual std includes on gcc-16). See the "Header-only for now" page in
+    the docs for why modularization is deferred.
 */
 
-WELDER_EXPORT namespace welder {
+namespace welder {
 
 /** The set of target languages welder can generate bindings for.
 

@@ -8,7 +8,7 @@ gcc extensions, but today only one compiler implements the papers it needs:
 | Requirement | This machine |
 |---|---|
 | Compiler (P2996 + P3394) | **gcc-16** — the only one so far (`g++-16`, Homebrew GCC 16.1.0) |
-| Build system | CMake ≥ 3.28 (for `FILE_SET CXX_MODULES`) + **Ninja** (modules need it) |
+| Build system | CMake ≥ 3.28; the presets drive **Ninja** |
 | Packages | Conan 2 (`conanfile.py`) → pybind11 / nanobind (Python); sol2 + Lua (Lua) |
 | Python | a `python3` with development headers (for the Python modules) |
 | Lua | headers via conan `sol2` (pulls Lua); a Lua interpreter to load the module |
@@ -80,7 +80,7 @@ Then a small translation unit per rod registers it. The `#include`s and the
     ```cpp title="shapes.cpp"
     #include <cstdint>
     #include <string>
-    import welder;                          // annotation vocabulary (module form)
+    #include <welder/vocabulary.hpp>        // annotation vocabulary
 
     #include <pybind11/pybind11.h>
     #include <pybind11/stl.h>              // std::string conversion (1)
@@ -119,7 +119,7 @@ Then a small translation unit per rod registers it. The `#include`s and the
     ```cpp title="shapes_lua.cpp"
     #include <cstdint>
     #include <string>
-    #include <welder/vocabulary.hpp>          // vocabulary (header-only — see note)
+    #include <welder/vocabulary.hpp>          // annotation vocabulary
 
     #include <sol/sol.hpp>
     #include <welder/rods/lua/sol2/rod.hpp>
@@ -147,34 +147,18 @@ welder synthesizes a field constructor for a baseless **aggregate** when every
 field binds, so `Point(1.0, 2.0)` also works — see
 [Binding a type](binding-types.md#constructors).
 
-## Two consumption forms
+## Consuming welder
 
-welder is fundamentally **header-only**, with one optional module wrapper so you
-can `import welder;`. Pick whichever you prefer — they are equivalent — but always
-provide the vocabulary before the rod header:
+welder ships **header-only**. A consuming TU brings the vocabulary in first, then
+the rod header:
 
-=== "Module"
+```cpp
+#include <welder/vocabulary.hpp>
+#include <welder/rods/python/pybind11/rod.hpp>
+```
 
-    ```cpp
-    import welder;
-    #include <welder/rods/python/pybind11/rod.hpp>
-    ```
-
-=== "Header-only"
-
-    ```cpp
-    #include <welder/vocabulary.hpp>
-    #include <welder/rods/python/pybind11/rod.hpp>
-    ```
-
-Rods are *always* header-only.
-
-!!! note "The Lua rod is header-only *only*"
-
-    sol2's `<luaconf.h>` doesn't survive C++20 module dependency scanning, so a Lua
-    TU must consume welder with `#include <welder/vocabulary.hpp>`, never `import
-    welder;`. The Python rods work with either form. Details on the
-    [Lua rod page](../backends/lua.md).
+A C++20 `import welder;` module wrapper is planned but currently deferred — see
+[Header-only for now](../header-only.md) for the toolchain reasons why.
 
 Next: the [annotation vocabulary](annotations.md). When you're ready to pick or
 combine rods, see the [Rods](../backends/index.md) section.

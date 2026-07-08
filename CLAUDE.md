@@ -25,15 +25,17 @@ override (used verbatim, beats `weld_as`). The actual traversal lives in an inje
 entry point is a one-line forward to the carriage, so a user can also subclass
 `welder::welder` to compose bespoke routines from the same gated building blocks.
 
-**Delivery model (Boost-style):** header-only (`src/welder/…`), with one optional
-C++20 module wrapper (`src/welder/welder.cppm`). Two equivalent vocabulary forms —
-`import welder;` *or* `#include <welder/vocabulary.hpp>`; rods are always
-header-only (`#include <welder/rods/python/pybind11/rod.hpp>`, which pulls in the
-core `<welder/welder.hpp>`). We deliberately do *not* modularize internally — see
-`.claude/context/gcc16-toolchain.md` for why.
+**Delivery model:** **header-only** (`src/welder/…`). The vocabulary arrives via
+`#include <welder/vocabulary.hpp>`; rods pull in the core themselves (`#include
+<welder/rods/python/pybind11/rod.hpp>` → `<welder/welder.hpp>`). The optional C++20
+`import welder;` module wrapper was **removed** until the gcc-16 `-freflection`/
+modules bugs are fixed and another toolchain (Clang/MSVC) implements P2996 — see
+`docs/content/guide/header-only.md` and `.claude/context/gcc16-toolchain.md`. The
+vocabulary headers are still kept std-include-free so the wrapper can return
+unchanged. We also deliberately do *not* modularize internally.
 
-**Status:** early POC, verified end-to-end (both consumption forms → an importable
-Python module; a `require`-able Lua module). Four *runtime* rods are implemented —
+**Status:** early POC, verified end-to-end (an importable Python module; a
+`require`-able Lua module). Four *runtime* rods are implemented —
 two **Python** (**pybind11**, **nanobind**) and two **Lua** (**sol2**,
 **LuaBridge3**) — all sharing the same core and the *same* backend-neutral C++ test
 cases, which each rod binds and asserts (pytest for Python, busted `.lua` specs for
@@ -48,7 +50,7 @@ locations, see the context files below.
 ## The idea / public API
 
 ```cpp
-import welder;            // or: #include <welder/vocabulary.hpp>
+#include <welder/vocabulary.hpp>  // annotation vocabulary (welder is header-only)
 #include <pybind11/pybind11.h>
 #include <welder/rods/python/pybind11/rod.hpp>
 
@@ -94,9 +96,9 @@ exclude/include spec is the sentinel for "all languages".
 - Pure standard C++26 — **no gcc-only constructs** in library code. If a gcc
   workaround is unavoidable, isolate and comment it.
 - **Vocabulary headers (`lang.hpp`, `annotations.hpp`) must stay std-include-free**
-  so the module can export them safely. Anything needing `<meta>`/std stays in
-  `reflect.hpp`/rods. (This is the module-vs-header boundary — details in
-  `.claude/context/gcc16-toolchain.md`.)
+  so a future `import welder;` module wrapper can re-export them safely. Anything
+  needing `<meta>`/std stays in `reflect.hpp`/rods. (This is the vocabulary-vs-`<meta>`
+  boundary — details in `.claude/context/gcc16-toolchain.md`.)
 - Keep the core rod-agnostic. New languages are new rods under
   `src/welder/rods/`, each with its own `welder::<framework>` CMake target
   (e.g. `welder::pybind11`) exposing one `welder::rods::<name>::rod` struct.

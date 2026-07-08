@@ -1,21 +1,20 @@
+// Minimal pybind11 proof-of-concept: two annotated structs welded for Python.
+// welder ships header-only, so the vocabulary arrives via <welder/vocabulary.hpp>.
 #include <cstdint>
 #include <string>
 
-import welder; // annotation vocabulary (module form)
+#include <welder/vocabulary.hpp> // annotation vocabulary
 
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>                  // std::string conversion
-#include <welder/rods/python/pybind11/rod.hpp>    // pybind11 backend (needs the vocabulary above)
+#include <pybind11/stl.h>
+#include <welder/rods/python/pybind11/rod.hpp> // pybind11 backend
 
-// A struct welded for Python. Default policy (automatic) reflects every member
-// unless excluded.
 struct
 [[=welder::weld(welder::lang::py)]]
 Point {
     double x{0.0};
     double y{0.0};
 
-    // Per-language exclusion: hidden from Python.
     [[=welder::mark::exclude(welder::lang::py)]]
     std::uint64_t internal_id{0};
 };
@@ -25,7 +24,6 @@ struct
 Label {
     std::string text;
 
-    // excluded everywhere
     [[=welder::mark::exclude]]
     std::string cache;
 };

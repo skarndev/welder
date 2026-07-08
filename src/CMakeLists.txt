@@ -1,6 +1,7 @@
-# welder is header-only at its core, with an optional single importable module
-# and header-only language rods (backends). Everything lives under one tree
-# (src/welder) so user includes always start from <welder/...>.
+# welder is header-only: a header-only core plus header-only language rods
+# (backends). Everything lives under one tree (src/welder) so user includes always
+# start from <welder/...>. (An optional C++20 module wrapper was removed until the
+# gcc-16 -freflection/modules bugs are resolved — see docs "Header-only for now".)
 
 # --- welder::headers : the header-only core (source of truth) ----------------
 add_library(welder_headers INTERFACE)
@@ -12,20 +13,6 @@ target_include_directories(welder_headers INTERFACE
   $<INSTALL_INTERFACE:include>)
 target_compile_features(welder_headers INTERFACE cxx_std_26)
 target_link_libraries(welder_headers INTERFACE welder_flags)
-
-# --- welder::module : optional `import welder;` wrapper (exports vocabulary) --
-if(WELDER_BUILD_MODULE)
-  add_library(welder_module STATIC)
-  add_library(welder::module ALIAS welder_module)
-  target_sources(welder_module
-    PUBLIC
-      FILE_SET welder_module_ifc TYPE CXX_MODULES
-        BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/welder
-        FILES ${CMAKE_CURRENT_SOURCE_DIR}/welder/welder.cppm)
-  target_compile_features(welder_module PUBLIC cxx_std_26)
-  # PUBLIC so importers also get the include path (for backend headers) + flags.
-  target_link_libraries(welder_module PUBLIC welder_headers welder_flags)
-endif()
 
 # --- language rods (header-only adapters over the core resolution API) --------
 add_subdirectory(welder/rods)

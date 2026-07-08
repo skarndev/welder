@@ -12,8 +12,7 @@
     `def_readwrite`/`def_readonly`, a placement-`__init__` factory, module
     docstrings set through `__doc__`, and the `is_base_caster` bindability probe.
 
-    Requires the welder vocabulary to be available first, via either `import
-    welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`).
     This header exposes exactly one thing: the rod template
     `welder::rods::nanobind::rod<DocStyle = google_style>`, to plug into
     `welder::welder` (`rod<>` for the default Google docstring style;

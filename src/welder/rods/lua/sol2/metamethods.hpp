@@ -17,8 +17,8 @@
     `special_method_name` (the `__name`, sourced from the shared map, that gates
     operator eligibility) and its `add_operator` (the `sol::meta_function` slot).
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`) and `<sol/sol.hpp>`.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`) and
+    `<sol/sol.hpp>`.
 */
 
 namespace welder::rods::sol2 {

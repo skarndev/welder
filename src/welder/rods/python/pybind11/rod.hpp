@@ -9,8 +9,7 @@
     namespaces — lives in the core; only the pybind11 emission primitives are here.
     The nanobind / lua backends mirror this file against their own frameworks.
 
-    Requires the welder vocabulary to be available first, via either `import
-    welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`).
     This header exposes exactly one thing: the rod template
     `welder::rods::pybind11::rod<DocStyle = google_style>`, to plug into
     `welder::welder` (`rod<>` for the default Google docstring style;

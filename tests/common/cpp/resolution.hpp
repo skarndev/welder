@@ -7,8 +7,7 @@
 // `Counter`, which lives in methods.hpp — nothing to declare for it here.
 //
 // #included by bindings.cpp *after* the welder vocabulary and the active Python
-// backend are in scope; this header deliberately does not include them itself (in
-// the module-form build the vocabulary arrives via `import welder;`).
+// backend are in scope; this header deliberately does not include them itself.
 #include <string>
 
 // The cases live in namespace `resolution`, bound under a `resolution` submodule

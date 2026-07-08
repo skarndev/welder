@@ -29,8 +29,8 @@
     `<welder/rods/lua/luacats/document.hpp>`. The rod struct below only wires
     those to the driver contract.
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`). This header exposes exactly one thing: the rod type
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`). This
+    header exposes exactly one thing: the rod type
     `welder::rods::luacats::rod`. Drive it by hand:
     @code
     #include <welder/rods/lua/luacats/rod.hpp>

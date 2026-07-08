@@ -4,8 +4,8 @@
 # cross-backend consistency check. The specs pick their module at run time via the
 # WELDER_TEST_LUA_MODULE env var (see helper.lua), so one spec suite serves both.
 #
-# Unlike the Python trees there is no module-form variant (a Lua binding TU is
-# header-only). The test framework — busted — is installed with luarocks into a
+# A Lua binding TU is header-only (as is every welder TU today). The test
+# framework — busted — is installed with luarocks into a
 # build-local tree (the analogue of uv/pytest): nothing is vendored. Each rod's
 # module ABI and its interpreter come from the *same* user Lua (sol2:
 # WELDER_LUA_DIR/_VERSION; LuaBridge3: WELDER_LUABRIDGE_LUA_DIR/_VERSION), so when the

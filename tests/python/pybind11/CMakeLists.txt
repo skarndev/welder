@@ -1,12 +1,11 @@
-# pybind11 backend tests. Build the test extension twice from one source —
-# module-form (`import welder;`) and header-only — then run the shared behavioral
-# specs (tests/test_*.py) against each. The target name doubles as the importable
-# Python module name (PYBIND11_MODULE(WELDER_TEST_MODNAME)).
+# pybind11 backend tests. Build the test extension from one source (welder is
+# header-only) and run the shared behavioral specs (tests/test_*.py) against it.
+# The target name doubles as the importable Python module name
+# (PYBIND11_MODULE(WELDER_TEST_MODNAME)).
 find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 REQUIRED)
 
 function(welder_add_pybind11_test_module tgt)
-  cmake_parse_arguments(A "HEADER_ONLY" "" "" ${ARGN})
   # bindings.cpp is the only TU; the per-spec-file case headers it #includes are
   # listed so they show in IDEs (header deps are tracked via compiler depfiles).
   # The backend-neutral groups live in ../common/cpp (shared with nanobind); trust
@@ -20,21 +19,11 @@ function(welder_add_pybind11_test_module tgt)
   target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
-  if(A_HEADER_ONLY)
-    target_compile_definitions(${tgt} PRIVATE WELDER_TEST_HEADER_ONLY)
-    target_link_libraries(${tgt} PRIVATE welder::headers welder::pybind11)
-  else()
-    target_link_libraries(${tgt} PRIVATE welder::module welder::pybind11)
-  endif()
+  target_link_libraries(${tgt} PRIVATE welder::headers welder::pybind11)
 endfunction()
 
-# Header-only variant is always available; module variant needs the module build.
-set(_variants welder_test_pybind11_ho)
-welder_add_pybind11_test_module(welder_test_pybind11_ho HEADER_ONLY)
-if(WELDER_BUILD_MODULE)
-  welder_add_pybind11_test_module(welder_test_pybind11)
-  list(APPEND _variants welder_test_pybind11)
-endif()
+set(_variants welder_test_pybind11)
+welder_add_pybind11_test_module(welder_test_pybind11)
 
 # Negative-compile cases: welder must *reject*, with a hard compile error, any
 # attempt to bind a type pybind11 cannot convert to a meaningful Python value.
@@ -58,8 +47,8 @@ if(NOT WELDER_TEST_VENV_PYTHON)
   return()
 endif()
 
-# pybind11-stubgen writes each variant's package under here (named after its
-# module: welder_test_pybind11/ and welder_test_pybind11_ho/), so they coexist.
+# pybind11-stubgen writes the package under here (named after its module,
+# welder_test_pybind11/).
 set(_stubs_dir ${CMAKE_CURRENT_BINARY_DIR}/stubs)
 
 foreach(variant IN LISTS _variants)
@@ -98,10 +87,9 @@ endforeach()
 
 # Type-level cases: tests/test_types.mypy-testing imports the backend-neutral name
 # `welder_test` and asserts revealed types, so a wrong stub type fails. Expose the
-# module-form stubs under that canonical name (rename-safe — the tree uses only
+# generated stubs under that canonical name (rename-safe — the tree uses only
 # relative imports) and run the shared cases against them via pytest-mypy-testing.
-# Skip when only the header-only variant is built (no module-form stubs).
-if(WELDER_BUILD_STUBS AND WELDER_BUILD_MODULE)
+if(WELDER_BUILD_STUBS)
   set(_canon_stubs ${CMAKE_CURRENT_BINARY_DIR}/typing-stubs)
   add_custom_command(TARGET welder_test_pybind11 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${_canon_stubs}/welder_test

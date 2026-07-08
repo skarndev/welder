@@ -1,16 +1,15 @@
 #pragma once
-#include <welder/detail/config.hpp>
 #include <welder/lang.hpp>
 
 /** @file
     The annotation vocabulary users attach to their types — `weld`, `policy`,
     `mark`, `doc`, `returns`, `tparam`.
 
-    Like `<welder/lang.hpp>`, this header is std-include-free so it can be exported
-    by the `welder` module.
+    Like `<welder/lang.hpp>`, this header is kept std-include-free so a future
+    `welder` C++20 module can re-export it without leaking std into importers.
 */
 
-WELDER_EXPORT namespace welder {
+namespace welder {
 
 /** The single-language bit for @a l within a language mask.
 

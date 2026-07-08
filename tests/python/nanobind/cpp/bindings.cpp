@@ -1,7 +1,6 @@
-// nanobind test extension exercising every member-resolution case. Built twice —
-// once consuming `import welder;` and once consuming welder header-only — from this
-// single source, selected by WELDER_TEST_HEADER_ONLY. The module name comes from
-// WELDER_TEST_MODNAME so each build produces a distinct importable module.
+// nanobind test extension exercising every member-resolution case. welder is
+// consumed header-only (via <welder/vocabulary.hpp>). The module name comes from
+// WELDER_TEST_MODNAME so the build produces a distinctly importable module.
 //
 // This mirrors tests/pybind11/cpp/bindings.cpp against the nanobind backend. The
 // backend-neutral case groups are the *shared* headers under tests/common/cpp (on
@@ -22,11 +21,7 @@
 #include <cstdint>
 #include <string>
 
-#ifdef WELDER_TEST_HEADER_ONLY
-#  include <welder/vocabulary.hpp>
-#else
-import welder;
-#endif
+#include <welder/vocabulary.hpp>
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h> // std::string members / return values
@@ -53,10 +48,9 @@ import welder;
 #define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)
 
 // Case groups. These must come after the vocabulary + backend above: they use
-// both and deliberately do not re-include them (in the module build the vocabulary
-// arrives via `import welder;`, which must not be textually included). The
-// backend-neutral groups resolve from tests/common/cpp (on the include path); the
-// two backend-specific ones (trust, caster) live alongside this file.
+// both and deliberately do not re-include them. The backend-neutral groups resolve
+// from tests/common/cpp (on the include path); the two backend-specific ones
+// (trust, caster) live alongside this file.
 #include "resolution.hpp"
 #include "methods.hpp"
 #include "inheritance.hpp"

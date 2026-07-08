@@ -20,8 +20,8 @@
     `max_retries`, while a `GeometryHelper` class stays `GeometryHelper`. A
     `[[=welder::weld_as]]` on any entity still wins verbatim.
 
-    Requires the welder vocabulary first (via `import welder;` or `#include
-    <welder/vocabulary.hpp>`), like the rest of the reflection layer.
+    Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`), like
+    the rest of the reflection layer.
 */
 
 namespace welder::rods::python {
