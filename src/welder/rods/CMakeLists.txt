@@ -118,14 +118,25 @@ if(WELDER_BUILD_LUABRIDGE AND TARGET LuaBridge)
   endif()
   # Guard the found Lua minor against the requested one: LuaBridge3 has no cross-minor
   # ABI, so a mismatch would segfault the interpreter that loads the module (same
-  # hazard as sol2). Parse LUA_VERSION_NUM (an integer, e.g. 504 → 5.4, 505 → 5.5):
-  # it is present in every lua.h, unlike the LUA_VERSION_MAJOR/MINOR *string* macros,
-  # which Lua 5.5 replaced with the integer LUA_VERSION_MAJOR_N/_MINOR_N form.
-  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_num
-    REGEX "^#define[ \t]+LUA_VERSION_NUM[ \t]+[0-9]+")
-  string(REGEX REPLACE ".*LUA_VERSION_NUM[ \t]+([0-9]+).*" "\\1" _wlb_num "${_wlb_num}")
-  math(EXPR _wlb_major "${_wlb_num} / 100")
-  math(EXPR _wlb_minor "${_wlb_num} % 100")
+  # hazard as sol2). Lua 5.5 carries the version as integer macros
+  # (LUA_VERSION_MAJOR_N 5 / LUA_VERSION_MINOR_N 5); 5.4 and earlier as strings
+  # (LUA_VERSION_MAJOR "5"). (LUA_VERSION_NUM is unusable — a literal in 5.4 but a
+  # computed expression in 5.5.) Try the integer form, then fall back to the string.
+  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_major
+    REGEX "^#define[ \t]+LUA_VERSION_MAJOR_N[ \t]+[0-9]+")
+  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_minor
+    REGEX "^#define[ \t]+LUA_VERSION_MINOR_N[ \t]+[0-9]+")
+  if(_wlb_major AND _wlb_minor)
+    string(REGEX REPLACE ".*LUA_VERSION_MAJOR_N[ \t]+([0-9]+).*" "\\1" _wlb_major "${_wlb_major}")
+    string(REGEX REPLACE ".*LUA_VERSION_MINOR_N[ \t]+([0-9]+).*" "\\1" _wlb_minor "${_wlb_minor}")
+  else()
+    file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_major
+      REGEX "^#define[ \t]+LUA_VERSION_MAJOR[ \t]+\"[0-9]+\"")
+    file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_minor
+      REGEX "^#define[ \t]+LUA_VERSION_MINOR[ \t]+\"[0-9]+\"")
+    string(REGEX REPLACE ".*\"([0-9]+)\".*" "\\1" _wlb_major "${_wlb_major}")
+    string(REGEX REPLACE ".*\"([0-9]+)\".*" "\\1" _wlb_minor "${_wlb_minor}")
+  endif()
   if(NOT "${_wlb_major}.${_wlb_minor}" STREQUAL WELDER_LUABRIDGE_LUA_VERSION)
     message(FATAL_ERROR
       "welder: found Lua ${_wlb_major}.${_wlb_minor} for the LuaBridge3 backend but "
