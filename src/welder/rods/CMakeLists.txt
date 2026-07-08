@@ -118,13 +118,14 @@ if(WELDER_BUILD_LUABRIDGE AND TARGET LuaBridge)
   endif()
   # Guard the found Lua minor against the requested one: LuaBridge3 has no cross-minor
   # ABI, so a mismatch would segfault the interpreter that loads the module (same
-  # hazard as sol2). lua.h carries the version as string macros.
-  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_major
-    REGEX "^#define[ \t]+LUA_VERSION_MAJOR[ \t]+\"[0-9]+\"")
-  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_minor
-    REGEX "^#define[ \t]+LUA_VERSION_MINOR[ \t]+\"[0-9]+\"")
-  string(REGEX REPLACE ".*\"([0-9]+)\".*" "\\1" _wlb_major "${_wlb_major}")
-  string(REGEX REPLACE ".*\"([0-9]+)\".*" "\\1" _wlb_minor "${_wlb_minor}")
+  # hazard as sol2). Parse LUA_VERSION_NUM (an integer, e.g. 504 → 5.4, 505 → 5.5):
+  # it is present in every lua.h, unlike the LUA_VERSION_MAJOR/MINOR *string* macros,
+  # which Lua 5.5 replaced with the integer LUA_VERSION_MAJOR_N/_MINOR_N form.
+  file(STRINGS "${WELDER_LUABRIDGE_LUA_INCLUDE_DIR}/lua.h" _wlb_num
+    REGEX "^#define[ \t]+LUA_VERSION_NUM[ \t]+[0-9]+")
+  string(REGEX REPLACE ".*LUA_VERSION_NUM[ \t]+([0-9]+).*" "\\1" _wlb_num "${_wlb_num}")
+  math(EXPR _wlb_major "${_wlb_num} / 100")
+  math(EXPR _wlb_minor "${_wlb_num} % 100")
   if(NOT "${_wlb_major}.${_wlb_minor}" STREQUAL WELDER_LUABRIDGE_LUA_VERSION)
     message(FATAL_ERROR
       "welder: found Lua ${_wlb_major}.${_wlb_minor} for the LuaBridge3 backend but "
