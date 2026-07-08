@@ -234,3 +234,26 @@ POST_BUILD, since its stubs are a separate custom target.) Key locations by feat
 
 Gotcha: uv rejects the Homebrew python for some operations — see the test-harness
 memory note if you hit it.
+
+## Windows: nanobind stable ABI (abi3) — the shippable / cross-compiler case
+`-DWELDER_NANOBIND_STABLE_ABI=ON` builds the nanobind extension against Python's
+**stable ABI (abi3)**: `nanobind_add_module(... STABLE_ABI ...)` +
+`find_package(Python … Development.SABIModule)` → the `.pyd` links `python3.dll`
+via `Py_LIMITED_API` instead of `pythonXY.dll`. Because the limited API is a **C
+ABI**, the module loads across Python minors *and* across the GCC/MSVC compiler
+boundary — so a **UCRT-MinGW gcc-16** build imports into a **stock MSVC CPython**
+(python.org / Blender), not just the mingw python. This is the only path to a
+shippable Windows binding today (welder is gcc-16-only; MSVC/Clang lack P2996), and
+it is **nanobind-only** — pybind11 has no abi3 equivalent. Needs Python ≥ 3.12 and
+CMake ≥ 3.26 (`Development.SABIModule`); below 3.12 nanobind silently downgrades.
+
+On MinGW the option also (in `tests/python/nanobind/CMakeLists.txt`): statically
+folds in the gcc runtimes (`-static -static-libgcc -static-libstdc++`) so the `.pyd`
+is self-contained (no `libstdc++-6`/`libgcc_s`/`libwinpthread` on the host PATH), and
+overrides nanobind's `-Os` on the binding TU with `-O2` — gcc-16.1 has an `-Os`
+codegen bug that emits an unresolved out-of-line ref to `std::string`'s move ctor
+(which `-O2` inlines away). CI job **`windows-abi3`** proves it end to end: compiles
+welder's shared nanobind bindings with ucrt64 gcc against an `actions/setup-python`
+MSVC CPython, asserts the `.pyd`'s only DLL deps are `python3.dll` + UCRT (no gcc
+runtimes), imports it under that MSVC interpreter and runs the shared specs.
+Origin/research: `skarndev/nb-mingw-abi3-poc`.
