@@ -135,12 +135,15 @@ jobs:
           set -euo pipefail
           # Match find_package(Python) to the mingw interpreter (the project pins
           # 3.14 by default; ucrt64's python happens to be 3.14 too, but detect it
-          # so this stays correct if it moves).
+          # so this stays correct if it moves). uv is a *native* Windows tool, so it
+          # needs the real python.exe as a forward-slash Windows path — derive it
+          # from sys.executable via cygpath, not `which python` (which lacks .exe).
           PYVER=$(python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')")
+          PYEXE=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")
           cmake --preset welder-gcc16 \
             -DWELDER_PYTHON_VERSION="$PYVER" \
-            -DPython_EXECUTABLE="$(which python)" \
-            -DWELDER_TEST_PYTHON="$(which python)" \
+            -DPython_EXECUTABLE="$PYEXE" \
+            -DWELDER_TEST_PYTHON="$PYEXE" \
             -DWELDER_BUILD_SOL2=OFF \
             -DWELDER_BUILD_LUABRIDGE=OFF
           # The Python rods run their full specs + stubs here: uv builds the test
