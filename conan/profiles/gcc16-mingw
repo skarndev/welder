@@ -1,0 +1,15 @@
+[settings]
+os=Windows
+arch=x86_64
+build_type=Release
+compiler=gcc
+compiler.version=16
+compiler.cppstd=23
+compiler.libcxx=libstdc++11
+
+[conf]
+# MSYS2 UCRT64 ships mingw-w64-ucrt-x86_64-gcc 16.1.0 (mainline, carries
+# -freflection). Inside the msys2 shell the compiler is plain gcc / g++ (no -16
+# suffix). Ninja + gcc come from the ucrt64 subsystem.
+tools.build:compiler_executables={"c": "gcc", "cpp": "g++"}
+tools.cmake.cmaketoolchain:generator=Ninja

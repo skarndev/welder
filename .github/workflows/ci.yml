@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref (a new push to a PR/branch).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux — the primary target. gcc-16 (with -freflection) is provisioned via
+  # Homebrew-on-Linux, mirroring the dev machine's g++-16.1 exactly. Conan
+  # supplies the C++ binding-framework headers; the language runtimes (Lua,
+  # Python) come from brew, matching welder's provider-neutral stance.
+  # ---------------------------------------------------------------------------
+  linux:
+    name: linux (gcc-16, brew)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Homebrew toolchain + runtimes
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix)/sbin" >> "$GITHUB_PATH"
+          brew update --quiet
+          # gcc → 16.1.0 (gcc-16 / g++-16); the language runtimes + build tools.
+          brew install --quiet \
+            gcc lua@5.4 luarocks ninja cmake conan uv python@3.14 lua-language-server
+          gcc-16 --version
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-linux-${{ hashFiles('conanfile.py', 'conan/profiles/gcc16-linux') }}
+          restore-keys: conan-linux-
+
+      - name: Conan install
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          conan install . -pr:a conan/profiles/gcc16-linux --build=missing
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          cmake --preset welder-gcc16 \
+            -DWELDER_LUA_DIR="$(brew --prefix lua@5.4)" \
+            -DWELDER_LUABRIDGE_LUA_DIR="$(brew --prefix lua@5.4)" \
+            -DPython_EXECUTABLE="$(brew --prefix python@3.14)/bin/python3.14"
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          cmake --build --preset welder-gcc16
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          ctest --preset welder-gcc16 --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # Windows — MSYS2 UCRT64 mingw-w64 gcc 16.1.0 (mainline, carries -freflection).
+  # Everything stays inside the MSYS2 subsystem so the mingw-built Python/Lua
+  # extensions load in the mingw-built interpreters (an MSVC CPython could not
+  # import a gcc-built .pyd). Best-effort but required to pass.
+  # ---------------------------------------------------------------------------
+  windows:
+    name: windows (mingw gcc-16, msys2)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git base-devel
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-lua
+            mingw-w64-ucrt-x86_64-luarocks
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-pip
+
+      - name: Install Conan + uv
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install conan uv
+          gcc --version
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-mingw-${{ hashFiles('conanfile.py', 'conan/profiles/gcc16-mingw') }}
+          restore-keys: conan-mingw-
+
+      - name: Conan install
+        run: |
+          set -euo pipefail
+          conan install . -pr:a conan/profiles/gcc16-mingw --build=missing
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake --preset welder-gcc16 \
+            -DWELDER_LUA_DIR="$MSYSTEM_PREFIX" \
+            -DWELDER_LUABRIDGE_LUA_DIR="$MSYSTEM_PREFIX" \
+            -DPython_EXECUTABLE="$(which python)"
+
+      - name: Build
+        run: cmake --build --preset welder-gcc16
+
+      - name: Test
+        run: ctest --preset welder-gcc16 --output-on-failure

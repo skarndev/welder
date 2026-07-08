@@ -1,0 +1,15 @@
+[settings]
+os=Linux
+arch=x86_64
+build_type=Release
+compiler=gcc
+compiler.version=16
+compiler.cppstd=23
+compiler.libcxx=libstdc++11
+
+[conf]
+# gcc-16 provisioned via Homebrew-on-Linux (mirrors the dev machine's g++-16.1);
+# the reflection-carrying mainline release. Executables land on PATH as gcc-16 /
+# g++-16 after `brew install gcc`.
+tools.build:compiler_executables={"c": "gcc-16", "cpp": "g++-16"}
+tools.cmake.cmaketoolchain:generator=Ninja
