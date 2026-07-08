@@ -5,49 +5,43 @@
 # lang::py and lang::lua) as a cross-backend consistency check.
 find_program(UV_EXECUTABLE uv)
 
-# Interpreter uv builds the test env from. Default: a uv-managed CPython of
-# WELDER_PYTHON_VERSION (uv rejects the build's Homebrew framework Python — its
-# platform.mac_ver() is empty — and that's fine: our extensions load in any
-# ABI-compatible CPython of the same minor via dynamic symbol lookup). Override it
-# where the managed CPython is the *wrong ABI* for the built extensions: on
-# Windows/mingw a gcc-built .pyd can't be imported by uv's MSVC-ABI managed
-# CPython, so point this at the mingw python that find_package(Python) built them
-# with (uv then syncs from that system interpreter).
-set(WELDER_TEST_PYTHON "" CACHE FILEPATH
-  "System python uv builds the test env from; empty = a uv-managed CPython of \
-WELDER_PYTHON_VERSION")
+# A ready-made interpreter already carrying the test deps (pytest, mypy,
+# pytest-mypy-testing, pybind11-stubgen, lark). Set it to bypass uv where uv can't
+# build the env: MSYS2's mingw python, which uv refuses outright ("Unknown
+# operating system: mingw_..."), and whose ABI a gcc-built .pyd needs anyway (uv's
+# managed CPython is MSVC-ABI). Empty = provision the env here via uv, the default
+# everywhere else.
+set(WELDER_TEST_VENV_PYTHON "" CACHE FILEPATH
+  "Interpreter (already carrying the test deps) to run the Python tests with; \
+empty = provision it here via uv")
 
 # Handed down to the language subdirectories. WELDER_TEST_VENV_PYTHON stays empty
-# if the uv env can't be prepared: backends then still *build* their extensions
-# (a compile check) but skip registering CTest entries. WELDER_TEST_COMMON_CPP is
-# the backend-neutral C++ case tree, shared by every backend's bindings.cpp. The
-# uv env is prepared here (not under python/) because the doxyfilter tests also use
-# it (for `lark`); it manages the pyproject that now lives in python/.
+# if the env can't be prepared: backends then still *build* their extensions (a
+# compile check) but skip registering CTest entries. WELDER_TEST_COMMON_CPP is the
+# backend-neutral C++ case tree, shared by every backend's bindings.cpp. The env is
+# prepared here (not under python/) because the doxyfilter tests also use it (for
+# `lark`); it manages the pyproject that now lives in python/.
 set(WELDER_TEST_PYDIR ${CMAKE_CURRENT_SOURCE_DIR}/python)
 set(WELDER_TEST_COMMON_CPP ${CMAKE_CURRENT_SOURCE_DIR}/common/cpp)
-set(WELDER_TEST_VENV_PYTHON "")
 
-if(NOT UV_EXECUTABLE)
+if(WELDER_TEST_VENV_PYTHON)
+  message(STATUS "welder: using provided test interpreter: ${WELDER_TEST_VENV_PYTHON}")
+elseif(NOT UV_EXECUTABLE)
   message(WARNING "welder: 'uv' not found; Python tests will be skipped.")
 else()
-  if(WELDER_TEST_PYTHON)
-    set(_uv_python --python ${WELDER_TEST_PYTHON} --python-preference only-system)
-    message(STATUS "welder: syncing uv test environment (system ${WELDER_TEST_PYTHON})...")
-  else()
-    set(_uv_python --python ${WELDER_PYTHON_VERSION} --python-preference only-managed)
-    message(STATUS "welder: syncing uv test environment (Python ${WELDER_PYTHON_VERSION})...")
-  endif()
+  # Prepare the (shared) uv environment once. We deliberately use uv's managed
+  # CPython rather than the build's Homebrew framework Python: uv rejects the
+  # latter (its platform.mac_ver() is empty). That's fine for importing our
+  # extensions — on macOS/Linux they load in any ABI-compatible CPython of the same
+  # minor (WELDER_PYTHON_VERSION) via dynamic symbol lookup.
+  message(STATUS "welder: syncing uv test environment (Python ${WELDER_PYTHON_VERSION})...")
   execute_process(
-    COMMAND ${UV_EXECUTABLE} sync --project ${WELDER_TEST_PYDIR} ${_uv_python}
+    COMMAND ${UV_EXECUTABLE} sync --project ${WELDER_TEST_PYDIR}
+            --python ${WELDER_PYTHON_VERSION} --python-preference only-managed
     RESULT_VARIABLE _uv_res
     OUTPUT_VARIABLE _uv_out ERROR_VARIABLE _uv_out)
   if(_uv_res EQUAL 0)
-    # uv lays the venv out per-OS: Scripts/ on Windows, bin/ elsewhere.
-    if(WIN32)
-      set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/Scripts/python.exe)
-    else()
-      set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/bin/python)
-    endif()
+    set(WELDER_TEST_VENV_PYTHON ${WELDER_TEST_PYDIR}/.venv/bin/python)
   else()
     message(WARNING "welder: 'uv sync' failed; Python tests will be skipped:\n${_uv_out}")
   endif()

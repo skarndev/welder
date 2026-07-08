@@ -109,7 +109,10 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-conan
-            mingw-w64-ucrt-x86_64-uv
+            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-python-pytest
+            mingw-w64-ucrt-x86_64-mypy
+            mingw-w64-ucrt-x86_64-python-lark-parser
 
       - name: Toolchain versions
         run: |
@@ -117,6 +120,22 @@ jobs:
           gcc --version
           conan --version
           python --version
+
+      - name: Prepare Python test env
+        # uv can't manage the mingw python ("Unknown operating system: mingw_..."),
+        # so build the venv directly instead. --system-site-packages shares the
+        # pacman-installed pytest/mypy/lark (no source builds); pip adds only the
+        # two pure-Python extras. The venv inherits the mingw ABI, so it imports the
+        # gcc-built extensions. Hand the interpreter to the harness via
+        # WELDER_TEST_VENV_PYTHON (which bypasses uv entirely).
+        run: |
+          set -euo pipefail
+          python -m venv --system-site-packages .tenv
+          ./.tenv/Scripts/python.exe -m pip install --quiet \
+            pytest-mypy-testing \
+            "pybind11-stubgen @ git+https://github.com/pybind/pybind11-stubgen@main"
+          echo "WELDER_TEST_VENV_PYTHON=$(cygpath -m "$(pwd)/.tenv/Scripts/python.exe")" \
+            >> "$GITHUB_ENV"
 
       - name: Cache Conan packages
         uses: actions/cache@v4
@@ -133,22 +152,22 @@ jobs:
       - name: Configure
         run: |
           set -euo pipefail
-          # Match find_package(Python) to the mingw interpreter (the project pins
-          # 3.14 by default; ucrt64's python happens to be 3.14 too, but detect it
-          # so this stays correct if it moves). uv is a *native* Windows tool, so it
-          # needs the real python.exe as a forward-slash Windows path — derive it
-          # from sys.executable via cygpath, not `which python` (which lacks .exe).
+          # Build the extensions against the mingw interpreter (find_package(Python)
+          # needs Development.Module, which the base python package carries — the
+          # venv doesn't). Detect its minor so this stays correct if ucrt64 moves off
+          # 3.14. cygpath gives a forward-slash Windows path CMake accepts.
           PYVER=$(python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')")
           PYEXE=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")
           cmake --preset welder-gcc16 \
             -DWELDER_PYTHON_VERSION="$PYVER" \
             -DPython_EXECUTABLE="$PYEXE" \
-            -DWELDER_TEST_PYTHON="$PYEXE" \
+            -DWELDER_TEST_VENV_PYTHON="$WELDER_TEST_VENV_PYTHON" \
             -DWELDER_BUILD_SOL2=OFF \
             -DWELDER_BUILD_LUABRIDGE=OFF
-          # The Python rods run their full specs + stubs here: uv builds the test
-          # env from the mingw python (WELDER_TEST_PYTHON), so the gcc-built .pyd
-          # imports cleanly (uv's managed CPython would be MSVC-ABI).
+          # The Python rods run their full specs + stubs here against the mingw-ABI
+          # venv prepared above (WELDER_TEST_VENV_PYTHON), so the gcc-built .pyd
+          # imports cleanly (uv's managed CPython would be MSVC-ABI, and uv can't
+          # manage the mingw python anyway).
           # TODO(windows-lua): the Lua runtime rods are still off — port the loadable
           #   Lua module link model for Windows PE and provision a runtime Lua, then
           #   re-enable WELDER_BUILD_LUABRIDGE (+ lua-luarocks busted specs). sol2
