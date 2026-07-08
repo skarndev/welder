@@ -25,4 +25,4 @@ struct [[=welder::weld(welder::lang::py)]] Bag {
     std::vector<Unwelded> items;
 };
 
-void bind_it(nanobind::module_& m) { welder::welder<welder::rods::nanobind::rod>::weld_type<Bag>(m); }
+void bind_it(nanobind::module_& m) { welder::welder<welder::rods::nanobind::rod<>>::weld_type<Bag>(m); }

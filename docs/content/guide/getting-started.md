@@ -90,7 +90,7 @@ Then a small translation unit per rod registers it. The `#include`s and the
 
     PYBIND11_MODULE(welder_poc, m) {
         m.doc() = "welder pybind11 proof-of-concept";
-        welder::welder<welder::rods::pybind11::rod>::weld_type<Point>(m);  // (2)
+        welder::welder<welder::rods::pybind11::rod<>>::weld_type<Point>(m);  // (2)
     }
     ```
 
@@ -103,7 +103,7 @@ Then a small translation unit per rod registers it. The `#include`s and the
         `Point`, resolves which members bind, checks each is representable, and
         emits the pybind11 registration. The bound name defaults to
         `identifier_of(^^T)`; pass a second string to override it. (When you call
-        several times, alias it: `using weld = welder::welder<welder::rods::pybind11::rod>;`.)
+        several times, alias it: `using weld = welder::welder<welder::rods::pybind11::rod<>>;`.)
 
     ```pycon
     >>> import welder_poc as w

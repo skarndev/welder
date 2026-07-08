@@ -23,7 +23,7 @@ annotations come through.
   gate), `doc.hpp` (docstring folding).
 - **The vocabulary** — `lang.hpp`, `annotations.hpp` (std-free; the `welder` module
   exports exactly these).
-- **The pybind11 rod** — `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod`).
+- **The pybind11 rod** — `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod<>`).
 
 ## How this reference is built
 

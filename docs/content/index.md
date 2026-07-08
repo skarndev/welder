@@ -31,7 +31,7 @@ Point {
 
 PYBIND11_MODULE(shapes, m) {
     // reflects Point, emits the binding
-    welder::welder<welder::rods::pybind11::rod>::weld_type<Point>(m);
+    welder::welder<welder::rods::pybind11::rod<>>::weld_type<Point>(m);
 }
 ```
 

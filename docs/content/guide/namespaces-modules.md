@@ -31,7 +31,7 @@ double distance(const Point& a, const Point& b) { /* … */ }
 
     ```cpp
     PYBIND11_MODULE(geometry, m) {
-        welder::welder<welder::rods::pybind11::rod>::weld_namespace<^^geometry>(m);
+        welder::welder<welder::rods::pybind11::rod<>>::weld_namespace<^^geometry>(m);
     }
     ```
 
@@ -84,7 +84,7 @@ namespace geometry {
 }  // namespace geometry
 
 PYBIND11_MODULE(geometry, m) {
-    using weld = welder::welder<welder::rods::pybind11::rod>;
+    using weld = welder::welder<welder::rods::pybind11::rod<>>;
     weld::weld_function<^^geometry::distance>(m);  // one free function
     weld::weld_variable<^^geometry::kUnit>(m);     // one constant
     // … the rest of the module stays ordinary hand-written pybind11 code …
@@ -124,7 +124,7 @@ Vec2 midpoint(const Vec2&, const Vec2&);
 inline constexpr int ABI_VERSION{3};
 }  // namespace thirdparty
 
-using tack = welder::welder<welder::rods::pybind11::rod,
+using tack = welder::welder<welder::rods::pybind11::rod<>,
                             welder::naming::none,
                             welder::tack_welding_carriage>;   // ← greedy carriage
 

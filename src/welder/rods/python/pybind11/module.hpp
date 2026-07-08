@@ -29,7 +29,7 @@
 #define WELDER_DETAIL_MODULE_ENTRY_pybind11(ns)                                   \
     static void welder_glue_##ns##_pybind11(::pybind11::module_&);                \
     PYBIND11_MODULE(ns, welder_module_var_) {                                     \
-        using welder_weld_ = ::welder::welder<::welder::rods::pybind11::rod>;      \
+        using welder_weld_ = ::welder::welder<::welder::rods::pybind11::rod<>>;    \
         welder_weld_::weld_module<^^ns>(                                          \
             welder_module_var_, welder_weld_::noop,                               \
             [](::pybind11::module_& welder_glue_m_) {                             \

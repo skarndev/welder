@@ -13,7 +13,7 @@
     Python binding reads idiomatically without every consumer re-spelling the rules.
     Hand it to `welder::welder`:
     @code
-    welder::welder<welder::rods::pybind11::rod, welder::rods::python::pep8>
+    welder::welder<welder::rods::pybind11::rod<>, welder::rods::python::pep8>
         ::weld_module<^^mymod>(m);
     @endcode
     and `processFile` binds as `process_file`, `MaxRetries` as a `MAX_RETRIES`-free

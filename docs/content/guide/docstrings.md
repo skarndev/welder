@@ -60,6 +60,74 @@ Returns:
     from the summary by spec type — which also keeps the door open for future
     `Raises:` / `Note:` blocks without re-breaking the style API.
 
+## Choosing a docstring style
+
+The style is a property of the **rod**, selected through its `DocStyle` template
+parameter. The Python rods ship three, matching the dialects the Python ecosystem's
+doc tools understand — pick one by naming it in the rod type:
+
+| Style | Rod | Renders as |
+|---|---|---|
+| `welder::rods::python::google_style` | `rod<>` (default) | `Args:` / `Returns:` blocks (Sphinx **Napoleon**) |
+| `welder::rods::python::numpy_style` | `rod<numpy_style>` | underlined `Parameters` / `Returns` sections (**numpydoc**; also Napoleon) |
+| `welder::rods::python::sphinx_style` | `rod<sphinx_style>` | `:param name:` / `:returns:` reST field lists (**autodoc** native) |
+
+```cpp
+#include <welder/rods/python/pybind11/rod.hpp>
+namespace py = welder::rods::python;
+
+PYBIND11_MODULE(mymod, m) {
+    // default (Google):        welder::rods::pybind11::rod<>
+    // NumPy:  welder::rods::pybind11::rod<py::numpy_style>
+    // Sphinx: welder::rods::pybind11::rod<py::sphinx_style>
+    welder::welder<welder::rods::pybind11::rod<py::numpy_style>>
+        ::weld_namespace<^^mymod>(m);
+}
+```
+
+The same `scale` above, welded through `rod<py::numpy_style>` and
+`rod<py::sphinx_style>` respectively:
+
+```pycon
+>>> print(scale.__doc__)          # numpy_style
+Scale a length by a factor.
+
+Parameters
+----------
+length
+    the length to scale
+factor
+    the multiplier
+
+Returns
+-------
+the scaled length
+```
+
+```pycon
+>>> print(scale.__doc__)          # sphinx_style
+Scale a length by a factor.
+
+:param length: the length to scale
+:param factor: the multiplier
+:returns: the scaled length
+```
+
+welder has no target-language type text to place after numpydoc's `name : type`
+colon, so it emits the bare `name` form (which numpydoc accepts). The choice is
+per-`welder::welder` instantiation, so different modules — or even different
+submodules — can carry different styles.
+
+!!! note "Styles are `constexpr`"
+
+    Each style's `format()` is a plain `constexpr` `std::string` assembly, so it is
+    unit-testable by `static_assert` (like [`cleandoc`](#multiline-docstrings)) and
+    usable in any compile-time context. That is deliberately *not* written with
+    `std::format`: `std::format` is not `constexpr` in the standard library (as of
+    gcc-16), so a `constexpr` docstring builder cannot call it — the compile-time
+    doc paths (`cleandoc`, annotation reading) rule it out, and the styles stay
+    hand-rolled for one consistent story.
+
 ## Multiline docstrings
 
 Function docs often carry examples that span several lines, so use a **raw string

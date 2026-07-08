@@ -1,8 +1,8 @@
 # Python (pybind11 & nanobind)
 
 welder ships **two** Python rods over the same core:
-[pybind11](https://pybind11.readthedocs.io/) (`welder::rods::pybind11::rod`) and
-[nanobind](https://nanobind.readthedocs.io/) (`welder::rods::nanobind::rod`). They
+[pybind11](https://pybind11.readthedocs.io/) (`welder::rods::pybind11::rod<>`) and
+[nanobind](https://nanobind.readthedocs.io/) (`welder::rods::nanobind::rod<>`). They
 are close cousins — same class-handle model, the *same* Python docstring styles
 (`welder/rods/python/doc_style.hpp`), the same resolution and bindability rules
 — so in welder terms nanobind is nearly a drop-in for pybind11. The difference is
@@ -23,7 +23,7 @@ The `weld_type` shape is identical; the module macro and rod type differ:
     #include <welder/rods/python/pybind11/rod.hpp>
 
     PYBIND11_MODULE(shapes, m) {
-        welder::welder<welder::rods::pybind11::rod>::weld_type<Point>(m);
+        welder::welder<welder::rods::pybind11::rod<>>::weld_type<Point>(m);
     }
     ```
 
@@ -35,7 +35,7 @@ The `weld_type` shape is identical; the module macro and rod type differ:
     #include <welder/rods/python/nanobind/rod.hpp>
 
     NB_MODULE(shapes, m) {
-        welder::welder<welder::rods::nanobind::rod>::weld_type<Point>(m);
+        welder::welder<welder::rods::nanobind::rod<>>::weld_type<Point>(m);
     }
     ```
 

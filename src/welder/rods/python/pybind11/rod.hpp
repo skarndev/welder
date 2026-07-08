@@ -11,13 +11,15 @@
 
     Requires the welder vocabulary to be available first, via either `import
     welder;` (module form) or `#include <welder/vocabulary.hpp>` (header-only).
-    This header exposes exactly one thing: the rod type
-    `welder::rods::pybind11::rod`, to plug into `welder::welder`:
+    This header exposes exactly one thing: the rod template
+    `welder::rods::pybind11::rod<DocStyle = google_style>`, to plug into
+    `welder::welder` (`rod<>` for the default Google docstring style;
+    `rod<numpy_style>` / `rod<sphinx_style>` for the other dialects):
     @code
     #include <pybind11/pybind11.h>
     #include <welder/rods/python/pybind11/rod.hpp>
     PYBIND11_MODULE(mymod, m) {
-        welder::welder<welder::rods::pybind11::rod>::weld_type<MyType>(m);
+        welder::welder<welder::rods::pybind11::rod<>>::weld_type<MyType>(m);
     }
     @endcode
     (For the `WELDER_MODULE` entry-point macro, include this directory's
@@ -54,7 +56,16 @@ namespace py = ::pybind11;
     `<welder/welder.hpp>` for the contract each member fulfills. The `protected`
     members below are pybind11-specific implementation helpers (prefixed `_`), not
     part of the contract.
+
+    @tparam DocStyle the docstring convention this rod folds function/parameter/
+                     return docs into (a @ref welder::doc_style). Defaults to
+                     @ref welder::rods::python::google_style; pass
+                     @ref welder::rods::python::numpy_style or
+                     @ref welder::rods::python::sphinx_style to emit those dialects.
+                     Defaulted, so `rod<>` is the Google-style rod and code that
+                     wants a different dialect names `rod<numpy_style>`.
 */
+template <::welder::doc_style DocStyle = ::welder::rods::python::google_style>
 struct rod {
     static constexpr lang language{lang::py}; /**< welder::lang::py. */
     using module_type = py::module_;          /**< pybind11's module handle. */
@@ -115,7 +126,7 @@ struct rod {
                               std::index_sequence<I...>) {
         static constexpr auto names{::welder::detail::param_names<Fn>()};
         const std::string doc{
-            ::welder::function_docstring<Fn, ::welder::rods::python::google_style>()};
+            ::welder::function_docstring<Fn, DocStyle>()};
         if constexpr (::welder::detail::all_params_named<Fn>()) {
             if (doc.empty())
                 def_into(name, &[:Fn:], py::arg(names[I])...);
@@ -443,7 +454,7 @@ struct rod {
     }
 };
 
-static_assert(::welder::rod<rod>,
-              "welder::rods::pybind11::rod must satisfy welder::rod");
+static_assert(::welder::rod<rod<>>,
+              "welder::rods::pybind11::rod<> must satisfy welder::rod");
 
 } // namespace welder::rods::pybind11

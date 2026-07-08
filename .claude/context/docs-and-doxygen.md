@@ -15,9 +15,29 @@ entity, so its doc rides on the function as a *distinct* spec type
 `function_doc` parts struct, extensible to future `Raises:`/`Note:` without
 re-breaking the style API) under a pluggable style; surfaced as Python `__doc__`.
 `doc.hpp` keeps only the neutral `doc_style` concept + `function_docstring` (no
-default style); the concrete `google_style` (→ `Args:`/`Returns:` blocks) lives in
-`<welder/rods/python/doc_style.hpp>` under `welder::python`, shared by both
-Python rods, which pass it explicitly.
+default style); the concrete styles live in `<welder/rods/python/doc_style.hpp>`
+under `welder::rods::python`, shared by both Python rods. Three are shipped —
+`google_style` (→ `Args:`/`Returns:`), `numpy_style` (underlined
+`Parameters`/`Returns` numpydoc sections, bare `name` since welder has no type
+text for the `name : type` colon) and `sphinx_style` (`:param`/`:returns:` reST
+field lists) — sharing `detail::{append_indented,blank_line,any_param_doc}`. Each
+`format()` is **`constexpr`** (unit-tested by `static_assert` in
+`tests/core/doc_styles.cpp`, same shape as `doc_cleandoc.cpp`); that is *why* they
+are hand-rolled, not written with `std::format` (which is not `constexpr` in
+libstdc++ on gcc-16 — the compile-time doc paths `cleandoc`/`annotation_text_of`
+rule it out anyway, so all string assembly stays `constexpr`-clean).
+
+**Style selection is a rod template parameter.** The Python rods are
+`welder::rods::{pybind11,nanobind}::rod<DocStyle = google_style>`; `rod<>` is the
+default (Google) rod (the name most code uses), `rod<numpy_style>` /
+`rod<sphinx_style>` pick the others. Only the rod's `_def_function` reads
+`DocStyle` (→ `function_docstring<Fn, DocStyle>`); the driver is style-agnostic
+(doc formatting is a Python-flavor concern — the Lua rods ignore it, luacats has
+its own). Because `rod` became a template, every use spells `rod<>` (module macros,
+tests, `naming.hpp`). E2e: the shared `tests/common/cpp/doc.hpp` re-welds
+`documented::add` through `WELDER_TEST_{NUMPY,SPHINX}_WELDER` seams (defined per
+backend beside `WELDER_TEST_WELDER`) into `documented_numpy`/`documented_sphinx`
+submodules, asserted in `tests/python/test_doc.py` for both backends.
 
 **Multiline docs work** — a `doc`/`returns`/param text is just a `const char[N]`,
 so a raw string literal (`R"(…)"`) with newlines/blank lines/quotes/backslashes

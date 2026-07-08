@@ -34,10 +34,16 @@ import welder;
 // backend-neutral and reach the backend only through these two names, so the same
 // sources drive both the pybind11 and nanobind extensions. pybind11 supports
 // multiple inheritance, so the diamond case is enabled here.
-#define WELDER_TEST_WELDER ::welder::welder<::welder::rods::pybind11::rod>
+#define WELDER_TEST_WELDER ::welder::welder<::welder::rods::pybind11::rod<>>
 // The naming group binds through a styled welder (PEP 8 for Python).
 #define WELDER_TEST_STYLED_WELDER \
-    ::welder::welder<::welder::rods::pybind11::rod, ::welder::rods::python::pep8>
+    ::welder::welder<::welder::rods::pybind11::rod<>, ::welder::rods::python::pep8>
+// The doc group re-welds one function through numpy- and sphinx-styled rods (the
+// docstring dialect is the rod's DocStyle template parameter).
+#define WELDER_TEST_NUMPY_WELDER \
+    ::welder::welder<::welder::rods::pybind11::rod<::welder::rods::python::numpy_style>>
+#define WELDER_TEST_SPHINX_WELDER \
+    ::welder::welder<::welder::rods::pybind11::rod<::welder::rods::python::sphinx_style>>
 #define WELDER_TEST_MODULE_T ::pybind11::module_
 #define WELDER_TEST_MULTIPLE_INHERITANCE 1
 // The one module-handle op the shared register_* helpers need; the Lua backend,
@@ -73,6 +79,7 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_freestanding(m); // <-> test_namespace.py (semi-manual weld_function/variable)
     register_foreign(m);     // <-> test_namespace.py (tack-welding an unmarked namespace)
     register_doc(m);         // <-> test_doc.py
+    register_doc_styles(m);  // <-> test_doc.py (numpy/sphinx docstring dialects)
     register_operators(m);   // <-> test_operators.py
     register_trust(m);       // <-> test_trust.py
     register_caster(m);      // <-> test_caster.py

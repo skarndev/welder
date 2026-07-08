@@ -134,6 +134,33 @@ def test_function_multiline_summary_param_and_return_docs(doc: ModuleType) -> No
     assert doc.combine(2, 3) == 5
 
 
+# --- alternative docstring styles (numpy / sphinx) --------------------------
+# `add` (summary + two param docs + a return doc) is re-welded through a
+# numpy-styled and a sphinx-styled rod into sibling submodules, so the *same*
+# function renders in each Python docstring dialect. The style is the rod's
+# DocStyle template parameter; the driver is unchanged.
+def test_numpy_style_docstring(mod: ModuleType) -> None:
+    text = cast(ModuleType, mod.documented_numpy).add.__doc__
+    assert "Add two integers." in text
+    # underlined numpydoc sections, not Google's `Args:`/`Returns:`
+    assert "Parameters\n----------" in text
+    assert "Returns\n-------" in text
+    assert "Args:" not in text
+    # a parameter renders as `name` then its indented body (no type available)
+    assert "a\n    left operand" in text
+
+
+def test_sphinx_style_docstring(mod: ModuleType) -> None:
+    text = cast(ModuleType, mod.documented_sphinx).add.__doc__
+    assert "Add two integers." in text
+    # reST field list, not Google/NumPy sections
+    assert ":param a: left operand" in text
+    assert ":param b: right operand" in text
+    assert ":returns: their sum" in text
+    assert "Args:" not in text
+    assert "Parameters" not in text
+
+
 # --- namespace docstring (adopted as the module docstring) -------------------
 def test_namespace_docstring_becomes_module_doc(doc: ModuleType) -> None:
     assert doc.__doc__ == "The documented sample namespace."

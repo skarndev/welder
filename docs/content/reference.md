@@ -27,8 +27,8 @@ docs come through, and themed to match this site.
 | The **carriage** (traversal driver) | `welder::stitch_welding_carriage` (default) / `welder::tack_welding_carriage` — `basic_carriage<Resolution>` (`bind_type`, `bind_enum`, `bind_function`, `bind_variable`, `bind_namespace`, `build_module`) |
 | The **reflection layer** | `reflect.hpp`, `bind_traits.hpp`, `bindable.hpp`, `doc.hpp` |
 | The **vocabulary** | `lang.hpp`, `annotations.hpp` |
-| The **pybind11 rod** | `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod`) |
-| The **nanobind rod** | `rods/python/nanobind/rod.hpp` (`welder::rods::nanobind::rod`) |
+| The **pybind11 rod** | `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod<>`) |
+| The **nanobind rod** | `rods/python/nanobind/rod.hpp` (`welder::rods::nanobind::rod<>`) |
 | The shared **Python docstring styles** | `rods/python/doc_style.hpp` (`welder::rods::python::google_style`) |
 | Internal helpers (`detail/`) | included — `EXTRACT_PRIVATE` / `INTERNAL_DOCS` are on |
 

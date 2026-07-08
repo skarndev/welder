@@ -29,7 +29,7 @@
 #define WELDER_DETAIL_MODULE_ENTRY_nanobind(ns)                                   \
     static void welder_glue_##ns##_nanobind(::nanobind::module_&);                \
     NB_MODULE(ns, welder_module_var_) {                                           \
-        using welder_weld_ = ::welder::welder<::welder::rods::nanobind::rod>;      \
+        using welder_weld_ = ::welder::welder<::welder::rods::nanobind::rod<>>;    \
         welder_weld_::weld_module<^^ns>(                                          \
             welder_module_var_, welder_weld_::noop,                               \
             [](::nanobind::module_& welder_glue_m_) {                             \

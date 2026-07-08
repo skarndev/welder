@@ -32,7 +32,7 @@ Circle : Shape {          // Shape is welded → a real base class in each langu
 };
 
 // bind order: base before derived
-using weld = welder::welder<welder::rods::pybind11::rod>;  // or ...::sol2::rod / …
+using weld = welder::welder<welder::rods::pybind11::rod<>>;  // or ...::sol2::rod / …
 weld::weld_type<Shape>(m);
 weld::weld_type<Circle>(m);
 ```

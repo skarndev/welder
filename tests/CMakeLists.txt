@@ -84,6 +84,18 @@ add_test(NAME compile.doc_cleandoc
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_doc_cleandoc --config $<CONFIG>)
 
+# Python docstring styles (compile-only): the three constexpr styles the Python
+# rods fold function/param/return docs into (google/numpy/sphinx). static_asserts
+# lock each style's exact layout; being constexpr they need no Python and no rod —
+# same compile-to-pass shape as above. (These are rod-agnostic string builders, so
+# they live under core/ despite living in the python rod tree.)
+add_library(welder_doc_styles OBJECT EXCLUDE_FROM_ALL core/doc_styles.cpp)
+target_compile_features(welder_doc_styles PRIVATE cxx_std_26)
+target_link_libraries(welder_doc_styles PRIVATE welder::headers)
+add_test(NAME compile.doc_styles
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_doc_styles --config $<CONFIG>)
+
 # Name-styling + weld_as semantics (compile-only): welder::naming reshapes an
 # identifier into a target convention whatever its source spelling, and
 # welder::name_of resolves the bound name (a [[=welder::weld_as]] override winning

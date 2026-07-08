@@ -1,7 +1,7 @@
 # Binding a type
 
 Every rod goes through the same entry point — `welder::welder<Rod>::weld_type<T>(m)`,
-where `Rod` is `welder::rods::pybind11::rod`, `welder::rods::nanobind::rod`, or
+where `Rod` is `welder::rods::pybind11::rod<>`, `welder::rods::nanobind::rod<>`, or
 `welder::rods::sol2::rod` — which reflects `T` and emits its whole surface. This
 page covers what "whole surface" means for a class: data members, constructors,
 methods, and operators. **The annotations and the resolution are identical across

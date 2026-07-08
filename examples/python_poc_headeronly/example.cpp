@@ -30,7 +30,7 @@ Label {
 
 PYBIND11_MODULE(welder_poc_ho, m) {
     m.doc() = "welder pybind11 POC (header-only consumption)";
-    using weld = welder::welder<welder::rods::pybind11::rod>;
+    using weld = welder::welder<welder::rods::pybind11::rod<>>;
     weld::weld_type<Point>(m);
     weld::weld_type<Label>(m);
 }

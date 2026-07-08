@@ -34,7 +34,7 @@ welding rod — the backend that lays a framework's bindings down):
 - The **core** does all the reflection — reading your annotations, deciding
   *which* members bind per language, checking each type is *representable*, and
   walking types / namespaces / bases.
-- A **rod** (`welder::rods::pybind11::rod`, …) is a stateless struct that supplies
+- A **rod** (`welder::rods::pybind11::rod<>`, …) is a stateless struct that supplies
   only the *emission primitives*: how to register a class, a method, a property in
   its framework. It never re-implements the traversal or the annotation semantics.
   You drive it through one entry point, `welder::welder<Rod>`.

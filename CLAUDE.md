@@ -63,7 +63,7 @@ ReflectedStruct {
 
 PYBIND11_MODULE(mymod, m) {
     // name defaults to identifier_of(^^T)
-    welder::welder<welder::rods::pybind11::rod>::weld_type<ReflectedStruct>(m);
+    welder::welder<welder::rods::pybind11::rod<>>::weld_type<ReflectedStruct>(m);
 }
 ```
 

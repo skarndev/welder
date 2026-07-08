@@ -32,7 +32,7 @@ Label {
 
 PYBIND11_MODULE(welder_poc, m) {
     m.doc() = "welder pybind11 proof-of-concept";
-    using weld = welder::welder<welder::rods::pybind11::rod>;
+    using weld = welder::welder<welder::rods::pybind11::rod<>>;
     weld::weld_type<Point>(m);
     weld::weld_type<Label>(m);
 }

@@ -20,7 +20,7 @@
     (`bind_traits.hpp`) and *whether each type can be represented* (`bindable.hpp`).
     Everything language-specific — *how* to register a class, method, property or
     module attribute — is delegated to a **rod** (a welding rod: the backend that
-    lays down the bindings): a stateless policy type (`welder::rods::pybind11::rod`,
+    lays down the bindings): a stateless policy type (`welder::rods::pybind11::rod<>`,
     `…::nanobind::rod`, `…::sol2::rod`) supplying a fixed set of emission
     primitives. The driver here is written once against the @ref welder::rod concept
     and reused verbatim by every rod, so a new rod implements only its primitives,
@@ -539,7 +539,7 @@ using carriage = stitch_welding_carriage;
 
 /** welder's binding entry point, parameterized on a **rod**.
 
-    One struct is all a user drives: pick a rod (e.g. `welder::rods::pybind11::rod`,
+    One struct is all a user drives: pick a rod (e.g. `welder::rods::pybind11::rod<>`,
     from that rod's header) and call the static member matching the stage of the
     usual hand-binding flow you want to automate — welder generates the
     backend-agnostic boilerplate there, and everything around it stays ordinary
@@ -547,7 +547,7 @@ using carriage = stitch_welding_carriage;
 
     @code
     #include <welder/rods/python/pybind11/rod.hpp>
-    using weld = welder::welder<welder::rods::pybind11::rod>;
+    using weld = welder::welder<welder::rods::pybind11::rod<>>;
 
     PYBIND11_MODULE(mymod, m) {
         weld::weld_type<MyType>(m);          // one type onto an existing module

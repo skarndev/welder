@@ -18,7 +18,7 @@ verbatim (the style is [`welder::naming::none`](#name-styles)).
 #include <welder/rods/python/pybind11/rod.hpp>
 #include <welder/rods/python/naming.hpp>   // welder::rods::python::pep8
 
-using weld = welder::welder<welder::rods::pybind11::rod,
+using weld = welder::welder<welder::rods::pybind11::rod<>,
                             welder::rods::python::pep8>;
 
 PYBIND11_MODULE(mymod, m) {

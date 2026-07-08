@@ -22,4 +22,4 @@ struct [[=welder::weld(welder::lang::py)]] Bag {
     std::vector<Unwelded> items;
 };
 
-void bind_it(pybind11::module_& m) { welder::welder<welder::rods::pybind11::rod>::weld_type<Bag>(m); }
+void bind_it(pybind11::module_& m) { welder::welder<welder::rods::pybind11::rod<>>::weld_type<Bag>(m); }

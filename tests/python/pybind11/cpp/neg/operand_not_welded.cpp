@@ -24,4 +24,4 @@ struct [[=welder::weld(welder::lang::py)]] Tagged {
     Tagged operator+(const RawTag& t) const { return Tagged{id + t.id}; }
 };
 
-void bind_it(pybind11::module_& m) { welder::welder<welder::rods::pybind11::rod>::weld_type<Tagged>(m); }
+void bind_it(pybind11::module_& m) { welder::welder<welder::rods::pybind11::rod<>>::weld_type<Tagged>(m); }

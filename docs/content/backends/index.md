@@ -16,8 +16,8 @@ point `welder::welder<Rod>`:
 
 | Rod | Type | Language | Target framework | Entry symbol |
 |---|---|---|---|---|
-| **pybind11** | `welder::rods::pybind11::rod` | Python | [pybind11](https://pybind11.readthedocs.io/) | `PyInit_<name>` |
-| **nanobind** | `welder::rods::nanobind::rod` | Python | [nanobind](https://nanobind.readthedocs.io/) | `PyInit_<name>` |
+| **pybind11** | `welder::rods::pybind11::rod<>` | Python | [pybind11](https://pybind11.readthedocs.io/) | `PyInit_<name>` |
+| **nanobind** | `welder::rods::nanobind::rod<>` | Python | [nanobind](https://nanobind.readthedocs.io/) | `PyInit_<name>` |
 | **sol2** | `welder::rods::sol2::rod` | Lua | [sol2](https://sol2.readthedocs.io/) | `luaopen_<name>` |
 | **luabridge** | `welder::rods::luabridge::rod` | Lua | [LuaBridge3](https://github.com/kunitoki/LuaBridge3) | `luaopen_<name>` |
 | **luacats** | `welder::rods::luacats::rod` | *(build-time)* | LuaCATS `---@meta` stub | — |

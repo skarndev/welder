@@ -160,3 +160,18 @@ inline void register_doc(WELDER_TEST_MODULE_T& m) {
         [](WELDER_TEST_MODULE_T& mm) { mm.attr("pre_marker") = 1; },
         [](WELDER_TEST_MODULE_T& mm) { mm.attr("post_marker") = 2; });
 }
+
+// The docstring *style* is a property of the rod (its DocStyle template
+// parameter), not the driver: the same welded `add` (summary + two param docs + a
+// return doc) folded through a numpy-styled and a sphinx-styled welder yields the
+// two other Python docstring dialects. WELDER_TEST_NUMPY_WELDER /
+// WELDER_TEST_SPHINX_WELDER are `welder::welder<Rod<numpy_style|sphinx_style>>`,
+// defined per backend alongside WELDER_TEST_WELDER; each Python backend threads the
+// style identically. Bound into their own submodules so test_doc.py can compare the
+// same function's __doc__ across the three styles.
+inline void register_doc_styles(WELDER_TEST_MODULE_T& m) {
+    auto n{WELDER_TEST_SUBMODULE(m, "documented_numpy")};
+    WELDER_TEST_NUMPY_WELDER::weld_function<^^documented::add>(n);
+    auto s{WELDER_TEST_SUBMODULE(m, "documented_sphinx")};
+    WELDER_TEST_SPHINX_WELDER::weld_function<^^documented::add>(s);
+}
