@@ -107,6 +107,8 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-lua
+            mingw-w64-ucrt-x86_64-lua-luarocks
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-conan
             mingw-w64-ucrt-x86_64-python-pip
@@ -161,21 +163,22 @@ jobs:
           # 3.14. cygpath gives a forward-slash Windows path CMake accepts.
           PYVER=$(python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')")
           PYEXE=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")
+          LUA_PREFIX=$(cygpath -m "$MSYSTEM_PREFIX")
           cmake --preset welder-gcc16 \
             -DWELDER_PYTHON_VERSION="$PYVER" \
             -DPython_EXECUTABLE="$PYEXE" \
             -DWELDER_TEST_VENV_PYTHON="$WELDER_TEST_VENV_PYTHON" \
             -DWELDER_TEST_TYPINGCASES=OFF \
             -DWELDER_BUILD_SOL2=OFF \
-            -DWELDER_BUILD_LUABRIDGE=OFF
-          # The Python rods run their full specs + stubs here against the mingw-ABI
-          # venv prepared above (WELDER_TEST_VENV_PYTHON), so the gcc-built .pyd
-          # imports cleanly (uv's managed CPython would be MSVC-ABI, and uv can't
-          # manage the mingw python anyway).
-          # TODO(windows-lua): the Lua runtime rods are still off — port the loadable
-          #   Lua module link model for Windows PE and provision a runtime Lua, then
-          #   re-enable WELDER_BUILD_LUABRIDGE (+ lua-luarocks busted specs). sol2
-          #   stays off on Windows: ucrt64 ships only Lua 5.5, which sol2 3.5.0 rejects.
+            -DWELDER_BUILD_LUABRIDGE=ON \
+            -DWELDER_LUABRIDGE_LUA_VERSION=5.5 \
+            -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX"
+          # The Python rods run their full specs + stubs against the mingw-ABI venv
+          # prepared above; the LuaBridge3 rod builds its loadable module against the
+          # ucrt64 Lua 5.5 (LuaBridge3 supports 5.5; the module links the Lua import
+          # lib per the Windows-PE link model) and runs the busted specs via
+          # lua-luarocks. sol2 stays off on Windows: ucrt64 ships only Lua 5.5, which
+          # sol2 3.5.0 rejects.
 
       - name: Build
         run: cmake --build --preset welder-gcc16

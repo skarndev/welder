@@ -138,6 +138,28 @@ if(WELDER_BUILD_LUABRIDGE AND TARGET LuaBridge)
   target_link_libraries(welder_luabridge INTERFACE welder_headers LuaBridge)
   target_include_directories(welder_luabridge SYSTEM INTERFACE
     ${WELDER_LUABRIDGE_LUA_INCLUDE_DIR})
+
+  # Windows PE has no ELF/Mach-O host-symbol lookup: a loadable module can't leave
+  # `lua_*` unresolved for the interpreter to satisfy at load, so it must link the
+  # Lua import library. The ucrt64 interpreter is linked against the same lua DLL,
+  # so the module and host share one lua_State (the host-symbol model's intent).
+  # (Header-only elsewhere — the ELF/macho rods never link liblua; see the note
+  # above and the module helpers' APPLE branch.)
+  if(WIN32)
+    find_library(WELDER_LUABRIDGE_LUA_LIBRARY
+      NAMES lua lua5.5 lua55 lua5.4 lua54 liblua
+      PATHS "${WELDER_LUABRIDGE_LUA_DIR}/lib" "${WELDER_LUABRIDGE_LUA_DIR}/bin"
+      NO_DEFAULT_PATH)
+    if(NOT WELDER_LUABRIDGE_LUA_LIBRARY)
+      find_library(WELDER_LUABRIDGE_LUA_LIBRARY NAMES lua lua5.5 lua55 lua5.4 lua54 liblua)
+    endif()
+    if(NOT WELDER_LUABRIDGE_LUA_LIBRARY)
+      message(FATAL_ERROR "welder: could not find the Lua import library for the "
+        "LuaBridge3 backend on Windows (needed to resolve lua_* in a loadable "
+        "module). Set -DWELDER_LUABRIDGE_LUA_DIR to a Lua install prefix.")
+    endif()
+    target_link_libraries(welder_luabridge INTERFACE ${WELDER_LUABRIDGE_LUA_LIBRARY})
+  endif()
 endif()
 
 # --- welder::luacats : LuaCATS `---@meta` stub rod -----------------------
