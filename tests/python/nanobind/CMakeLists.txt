@@ -9,7 +9,11 @@
 # nanobind ships its runtime as source compiled into each extension via
 # nanobind_add_module (not a plain link library), so the extensions are created
 # with that helper rather than Python_add_library.
-find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
+set(_welder_nb_py_components Interpreter Development.Module)
+if(WELDER_NANOBIND_STABLE_ABI)
+  list(APPEND _welder_nb_py_components Development.SABIModule)
+endif()
+find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS ${_welder_nb_py_components})
 find_package(nanobind CONFIG REQUIRED)
 
 function(welder_add_nanobind_test_module tgt)
@@ -17,7 +21,15 @@ function(welder_add_nanobind_test_module tgt)
   # show in IDEs (header deps are tracked via compiler depfiles). The backend-neutral
   # groups live in ../common/cpp (shared with pybind11); trust and caster are
   # nanobind-specific and live alongside bindings.cpp.
-  nanobind_add_module(${tgt}
+  #
+  # STABLE_ABI (opt-in via WELDER_NANOBIND_STABLE_ABI) builds against Py_LIMITED_API
+  # so the module links python3.dll and loads across Python minors and the compiler
+  # boundary — a UCRT-MinGW gcc build then imports in a stock MSVC CPython.
+  set(_nb_args "")
+  if(WELDER_NANOBIND_STABLE_ABI)
+    set(_nb_args STABLE_ABI)
+  endif()
+  nanobind_add_module(${tgt} ${_nb_args}
     cpp/bindings.cpp cpp/trust.hpp cpp/caster.hpp
     ${WELDER_TEST_COMMON_CPP}/resolution.hpp ${WELDER_TEST_COMMON_CPP}/methods.hpp
     ${WELDER_TEST_COMMON_CPP}/inheritance.hpp ${WELDER_TEST_COMMON_CPP}/namespace.hpp
@@ -27,6 +39,16 @@ function(welder_add_nanobind_test_module tgt)
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
   target_link_libraries(${tgt} PRIVATE welder::headers welder::nanobind)
+
+  # For a distributable stable-ABI module on MinGW: fold the gcc runtimes in so the
+  # .pyd is self-contained (no libstdc++-6/libgcc_s/libwinpthread on the host's
+  # PATH), and override nanobind's -Os on the binding TU with -O2. gcc-16.1 has an
+  # -Os codegen bug that emits an unresolved out-of-line ref to std::string's move
+  # ctor (which -O2 inlines away); the later flag wins over nanobind's -Os.
+  if(WELDER_NANOBIND_STABLE_ABI AND MINGW)
+    target_compile_options(${tgt} PRIVATE -O2)
+    target_link_options(${tgt} PRIVATE -static -static-libgcc -static-libstdc++)
+  endif()
 endfunction()
 
 set(_variants welder_test_nanobind)

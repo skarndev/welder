@@ -198,3 +198,102 @@ jobs:
 
       - name: Test
         run: ctest --preset welder-gcc16 --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # Windows abi3 — the shippable case. Proves a welder/nanobind extension built
+  # with UCRT-MinGW gcc-16 loads in a STOCK MSVC CPython (the interpreter
+  # python.org and Blender ship), not just the mingw python. The bridge is
+  # nanobind's stable ABI (abi3): the extension links python3.dll via
+  # Py_LIMITED_API, and the limited API is a C ABI that's compatible across the
+  # GCC/MSVC boundary. (pybind11 has no abi3 equivalent, so this is nanobind-only.)
+  # ---------------------------------------------------------------------------
+  windows-abi3:
+    name: windows abi3 (mingw gcc-16 → MSVC CPython)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The MSVC-built CPython we must load into (python.org / Blender's flavor).
+      - uses: actions/setup-python@v5
+        id: py
+        with:
+          python-version: '3.13'
+
+      - name: Install pytest into the MSVC python
+        shell: pwsh
+        run: |
+          & "${{ steps.py.outputs.python-path }}" -m pip install --upgrade pip pytest pytest-mypy-testing
+
+      # UCRT-MinGW gcc — shares the Universal CRT with the MSVC python, closing the
+      # CRT gap. conan supplies nanobind's headers (built into the extension).
+      - name: Set up MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git base-devel
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python-conan
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-mingw-${{ hashFiles('conanfile.py', 'conan/profiles/gcc16-mingw') }}
+          restore-keys: conan-mingw-
+
+      - name: Conan install
+        shell: msys2 {0}
+        run: conan install . -pr:a conan/profiles/gcc16-mingw --build=missing -o with_pybind11=False -o with_sol2=False
+
+      - name: Configure + build (mingw gcc, abi3, targeting the MSVC python)
+        shell: msys2 {0}
+        env:
+          PY_WIN: ${{ steps.py.outputs.python-path }}
+        run: |
+          set -euo pipefail
+          PYEXE=$(cygpath -m "$PY_WIN")
+          cmake --preset welder-gcc16 \
+            -DPython_EXECUTABLE="$PYEXE" \
+            -DWELDER_PYTHON_VERSION=3.13 \
+            -DWELDER_BUILD_PYBIND11=OFF \
+            -DWELDER_BUILD_SOL2=OFF \
+            -DWELDER_BUILD_LUABRIDGE=OFF \
+            -DWELDER_BUILD_EXAMPLES=OFF \
+            -DWELDER_BUILD_STUBS=OFF \
+            -DWELDER_NANOBIND_STABLE_ABI=ON \
+            -DWELDER_TEST_VENV_PYTHON="$PYEXE"
+          cmake --build --preset welder-gcc16 --target welder_test_nanobind
+
+      - name: Assert the .pyd is abi3 + self-contained
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          PYD=$(find build -name 'welder_test_nanobind*.pyd' | head -1)
+          echo "artifact: $PYD"
+          # abi3 links python3.dll, not python313.dll.
+          echo "== DLL dependencies =="; objdump -p "$PYD" | grep 'DLL Name'
+          objdump -p "$PYD" | grep -qi 'python3\.dll' \
+            || { echo "FAIL: not linked against python3.dll (abi3)"; exit 1; }
+          # Self-contained: no gcc runtime DLLs (statically folded in).
+          if objdump -p "$PYD" | grep -Eiq 'libstdc\+\+|libgcc|libwinpthread'; then
+            echo "FAIL: depends on a gcc runtime DLL"; exit 1
+          fi
+          echo "OK: abi3 (python3.dll) + self-contained"
+
+      # The decisive check: run welder's shared nanobind specs under the MSVC
+      # CPython, importing the mingw-built abi3 .pyd.
+      - name: Run nanobind specs under the MSVC CPython
+        shell: msys2 {0}
+        run: ctest --preset welder-gcc16 -R '^pytest.welder_test_nanobind$' --output-on-failure
+
+      - name: Upload the abi3 .pyd
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: welder-nanobind-abi3-ucrt-mingw
+          path: build/welder-gcc16/tests/python/nanobind/welder_test_nanobind*.pyd
+          if-no-files-found: warn

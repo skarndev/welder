@@ -25,7 +25,13 @@ endif()
 # runtime, visibility and link flags). nanobind's config requires Python to be
 # found first and defines NB_DIR (its package root).
 if(WELDER_BUILD_NANOBIND)
-  find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS Interpreter Development.Module)
+  # Development.SABIModule (CMake >= 3.26) is what lets nanobind's STABLE_ABI engage;
+  # without it STABLE_ABI silently downgrades to a version-locked module.
+  set(_welder_nb_py_components Interpreter Development.Module)
+  if(WELDER_NANOBIND_STABLE_ABI)
+    list(APPEND _welder_nb_py_components Development.SABIModule)
+  endif()
+  find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED COMPONENTS ${_welder_nb_py_components})
   find_package(nanobind CONFIG REQUIRED)
 
   add_library(welder_nanobind INTERFACE)

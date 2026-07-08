@@ -17,6 +17,14 @@ option(WELDER_BUILD_TESTS "Build tests" ON)
 option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ON)
 option(WELDER_BUILD_DOCS "Build the documentation site (mkdocs + Doxygen reference)" OFF)
 
+# Build the nanobind extension against Python's stable ABI (abi3): links
+# python3.dll (not pythonXY.dll) via Py_LIMITED_API, so one binary loads across
+# Python minors AND across the compiler boundary — the C-ABI limited API is
+# GCC/MSVC-compatible. This is what lets a UCRT-MinGW gcc build load in a stock
+# MSVC CPython (e.g. Blender's). Requires nanobind + Python >= 3.12 + CMake's
+# Development.SABIModule. (pybind11 has no equivalent — nanobind only.)
+option(WELDER_NANOBIND_STABLE_ABI "Build the nanobind extension against Python's stable ABI (abi3)" OFF)
+
 # Language-runtime version knobs. Conan supplies the C++ backend headers (sol2,
 # pybind11, nanobind) at the versions we test with, but the *language runtimes*
 # (Python, Lua) come from the system/user: an extension's ABI must match the
