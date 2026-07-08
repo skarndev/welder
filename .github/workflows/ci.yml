@@ -34,6 +34,12 @@ jobs:
           # gcc → 16.1.0 (gcc-16 / g++-16); the language runtimes + build tools.
           brew install --quiet \
             gcc lua@5.4 luarocks ninja cmake conan uv python@3.14 lua-language-server
+          # luarocks pulls linked `lua` 5.5 into the prefix, whose headers shadow
+          # the keg-only lua@5.4 on the -isystem path (sol2 then miscompiles against
+          # 5.5). Unlink it: we reference the 5.4 keg explicitly via WELDER_LUA_DIR,
+          # and luarocks uses its opt-path interpreter regardless. Mirrors the Mac,
+          # where no linked 5.5 exists.
+          brew unlink lua 2>/dev/null || true
           gcc-16 --version
 
       - name: Cache Conan packages
@@ -96,7 +102,6 @@ jobs:
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-lua
-            mingw-w64-ucrt-x86_64-luarocks
             mingw-w64-ucrt-x86_64-python
             mingw-w64-ucrt-x86_64-python-pip
 
