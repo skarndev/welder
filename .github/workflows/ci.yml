@@ -121,20 +121,20 @@ jobs:
           conan --version
           python --version
 
-      - name: Prepare Python test env
+      - name: Prepare Python test deps
         # uv can't manage the mingw python ("Unknown operating system: mingw_..."),
-        # so build the venv directly instead. --system-site-packages shares the
-        # pacman-installed pytest/mypy/lark (no source builds); pip adds only the
-        # two pure-Python extras. The venv inherits the mingw ABI, so it imports the
-        # gcc-built extensions. Hand the interpreter to the harness via
-        # WELDER_TEST_VENV_PYTHON (which bypasses uv entirely).
+        # so install the test deps into it directly. pytest/mypy/lark come from
+        # pacman above (no source builds); pip adds only the two pure-Python extras.
+        # The base mingw python then serves as the test interpreter — its ABI
+        # matches the gcc-built extensions — handed to the harness via
+        # WELDER_TEST_VENV_PYTHON (which bypasses uv). (No venv: MSYS2's venv layout
+        # varies and a bin/python without .exe won't run under native CTest.)
         run: |
           set -euo pipefail
-          python -m venv --system-site-packages .tenv
-          ./.tenv/Scripts/python.exe -m pip install --quiet \
+          python -m pip install --break-system-packages --quiet \
             pytest-mypy-testing \
             "pybind11-stubgen @ git+https://github.com/pybind/pybind11-stubgen@main"
-          echo "WELDER_TEST_VENV_PYTHON=$(cygpath -m "$(pwd)/.tenv/Scripts/python.exe")" \
+          echo "WELDER_TEST_VENV_PYTHON=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")" \
             >> "$GITHUB_ENV"
 
       - name: Cache Conan packages
