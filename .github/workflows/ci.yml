@@ -80,13 +80,12 @@ jobs:
   # Windows — MSYS2 UCRT64 mingw-w64 gcc 16.1.0 (mainline, carries -freflection).
   # Everything stays inside the MSYS2 subsystem so mingw-built extensions load in
   # the mingw-built interpreters (an MSVC CPython could not import a gcc-built
-  # .pyd). The compiler + Python 3.14 + pybind11 all work here; this job verifies
-  # the *portable* surface — the reflection core, the Python rods and the luacats
-  # stub rod (+ compile-only core tests). The Lua runtime rods (sol2/LuaBridge3)
-  # are OFF pending a Windows port of their loadable-module link model and a
-  # Lua-5.4 source (ucrt64 ships 5.5, which sol2 3.5.0 can't use); the Python
-  # runtime tests are skipped pending a mingw-ABI pytest path (uv's managed
-  # CPython is MSVC-ABI). See TODO(windows-*) markers below.
+  # .pyd). At parity with Linux/macOS bar two documented items: the Python rods run
+  # their full specs + stubs (against the mingw python; the version-sensitive
+  # type-level cases are off — mypy 2.x won't build here) and the LuaBridge3 rod
+  # runs its busted specs (Lua 5.5; the module links the Lua import lib per the
+  # Windows-PE link model). sol2 stays off: ucrt64 ships only Lua 5.5, which
+  # sol2 3.5.0 rejects.
   # ---------------------------------------------------------------------------
   windows:
     name: windows (mingw gcc-16, msys2)
