@@ -142,14 +142,18 @@ jobs:
           echo "WELDER_TEST_VENV_PYTHON=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")" \
             >> "$GITHUB_ENV"
 
-      - name: Debug luarocks busted
+      - name: Install busted (Lua 5.5)
+        # Provision busted in the shell — luarocks is a shebang script CMake's
+        # execute_process can't run on Windows (empty-output failure), and its
+        # wrapper is a .bat. Hand the wrapper to the harness via
+        # WELDER_BUSTED_EXECUTABLE (which skips the configure-time luarocks call).
         run: |
-          set -x
-          luarocks --version || true
+          set -euo pipefail
           LUA_PREFIX=$(cygpath -m "$MSYSTEM_PREFIX")
           luarocks --lua-version 5.5 --lua-dir "$LUA_PREFIX" \
-            --tree "$(pwd)/.busteddbg" install busted 2.3.0 || true
-          ls -la "$(pwd)/.busteddbg/bin" 2>/dev/null || true
+            --tree "$(pwd)/.lua_modules" install busted 2.3.0
+          echo "WELDER_BUSTED_EXECUTABLE=$(cygpath -m "$(pwd)/.lua_modules/bin/busted.bat")" \
+            >> "$GITHUB_ENV"
 
       - name: Cache Conan packages
         uses: actions/cache@v4
@@ -181,7 +185,8 @@ jobs:
             -DWELDER_BUILD_SOL2=OFF \
             -DWELDER_BUILD_LUABRIDGE=ON \
             -DWELDER_LUABRIDGE_LUA_VERSION=5.5 \
-            -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX"
+            -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX" \
+            -DWELDER_BUSTED_EXECUTABLE="$WELDER_BUSTED_EXECUTABLE"
           # The Python rods run their full specs + stubs against the mingw-ABI venv
           # prepared above; the LuaBridge3 rod builds its loadable module against the
           # ucrt64 Lua 5.5 (LuaBridge3 supports 5.5; the module links the Lua import

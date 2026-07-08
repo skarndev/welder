@@ -21,6 +21,13 @@ set(WELDER_LUA_CASE_HEADERS
 find_program(WELDER_LUAROCKS_EXECUTABLE NAMES luarocks)
 set(WELDER_BUSTED_VERSION "2.3.0" CACHE STRING "busted rock version for the Lua tests")
 
+# A pre-installed busted wrapper. Set it to bypass the configure-time luarocks
+# install — needed on Windows, where luarocks is a shebang script CMake's
+# execute_process can't run, and its wrapper is a .bat. The CI step installs
+# busted in a shell (where luarocks works) and passes the wrapper here.
+set(WELDER_BUSTED_EXECUTABLE "" CACHE FILEPATH
+  "Pre-installed busted wrapper; empty = install via luarocks at configure time")
+
 # Install busted for a given Lua (version,dir) into a per-version build-local tree
 # (the analogue of `uv sync`), reusing it if already present. Sets <wrapper_out> to
 # the `bin/busted` wrapper (which bakes in the matched interpreter), or empty when it
@@ -30,6 +37,11 @@ set(WELDER_BUSTED_VERSION "2.3.0" CACHE STRING "busted rock version for the Lua 
 # not enough for luarocks to target).
 function(_welder_lua_install_busted version dir wrapper_out)
   set(${wrapper_out} "" PARENT_SCOPE)
+  if(WELDER_BUSTED_EXECUTABLE)
+    # Caller pre-installed busted (e.g. the Windows job); use it verbatim.
+    set(${wrapper_out} ${WELDER_BUSTED_EXECUTABLE} PARENT_SCOPE)
+    return()
+  endif()
   if(NOT WELDER_LUAROCKS_EXECUTABLE)
     message(WARNING "welder: 'luarocks' not found — Lua behavioral tests are skipped. "
       "Install it, e.g. `brew install luarocks`.")
