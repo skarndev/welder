@@ -74,11 +74,18 @@ jobs:
           # rather than hard-coding the build-type path.
           TC=$(find build-clang -name conan_toolchain.cmake | head -1)
           test -n "$TC"
+          # Point the Python backends at the container's own python (its dev headers
+          # come from python3-dev); welder defaults WELDER_PYTHON_VERSION=3.14, which
+          # the base image doesn't ship, so pin it to whatever is installed here.
+          PYEXE=$(command -v python3)
+          PYVER=$(python3 -c 'import sys; print(f"{sys.version_info[0]}.{sys.version_info[1]}")')
           cmake -S . -B build-clang/cmake -G Ninja \
             -DCMAKE_TOOLCHAIN_FILE="$PWD/$TC" \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
             -DWELDER_CLANG_P2996=ON \
+            -DWELDER_PYTHON_VERSION="$PYVER" \
+            -DPython_EXECUTABLE="$PYEXE" \
             -DWELDER_LUA_VERSION=5.4 \
             -DWELDER_LUA_DIR=/usr \
             -DWELDER_LUABRIDGE_LUA_DIR=/usr
