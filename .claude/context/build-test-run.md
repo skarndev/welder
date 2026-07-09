@@ -52,9 +52,10 @@ Knobs:
   -Wnon-virtual-dtor -Woverloaded-virtual -Wdouble-promotion -Wformat=2
   -Wimplicit-fallthrough -Wuseless-cast -Wextra-semi -Wmisleading-indentation
   -Wredundant-decls`. Curated to be `-Werror`-clean on gcc-16.
-- `WELDER_WERROR` (default **OFF**) — promote those to errors. **CI turns it on**
-  (Linux + macOS configure); left off locally so toolchain drift (new gcc warnings)
-  doesn't block a dev build.
+- `WELDER_WERROR` (default **OFF**) — promote those to errors. **All CI jobs turn it
+  on** (Linux, macOS, and both Windows/mingw configures — the set is clean on LLP64
+  too); left off locally so toolchain drift (new gcc warnings) doesn't block a dev
+  build.
 
 **`-Wnull-dereference` is intentionally excluded** — it's a gcc *middle-end* warning
 (emitted during optimization), so it ignores `-isystem` suppression and leaks a false

@@ -113,6 +113,7 @@ jobs:
           PYEXE=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")
           LUA_PREFIX=$(cygpath -m "$MSYSTEM_PREFIX")
           cmake --preset welder-gcc16 \
+            -DWELDER_WERROR=ON \
             -DWELDER_PYTHON_VERSION="$PYVER" \
             -DPython_EXECUTABLE="$PYEXE" \
             -DWELDER_TEST_VENV_PYTHON="$WELDER_TEST_VENV_PYTHON" \
@@ -193,6 +194,7 @@ jobs:
           set -euo pipefail
           PYEXE=$(cygpath -m "$PY_WIN")
           cmake --preset welder-gcc16 \
+            -DWELDER_WERROR=ON \
             -DPython_EXECUTABLE="$PYEXE" \
             -DWELDER_PYTHON_VERSION=3.13 \
             -DWELDER_BUILD_PYBIND11=OFF \
