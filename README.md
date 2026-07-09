@@ -105,8 +105,9 @@ P2996 — see `docs/content/guide/header-only.md`.
 
 ## Quick start
 
-Requires **gcc-16** (Homebrew GCC 16.1.0 — the only compiler with P2996 + P3394),
-CMake ≥ 3.28 + Ninja, and Conan 2.
+Requires **gcc-16** (GCC ≥ 16.1 — the only compiler with P2996 + P3394, installed
+from whatever package manager or source build you prefer), CMake ≥ 3.28 + Ninja, and
+Conan 2.
 
 ```bash
 conan install . -pr:a conan/profiles/gcc16 --build=missing

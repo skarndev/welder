@@ -5,9 +5,9 @@
 C++26 reflection is bleeding-edge. welder is written against the **standard**, not
 gcc extensions, but today only one compiler implements the papers it needs:
 
-| Requirement | This machine |
+| Requirement | Needed |
 |---|---|
-| Compiler (P2996 + P3394) | **gcc-16** — the only one so far (`g++-16`, Homebrew GCC 16.1.0) |
+| Compiler (P2996 + P3394) | **gcc-16** — the only one so far (`g++-16`, GCC ≥ 16.1); install it from whatever package manager or source build you prefer |
 | Build system | CMake ≥ 3.28; the presets drive **Ninja** |
 | Packages | Conan 2 (`conanfile.py`) → pybind11 / nanobind (Python); sol2 + Lua (Lua) |
 | Python | a `python3` with development headers (for the Python modules) |
