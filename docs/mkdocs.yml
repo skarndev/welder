@@ -3,6 +3,9 @@ site_description: >-
   Generate language bindings for annotated C++ types from C++26 reflection —
   no external code generator, no parsing step.
 site_author: welder authors
+site_url: https://skarndev.github.io/welder/
+repo_url: https://github.com/skarndev/welder
+repo_name: skarndev/welder
 copyright: Built from the real sources by welder's own Doxygen filter.
 
 # Content lives in content/; the site is assembled by CMake (mkdocs build -d …).

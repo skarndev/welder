@@ -1,0 +1,86 @@
+name: Docs
+
+# Build the documentation site (mkdocs-material guide + Doxygen C++ reference) and
+# publish it to GitHub Pages. The site build needs neither gcc-16 nor the language
+# backends — the Doxygen reference is produced by welder's own Python/lark
+# INPUT_FILTER, not the compiler — so we configure a docs-only tree with every
+# backend/example/test off and drive the tested `welder-docs` CMake target.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'src/welder/**'
+      - 'tools/welder_doxygen_filter.py'
+      - 'CMakeLists.txt'
+      - 'src/CMakeLists.txt'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+# Least privilege + the OIDC token the Pages deploy needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One in-flight publish at a time; let a running deploy finish (don't cancel).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # doxygen renders the C++ reference; graphviz (dot) draws the class graphs.
+      - name: Install Doxygen + Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends doxygen graphviz
+
+      # uv provisions the isolated docs env (mkdocs-material + lark) that
+      # docs/CMakeLists.txt syncs and runs `mkdocs build` from.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      # Configure a docs-only tree. Every backend/example/test is off, so no
+      # Python/Lua/pybind11/nanobind/sol2 packages are needed and nothing compiles;
+      # clang just satisfies project(LANGUAGES CXX) (gcc-16 is only needed to build
+      # the bindings, not the docs). This step also runs `uv sync` and fetches
+      # doxygen-awesome-css via CMake's execute_process.
+      - name: Configure (docs only)
+        env:
+          CC: clang
+          CXX: clang++
+        run: >
+          cmake -S . -B build
+          -DWELDER_BUILD_DOCS=ON
+          -DWELDER_BUILD_PYBIND11=OFF
+          -DWELDER_BUILD_NANOBIND=OFF
+          -DWELDER_BUILD_SOL2=OFF
+          -DWELDER_BUILD_LUABRIDGE=OFF
+          -DWELDER_BUILD_EXAMPLES=OFF
+          -DWELDER_BUILD_TESTS=OFF
+          -DWELDER_BUILD_STUBS=OFF
+
+      - name: Build site (guide + Doxygen reference)
+        run: cmake --build build --target welder-docs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/docs/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
