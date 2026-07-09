@@ -17,12 +17,6 @@ option(WELDER_BUILD_TESTS "Build tests" ON)
 option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ON)
 option(WELDER_BUILD_DOCS "Build the documentation site (mkdocs + Doxygen reference)" OFF)
 
-# Experimental: build with Bloomberg's clang-p2996 fork instead of gcc-16. Opt-in
-# because the fork's reflection flag (-freflection-latest) is rejected by stock
-# Clang, so the Clang branch of welder_flags must not fire for an ordinary clang.
-# Tracked by .github/workflows/experimental-clang-p2996.yml.
-option(WELDER_CLANG_P2996 "Enable the clang-p2996 fork reflection flags (experimental)" OFF)
-
 # Build the nanobind extension against Python's stable ABI (abi3): links
 # python3.dll (not pythonXY.dll) via Py_LIMITED_API, so one binary loads across
 # Python minors AND across the compiler boundary — the C-ABI limited API is
@@ -71,17 +65,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     message(FATAL_ERROR "welder needs GCC >= 16 for C++26 reflection (got ${CMAKE_CXX_COMPILER_VERSION})")
   endif()
   target_compile_options(welder_flags INTERFACE -freflection)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND WELDER_CLANG_P2996)
-  # Experimental: Bloomberg's clang-p2996 fork implements P2996 *and* P3394
-  # (annotations) behind the single -freflection-latest flag, and ships its <meta>
-  # in libc++ (the fork defaults to -stdlib=libc++). Gated on WELDER_CLANG_P2996
-  # because stock Clang rejects the flag outright — this branch is only for the fork.
-  target_compile_options(welder_flags INTERFACE -freflection-latest)
 else()
   message(WARNING
-    "welder: C++26 reflection flags are only wired for GNU (gcc-16) and, "
-    "experimentally, Bloomberg's clang-p2996 fork (-DWELDER_CLANG_P2996=ON). "
-    "Compiler '${CMAKE_CXX_COMPILER_ID}' is not supported here; the build will "
+    "welder: C++26 reflection flags are only wired for GNU (gcc-16). "
+    "Compiler '${CMAKE_CXX_COMPILER_ID}' is not supported yet; the build will "
     "almost certainly fail until P2996/P3394 land there.")
 endif()
 
