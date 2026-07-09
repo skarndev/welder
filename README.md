@@ -1,5 +1,13 @@
 # welder
 
+[![Linux](https://github.com/skarndev/welder/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/skarndev/welder/actions/workflows/ci-linux.yml)
+[![macOS](https://github.com/skarndev/welder/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/skarndev/welder/actions/workflows/ci-macos.yml)
+[![Windows](https://github.com/skarndev/welder/actions/workflows/ci-windows.yml/badge.svg)](https://github.com/skarndev/welder/actions/workflows/ci-windows.yml)
+[![Docs](https://github.com/skarndev/welder/actions/workflows/docs.yml/badge.svg)](https://github.com/skarndev/welder/actions/workflows/docs.yml)
+[![Docs site](https://img.shields.io/badge/docs-skarndev.github.io%2Fwelder-blue)](https://skarndev.github.io/welder/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![C++26](https://img.shields.io/badge/C%2B%2B-26-blue)](https://en.cppreference.com/w/cpp/26)
+
 **Generate language bindings for annotated C++ types straight from C++26
 reflection — no external code generator, no parsing step.**
 
@@ -127,25 +135,27 @@ LUA_CPATH='build/welder-gcc16/examples/lua_poc/?.so' \
   lua -e 'local s=require("shapes_lua"); local r=s.Rect(3,4); print(r:area())'
 ```
 
-See [`docs/content/guide/getting-started.md`](docs/content/guide/getting-started.md)
+See the [getting-started guide](https://skarndev.github.io/welder/guide/getting-started/)
 for the full walkthrough.
 
 ## Documentation
 
-The user guide and C++ reference live under [`docs/`](docs/) (an mkdocs-material site
-with a Doxygen-generated reference). Highlights:
+**Full docs → [skarndev.github.io/welder](https://skarndev.github.io/welder/)** — an
+mkdocs-material guide plus a Doxygen-generated C++ reference, rebuilt and published on
+every push. Highlights:
 
-- [Getting started](docs/content/guide/getting-started.md)
-- [Annotation vocabulary](docs/content/guide/annotations.md)
-- [Binding a type](docs/content/guide/binding-types.md) ·
-  [Enums](docs/content/guide/enums.md) ·
-  [Inheritance](docs/content/guide/inheritance.md) ·
-  [Namespaces & modules](docs/content/guide/namespaces-modules.md)
-- [Docstrings](docs/content/guide/docstrings.md) ·
-  [Naming conventions](docs/content/guide/naming.md)
-- [The bindability gate](docs/content/guide/bindability.md) ·
-  [Trust & type casters](docs/content/guide/trust-casters.md)
-- [Architecture](docs/content/architecture.md)
+- [Getting started](https://skarndev.github.io/welder/guide/getting-started/)
+- [Annotation vocabulary](https://skarndev.github.io/welder/guide/annotations/)
+- [Binding a type](https://skarndev.github.io/welder/guide/binding-types/) ·
+  [Enums](https://skarndev.github.io/welder/guide/enums/) ·
+  [Inheritance](https://skarndev.github.io/welder/guide/inheritance/) ·
+  [Namespaces & modules](https://skarndev.github.io/welder/guide/namespaces-modules/)
+- [Docstrings](https://skarndev.github.io/welder/guide/docstrings/) ·
+  [Naming conventions](https://skarndev.github.io/welder/guide/naming/)
+- [The bindability gate](https://skarndev.github.io/welder/guide/bindability/) ·
+  [Trust & type casters](https://skarndev.github.io/welder/guide/trust-casters/)
+- [Architecture](https://skarndev.github.io/welder/architecture/) ·
+  [C++ API reference](https://skarndev.github.io/welder/api/)
 
 ## Repository layout
 
