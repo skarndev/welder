@@ -15,6 +15,15 @@ if(WELDER_BUILD_PYBIND11)
   add_library(welder::pybind11 ALIAS welder_pybind11)
   target_link_libraries(welder_pybind11 INTERFACE
     welder_headers pybind11::headers Python::Module)
+  # Consume pybind11's headers as SYSTEM (as we do for nanobind/sol2/LuaBridge3), so
+  # warnings from pybind11-internal code inlined into a binding TU (e.g. a spurious
+  # -Wnull-dereference in its dispatcher's std::copy) don't surface under welder's
+  # strict warning set. find_package(pybind11) leaves them non-SYSTEM.
+  get_target_property(_welder_pb_inc pybind11::headers INTERFACE_INCLUDE_DIRECTORIES)
+  if(_welder_pb_inc)
+    set_target_properties(pybind11::headers PROPERTIES
+      INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_welder_pb_inc}")
+  endif()
 endif()
 
 # --- welder::nanobind : nanobind Python rod ------------------------------

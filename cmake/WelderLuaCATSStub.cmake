@@ -32,6 +32,11 @@ function(welder_luacats_generate_stub name)
   set(_gen ${name}_gen)
   add_executable(${_gen} ${S_SOURCES})
   target_link_libraries(${_gen} PRIVATE welder::luacats)
+  # welder's own build applies its strict warning set; a consumer using this
+  # helper won't have the target, so the link is skipped for them.
+  if(TARGET welder_warnings)
+    target_link_libraries(${_gen} PRIVATE welder_warnings)
+  endif()
   target_compile_features(${_gen} PRIVATE cxx_std_26)
   # The generator is header-only welder and pulls in no Lua headers, but keep
   # module scanning off to match the other Lua-side TUs and stay clear of the

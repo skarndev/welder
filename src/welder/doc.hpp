@@ -220,7 +220,10 @@ template <std::meta::info Fn>
 consteval auto param_docs() {
     constexpr decltype(sizeof(0)) n{std::meta::parameters_of(Fn).size()};
     std::array<param_doc, n> out{};
-    decltype(sizeof(0)) i{0};
+    // The final `i++` in the unrolled `template for` is a dead store (its result is
+    // never read), which trips -Wunused-but-set-variable; the counter is genuinely
+    // used to index `out`, so mark it maybe_unused rather than restructure.
+    [[maybe_unused]] decltype(sizeof(0)) i{0};
     template for (constexpr auto p :
                   std::define_static_array(std::meta::parameters_of(Fn))) {
         const char* name{std::meta::has_identifier(p)

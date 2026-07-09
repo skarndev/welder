@@ -111,12 +111,49 @@ if(WELDER_BUILD_LUABRIDGE AND NOT TARGET LuaBridge)
       GIT_SHALLOW FALSE)
     set(LUABRIDGE_TESTING OFF CACHE BOOL "" FORCE) # don't build LuaBridge3's own tests
     FetchContent_MakeAvailable(LuaBridge3)         # defines the `LuaBridge` target
+    # Consume LuaBridge3's headers as SYSTEM (as the find_path branch already does),
+    # so upstream header warnings (e.g. its deprecated std::is_trivial_v use) don't
+    # surface in our build. FetchContent leaves the interface includes non-SYSTEM.
+    get_target_property(_welder_lb_inc LuaBridge INTERFACE_INCLUDE_DIRECTORIES)
+    if(_welder_lb_inc)
+      set_target_properties(LuaBridge PROPERTIES
+        INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_welder_lb_inc}")
+    endif()
   endif()
   if(NOT TARGET LuaBridge)
     message(WARNING "welder: LuaBridge3 not found; the LuaBridge3 backend "
       "(welder::luabridge) is disabled. Provide it with -DWELDER_LUABRIDGE_DIR=<dir> "
       "or allow fetching with -DWELDER_LUABRIDGE_FETCH=ON.")
     set(WELDER_BUILD_LUABRIDGE OFF)
+  endif()
+endif()
+
+# --- strict warnings for welder's OWN targets ----------------------------------
+# A dedicated INTERFACE target our own compiled targets (rods' tests, examples,
+# negative-compile probes) link PRIVATE. Deliberately NOT folded into welder_flags
+# / welder::headers: a library must not impose its warning flags on consumers, and
+# third-party code built in-tree (nanobind's runtime, LuaBridge3) must stay
+# untouched. The flag set is curated to be -Werror-clean on gcc-16: omitted is
+# -Wnull-dereference (a middle-end false positive leaking from pybind11's dispatcher
+# that -isystem cannot suppress) and anything only third-party headers trip. Toggle
+# enforcement with WELDER_WERROR (CI turns it on).
+#
+# Sanitizers (-fsanitize=address/undefined) are intentionally NOT wired up: on
+# gcc-16 UBSan's pointer checks are injected into constant evaluation and break
+# welder's consteval resolution, and running the extension modules under the
+# sanitizers crashes the host interpreter — the toolchain isn't stable enough yet.
+option(WELDER_WARNINGS "Compile welder's own targets with a strict warning set" ON)
+option(WELDER_WERROR "Promote welder's strict warnings to errors" OFF)
+
+add_library(welder_warnings INTERFACE)
+if(WELDER_WARNINGS AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+  target_compile_options(welder_warnings INTERFACE
+    -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+    -Wcast-qual -Wold-style-cast -Wnon-virtual-dtor -Woverloaded-virtual
+    -Wdouble-promotion -Wformat=2 -Wimplicit-fallthrough -Wuseless-cast
+    -Wextra-semi -Wmisleading-indentation -Wredundant-decls)
+  if(WELDER_WERROR)
+    target_compile_options(welder_warnings INTERFACE -Werror)
   endif()
 endif()
 

@@ -74,7 +74,7 @@ endif()
 # compiler — no Python — so it is registered before the uv-env gate.
 add_library(welder_rod_probe OBJECT EXCLUDE_FROM_ALL core/rod_probe.cpp)
 target_compile_features(welder_rod_probe PRIVATE cxx_std_26)
-target_link_libraries(welder_rod_probe PRIVATE welder::headers)
+target_link_libraries(welder_rod_probe PRIVATE welder::headers welder_warnings)
 add_test(NAME compile.rod_probe
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_rod_probe --config $<CONFIG>)
@@ -87,7 +87,7 @@ add_test(NAME compile.rod_probe
 add_library(welder_template_annotations OBJECT EXCLUDE_FROM_ALL
   core/template_annotations.cpp)
 target_compile_features(welder_template_annotations PRIVATE cxx_std_26)
-target_link_libraries(welder_template_annotations PRIVATE welder::headers)
+target_link_libraries(welder_template_annotations PRIVATE welder::headers welder_warnings)
 add_test(NAME compile.template_annotations
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_template_annotations --config $<CONFIG>)
@@ -98,7 +98,7 @@ add_test(NAME compile.template_annotations
 # exact cases; same compile-to-pass shape as above (no Python needed).
 add_library(welder_doc_cleandoc OBJECT EXCLUDE_FROM_ALL core/doc_cleandoc.cpp)
 target_compile_features(welder_doc_cleandoc PRIVATE cxx_std_26)
-target_link_libraries(welder_doc_cleandoc PRIVATE welder::headers)
+target_link_libraries(welder_doc_cleandoc PRIVATE welder::headers welder_warnings)
 add_test(NAME compile.doc_cleandoc
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_doc_cleandoc --config $<CONFIG>)
@@ -110,7 +110,7 @@ add_test(NAME compile.doc_cleandoc
 # they live under core/ despite living in the python rod tree.)
 add_library(welder_doc_styles OBJECT EXCLUDE_FROM_ALL core/doc_styles.cpp)
 target_compile_features(welder_doc_styles PRIVATE cxx_std_26)
-target_link_libraries(welder_doc_styles PRIVATE welder::headers)
+target_link_libraries(welder_doc_styles PRIVATE welder::headers welder_warnings)
 add_test(NAME compile.doc_styles
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_doc_styles --config $<CONFIG>)
@@ -122,7 +122,7 @@ add_test(NAME compile.doc_styles
 # resolution; same compile-to-pass shape as above (no Python/Lua needed).
 add_library(welder_naming OBJECT EXCLUDE_FROM_ALL core/naming.cpp)
 target_compile_features(welder_naming PRIVATE cxx_std_26)
-target_link_libraries(welder_naming PRIVATE welder::headers)
+target_link_libraries(welder_naming PRIVATE welder::headers welder_warnings)
 add_test(NAME compile.naming
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_naming --config $<CONFIG>)

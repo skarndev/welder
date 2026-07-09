@@ -19,7 +19,14 @@ function(welder_add_pybind11_test_module tgt)
   target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
-  target_link_libraries(${tgt} PRIVATE welder::headers welder::pybind11)
+  target_link_libraries(${tgt} PRIVATE welder::headers welder::pybind11 welder_warnings)
+  # pybind11's types carry hidden visibility, so any TU touching them must too —
+  # otherwise a default-visibility lambda capturing a `class_`/`module_` trips
+  # -Wattributes ("greater visibility than the type of its field"). pybind11_add_module
+  # sets this automatically; the CMake-native Python_add_library path (used above)
+  # does not, so we set it ourselves, matching pybind11's requirement.
+  set_target_properties(${tgt} PROPERTIES
+    CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 endfunction()
 
 set(_variants welder_test_pybind11)

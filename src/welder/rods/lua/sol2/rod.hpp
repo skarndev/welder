@@ -375,9 +375,9 @@ struct rod {
     static ::sol::object _prev_index(::sol::this_state ts, const ::sol::object& prev,
                                      const ::sol::table& self, const ::sol::object& key) {
         if (prev.get_type() == ::sol::type::function)
-            return prev.as<::sol::function>()(self, key);
+            return ::sol::object{prev.as<::sol::function>()(self, key)};
         if (prev.get_type() == ::sol::type::table)
-            return prev.as<::sol::table>()[key];
+            return ::sol::object{prev.as<::sol::table>()[key]};
         return ::sol::make_object(ts, ::sol::lua_nil);
     }
 
@@ -429,7 +429,7 @@ struct rod {
                                               ::sol::object key) -> ::sol::object {
             ::sol::object g{getters[key]};
             if (g.get_type() == ::sol::type::function)
-                return g.as<::sol::function>()(); // live read of the C++ global
+                return ::sol::object{g.as<::sol::function>()()}; // live read of the C++ global
             return _prev_index(ts, prev_index, self, key);
         };
         mt["__newindex"] = [setters, prev_newindex](::sol::table self, ::sol::object key,

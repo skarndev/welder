@@ -60,6 +60,7 @@ jobs:
           set -euo pipefail
           eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
           cmake --preset welder-gcc16 \
+            -DWELDER_WERROR=ON \
             -DWELDER_LUA_DIR="$(brew --prefix lua@5.4)" \
             -DWELDER_LUABRIDGE_LUA_DIR="$(brew --prefix lua@5.4)" \
             -DPython_EXECUTABLE="$(brew --prefix python@3.14)/bin/python3.14"

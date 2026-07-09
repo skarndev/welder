@@ -38,7 +38,7 @@ function(welder_add_nanobind_test_module tgt)
   target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
-  target_link_libraries(${tgt} PRIVATE welder::headers welder::nanobind)
+  target_link_libraries(${tgt} PRIVATE welder::headers welder::nanobind welder_warnings)
 
   # For a distributable stable-ABI module on MinGW: fold the gcc runtimes in so the
   # .pyd is self-contained (no libstdc++-6/libgcc_s/libwinpthread on the host's

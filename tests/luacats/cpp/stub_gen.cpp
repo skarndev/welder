@@ -40,6 +40,7 @@ Shape {
     [[=welder::doc("Number of spatial dimensions.")]] const std::uint32_t dims{2};
 
     Shape() = default;
+    virtual ~Shape() = default;
 
     [[=welder::doc("The area of the shape.")]] [[=welder::returns("square units")]]
     virtual double area() const;

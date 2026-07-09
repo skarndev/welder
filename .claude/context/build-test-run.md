@@ -33,6 +33,45 @@ local s = require("shapes_lua")
 local r = s.Rect(3.0, 4.0); print(r:area())   -- 12.0
 ```
 
+## Strict warnings
+welder's own compiled targets (rod tests, examples, the core compile-only checks)
+build under a strict warning set; **library consumers never inherit it**. It lives
+on a dedicated `welder_warnings` INTERFACE target (top `CMakeLists.txt`), linked
+`PRIVATE` into our targets — deliberately *not* folded into `welder_flags` /
+`welder::headers` (a library must not impose its warning flags on consumers, and
+in-tree third-party code — nanobind's runtime, LuaBridge3 — must stay untouched). The
+module helpers (`welder_sol2_add_module`, `welder_luabridge_add_module`,
+`welder_luacats_generate_stub`) link it themselves, guarded by
+`if(TARGET welder_warnings)` so a *consumer* using those helpers is unaffected. The
+negative-compile probes deliberately **don't** link it (their failure must be the
+bindability gate, not a warning).
+
+Knobs:
+- `WELDER_WARNINGS` (default **ON**) — the strict set: `-Wall -Wextra -Wpedantic
+  -Wshadow -Wconversion -Wsign-conversion -Wcast-qual -Wold-style-cast
+  -Wnon-virtual-dtor -Woverloaded-virtual -Wdouble-promotion -Wformat=2
+  -Wimplicit-fallthrough -Wuseless-cast -Wextra-semi -Wmisleading-indentation
+  -Wredundant-decls`. Curated to be `-Werror`-clean on gcc-16.
+- `WELDER_WERROR` (default **OFF**) — promote those to errors. **CI turns it on**
+  (Linux + macOS configure); left off locally so toolchain drift (new gcc warnings)
+  doesn't block a dev build.
+
+**`-Wnull-dereference` is intentionally excluded** — it's a gcc *middle-end* warning
+(emitted during optimization), so it ignores `-isystem` suppression and leaks a false
+positive from pybind11's dispatcher (`std::copy` in libstdc++) that we cannot fix; it
+would make `-Werror` impossible. For the same reason all backend headers are consumed
+**SYSTEM** (nanobind/sol2/LuaBridge3 already were; pybind11 is now promoted to SYSTEM
+in `src/welder/rods/CMakeLists.txt`) so parse-time third-party warnings don't surface.
+
+**No sanitizers (gcc-16 not stable enough).** `-fsanitize=address/undefined` is
+deliberately not wired up. Two independent blockers on gcc-16: (1) UBSan's `null` /
+`nonnull-attribute` / `returns-nonnull-attribute` pointer checks are injected into
+*constant evaluation*, turning welder's `consteval` name resolution (`naming.hpp`
+`name_of`) into a non-constant expression so the TU won't even compile (a per-function
+`[[gnu::no_sanitize]]` does *not* suppress it — verified); and (2) running the built
+extension modules under the sanitizers crashes the host interpreter. Revisit when the
+toolchain matures.
+
 ## Lua rod build/test (sol2)
 `welder::sol2` needs conan `with_sol2` (for the `sol2` C++ headers). **Lua itself is
 NOT from conan** — `src/welder/rods/CMakeLists.txt` finds it with CMake's builtin

@@ -92,7 +92,7 @@ struct rod {
         @a T's caster type at compile time, so it reports whether @a T *needs* a
         class/enum, never whether one exists at runtime, and "native" is relative to
         the TU's includes (`std::string` / `std::vector` / … are native only when
-        their `<nanobind/stl/*>` converter header is included). A type hand-registered
+        their `<nanobind/stl/…>` converter header is included). A type hand-registered
         out-of-band still reads `true`; that false positive is resolved by the
         deferred `trust_bindable` escape hatch.
 

@@ -16,6 +16,11 @@
 function(welder_luabridge_add_module target)
   add_library(${target} MODULE ${ARGN})
   target_link_libraries(${target} PRIVATE welder::luabridge)
+  # welder's own build applies its strict warning set; a consumer using this
+  # helper won't have the target, so the link is skipped for them.
+  if(TARGET welder_warnings)
+    target_link_libraries(${target} PRIVATE welder_warnings)
+  endif()
   # Bare name, `.so` suffix, on every platform Lua loads from cpath.
   set_target_properties(${target} PROPERTIES PREFIX "" SUFFIX ".so")
   # Do NOT scan this TU for C++20 module imports. As with the sol2 rod, a Lua binding
