@@ -77,6 +77,58 @@ jobs:
           ctest --preset welder-gcc16 --output-on-failure
 
   # ---------------------------------------------------------------------------
+  # macOS — the dev machine's own platform (Apple Silicon, arm64). gcc-16 comes
+  # from Homebrew, exactly as the developer runs it locally, so this job is the
+  # closest mirror of the reference environment and runs the *full* suite. On the
+  # GitHub macOS runners Homebrew is preinstalled and on PATH, so — unlike the
+  # Linux job — no `brew shellenv` bootstrap is needed. Reuses the dev profile
+  # conan/profiles/gcc16 (os=Macos, arch=armv8).
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macos (gcc-16, brew)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Homebrew toolchain + runtimes
+        run: |
+          set -euo pipefail
+          brew update --quiet
+          # gcc → 16.1.0 (gcc-16 / g++-16); the language runtimes + build tools.
+          brew install --quiet \
+            gcc lua@5.4 luarocks ninja cmake conan uv python@3.14 lua-language-server
+          # luarocks pulls linked `lua` 5.5 into the prefix, whose headers shadow
+          # the keg-only lua@5.4 on the -isystem path (sol2 then miscompiles against
+          # 5.5). Unlink it: we reference the 5.4 keg explicitly via WELDER_LUA_DIR,
+          # and luarocks uses its opt-path interpreter regardless.
+          brew unlink lua 2>/dev/null || true
+          gcc-16 --version
+
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2
+          key: conan-macos-${{ hashFiles('conanfile.py', 'conan/profiles/gcc16') }}
+          restore-keys: conan-macos-
+
+      - name: Conan install
+        run: conan install . -pr:a conan/profiles/gcc16 --build=missing
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          cmake --preset welder-gcc16 \
+            -DWELDER_LUA_DIR="$(brew --prefix lua@5.4)" \
+            -DWELDER_LUABRIDGE_LUA_DIR="$(brew --prefix lua@5.4)" \
+            -DPython_EXECUTABLE="$(brew --prefix python@3.14)/bin/python3.14"
+
+      - name: Build
+        run: cmake --build --preset welder-gcc16
+
+      - name: Test
+        run: ctest --preset welder-gcc16 --output-on-failure
+
+  # ---------------------------------------------------------------------------
   # Windows — MSYS2 UCRT64 mingw-w64 gcc 16.1.0 (mainline, carries -freflection).
   # Everything stays inside the MSYS2 subsystem so mingw-built extensions load in
   # the mingw-built interpreters (an MSVC CPython could not import a gcc-built
