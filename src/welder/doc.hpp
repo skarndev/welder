@@ -7,6 +7,8 @@
 #include <string_view>
 #include <vector>
 
+#include <welder/concepts.hpp> // the doc_style concept (over function_doc, below)
+
 /** @file
     Language-agnostic documentation layer: read `[[=welder::doc(...)]]`
     annotations off reflected entities and assemble them into a docstring under a
@@ -248,20 +250,9 @@ struct function_doc {
     const char* returns{nullptr};        /**< The function's `returns`. */
 };
 
-/** A *style* folds a function_doc into one docstring.
-
-    It is the customization point for how documentation reads in the target
-    language; swap it to emit Google-, NumPy-, or any house style. Any type with
-    `static std::string format(const function_doc&)` qualifies. Concrete styles
-    live with the rods that share them (e.g. `welder::rods::python::google_style`
-    in `<welder/rods/python/doc_style.hpp>`), keeping this core layer neutral.
-
-    @tparam S the candidate style type.
-*/
-template <class S>
-concept doc_style = requires(const function_doc& d) {
-    { S::format(d) } -> std::same_as<std::string>;
-};
+// The `doc_style` concept — the customization point that folds a `function_doc`
+// into one docstring — lives in <welder/concepts.hpp> (with welder's other
+// interface concepts); `function_docstring` below constrains its `Style` on it.
 
 /** The complete docstring for function @a Fn under @a Style.
 

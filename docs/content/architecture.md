@@ -11,7 +11,9 @@ flowchart TB
         R["reflect.hpp<br/>welded_for · member_bound · public_bases"]
         BT["bind_traits.hpp<br/>what binds: params/ctors/methods/operators"]
         BD["bindable.hpp<br/>the bindability gate (STL-wrapper recursion)"]
-        DR["welder.hpp<br/>the welder::rod concept + driver + welder&lt;Rod&gt; entry point"]
+        CN["concepts.hpp<br/>interface concepts: rod · caster_oracle · doc_style · name_style"]
+        CA["carriage.hpp<br/>the traversal driver (basic_carriage&lt;Resolution&gt;)"]
+        DR["welder.hpp<br/>the welder&lt;Rod&gt; entry point"]
         DC["doc.hpp<br/>doc/return/param folding + styles"]
     end
     subgraph voc["vocabulary (std-free; ready for a future module)"]
@@ -39,10 +41,11 @@ The **core** decides:
   selectors, native-base collection);
 - whether each type is **representable** — `bindable.hpp` (the
   [bindability gate](guide/bindability.md));
-- how to **walk** types / namespaces / bases — `welder.hpp`'s generic driver.
+- how to **walk** types / namespaces / bases — the carriage (`carriage.hpp`), driven
+  through the `welder::welder<Rod>` entry point (`welder.hpp`).
 
 A **rod** is a stateless struct (`welder::rods::<name>::rod`) satisfying the
-`welder::rod` concept. It provides ~16 emission primitives and *nothing else*:
+`welder::rod` concept (`concepts.hpp`). It provides ~16 emission primitives and *nothing else*:
 
 - **associated:** `language`, `module_type`, and `has_native_caster<T>` — the one
   bindability fact the core can't know;

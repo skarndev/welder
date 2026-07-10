@@ -11,13 +11,16 @@ annotations come through.
 
 ## Where to start
 
-- **The `welder::rod` concept + `welder::welder<Rod>` entry point** (`welder.hpp`) —
-  the emission contract every rod satisfies, the shared entry point (`weld_type`,
-  `weld_function`, `weld_variable`, `weld_namespace`, `weld_namespace_as_submodule`,
-  `weld_module`), and the injectable traversal driver — the **carriage**
-  (`basic_carriage<Resolution>`, shipped as `welder::stitch_welding_carriage` and
+- **The `welder::welder<Rod>` entry point** (`welder.hpp`) — the shared entry point
+  (`weld_type`, `weld_function`, `weld_variable`, `weld_namespace`,
+  `weld_namespace_as_submodule`, `weld_module`), each a one-line forward to the
+  injectable traversal driver — the **carriage** (`basic_carriage<Resolution>` in
+  `carriage.hpp`, shipped as `welder::stitch_welding_carriage` and
   `welder::tack_welding_carriage`: `bind_type`, `bind_enum`, `bind_function`,
   `bind_variable`, `bind_namespace`, `build_module`).
+- **The interface concepts** (`concepts.hpp`) — the emission contract every rod
+  satisfies (`welder::rod`) plus the `caster_oracle`, `doc_style` and
+  `naming::name_style` customization-point contracts, pooled in one catalogue.
 - **The reflection layer** — `reflect.hpp` (`welded_for`, `member_bound`,
   `public_bases`), `bind_traits.hpp` (what binds), `bindable.hpp` (the bindability
   gate), `doc.hpp` (docstring folding).

@@ -26,11 +26,13 @@ src/welder/
   lang.hpp              enum class lang                       — std-free vocabulary
   annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary
   reflect.hpp           welded_for / policy_of / member_bound / trusted_for / public_bases — uses <meta>
-  doc.hpp               doc_of / return_doc_of / param_docs / doc styles / function_docstring — uses <meta>
-  naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + the name_style concept (per-kind transform_* hooks) + weld_as_of / name_of (weld_as override → else style hook) — uses <meta>, depends on vocabulary (weld_as_spec), NOT annotations.hpp
+  doc.hpp               doc_of / return_doc_of / param_docs / function_doc struct / function_docstring — uses <meta>. The `doc_style` concept now lives in concepts.hpp (over function_doc, forward-declared there)
+  naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + weld_as_of / name_of (weld_as override → else style hook) — uses <meta>, depends on vocabulary (weld_as_spec), NOT annotations.hpp. The `name_style` concept (per-kind transform_* hooks) now lives in concepts.hpp
   bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
-  bindable.hpp          caster_oracle concept + generic bindability gate (STL-wrapper recursion) — uses <meta>
-  welder.hpp            the `welder::rod` concept (emission contract) + the **carriage** (`detail::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). + the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
+  concepts.hpp          welder's **core interface concepts**, pooled in one catalogue: `welder::rod` (emission contract) + `welder::caster_oracle` (backend leaf test) + `welder::doc_style` + `welder::naming::name_style`. A dependency-light leaf — forward-declares `welder::function_doc` (defined in doc.hpp) rather than including it; the machinery headers (bindable/naming/doc/carriage) include this. Uses <meta>; vocabulary-first for `lang`
+  bindable.hpp          generic bindability gate (STL-wrapper recursion); the `caster_oracle` concept it uses now lives in concepts.hpp — uses <meta>
+  carriage.hpp          the **carriage** (`detail::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). Split out of welder.hpp — uses <meta>
+  welder.hpp            the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Includes concepts.hpp + carriage.hpp. Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
   module.hpp            WELDER_MODULE(ns, rod) binding-module entry-point dispatch macro (NOT a C++20 module)
   vocabulary.hpp        the single include a consuming TU uses for the vocabulary: lang+annotations only (welder is header-only; no C++20 `import welder;` today)
   rods/
@@ -80,10 +82,15 @@ docs/                     the documentation site (gated by WELDER_BUILD_DOCS, OF
 
 ## Layering rules
 
-`bind_traits.hpp`, `bindable.hpp` and `welder.hpp` are part of the reflection
-layer (like `reflect.hpp`/`doc.hpp`): header-only, `<meta>`-using, and they do
-**not** include `annotations.hpp` (the vocabulary arrives first via
-`vocabulary.hpp`). `doc.hpp` follows the same rule. `module.hpp` is macro-only and
+`concepts.hpp`, `bind_traits.hpp`, `bindable.hpp`, `carriage.hpp` and `welder.hpp`
+are part of the reflection layer (like `reflect.hpp`/`doc.hpp`): header-only,
+`<meta>`-using, and they do **not** include `annotations.hpp` (the vocabulary
+arrives first via `vocabulary.hpp`). `doc.hpp` follows the same rule.
+`concepts.hpp` is the dependency-light leaf at the bottom — the four interface
+concepts (`rod`, `caster_oracle`, `doc_style`, `naming::name_style`), forward-
+declaring `function_doc` rather than pulling `doc.hpp` — included by the machinery
+headers that need a concept (`bindable.hpp` for `caster_oracle`, `naming.hpp` for
+`name_style`, `doc.hpp` for `doc_style`, `carriage.hpp`/`welder.hpp` for `rod`). `module.hpp` is macro-only and
 rod-agnostic; each rod's `module.hpp` defines its `WELDER_DETAIL_MODULE_ENTRY_<rod>`
 expansion.
 
@@ -94,9 +101,9 @@ and why the module wrapper is currently deferred.
 
 ## The rod interface (static polymorphism)
 
-A rod is a stateless struct `B` satisfying `welder::rod` (`welder.hpp`), exposed as
+A rod is a stateless struct `B` satisfying `welder::rod` (`concepts.hpp`), exposed as
 `welder::rods::<name>::rod`. The core's traversal driver — the **carriage**
-(`detail::basic_carriage<Resolution>`, a stateless struct of static member templates
+(`detail::basic_carriage<Resolution>` in `carriage.hpp`, a stateless struct of static member templates
 `bind_type` / `bind_enum` / `bind_function` / `bind_variable` / `bind_namespace` /
 `bind_namespace_as_submodule` / `build_module`, + private `bind_members`) — is templated
 on `B` and calls its members; the public `welder::welder<B, Style, Carriage=carriage>`

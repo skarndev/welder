@@ -4,6 +4,8 @@
 #include <string_view>
 #include <vector>
 
+#include <welder/concepts.hpp> // the name_style concept (welder::naming::name_style)
+
 /** @file
     Language-agnostic **name styling**: reshape a C++ identifier into a target
     language's naming convention, and resolve the final bound name of an entity
@@ -165,32 +167,9 @@ consteval std::string restyle(std::string_view id, case_kind kind) {
 }
 
 // --- the style customization point ------------------------------------------
-
-/** A **name style** names every kind of entity welder can bind, through one hook
-    per kind. Each hook takes the entity's reflection and returns its target name.
-    The driver calls the hook matching what it is binding — so a style varies naming
-    by kind without inspecting the reflection itself.
-
-    A style implements all of `transform_class`, `transform_enum`,
-    `transform_enumerator`, `transform_method`, `transform_static_method`,
-    `transform_function`, `transform_field`, `transform_variable` and
-    `transform_submodule` as `static consteval std::string(std::meta::info)`. In
-    practice a style *inherits* @ref none (or a single-convention style) and
-    overrides only the hooks that differ — static-hook hiding does the rest, since
-    welder always calls through the concrete style type.
-    @tparam S the candidate style type. */
-template <class S>
-concept name_style = requires {
-    { S::transform_class(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_enum(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_enumerator(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_method(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_static_method(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_function(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_field(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_variable(^^int) } -> std::convertible_to<std::string>;
-    { S::transform_submodule(^^int) } -> std::convertible_to<std::string>;
-};
+//
+// The `name_style` concept — the per-kind hook contract a style below implements —
+// lives in <welder/concepts.hpp> (with welder's other interface concepts).
 
 /** The identity style: bind every C++ identifier unchanged. The default for
     `welder::welder<Rod, Style>`, and the base a custom style inherits so it need

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include <welder/bind_traits.hpp> // param_types (for signature asserts)
+#include <welder/concepts.hpp>    // caster_oracle (the backend leaf test)
 #include <welder/reflect.hpp>     // welded_for
 
 /** @file
@@ -38,35 +39,12 @@
     Only ONE thing is backend-specific here: the leaf test — "does the backend
     natively convert this scalar/string/user-registered type, or does it need
     welder to register a class/enum for it?". A backend supplies that via the
-    `caster_oracle` concept; the STL-wrapper recursion below is shared, so a new
-    backend inherits container/optional/variant/smart-pointer handling for free.
+    @ref welder::caster_oracle concept (in `<welder/concepts.hpp>`); the STL-wrapper
+    recursion below is shared, so a new backend inherits
+    container/optional/variant/smart-pointer handling for free.
 */
 
 namespace welder {
-
-/** The one bindability fact a backend must provide: can it natively convert a
-    type *without* welder registering it?
-
-    `has_native_caster<T>` is `true` for a native scalar/string/STL type, or one
-    the user gave a bespoke backend converter; `false` means @a T is a
-    program-defined class/enum the backend can only handle once welder has
-    registered it (so welder then requires @a T to be welded).
-
-    This concept is a *shape* guard, not a per-type correctness guarantee: it only
-    checks that @a B exposes the `has_native_caster` member template and that it
-    yields something bool-convertible, so a backend that forgot it fails here with a
-    clear "not a `caster_oracle`" instead of a deep error inside bindable(). A
-    concept cannot quantify over every @a T, so we probe with a single arbitrary
-    type — `std::monostate`, the std placeholder that spells "the type is
-    irrelevant here". Any complete type would do; the value it answers is never
-    inspected.
-
-    @tparam B the rod type.
-*/
-template <class B>
-concept caster_oracle = requires {
-    { B::template has_native_caster<std::monostate> } -> std::convertible_to<bool>;
-};
 
 namespace detail {
 
