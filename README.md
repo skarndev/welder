@@ -1,4 +1,9 @@
-# welder
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/content/assets/welder-lockup-dark.svg">
+    <img alt="welder" src="docs/content/assets/welder-lockup-light.svg" width="340">
+  </picture>
+</div>
 
 [![Linux](https://github.com/skarndev/welder/actions/workflows/ci-linux.yml/badge.svg)](https://github.com/skarndev/welder/actions/workflows/ci-linux.yml)
 [![macOS](https://github.com/skarndev/welder/actions/workflows/ci-macos.yml/badge.svg)](https://github.com/skarndev/welder/actions/workflows/ci-macos.yml)

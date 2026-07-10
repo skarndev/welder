@@ -41,8 +41,11 @@ theme:
   font:
     text: Inter
     code: JetBrains Mono
+  # The custom welder mark (the "W" weld path with a struck spark). The header bar
+  # is amber, so we use the single-colour light version — the two-tone spark would
+  # wash out against it. See docs/content/assets/ for the README lockups.
+  logo: assets/welder-mono.svg
   icon:
-    logo: material/fire
     repo: fontawesome/brands/github
   features:
     - navigation.tabs

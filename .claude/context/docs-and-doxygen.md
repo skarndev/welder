@@ -209,8 +209,12 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
   overrides in that media form), a `<button>` toggle placed inline next to the
   search box with a **delegated** document-level click (a direct listener didn't
   fire reliably in the search container), and the **project title linked back to
-  the guide** (`$relpath^../index.html`). A welder **spark logo**
-  (`docs/welder-logo.svg`, matching the mkdocs fire mark) is set via `PROJECT_LOGO`.
+  the guide** (`$relpath^../index.html`). The welder **mark** — the "W" weld path
+  with a struck spark, single deep-orange so it reads on both themes
+  (`docs/welder-logo.svg`) — is set via `PROJECT_LOGO`. The mkdocs header uses the
+  single-colour *light* variant (`docs/content/assets/welder-mono.svg`, set as
+  `theme.logo`) since that bar is amber; the two-tone README lockups
+  (`welder-lockup-{light,dark}.svg`, swapped via `<picture>`) live alongside it.
   `HTML_COLORSTYLE` stays `LIGHT` with **default HUE/SAT** (custom values bake warm,
   non-theme-adapting colors into doxygen's own CSS). The interactive-toc extension
   is left **off** (it makes a full-height right panel that fights the layout).
