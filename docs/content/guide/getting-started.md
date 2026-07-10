@@ -9,7 +9,7 @@ gcc extensions, but today only one compiler implements the papers it needs:
 |---|---|
 | Compiler (P2996 + P3394) | **gcc-16** — the only one so far (`g++-16`, GCC ≥ 16.1); install it from whatever package manager or source build you prefer |
 | Build system | CMake ≥ 3.28; the presets drive **Ninja** |
-| Packages | Conan 2 (`conanfile.py`) → pybind11 / nanobind (Python); sol2 + Lua (Lua) |
+| Packages *(examples/tests only)* | Conan 2 (`conanfile.py`) provisions the backends → pybind11 / nanobind (Python), sol2 (Lua). **Not needed to consume welder** — see [Consuming welder](#consuming-welder). |
 | Python | a `python3` with development headers (for the Python modules) |
 | Lua | headers via conan `sol2` (pulls Lua); a Lua interpreter to load the module |
 
@@ -24,6 +24,9 @@ Clang/MSVC catch up, add a branch there.
     pointer-to-member with `&[:member:]`.
 
 ## Build
+
+To build welder's own examples and tests from a clone, Conan provisions the backends;
+then configure and build with the preset:
 
 ```bash
 conan install . -pr:a conan/profiles/gcc16 --build=missing
@@ -149,8 +152,57 @@ field binds, so `Point(1.0, 2.0)` also works — see
 
 ## Consuming welder
 
-welder ships **header-only**. A consuming TU brings the vocabulary in first, then
-the rod header:
+welder is **header-only** and **needs no Conan** — plain CMake wires it in. It exports
+the *core* only; you bring your own backend (pybind11/nanobind/sol2/LuaBridge3). Pulled
+in as a subproject, welder builds nothing of its own — no backends, no tests, no
+install rules — so all it asks of a consumer is a C++26 compiler. Link
+`welder::headers`; it carries the vocabulary, the core, C++26 and the `-freflection`
+flag.
+
+=== "FetchContent"
+
+    ```cmake
+    include(FetchContent)
+    FetchContent_Declare(welder
+      GIT_REPOSITORY https://github.com/skarndev/welder.git
+      GIT_TAG main)
+    FetchContent_MakeAvailable(welder)
+
+    target_link_libraries(my_bindings PRIVATE welder::headers)
+    ```
+
+=== "Installed + `find_package`"
+
+    Configure with the dev-time build off (nothing of welder's own compiles), install
+    the header tree, then depend on it:
+
+    ```bash
+    cmake -S welder -B build \
+      -DWELDER_BUILD_EXAMPLES=OFF -DWELDER_BUILD_TESTS=OFF \
+      -DWELDER_BUILD_PYBIND11=OFF -DWELDER_BUILD_NANOBIND=OFF \
+      -DWELDER_BUILD_SOL2=OFF -DWELDER_BUILD_LUABRIDGE=OFF
+    cmake --install build --prefix /your/prefix
+    ```
+
+    ```cmake
+    find_package(welder REQUIRED)   # /your/prefix on CMAKE_PREFIX_PATH
+    target_link_libraries(my_bindings PRIVATE welder::headers)
+    ```
+
+=== "Conan"
+
+    Optional — only if your project already uses Conan.
+    `conan create . -pr:a conan/profiles/gcc16 --build=missing` publishes welder to your
+    local cache; a downstream `requires("welder/0.1.0")` then resolves the same
+    `find_package(welder)` / `welder::headers`.
+
+`find_package(welder)` (and the FetchContent pull) also define the build helpers —
+`welder_pybind11_generate_stubs`, `welder_sol2_add_module`,
+`welder_luabridge_add_module`, `welder_luacats_generate_stub` — for producing the
+loadable module or stub. Each references its backend's targets only *inside* the call,
+so pulling them in is free; you set that backend up yourself.
+
+A consuming TU brings the vocabulary in first, then the rod header:
 
 ```cpp
 #include <welder/vocabulary.hpp>

@@ -8,13 +8,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # welder ships header-only for now — the optional C++20 module wrapper was removed
 # until the gcc-16 -freflection/modules bugs are fixed and other toolchains catch
 # up (see docs "Header-only for now").
-option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ON)
-option(WELDER_BUILD_NANOBIND "Build the nanobind Python backend" ON)
-option(WELDER_BUILD_SOL2 "Build the sol2 Lua backend" ON)
-option(WELDER_BUILD_LUABRIDGE "Build the LuaBridge3 Lua backend" ON)
-option(WELDER_BUILD_EXAMPLES "Build examples" ON)
-option(WELDER_BUILD_TESTS "Build tests" ON)
-option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ON)
+#
+# The dev-time build — the language backends, the examples, the tests and the
+# install/packaging rules (WELDER_INSTALL, in src/) — defaults ON only when welder
+# is the *top-level* project: i.e. you are developing welder or configuring this
+# repo directly. Pulled into another build via add_subdirectory()/FetchContent(),
+# welder collapses to just the header target `welder::headers` — no backend
+# find_package(), no tests, no install pollution — so a consumer needs neither Conan
+# nor any of the backends to use the core. welder exports core headers only anyway
+# (the rods are not installed); flip any option back ON explicitly to opt in.
+set(_welder_dev_default ${PROJECT_IS_TOP_LEVEL})
+option(WELDER_BUILD_PYBIND11 "Build the pybind11 Python backend" ${_welder_dev_default})
+option(WELDER_BUILD_NANOBIND "Build the nanobind Python backend" ${_welder_dev_default})
+option(WELDER_BUILD_SOL2 "Build the sol2 Lua backend" ${_welder_dev_default})
+option(WELDER_BUILD_LUABRIDGE "Build the LuaBridge3 Lua backend" ${_welder_dev_default})
+option(WELDER_BUILD_EXAMPLES "Build examples" ${_welder_dev_default})
+option(WELDER_BUILD_TESTS "Build tests" ${_welder_dev_default})
+option(WELDER_BUILD_STUBS "Generate Python .pyi stubs for built modules (pybind11 + nanobind)" ${_welder_dev_default})
 option(WELDER_BUILD_DOCS "Build the documentation site (mkdocs + Doxygen reference)" OFF)
 
 # Build the nanobind extension against Python's stable ABI (abi3): links

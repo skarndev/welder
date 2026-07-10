@@ -24,7 +24,10 @@ add_subdirectory(welder/rods)
 # build helpers so find_package(welder) also defines welder_*_add_module /
 # welder_*_generate_stubs. Rods are NOT exported: welder ships core headers only,
 # and a consumer brings their own backend (pybind11/nanobind/sol2/LuaBridge3).
-option(WELDER_INSTALL "Generate welder's install and packaging rules" ON)
+# Default ON only at top level (developing/packaging welder). A consumer pulling
+# welder in via add_subdirectory()/FetchContent() gets it OFF, so welder's install
+# rules never leak into their `cmake --install` — they just link welder::headers.
+option(WELDER_INSTALL "Generate welder's install and packaging rules" ${PROJECT_IS_TOP_LEVEL})
 if(WELDER_INSTALL)
   include(GNUInstallDirs)
   include(CMakePackageConfigHelpers)

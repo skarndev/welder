@@ -33,17 +33,33 @@ local s = require("shapes_lua")
 local r = s.Rect(3.0, 4.0); print(r:area())   -- 12.0
 ```
 
-## Packaging & consuming (Conan / CMake)
+## Packaging & consuming (pure CMake; Conan optional)
 
-welder ships as a **header-only Conan package** + a relocatable CMake package.
+**Conan is NOT required to consume welder** — plain CMake (FetchContent /
+`find_package`) is the primary path; Conan is one option among them and is what CI
+uses to provision the *backends* for welder's own examples/tests. Three consumer
+routes, all landing on the same `welder::headers` target:
 
-- **CMake install/export** (`src/CMakeLists.txt`, guarded by `WELDER_INSTALL`,
-  default ON): installs the `src/welder` header tree to `include/`, exports the two
-  INTERFACE targets a consumer links — `welder::headers` and `welder::flags` (the
-  `-freflection` carrier `headers` pulls in) — as `welder-targets.cmake`, and ships
-  the four `cmake/Welder*.cmake` build helpers next to the generated
-  `welder-config.cmake`. **Only the core is exported — rods are not**: welder is
-  bring-your-own-backend. The config `include()`s the helpers, so
+- **FetchContent / add_subdirectory** (lightest, no install): `FetchContent_Declare` +
+  `FetchContent_MakeAvailable` then link `welder::headers`. **No flags needed** — the
+  dev-time options (`WELDER_BUILD_{PYBIND11,NANOBIND,SOL2,LUABRIDGE,EXAMPLES,TESTS,STUBS}`
+  and `WELDER_INSTALL`) now default to `${PROJECT_IS_TOP_LEVEL}` (top-level CMakeLists +
+  `src/`), so when welder is a subproject it builds *nothing* of its own: no backend
+  `find_package()`, no tests, no install-rule leakage. Top-level (developing welder, or
+  CI/Conan configuring the repo directly) they stay ON, unchanged.
+- **Install + `find_package`:** configure the repo with the dev-time build off
+  (`-DWELDER_BUILD_EXAMPLES=OFF -DWELDER_BUILD_TESTS=OFF -DWELDER_BUILD_PYBIND11=OFF …`
+  — nothing of welder's own compiles, and backends aren't installed anyway),
+  `cmake --install --prefix …`, then `find_package(welder)` + link `welder::headers`.
+- **Conan** (optional): see the recipe bullet below.
+
+- **CMake install/export** (`src/CMakeLists.txt`, guarded by `WELDER_INSTALL`, default
+  `${PROJECT_IS_TOP_LEVEL}`): installs the `src/welder` header tree to `include/`,
+  exports the two INTERFACE targets a consumer links — `welder::headers` and
+  `welder::flags` (the `-freflection` carrier `headers` pulls in) — as
+  `welder-targets.cmake`, and ships the four `cmake/Welder*.cmake` build helpers next
+  to the generated `welder-config.cmake`. **Only the core is exported — rods are
+  not**: welder is bring-your-own-backend. The config `include()`s the helpers, so
   `find_package(welder)` also defines `welder_sol2_add_module`,
   `welder_pybind11_generate_stubs`, etc. Note `EXPORT_NAME` is set on the targets
   so they export as `welder::headers` (not `welder::welder_headers`) — the ALIAS

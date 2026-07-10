@@ -118,9 +118,11 @@ P2996 — see `docs/content/guide/header-only.md`.
 
 ## Quick start
 
-Requires **gcc-16** (GCC ≥ 16.1 — the only compiler with P2996 + P3394, installed
-from whatever package manager or source build you prefer), CMake ≥ 3.28 + Ninja, and
-Conan 2.
+Building welder's own examples and tests from a clone uses **Conan 2** to provision
+the backends (pybind11 / nanobind / sol2). It also requires **gcc-16** (GCC ≥ 16.1 —
+the only compiler with P2996 + P3394, installed from whatever package manager or
+source build you prefer) and CMake ≥ 3.28 + Ninja. (Consuming welder in *your* project
+needs neither Conan nor the backends — see [Consuming welder](#consuming-welder).)
 
 ```bash
 conan install . -pr:a conan/profiles/gcc16 --build=missing
@@ -145,30 +147,51 @@ for the full walkthrough.
 
 ## Consuming welder
 
-welder is **header-only** and ships as a Conan package + a CMake package. It exports
-the core only — you bring your own backend (pybind11/nanobind/sol2/LuaBridge3) and
-wire it, matching the header-only delivery model.
+welder is **header-only** and **does not require Conan** — plain CMake is enough. It
+exports the core only: you bring your own backend (pybind11/nanobind/sol2/LuaBridge3)
+and wire it, however you already manage dependencies. The one target you link,
+`welder::headers`, carries the vocabulary, the core, C++26 and the `-freflection`
+flag; the package also defines the build helpers (`welder_sol2_add_module`,
+`welder_pybind11_generate_stubs`, …) that produce the loadable module.
 
-```bash
-# Build & publish to your local Conan cache (needs gcc-16, see Quick start):
-conan create . -pr:a conan/profiles/gcc16 --build=missing
-```
+Pulled in as a subproject, welder builds *nothing* of its own — no backends, no
+tests, no install rules — so all it needs is a C++26 compiler.
 
-A downstream project then depends on it like any other Conan package
-(`requires("welder/0.1.0")`) and, in CMake:
+**FetchContent** (no install step):
 
 ```cmake
-find_package(welder REQUIRED)
-target_link_libraries(my_bindings PRIVATE welder::headers)  # brings C++26 + -freflection
+include(FetchContent)
+FetchContent_Declare(welder
+  GIT_REPOSITORY https://github.com/skarndev/welder.git
+  GIT_TAG main)
+FetchContent_MakeAvailable(welder)
+
+target_link_libraries(my_bindings PRIVATE welder::headers)
 ```
 
-`welder::headers` carries the vocabulary, the core, C++26 and the `-freflection`
-flag; `find_package(welder)` also defines the build helpers
-(`welder_sol2_add_module`, `welder_pybind11_generate_stubs`, …) for producing the
-actual loadable module. See `test_package/` for a minimal, backend-free consumer.
+**Install, then `find_package`** — nothing of welder's own compiles, so disable the
+dev-time build and install the header tree:
 
-> **Note:** GitHub Packages doesn't host Conan, so there's no public remote yet —
-> the local cache is the current distribution channel.
+```bash
+cmake -S welder -B build \
+  -DWELDER_BUILD_EXAMPLES=OFF -DWELDER_BUILD_TESTS=OFF \
+  -DWELDER_BUILD_PYBIND11=OFF -DWELDER_BUILD_NANOBIND=OFF \
+  -DWELDER_BUILD_SOL2=OFF -DWELDER_BUILD_LUABRIDGE=OFF
+cmake --install build --prefix /your/prefix
+```
+
+```cmake
+find_package(welder REQUIRED)   # with /your/prefix on CMAKE_PREFIX_PATH
+target_link_libraries(my_bindings PRIVATE welder::headers)
+```
+
+**Conan** — optional, if your project already uses it. welder also ships a recipe;
+`conan create . -pr:a conan/profiles/gcc16 --build=missing` publishes it to your local
+cache, after which a downstream `requires("welder/0.1.0")` resolves the same
+`find_package(welder)` / `welder::headers`. GitHub Packages doesn't host Conan, so
+there's no public remote yet — the local cache is the current channel.
+
+See `test_package/` for a minimal, backend-free consumer.
 
 ## Documentation
 
