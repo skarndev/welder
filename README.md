@@ -18,7 +18,7 @@ reflection — no external code generator, no parsing step.**
 
 welder is a header-only **C++26** library that reads [P2996][p2996] reflection and
 [P3394][p3394] annotations *at compile time* to emit binding-registration code for
-your types (e.g. pybind11 `class_<T>` calls) directly, through template
+your types (e.g. [pybind11] `class_<T>` calls) directly, through template
 instantiation. You mark a type with attributes saying *which languages* it should be
 exposed to and *which members* participate; welder reflects over it and lays the
 bindings down. On top of that it carries the reflected documentation into the target
@@ -30,10 +30,26 @@ static analysis come along for free.
 > the only compiler** that implements the papers it needs. Targets **C++26 and newer
 > only**.
 
-[p2996]: https://wg21.link/p2996
-[p3394]: https://wg21.link/p3394
+## Supported languages
+
+welder emits through a **rod** — a small policy struct for one binding backend. The
+same annotated type binds through any rod you weld it for:
+
+| Language | Backend | Output |
+|---|---|---|
+| Python | [pybind11] | extension module + `.pyi` typing stubs |
+| Python | [nanobind] | extension module + `.pyi` typing stubs |
+| Lua | [sol2] | loadable module |
+| Lua | [LuaBridge3] | loadable module |
+| Lua | [LuaCATS] | build-time `---@meta` stub file |
+
+Adding a language is one rod struct; the language-agnostic core is reused verbatim.
+Further backends are designed-for but not yet implemented.
 
 ## The idea
+
+Annotate the C++ type — say which languages, which members, and the docs — then let
+welder lay the bindings down:
 
 ```cpp
 #include <welder/vocabulary.hpp>            // annotation vocabulary (header-only)
@@ -42,23 +58,48 @@ static analysis come along for free.
 
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // expose to py + lua
        [[=welder::policy::automatic]]                          // reflect all members
-Point {
-    double x{0.0};
-    double y{0.0};
-    [[=welder::mark::exclude]] std::uint64_t internal_id{0};   // bound nowhere
+       [[=welder::doc("An axis-aligned rectangle.")]]
+Rectangle {
+    double width{0.0};
+    double height{0.0};
+
+    [[=welder::mark::exclude]] std::uint64_t cacheHandle{0};   // internal, bound nowhere
+
+    [[=welder::doc("Compute the area of the rectangle.\n\n"
+                   "Width and height are treated as unsigned extents; a\n"
+                   "degenerate (zero) side yields zero area.")]]
+    [[=welder::returns("The area in square units.")]]
+    double computeArea() const { return width * height; }
 };
 
 PYBIND11_MODULE(shapes, m) {
-    welder::welder<welder::rods::pybind11::rod<>>::weld_type<Point>(m);
+    using welder::rods::pybind11::rod;
+    using welder::rods::python::google_style;   // Google-style docstrings (Args:/Returns:)
+    using welder::rods::python::pep8;            // PEP 8 names: computeArea → compute_area
+    welder::welder<rod<google_style>, pep8>::weld_type<Rectangle>(m);
 }
 ```
 
+The compiled module carries the renamed method, the folded docstring, and *not* the
+excluded member:
+
 ```pycon
 >>> import shapes
->>> p = shapes.Point(); p.x = 1.5
->>> p.x
-1.5
->>> hasattr(p, "internal_id")
+>>> r = shapes.Rectangle()
+>>> r.width, r.height = 3.0, 4.0
+>>> r.compute_area()                          # C++ computeArea(), renamed to PEP 8
+12.0
+>>> print(shapes.Rectangle.compute_area.__doc__)
+compute_area(self: shapes.Rectangle) -> float
+
+Compute the area of the rectangle.
+
+Width and height are treated as unsigned extents; a
+degenerate (zero) side yields zero area.
+
+Returns:
+    The area in square units.
+>>> hasattr(r, "cacheHandle")                 # excluded member — never bound
 False
 ```
 
@@ -83,43 +124,15 @@ once.
   a silent skip.
 
 welder removes boilerplate; it is **not** a universal binding abstraction. It does
-not convert your types for you (that stays the framework's job — a pybind11
-`type_caster`, a nanobind caster, a sol2 usertype), it does not replace the binding
-framework, and it does not flatten the languages into one lowest-common-denominator
-API.
-
-## How it fits together
-
-A language-agnostic **core** owns the reflection work — deciding *what* binds,
-whether each type is *representable*, and walking types/namespaces/bases. A **rod**
-(a welding rod, `welder::rods::<name>::rod`) is a stateless policy struct supplying
-only the emission primitives for one backend, driven through the single entry point
-`welder::welder<Rod>`. Adding a language is one rod struct; the core is reused
-verbatim.
-
-| Rod | Language | Kind |
-|---|---|---|
-| `welder::rods::pybind11::rod` | Python (pybind11) | runtime module |
-| `welder::rods::nanobind::rod` | Python (nanobind) | runtime module |
-| `welder::rods::sol2::rod` | Lua (sol2) | runtime module |
-| `welder::rods::luabridge::rod` | Lua (LuaBridge3) | runtime module |
-| `welder::rods::luacats::rod` | Lua (LuaCATS `---@meta` stub) | build-time stub |
-
-The Python rods additionally emit `.pyi` typing stubs. Further languages are
-designed-for but not yet implemented.
-
-## Delivery model
-
-**Header-only** (`src/welder/…`). The vocabulary arrives via `#include
-<welder/vocabulary.hpp>`; a rod pulls in the core itself (`#include
-<welder/rods/python/pybind11/rod.hpp>`). The optional `import welder;` module wrapper
-is removed until the gcc-16 modules bugs are fixed and another toolchain implements
-P2996 — see `docs/content/guide/header-only.md`.
+not convert your types for you (that stays the framework's job — a [pybind11]
+`type_caster`, a [nanobind] caster, a [sol2] usertype), it does not replace the
+binding framework, and it does not flatten the languages into one
+lowest-common-denominator API.
 
 ## Quick start
 
 Building welder's own examples and tests from a clone uses **Conan 2** to provision
-the backends (pybind11 / nanobind / sol2). It also requires **gcc-16** (GCC ≥ 16.1 —
+the backends ([pybind11] / [nanobind] / [sol2]). It also requires **gcc-16** (GCC ≥ 16.1 —
 the only compiler with P2996 + P3394, installed from whatever package manager or
 source build you prefer) and CMake ≥ 3.28 + Ninja. (Consuming welder in *your* project
 needs neither Conan nor the backends — see [Consuming welder](#consuming-welder).)
@@ -147,34 +160,16 @@ for the full walkthrough.
 
 ## Consuming welder
 
-welder is **header-only** and exports the *core only* — `welder::headers` is just the
-include path. You bring your own backend (pybind11 / nanobind / sol2 / LuaBridge3) and,
-on your own target, set C++26 + gcc's `-freflection`. welder does **not** force the
-standard or the flag onto your target; it *checks* them and fails with a clear message
-if they're missing, rather than imposing them.
+welder is header-only and exports the *core only* — `welder::headers` is just the
+include path. You bring your own backend ([pybind11] / [nanobind] / [sol2] /
+[LuaBridge3]) and, on your own target, set C++26 + gcc's `-freflection`. welder does
+**not** force the standard or the flag onto your target; it *checks* them and fails
+with a clear message if they're missing, rather than imposing them.
 
-**The target wiring is the same however you obtain welder** — here linking
-[nanobind](https://github.com/wjakob/nanobind) for a Python extension:
+### Obtaining welder
 
-```cmake
-# Your backend, however you provide it (find_package / FetchContent / Conan / …):
-find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
-find_package(nanobind CONFIG REQUIRED)
-
-nanobind_add_module(mymod src/bindings.cpp)            # your extension module
-target_link_libraries(mymod PRIVATE welder::headers)   # welder = the include path
-target_compile_features(mymod PRIVATE cxx_std_26)      # welder needs C++26 …
-target_compile_options(mymod PRIVATE -freflection)     # … + gcc-16's reflection flag
-```
-
-`find_package(welder)` (and a FetchContent pull) also define the build helpers —
-`welder_pybind11_generate_stubs`, `welder_sol2_add_module`, … — for emitting the
-loadable module and its stubs. Now pick how you obtain welder:
-
-### With CMake (no package manager)
-
-**FetchContent** — no install step. As a subproject welder builds *nothing* of its own
-(no backends, tests or install rules), so it only needs a C++26 compiler:
+**CMake — FetchContent** (no install step; as a subproject welder builds *nothing* of
+its own — no backends, tests or install rules — so it only needs a C++26 compiler):
 
 ```cmake
 include(FetchContent)
@@ -184,8 +179,8 @@ FetchContent_Declare(welder
 FetchContent_MakeAvailable(welder)                     # defines welder::headers
 ```
 
-**Install + `find_package`** — nothing of welder's own compiles, so disable the
-dev-time build and install just the header tree:
+**CMake — install + `find_package`** (nothing of welder's own compiles, so disable the
+dev-time build and install just the header tree):
 
 ```bash
 cmake -S welder -B build \
@@ -195,31 +190,46 @@ cmake -S welder -B build \
 cmake --install build --prefix /your/prefix
 ```
 
-```cmake
-find_package(welder REQUIRED)                          # /your/prefix on CMAKE_PREFIX_PATH
-```
-
-### With Conan
-
-Optional — only if your project already uses Conan. welder ships a recipe; build and
-publish it to your local cache:
+**Conan** (optional — only if your project already uses Conan). welder ships a recipe;
+build and publish it to your local cache, then `requires("welder/0.1.0")` downstream:
 
 ```bash
 conan create . -pr:a conan/profiles/gcc16 --build=missing   # → local ~/.conan2 cache
 ```
 
-A downstream project then `requires("welder/0.1.0")` and consumes it through the *same*
-`find_package(welder)` / `welder::headers` wiring shown above. GitHub Packages doesn't
-host Conan, so there's no public remote yet — the local cache is the current channel.
+GitHub Packages doesn't host Conan, so there's no public remote yet — the local cache
+is the current channel.
+
+### Wiring it onto your target
+
+However you obtain welder, the target wiring is the same — here linking [nanobind]
+for a Python extension:
+
+```cmake
+find_package(welder REQUIRED)                          # welder::headers + build helpers
+find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(nanobind CONFIG REQUIRED)                 # your backend, however you provide it
+
+nanobind_add_module(mymod src/bindings.cpp)            # your extension module
+target_link_libraries(mymod PRIVATE welder::headers)   # welder = the include path
+target_compile_features(mymod PRIVATE cxx_std_26)      # welder needs C++26 …
+target_compile_options(mymod PRIVATE -freflection)     # … + gcc-16's reflection flag
+```
+
+`find_package(welder)` (and a FetchContent pull) also define the build helpers —
+`welder_pybind11_generate_stubs`, `welder_sol2_add_module`, … — for emitting the
+loadable module and its stubs. (With FetchContent, drop the `find_package(welder)`
+line — `welder::headers` is already defined by `FetchContent_MakeAvailable`.)
 
 ## Documentation
 
-**Full docs → [skarndev.github.io/welder](https://skarndev.github.io/welder/)** — an
-mkdocs-material guide plus a Doxygen-generated C++ reference, rebuilt and published on
-every push. Highlights:
+The full documentation lives at
+**[skarndev.github.io/welder](https://skarndev.github.io/welder/)** — a
+[mkdocs-material](https://squidfunk.github.io/mkdocs-material/) guide plus a
+Doxygen-generated C++ reference, rebuilt and published on every push. Highlights:
 
-- [Getting started](https://skarndev.github.io/welder/guide/getting-started/)
-- [Annotation vocabulary](https://skarndev.github.io/welder/guide/annotations/)
+- [Getting started](https://skarndev.github.io/welder/guide/getting-started/) ·
+  [Annotation vocabulary](https://skarndev.github.io/welder/guide/annotations/)
 - [Binding a type](https://skarndev.github.io/welder/guide/binding-types/) ·
   [Enums](https://skarndev.github.io/welder/guide/enums/) ·
   [Inheritance](https://skarndev.github.io/welder/guide/inheritance/) ·
@@ -231,15 +241,14 @@ every push. Highlights:
 - [Architecture](https://skarndev.github.io/welder/architecture/) ·
   [C++ API reference](https://skarndev.github.io/welder/api/)
 
-## Repository layout
-
-| Path | What |
-|---|---|
-| `src/welder/` | the header-only library (vocabulary, core, rods) |
-| `examples/` | loadable Python & Lua proof-of-concept modules |
-| `tests/` | backend-neutral C++ cases each rod binds and asserts (pytest / busted) |
-| `docs/` | the guide + Doxygen reference site |
-
 ## License
 
 [MIT](LICENSE) © 2026 Sergey Shumakov
+
+[p2996]: https://wg21.link/p2996
+[p3394]: https://wg21.link/p3394
+[pybind11]: https://github.com/pybind/pybind11
+[nanobind]: https://github.com/wjakob/nanobind
+[sol2]: https://github.com/ThePhD/sol2
+[LuaBridge3]: https://github.com/kunitoki/LuaBridge3
+[LuaCATS]: https://luals.github.io/wiki/annotations/
