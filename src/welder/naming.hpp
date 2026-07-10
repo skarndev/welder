@@ -190,6 +190,7 @@ struct none {
         return std::string{std::meta::identifier_of(e)};
     }
 };
+static_assert(name_style<none>, "welder: naming::none is not a name_style");
 
 /** A single-convention style: reshape *every* kind to convention @a Kind, whatever
     the source spelling. The base behind the named aliases below, and a handy base
@@ -213,15 +214,20 @@ struct uniform {
     }
 };
 
-using snake_case = uniform<case_kind::snake>;                     /**< `foo_bar` everywhere */
+// Each predefined style is checked against the `name_style` concept right at its
+// definition, so a hook that drifts out of contract (a missing or wrongly-typed
+// transform_*) fails loudly here rather than at some rod's call site.
+using snake_case = uniform<case_kind::snake>; /**< `foo_bar` everywhere */
+static_assert(name_style<snake_case>, "welder: naming::snake_case is not a name_style");
 using screaming_snake_case = uniform<case_kind::screaming_snake>; /**< `FOO_BAR` everywhere */
-using kebab_case = uniform<case_kind::kebab>;                     /**< `foo-bar` everywhere */
-using camel_case = uniform<case_kind::camel>;                     /**< `fooBar` everywhere */
-using pascal_case = uniform<case_kind::pascal>;                   /**< `FooBar` everywhere */
-
-static_assert(name_style<none>);
-static_assert(name_style<snake_case> && name_style<pascal_case> &&
-              name_style<camel_case>);
+static_assert(name_style<screaming_snake_case>,
+              "welder: naming::screaming_snake_case is not a name_style");
+using kebab_case = uniform<case_kind::kebab>; /**< `foo-bar` everywhere */
+static_assert(name_style<kebab_case>, "welder: naming::kebab_case is not a name_style");
+using camel_case = uniform<case_kind::camel>; /**< `fooBar` everywhere */
+static_assert(name_style<camel_case>, "welder: naming::camel_case is not a name_style");
+using pascal_case = uniform<case_kind::pascal>; /**< `FooBar` everywhere */
+static_assert(name_style<pascal_case>, "welder: naming::pascal_case is not a name_style");
 
 } // namespace welder::naming
 
