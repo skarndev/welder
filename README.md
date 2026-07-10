@@ -56,19 +56,20 @@ welder lay the bindings down:
 #include <pybind11/pybind11.h>
 #include <welder/rods/python/pybind11/rod.hpp>
 
-struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // expose to py + lua
-       [[=welder::policy::automatic]]                          // reflect all members
-       [[=welder::doc("An axis-aligned rectangle.")]]
+struct [[=welder::weld(welder::lang::py, welder::lang::lua),   // expose to py + lua
+         =welder::policy::automatic,                           // reflect all members
+         =welder::doc("An axis-aligned rectangle.")]]
 Rectangle {
     double width{0.0};
     double height{0.0};
 
     [[=welder::mark::exclude]] std::uint64_t cacheHandle{0};   // internal, bound nowhere
 
-    [[=welder::doc("Compute the area of the rectangle.\n\n"
-                   "Width and height are treated as unsigned extents; a\n"
-                   "degenerate (zero) side yields zero area.")]]
-    [[=welder::returns("The area in square units.")]]
+    [[=welder::doc(R"(Compute the area of the rectangle.
+
+        Width and height are treated as unsigned extents; a
+        degenerate (zero) side yields zero area.)"),
+      =welder::returns("The area in square units.")]]
     double computeArea() const { return width * height; }
 };
 
