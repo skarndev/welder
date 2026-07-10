@@ -151,8 +151,11 @@ struct module_scope {
 /** The LuaBridge3 rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the emission primitives welder's driver calls; the
-    driver supplies all the reflection-derived decisions. See `<welder/welder.hpp>`
-    for the contract each member fulfills. The `protected` members are LuaBridge3
+    driver supplies all the reflection-derived decisions. Each implements the
+    correspondingly-named hook of the @ref welder::rod contract (and
+    @ref welder::caster_oracle) — every one carries a `@see` back to it, where the
+    shared parameter and return-value semantics are documented once rather than
+    repeated on each backend's mirror. The `protected` members are LuaBridge3
     implementation helpers (prefixed `_`); the operator→metamethod-name map is shared
     in `<welder/rods/lua/metamethods.hpp>`. */
 struct rod {
@@ -350,12 +353,14 @@ struct rod {
     // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** `caster_oracle`: @a T converts without welder registering a class iff
-        LuaBridge3 does not classify it as needs-registration. @see _needs_registration */
+        LuaBridge3 does not classify it as needs-registration.
+        @tparam T the type to classify.
+        @see _needs_registration @see welder::caster_oracle */
     template <class T>
     static constexpr bool has_native_caster = !_needs_registration<T>;
 
     /** Map a member operator to its Lua metamethod name (`nullptr` = not exposed).
-        Shared with the sol2 rod. */
+        Shared with the sol2 rod. @see welder::rod */
     static consteval const char* special_method_name(std::meta::info op_fn) {
         return lua_metamethod_name(op_fn);
     }
@@ -365,7 +370,7 @@ struct rod {
     /** Register class @a T (with its native bases and constructors) and return a
         re-openable handle. @a Bases is the core's *nearest* welded-ancestor set,
         which suffices for LuaBridge3's transitive `__index` chaining. @a doc has no
-        Lua runtime home and is ignored. */
+        Lua runtime home and is ignored. @see welder::rod */
     template <class T, auto Bases, std::size_t... I>
     static class_handle<T> make_class(module_type& m, const char* name,
                                       const char* /*doc*/,
@@ -376,9 +381,12 @@ struct rod {
 
     // Constructors are registered as one set in make_class (LuaBridge3 wants them all
     // at once), so the driver's per-constructor hooks are intentional no-ops here.
+    /** No-op: LuaBridge3 registers the whole constructor set in @ref make_class. @see welder::rod */
     static void add_default_ctor(auto&) {}
+    /** No-op: LuaBridge3 registers the whole constructor set in @ref make_class. @see welder::rod */
     template <std::meta::info /*Ctor*/>
     static void add_constructor(auto&) {}
+    /** No-op: LuaBridge3 registers the whole constructor set in @ref make_class. @see welder::rod */
     template <class /*T*/>
     static void add_aggregate_constructor(auto&) {}
 
@@ -390,7 +398,7 @@ struct rod {
         splices as `Field Base::*`, which LuaBridge3's `addProperty` template
         deduction (fixed on the class `T`) will not up-convert on its own — the cast
         is the derived→base pointer-to-member standard conversion, a no-op for @a T's
-        own members. */
+        own members. @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& h) {
         using T = _class_type<decltype(h)>;
@@ -407,7 +415,7 @@ struct rod {
 
     /** Bind member function @a Fn as a method (`obj:name(…)`). Several C++ overloads
         of a name are gathered into one variadic `addFunction`; registered once, on
-        the group's first (decl-order) member. */
+        the group's first (decl-order) member. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(auto& h) {
         using T = _class_type<decltype(h)>;
@@ -422,7 +430,7 @@ struct rod {
     }
 
     /** Bind static member function @a Fn as a class-table function (`T.name(…)`);
-        overloads are grouped as in @ref add_method. */
+        overloads are grouped as in @ref add_method. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(auto& h) {
         using T = _class_type<decltype(h)>;
@@ -457,7 +465,8 @@ struct rod {
         mutates a *number* key into a string in place, so `obj[0]` reaches the fallback
         as `"0"` and a strict `Stack<int>` cast would reject it. For an arithmetic index
         type the adapter therefore coerces the key with `lua_tonumberx` (which accepts a
-        numeric string), and only treats a genuinely non-numeric key as a member miss. */
+        numeric string), and only treats a genuinely non-numeric key as a member miss.
+        @see welder::rod */
     template <std::meta::info Fn>
     static void add_operator(auto& h) {
         using T = _class_type<decltype(h)>;
@@ -495,7 +504,7 @@ struct rod {
     // --- enum binding -------------------------------------------------------
 
     /** Create the enum's nested namespace (a `Name = value` table) on the module
-        (@a doc ignored) and return a re-openable handle. */
+        (@a doc ignored) and return a re-openable handle. @see welder::rod */
     template <class E>
     static enum_handle make_enum(module_type& m, const char* name,
                                  const char* /*doc*/) {
@@ -506,7 +515,7 @@ struct rod {
     /** Add enumerator @a Enum (as its underlying integer) to the enum's table. An
         unscoped enum's enumerator is also mirrored onto the enclosing module,
         unqualified — the driver's `finish_enum` role, done incrementally here since
-        the handle carries the module. */
+        the handle carries the module. @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(enum_handle& e) {
         constexpr const char* name{
@@ -517,21 +526,23 @@ struct rod {
             _open_namespace(e.mod).addVariable(name, value);
     }
 
-    /** No whole-enum finalizer needed (unscoped export is done per-enumerator). */
+    /** No whole-enum finalizer needed (unscoped export is done per-enumerator).
+        @see welder::rod */
     template <class /*E*/>
     static void finish_enum(auto&) {}
 
     // --- namespace / module binding -----------------------------------------
 
-    /** Open a per-module session (unused; see @ref session). */
+    /** Open a per-module session (unused; see @ref session). @see welder::rod */
     static session open_module(module_type&) { return {}; }
 
-    /** No runtime module docstring in Lua (its home is a generated stub). */
+    /** No runtime module docstring in Lua (its home is a generated stub).
+        @see welder::rod */
     static void set_module_doc(module_type&, const char*) {}
 
     /** Bind free function @a Fn as a module-level function; overloads are gathered
         into one variadic `addFunction`. A non-null @a name overrides the resolved
-        name (including any `weld_as`), used verbatim. */
+        name (including any `weld_as`), used verbatim. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
@@ -551,7 +562,8 @@ struct rod {
         A const/constexpr variable is copied in as a **value snapshot** (frozen at
         load time). A mutable variable becomes a **live get/set** over the C++ global
         via LuaBridge3's native property support, so Lua reads see the current value
-        and writes flow back. A non-null @a name overrides the resolved name. */
+        and writes flow back. A non-null @a name overrides the resolved name.
+        @see welder::rod */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session& /*s*/,
                              const char* name = nullptr) {
@@ -568,7 +580,7 @@ struct rod {
         }
     }
 
-    /** Create a submodule (nested namespace) named @a name under @a m. */
+    /** Create a submodule (nested namespace) named @a name under @a m. @see welder::rod */
     static module_type add_submodule(module_type& m, const char* name) {
         _open_namespace(m).beginNamespace(name); // create, then unwind
         module_type sub{m};
@@ -576,7 +588,7 @@ struct rod {
         return sub;
     }
 
-    /** Close the session (no-op; see @ref session). */
+    /** Close the session (no-op; see @ref session). @see welder::rod */
     static void close_module(module_type&, session&) {}
 };
 

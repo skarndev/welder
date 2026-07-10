@@ -144,19 +144,22 @@ struct rod {
   public:
     // --- caster oracle + emission primitives (the welder::rod contract) --
 
-    /** @ref is_native_lua drives the shared bindability gate. */
+    /** @ref is_native_lua drives the shared bindability gate.
+        @tparam T the type to classify. @see welder::caster_oracle */
     template <class T>
     static constexpr bool has_native_caster =
         is_native_lua<std::remove_cvref_t<T>>;
 
     /** Member operator → its `---@operator` name, or `nullptr` (also gates
-        eligibility, like every backend). */
+        eligibility, like every backend). @see welder::rod */
     static consteval const char* special_method_name(std::meta::info op_fn) {
         return operator_luacats(op_fn);
     }
 
     // --- class binding ------------------------------------------------------
 
+    /** Open a `---@class` block for @a T and register its raw→styled name for
+        later type-reference reconciliation. @see welder::rod */
     template <class T, auto Bases, std::size_t... I>
     static class_writer make_class(module_type& m, const char* name,
                                    const char* doc, std::index_sequence<I...> seq) {
@@ -174,6 +177,7 @@ struct rod {
         return w;
     }
 
+    /** Emit a no-argument `.new()` constructor overload. @see welder::rod */
     static void add_default_ctor(class_writer& w) {
         // A no-argument `.new()` overload returning the class; grouped on flush.
         func_overload o{};
@@ -182,11 +186,14 @@ struct rod {
         w.ctors.push_back(std::move(o));
     }
 
+    /** Emit a `.new(…)` constructor overload for @a Ctor. @see welder::rod */
     template <std::meta::info Ctor>
     static void add_constructor(class_writer& w) {
         w.ctors.push_back(build_overload<Ctor>(w.qualified));
     }
 
+    /** Emit the aggregate field constructor (one `.new` param per field).
+        @see welder::rod */
     template <class T>
     static void add_aggregate_constructor(class_writer& w) {
         // C++26 aggregate field constructor: one `.new` param per field.
@@ -199,6 +206,8 @@ struct rod {
         w.ctors.push_back(std::move(o));
     }
 
+    /** Emit a `---@field` line for data member @a Mem (const → a `(read-only)`
+        note, since LuaCATS has no const modifier). @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         w.fields += "---@field ";
@@ -217,6 +226,8 @@ struct rod {
         w.fields += '\n';
     }
 
+    /** Emit a documented `Class:name(…)` method (overloads as `---@overload` lines).
+        @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(class_writer& w) {
         // A method is `Class:name(...)` (implicit self); reflection's parameters
@@ -235,6 +246,8 @@ struct rod {
         }
     }
 
+    /** Emit a documented `Class.name(…)` static method (dotted, no self).
+        @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(class_writer& w) {
         if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
@@ -250,6 +263,7 @@ struct rod {
         }
     }
 
+    /** Emit a `---@operator name(rhs): R` line on the class block. @see welder::rod */
     template <std::meta::info Fn>
     static void add_operator(class_writer& w) {
         // LuaCATS records operators on the class block: `---@operator name(rhs): R`.
@@ -272,6 +286,8 @@ struct rod {
 
     // --- enum binding -------------------------------------------------------
 
+    /** Open an enum table declaration for @a E and register its raw→styled name.
+        @see welder::rod */
     template <class E>
     static enum_writer make_enum(module_type& m, const char* name,
                                  const char* doc) {
@@ -287,6 +303,7 @@ struct rod {
         return w;
     }
 
+    /** Emit an `Name = <int>` line for enumerator @a Enum. @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(enum_writer& w) {
         w.values += "    ";
@@ -298,17 +315,22 @@ struct rod {
         w.values += ",\n";
     }
 
+    /** No finalizer needed — the `enum_writer` flushes on destruction. @see welder::rod */
     template <class E>
     static void finish_enum(enum_writer&) {} // RAII flush handles it
 
     // --- namespace / module binding -----------------------------------------
 
+    /** Open a per-module session (no deferred state). @see welder::rod */
     static session open_module(module_type&) { return {}; }
 
+    /** Declare the (sub)module table, carrying @a doc as its comment. @see welder::rod */
     static void set_module_doc(module_type& m, const char* doc) {
         m.doc->declare_table(m.prefix, doc);
     }
 
+    /** Emit a documented module-level `function` (overloads as `---@overload`).
+        @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
         // Free-function overloads group just like methods (see add_method). A
@@ -327,6 +349,8 @@ struct rod {
         }
     }
 
+    /** Emit a `---@type`-annotated `<name> = nil` module variable declaration.
+        @see welder::rod */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&, const char* name = nullptr) {
         std::string& out{m.doc->body};
@@ -341,6 +365,7 @@ struct rod {
                " = nil\n\n";
     }
 
+    /** Declare a nested submodule table under @a m and return its writer. @see welder::rod */
     static module_type add_submodule(module_type& m, const char* name) {
         const std::string prefix{m.prefix.empty() ? std::string{name}
                                                   : m.prefix + "." + name};
@@ -348,6 +373,7 @@ struct rod {
         return module_type{m.doc, prefix};
     }
 
+    /** Close the session (no-op; the document accumulates directly). @see welder::rod */
     static void close_module(module_type&, session&) {}
 
     // --- whole-stub generation (this backend's extra entry point) -----------

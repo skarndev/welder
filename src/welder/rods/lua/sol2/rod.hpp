@@ -104,10 +104,13 @@ using ::welder::rods::lua::overload_group;
 /** The sol2 rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the sol2 emission primitives welder's driver
-    calls; the driver supplies all the reflection-derived decisions. See
-    `<welder/welder.hpp>` for the contract each member fulfills. The `protected`
-    members below are sol2-specific implementation helpers (prefixed `_`), not part
-    of the contract; the operator→metamethod map lives in `metamethods.hpp`.
+    calls; the driver supplies all the reflection-derived decisions. Each implements
+    the correspondingly-named hook of the @ref welder::rod contract (and
+    @ref welder::caster_oracle) — every one carries a `@see` back to it, where the
+    shared parameter and return-value semantics are documented once rather than
+    repeated on each backend's mirror. The `protected` members below are sol2-specific
+    implementation helpers (prefixed `_`), not part of the contract; the
+    operator→metamethod map lives in `metamethods.hpp`.
 */
 struct rod {
     static constexpr lang language{lang::lua}; /**< welder::lang::lua. */
@@ -448,11 +451,14 @@ struct rod {
     // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** `caster_oracle`: @a T converts without welder registering a usertype iff
-        sol2 does not classify it as needs-registration. @see _needs_registration */
+        sol2 does not classify it as needs-registration.
+        @tparam T the type to classify.
+        @see _needs_registration @see welder::caster_oracle */
     template <class T>
     static constexpr bool has_native_caster = !_needs_registration<T>;
 
-    /** Map a member operator to its Lua metamethod name (`nullptr` = not exposed). */
+    /** Map a member operator to its Lua metamethod name (`nullptr` = not exposed).
+        @see welder::rod */
     static consteval const char* special_method_name(std::meta::info op_fn) {
         return operator_mm(op_fn).name;
     }
@@ -464,7 +470,8 @@ struct rod {
 
         The driver's @a Bases is welder's *nearest* welded-ancestor set; sol2 needs
         the full transitive closure (see _collect_welded_bases), so this recomputes
-        it from @a T and ignores the passed-in @a Bases. @see _make_usertype */
+        it from @a T and ignores the passed-in @a Bases.
+        @see _make_usertype @see welder::rod */
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type& m, const char* name, const char* /*doc*/,
                            std::index_sequence<I...> /*seq*/) {
@@ -475,9 +482,12 @@ struct rod {
 
     // Constructors are registered as one set in make_class (sol2 wants them all at
     // once), so the driver's per-constructor hooks are intentional no-ops here.
+    /** No-op: sol2 registers the whole constructor set in @ref make_class. @see welder::rod */
     static void add_default_ctor(auto&) {}
+    /** No-op: sol2 registers the whole constructor set in @ref make_class. @see welder::rod */
     template <std::meta::info /*Ctor*/>
     static void add_constructor(auto&) {}
+    /** No-op: sol2 registers the whole constructor set in @ref make_class. @see welder::rod */
     template <class /*T*/>
     static void add_aggregate_constructor(auto&) {}
 
@@ -486,7 +496,7 @@ struct rod {
         A mutable member becomes read/write; a const member is wrapped in
         `sol::readonly` (its setter would not compile). Lua has no property
         docstring, so a `[[=welder::doc]]` on the member is not surfaced at runtime
-        (it belongs in a generated stub). */
+        (it belongs in a generated stub). @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& ut) {
         constexpr const char* name{
@@ -499,7 +509,8 @@ struct rod {
 
     /** Bind member function @a Fn as a method (`obj:name(…)`). Several C++ overloads
         of a name are gathered into one `sol::overload(…)`; the driver visits each
-        overload, so the whole group is registered once, on its first member. */
+        overload, so the whole group is registered once, on its first member.
+        @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(auto& ut) {
         if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
@@ -511,7 +522,7 @@ struct rod {
     }
 
     /** Bind static member function @a Fn as a class-table function (`T.name(…)`);
-        overloads are grouped as in @ref add_method. */
+        overloads are grouped as in @ref add_method. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(auto& ut) {
         if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
@@ -526,7 +537,8 @@ struct rod {
 
     /** Bind member operator @a Fn under its Lua metamethod. The specific overload is
         spliced, so unary/binary forms never collide; several overloads mapping to
-        the *same* metamethod slot are gathered into one `sol::overload(…)`. */
+        the *same* metamethod slot are gathered into one `sol::overload(…)`.
+        @see welder::rod */
     template <std::meta::info Fn>
     static void add_operator(auto& ut) {
         if constexpr (is_overload_leader<operator_overload_set>(Fn, lang::lua)) {
@@ -537,7 +549,8 @@ struct rod {
 
     // --- enum binding -------------------------------------------------------
 
-    /** Create the enum's `Name = value` table on the module (@a doc ignored). */
+    /** Create the enum's `Name = value` table on the module (@a doc ignored).
+        @see welder::rod */
     template <class E>
     static auto make_enum(module_type& m, const char* name, const char* /*doc*/) {
         ::sol::table values{::sol::state_view{m.lua_state()}.create_table()};
@@ -548,7 +561,7 @@ struct rod {
     /** Add enumerator @a Enum (as its underlying integer). An unscoped enum's
         enumerator is also mirrored onto the enclosing module, unqualified — the
         driver's `finish_enum` role, done incrementally here since the handle
-        carries the parent. */
+        carries the parent. @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(auto& e) {
         constexpr const char* name{
@@ -559,7 +572,8 @@ struct rod {
             e.parent[name] = value;
     }
 
-    /** No whole-enum finalizer needed (unscoped export is done per-enumerator). */
+    /** No whole-enum finalizer needed (unscoped export is done per-enumerator).
+        @see welder::rod */
     template <class /*E*/>
     static void finish_enum(auto&) {}
 
@@ -567,17 +581,18 @@ struct rod {
 
     /** Open a per-module session. The live-variable registry tables are created
         lazily (on the first mutable variable), so a plain type/function module never
-        allocates them. */
+        allocates them. @see welder::rod */
     static session open_module(module_type&) { return {}; }
 
-    /** No runtime module docstring in Lua (its home is a generated stub). */
+    /** No runtime module docstring in Lua (its home is a generated stub).
+        @see welder::rod */
     static void set_module_doc(module_type&, const char*) {}
 
     /** Bind free function @a Fn as a module-level function; overloads are gathered
         into one `sol::overload(…)`, registered once on the group's first member.
 
         A non-null @a name overrides the resolved name (including any `weld_as`), used
-        verbatim; `nullptr` falls back to the styled/`weld_as` name. */
+        verbatim; `nullptr` falls back to the styled/`weld_as` name. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
@@ -602,7 +617,7 @@ struct rod {
         deliberately *not* stored on the table (a present key would bypass `__index`).
 
         A non-null @a name overrides the resolved name (including any `weld_as`), used
-        verbatim; `nullptr` falls back to the styled/`weld_as` name. */
+        verbatim; `nullptr` falls back to the styled/`weld_as` name. @see welder::rod */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session& s, const char* name = nullptr) {
         const char* key{name ? name
@@ -624,7 +639,7 @@ struct rod {
         }
     }
 
-    /** Create a submodule table named @a name under @a m. */
+    /** Create a submodule table named @a name under @a m. @see welder::rod */
     static module_type add_submodule(module_type& m, const char* name) {
         ::sol::table sub{::sol::state_view{m.lua_state()}.create_table()};
         m[name] = sub;
@@ -632,7 +647,7 @@ struct rod {
     }
 
     /** Close the session: install the live-variable metatable proxy, if any
-        mutable variable was welded onto @a m. */
+        mutable variable was welded onto @a m. @see welder::rod */
     static void close_module(module_type& m, session& s) {
         if (s.has_live)
             _install_live_variables(m, s.getters, s.setters);

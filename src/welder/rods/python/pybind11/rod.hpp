@@ -51,10 +51,12 @@ namespace py = ::pybind11;
 /** The pybind11 rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the pybind11 emission primitives welder's driver
-    calls; the driver supplies all the reflection-derived decisions. See
-    `<welder/welder.hpp>` for the contract each member fulfills. The `protected`
-    members below are pybind11-specific implementation helpers (prefixed `_`), not
-    part of the contract.
+    calls; the driver supplies all the reflection-derived decisions. Each implements
+    the correspondingly-named hook of the @ref welder::rod contract (and
+    @ref welder::caster_oracle) — every one carries a `@see` back to it, where the
+    shared parameter and return-value semantics are documented once rather than
+    repeated on each backend's mirror. The `protected` members below are
+    pybind11-specific implementation helpers (prefixed `_`), not part of the contract.
 
     @tparam DocStyle the docstring convention this rod folds function/parameter/
                      return docs into (a @ref welder::doc_style). Defaults to
@@ -237,35 +239,38 @@ struct rod {
     // --- caster oracle + emission primitives (the welder::rod contract) --
 
     /** `caster_oracle`: @a T is convertible without welder registering a class for
-        it iff pybind11 does *not* fall back to runtime class registration. */
+        it iff pybind11 does *not* fall back to runtime class registration.
+        @tparam T the type to classify. @see welder::caster_oracle */
     template <class T>
     static constexpr bool has_native_caster = !_needs_registration<T>;
 
-    /** Map a member operator to its Python dunder (`nullptr` = not exposed). */
+    /** Map a member operator to its Python dunder (`nullptr` = not exposed).
+        @see welder::rod */
     static consteval const char* special_method_name(std::meta::info op_fn) {
         return ::welder::rods::python::operator_dunder(op_fn);
     }
 
     // --- class binding ------------------------------------------------------
 
-    /** Create the `py::class_<T, Bases…>` handle. @see _make_class */
+    /** Create the `py::class_<T, Bases…>` handle. @see _make_class @see welder::rod */
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type& m, const char* name, const char* doc,
                            std::index_sequence<I...> seq) {
         return _make_class<T, Bases>(m, name, doc, seq);
     }
 
-    /** Bind the default constructor. */
+    /** Bind the default constructor. @see welder::rod */
     static void add_default_ctor(auto& cls) { cls.def(py::init<>()); }
 
-    /** Bind constructor @a Ctor as a `py::init<…>`. @see _def_init */
+    /** Bind constructor @a Ctor as a `py::init<…>`. @see _def_init @see welder::rod */
     template <std::meta::info Ctor>
     static void add_constructor(auto& cls) {
         _def_init<Ctor>(cls, std::make_index_sequence<
                                  std::meta::parameters_of(Ctor).size()>{});
     }
 
-    /** Bind the synthesized aggregate field constructor. @see _def_aggregate_init */
+    /** Bind the synthesized aggregate field constructor.
+        @see _def_aggregate_init @see welder::rod */
     template <class T>
     static void add_aggregate_constructor(auto& cls) {
         constexpr auto fields{::welder::detail::aggregate_fields<T>()};
@@ -280,7 +285,8 @@ struct rod {
         (`def_readonly`); a mutable one is read/write (`def_readwrite`). The doc,
         when present, is passed as the property docstring. There is deliberately no
         setter docstring: a Python `property` surfaces only the getter's `__doc__`,
-        so one would be pure overhead. */
+        so one would be pure overhead.
+        @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& cls) {
         constexpr const char* name{
@@ -300,7 +306,7 @@ struct rod {
         }
     }
 
-    /** Bind member function @a Fn as a method. */
+    /** Bind member function @a Fn as a method. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_method(auto& cls) {
         _def_function<Fn>(
@@ -308,7 +314,7 @@ struct rod {
             [&cls](auto&&... a) { cls.def(std::forward<decltype(a)>(a)...); });
     }
 
-    /** Bind static member function @a Fn as a static method. */
+    /** Bind static member function @a Fn as a static method. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_static_method(auto& cls) {
         _def_function<Fn>(
@@ -316,7 +322,7 @@ struct rod {
             [&cls](auto&&... a) { cls.def_static(std::forward<decltype(a)>(a)...); });
     }
 
-    /** Bind member operator @a Fn under its Python dunder. */
+    /** Bind member operator @a Fn under its Python dunder. @see welder::rod */
     template <std::meta::info Fn>
     static void add_operator(auto& cls) {
         _def_function<Fn>(::welder::rods::python::operator_dunder(Fn),
@@ -345,9 +351,15 @@ struct rod {
         const char* name;                         ///< the enum's Python name
         std::unique_ptr<py::native_enum<E>> impl; ///< the (move-only) native enum
 
+        /** Add enumerator @a n = @a v to the pending native enum.
+            @param n the enumerator's Python name.
+            @param v the enumerator value. */
         void value(const char* n, E v) { impl->value(n, v); }
+        /** Export the enumerators into the enclosing scope (unscoped enums). */
         void export_values() { impl->export_values(); }
 
+        /** Commit the enum onto @ref scope as @ref name, and stamp the
+            pybind11-stubgen native-enum marker. */
         void finalize() {
             impl->finalize(); // commits the enum onto `scope` as `name`
             // pybind11 3.0.1 does not yet stamp the `__pybind11_native_enum__`
@@ -360,7 +372,8 @@ struct rod {
         }
     };
 
-    /** Create the `enum_handle` for @a E (a non-null @a doc becomes its docstring). */
+    /** Create the `enum_handle` for @a E (a non-null @a doc becomes its docstring).
+        @see welder::rod */
     template <class E>
     static enum_handle<E> make_enum(module_type& m, const char* name,
                                     const char* doc) {
@@ -371,7 +384,7 @@ struct rod {
                                                      doc ? doc : "")};
     }
 
-    /** Add enumerator @a Enum to the enum handle. */
+    /** Add enumerator @a Enum to the enum handle. @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(auto& e) {
         e.value(
@@ -380,7 +393,7 @@ struct rod {
     }
 
     /** Finalize enum @a E: export an unscoped enum's values into the enclosing scope,
-        then commit the enum to the module. */
+        then commit the enum to the module. @see welder::rod */
     template <class E>
     static void finish_enum(auto& e) {
         // Mirror C++ scope semantics: an unscoped enum's enumerators are visible
@@ -395,16 +408,17 @@ struct rod {
 
     /** Open a per-module session: a dict accumulating live (mutable-variable)
         properties; _install_live_properties() applies them in one `__class__` swap
-        at close. */
+        at close. @see welder::rod */
     static py::dict open_module(module_type&) { return py::dict{}; }
 
-    /** Set the (sub)module docstring. */
+    /** Set the (sub)module docstring. @see welder::rod */
     static void set_module_doc(module_type& m, const char* doc) { m.doc() = doc; }
 
     /** Bind free function @a Fn as a module-level function.
 
         A non-null @a name overrides the resolved name (including any `weld_as`),
-        used verbatim; `nullptr` falls back to the styled/`weld_as` name. */
+        used verbatim; `nullptr` falls back to the styled/`weld_as` name.
+        @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
         _def_function<Fn>(
@@ -418,7 +432,7 @@ struct rod {
         A const/constexpr variable becomes a value snapshot; a mutable one becomes a
         live get/set property over the C++ global (accumulated in @a live). A non-null
         @a name_override is used verbatim (beating any `weld_as`); `nullptr` falls back
-        to the styled/`weld_as` name. */
+        to the styled/`weld_as` name. @see welder::rod */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, py::dict& live,
                              const char* name_override = nullptr) {
@@ -441,12 +455,12 @@ struct rod {
         }
     }
 
-    /** Create a submodule named @a name under @a m. */
+    /** Create a submodule named @a name under @a m. @see welder::rod */
     static module_type add_submodule(module_type& m, const char* name) {
         return m.def_submodule(name);
     }
 
-    /** Close the session: apply any accumulated live properties. */
+    /** Close the session: apply any accumulated live properties. @see welder::rod */
     static void close_module(module_type& m, py::dict& live) {
         if (live.size() != 0)
             _install_live_properties(m, live);
