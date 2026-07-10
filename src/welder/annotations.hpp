@@ -11,6 +11,12 @@
 
 namespace welder {
 
+/** `std::size_t` named without a standard-library include, keeping this
+    vocabulary header std-free (see the file note). `sizeof` yields `std::size_t`
+    by definition, so `decltype(sizeof(0))` *is* that type — this alias just gives
+    it a readable name for the array-length template parameters below. */
+using size_type = decltype(sizeof(0));
+
 /** The single-language bit for @a l within a language mask.
 
     Languages are tracked as bits in a mask so a spec can name an arbitrary
@@ -180,15 +186,13 @@ inline constexpr trust_bindable_spec trust_bindable{};   /**< @see trust_bindabl
     (gcc-16 rejects it as a non-structural constant), whereas an inline array is.
 
     @tparam N the literal's length including the terminator (deduced).
-    @note `decltype(sizeof(0))` is `size_t` without a standard-library include —
-          see the std-free constraint on this header.
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 struct fixed_string {
     char data[N]{}; /**< The captured characters, including the terminator. */
     /** Capture the characters of @a s. @param s the source string literal. */
     consteval fixed_string(const char (&s)[N]) {
-        for (decltype(sizeof(0)) i{0}; i < N; ++i)
+        for (size_type i{0}; i < N; ++i)
             data[i] = s[i];
     }
 };
@@ -197,7 +201,7 @@ struct fixed_string {
 
     @tparam N the text length (deduced).
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 struct doc_spec {
     fixed_string<N> text; /**< The docstring text. */
 };
@@ -214,7 +218,7 @@ struct doc_spec {
     @param s  the docstring text.
     @return a doc_spec holding the text.
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 consteval doc_spec<N> doc(const char (&s)[N]) {
     return doc_spec<N>{fixed_string<N>{s}};
 }
@@ -227,7 +231,7 @@ consteval doc_spec<N> doc(const char (&s)[N]) {
 
     @tparam N the text length (deduced).
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 struct return_doc_spec {
     fixed_string<N> text; /**< The return-value documentation. */
 };
@@ -240,7 +244,7 @@ struct return_doc_spec {
     @param s  the return-value documentation.
     @return a return_doc_spec holding the text.
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 consteval return_doc_spec<N> returns(const char (&s)[N]) {
     return return_doc_spec<N>{fixed_string<N>{s}};
 }
@@ -265,7 +269,7 @@ consteval return_doc_spec<N> returns(const char (&s)[N]) {
     @tparam N the parameter-name length (deduced).
     @tparam M the text length (deduced).
 */
-template <decltype(sizeof(0)) N, decltype(sizeof(0)) M>
+template <size_type N, size_type M>
 struct tparam_spec {
     fixed_string<N> name; /**< The documented template parameter's name. */
     fixed_string<M> text; /**< Its documentation. */
@@ -281,7 +285,7 @@ struct tparam_spec {
     @param text its documentation.
     @return a tparam_spec pairing the name with the text.
 */
-template <decltype(sizeof(0)) N, decltype(sizeof(0)) M>
+template <size_type N, size_type M>
 consteval tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M]) {
     return tparam_spec<N, M>{fixed_string<N>{name}, fixed_string<M>{text}};
 }
@@ -307,7 +311,7 @@ consteval tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M])
     a structural annotation constant.
     @tparam N the name length including the terminator (deduced).
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 struct weld_as_spec {
     unsigned mask = 0;    /**< The languages to rename for; `0` == all languages. */
     fixed_string<N> name; /**< The verbatim target-language name. */
@@ -324,7 +328,7 @@ struct weld_as_spec {
     @param s the verbatim name.
     @return a weld_as_spec with mask `0` (all languages).
 */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 consteval weld_as_spec<N> weld_as(const char (&s)[N]) {
     return weld_as_spec<N>{0u, fixed_string<N>{s}};
 }
@@ -341,7 +345,7 @@ namespace detail {
 /** The language mask of a `weld_as` argument list: the OR of its leading `lang`
     markers (the trailing name contributes nothing; no markers → `0` = all). */
 consteval unsigned weld_as_mask() { return 0u; }
-template <decltype(sizeof(0)) N>
+template <size_type N>
 consteval unsigned weld_as_mask(const char (&)[N]) { return 0u; }
 template <class... Rest>
 consteval unsigned weld_as_mask(lang l, Rest&&... rest) {
@@ -350,7 +354,7 @@ consteval unsigned weld_as_mask(lang l, Rest&&... rest) {
 
 /** The verbatim name of a `weld_as` argument list: the trailing string, reached by
     dropping the leading `lang` markers (its extent N preserved by reference). */
-template <decltype(sizeof(0)) N>
+template <size_type N>
 consteval fixed_string<N> weld_as_name(const char (&s)[N]) { return fixed_string<N>{s}; }
 template <class... Rest>
 consteval auto weld_as_name(lang, Rest&&... rest) {

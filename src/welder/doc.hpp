@@ -163,8 +163,8 @@ struct tparam_doc {
     @return the count of `tparam` annotations.
 */
 template <std::meta::info Ent>
-consteval decltype(sizeof(0)) tparam_count() {
-    decltype(sizeof(0)) n{0};
+consteval size_type tparam_count() {
+    size_type n{0};
     for (auto a : std::meta::annotations_of(Ent)) {
         auto t{std::meta::type_of(a)};
         if (std::meta::has_template_arguments(t) &&
@@ -189,7 +189,7 @@ consteval decltype(sizeof(0)) tparam_count() {
 template <std::meta::info Ent>
 consteval auto tparam_docs() {
     std::array<tparam_doc, tparam_count<Ent>()> out{};
-    decltype(sizeof(0)) i{0};
+    size_type i{0};
     template for (constexpr auto a :
                   std::define_static_array(std::meta::annotations_of(Ent))) {
         constexpr std::meta::info t{std::meta::type_of(a)};
@@ -220,12 +220,12 @@ struct param_doc {
 */
 template <std::meta::info Fn>
 consteval auto param_docs() {
-    constexpr decltype(sizeof(0)) n{std::meta::parameters_of(Fn).size()};
+    constexpr size_type n{std::meta::parameters_of(Fn).size()};
     std::array<param_doc, n> out{};
     // The final `i++` in the unrolled `template for` is a dead store (its result is
     // never read), which trips -Wunused-but-set-variable; the counter is genuinely
     // used to index `out`, so mark it maybe_unused rather than restructure.
-    [[maybe_unused]] decltype(sizeof(0)) i{0};
+    [[maybe_unused]] size_type i{0};
     template for (constexpr auto p :
                   std::define_static_array(std::meta::parameters_of(Fn))) {
         const char* name{std::meta::has_identifier(p)
