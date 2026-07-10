@@ -353,5 +353,10 @@ framework's own mechanisms, separately from core resolution — design pending.
   builds a `WELDER_LUACATS_MAIN` generator executable and runs it into `<name>.lua`
   as an ALL target (`CXX_SCAN_FOR_MODULES OFF`, matching the Lua-side TUs).
 
-Reflection/module flags are isolated in the `welder_flags` INTERFACE target and
-gated on compiler id, so nothing gcc-specific leaks into the public targets.
+Reflection flags are **not** propagated to consumers: `welder::headers` is the include
+path only (no `cxx_std_26`, no `-freflection`). welder's own build applies
+`-freflection` via a build-tree-scoped `add_compile_options` (gated on compiler id),
+and a consumer sets the standard + `-freflection` on its own target. welder *checks*
+both — `WelderRequirements.cmake` (compiler + `CMAKE_CXX_STANDARD`, shared by the build
+and the installed config) and the `#error` guard in `<welder/lang.hpp>`
+(`__cpp_impl_reflection`) — rather than imposing them. See build-test-run.md.

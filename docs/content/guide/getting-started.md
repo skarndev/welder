@@ -13,9 +13,10 @@ gcc extensions, but today only one compiler implements the papers it needs:
 | Python | a `python3` with development headers (for the Python modules) |
 | Lua | headers via conan `sol2` (pulls Lua); a Lua interpreter to load the module |
 
-Reflection/module flags are isolated in the `welder_flags` CMake target and gated
-on the compiler id, so nothing gcc-specific leaks into the public targets. As
-Clang/MSVC catch up, add a branch there.
+welder does not propagate these onto your targets — `welder::headers` is the include
+path only, and you set `-std=c++26 -freflection` on your own target (welder *checks*
+the compiler + standard, see [Consuming welder](#consuming-welder)). As Clang/MSVC
+catch up, add a branch to `WelderRequirements.cmake`.
 
 !!! tip "Reflection flags"
 
@@ -155,9 +156,13 @@ field binds, so `Point(1.0, 2.0)` also works — see
 welder is **header-only** and **needs no Conan** — plain CMake wires it in. It exports
 the *core* only; you bring your own backend (pybind11/nanobind/sol2/LuaBridge3). Pulled
 in as a subproject, welder builds nothing of its own — no backends, no tests, no
-install rules — so all it asks of a consumer is a C++26 compiler. Link
-`welder::headers`; it carries the vocabulary, the core, C++26 and the `-freflection`
-flag.
+install rules — so all it asks of a consumer is a C++26 compiler.
+
+`welder::headers` is **just the include path**. welder does not force the C++ standard
+or gcc's `-freflection` onto your target — those are your project's to set. welder
+*checks* them (at `find_package` time, and via the compile-time guard in
+`<welder/lang.hpp>`) and fails with a clear message if they're missing, rather than
+imposing them:
 
 === "FetchContent"
 
@@ -169,6 +174,8 @@ flag.
     FetchContent_MakeAvailable(welder)
 
     target_link_libraries(my_bindings PRIVATE welder::headers)
+    target_compile_features(my_bindings PRIVATE cxx_std_26)   # welder needs C++26 …
+    target_compile_options(my_bindings PRIVATE -freflection)  # … + gcc-16's reflection flag
     ```
 
 === "Installed + `find_package`"
@@ -187,6 +194,8 @@ flag.
     ```cmake
     find_package(welder REQUIRED)   # /your/prefix on CMAKE_PREFIX_PATH
     target_link_libraries(my_bindings PRIVATE welder::headers)
+    target_compile_features(my_bindings PRIVATE cxx_std_26)
+    target_compile_options(my_bindings PRIVATE -freflection)
     ```
 
 === "Conan"

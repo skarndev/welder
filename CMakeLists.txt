@@ -65,21 +65,27 @@ include(WelderPybind11Stubgen)
 include(WelderSol2Module)
 include(WelderLuaBridgeModule)
 include(WelderLuaCATSStub)
+include(WelderRequirements)
 
-# All toolchain-specific flags for C++26 reflection + annotations live here, so
-# the rest of the project stays standard. gcc-16 is currently the only compiler
-# that implements P2996/P3394; add branches as others catch up.
-add_library(welder_flags INTERFACE)
+# Check (don't impose) welder's compiler + language-standard requirements — shared
+# with the installed welder-config.cmake, so find_package() consumers get the same
+# diagnostics. welder propagates NOTHING onto a consumer's target beyond its include
+# path: not the C++ standard (no INTERFACE cxx_std_26) and not gcc's -freflection.
+# Those are the consumer's to set; we only verify, and the header guard in
+# <welder/lang.hpp> is the compile-time backstop (it also catches a missing
+# -freflection). gcc-16 is currently the only compiler implementing P2996/P3394.
+welder_check_requirements()
+
+# welder's OWN targets (examples, tests, negative-compile probes) still need gcc's
+# reflection flag. Apply it directory-scoped to this build tree — it reaches welder's
+# own subdirs but NOT a parent project's targets, so a consuming
+# add_subdirectory()/FetchContent() build does not inherit it (the consumer sets
+# -freflection itself; welder checks, doesn't propagate). A build-tree $<BUILD_INTERFACE>
+# link would be wrong here — it can't tell welder's own targets from a FetchContent
+# consumer's, since both live in the build tree. (The C++ standard for this build is
+# the global CMAKE_CXX_STANDARD 26 above.)
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
-    message(FATAL_ERROR "welder needs GCC >= 16 for C++26 reflection (got ${CMAKE_CXX_COMPILER_VERSION})")
-  endif()
-  target_compile_options(welder_flags INTERFACE -freflection)
-else()
-  message(WARNING
-    "welder: C++26 reflection flags are only wired for GNU (gcc-16). "
-    "Compiler '${CMAKE_CXX_COMPILER_ID}' is not supported yet; the build will "
-    "almost certainly fail until P2996/P3394 land there.")
+  add_compile_options(-freflection)
 endif()
 
 # --- LuaBridge3 provisioning ---------------------------------------------------

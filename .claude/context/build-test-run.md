@@ -55,15 +55,24 @@ routes, all landing on the same `welder::headers` target:
 
 - **CMake install/export** (`src/CMakeLists.txt`, guarded by `WELDER_INSTALL`, default
   `${PROJECT_IS_TOP_LEVEL}`): installs the `src/welder` header tree to `include/`,
-  exports the two INTERFACE targets a consumer links — `welder::headers` and
-  `welder::flags` (the `-freflection` carrier `headers` pulls in) — as
-  `welder-targets.cmake`, and ships the four `cmake/Welder*.cmake` build helpers next
-  to the generated `welder-config.cmake`. **Only the core is exported — rods are
-  not**: welder is bring-your-own-backend. The config `include()`s the helpers, so
-  `find_package(welder)` also defines `welder_sol2_add_module`,
-  `welder_pybind11_generate_stubs`, etc. Note `EXPORT_NAME` is set on the targets
-  so they export as `welder::headers` (not `welder::welder_headers`) — the ALIAS
-  name alone doesn't export.
+  exports the **one** INTERFACE target a consumer links — `welder::headers`, **the
+  include path only** — as `welder-targets.cmake`, and ships the five
+  `cmake/Welder*.cmake` build helpers next to the generated `welder-config.cmake`.
+  **welder propagates nothing else onto a consumer's target:** no `cxx_std_26` usage
+  requirement and no `-freflection` (there is no longer a `welder::flags` target). The
+  C++ standard and the reflection flag are the consumer's to set; welder *checks* them
+  — `WelderRequirements.cmake`'s `welder_check_requirements()` (compiler is gcc-16;
+  `CMAKE_CXX_STANDARD` ≥ 26) is `include()`d + called by both the top-level CMakeLists
+  and `welder-config.cmake`, and the `#error` guard in `<welder/lang.hpp>` (keyed on
+  `__cpp_impl_reflection`, defined only under `-std=c++26 -freflection`) is the
+  compile-time backstop for what CMake can't see (per-target/unset standard, missing
+  `-freflection`). welder's OWN build gets `-freflection` via a build-tree-scoped
+  `add_compile_options` (top CMakeLists), never reaching a consumer. **Only the core
+  is exported — rods are not**: welder is bring-your-own-backend. The config
+  `include()`s the helpers, so `find_package(welder)` also defines
+  `welder_sol2_add_module`, `welder_pybind11_generate_stubs`, etc. Note `EXPORT_NAME`
+  is set on `welder_headers` so it exports as `welder::headers` (not
+  `welder::welder_headers`) — the ALIAS name alone doesn't export.
 - **Recipe** (`conanfile.py`): `package_type = "header-library"`; `package_id`
   clears settings (one package for all configs). It carries **no backend deps** —
   the backends are `test_requires` (never propagated to a consumer), gated by the
@@ -71,16 +80,19 @@ routes, all landing on the same `welder::headers` target:
   `conan install .` still provisions them for building welder's *own*
   examples/tests, while a consumer's `requires("welder/0.1.0")` stays core-only.
   `package_info()` sets `cmake_find_mode = "none"` so
-  CMakeDeps defers to welder's own shipped config (which carries the helpers +
-  `-freflection`) rather than synthesizing a thinner one.
+  CMakeDeps defers to welder's own shipped config (which carries the helpers + the
+  requirements check) rather than synthesizing a thinner one.
 - **Build & publish locally:**
   ```bash
   conan create . -pr:a conan/profiles/gcc16 --build=missing   # → local ~/.conan2 cache
   ```
   `test_package/` is the consumer proof: `find_package(welder)` + link
-  `welder::headers` + a backend-free `static_assert(welder::welded_for(^^T, …))`
-  smoke TU — compiling it at all proves the exported target propagates `-freflection`
-  + C++26 to a downstream TU. A sibling project then just `requires("welder/0.1.0")`.
+  `welder::headers`, with the consumer setting `CMAKE_CXX_STANDARD 26` +
+  `-freflection` on its own target, then a backend-free
+  `static_assert(welder::welded_for(^^T, …))` smoke TU. Compiling it proves the
+  exported include path + the consumer-supplied flags reach a downstream TU (and that
+  the requirements check passes). A sibling project then just
+  `requires("welder/0.1.0")`.
 - **GitHub note:** GitHub Packages has **no Conan support**, so there's no
   `conan upload` target there. The eventual "remote on GitHub" path is a Conan 2.4+
   `local-recipes-index` repo (conan-center-index layout, added as a remote from a
@@ -90,9 +102,11 @@ routes, all landing on the same `welder::headers` target:
 welder's own compiled targets (rod tests, examples, the core compile-only checks)
 build under a strict warning set; **library consumers never inherit it**. It lives
 on a dedicated `welder_warnings` INTERFACE target (top `CMakeLists.txt`), linked
-`PRIVATE` into our targets — deliberately *not* folded into `welder_flags` /
-`welder::headers` (a library must not impose its warning flags on consumers, and
-in-tree third-party code — nanobind's runtime, LuaBridge3 — must stay untouched). The
+`PRIVATE` into our targets — deliberately *not* folded into `welder::headers` (a
+library must not impose its warning flags on consumers — just as it must not impose the
+C++ standard or `-freflection`, which welder checks rather than propagates, see
+Packaging — and in-tree third-party code, nanobind's runtime and LuaBridge3, must stay
+untouched). The
 module helpers (`welder_sol2_add_module`, `welder_luabridge_add_module`,
 `welder_luacats_generate_stub`) link it themselves, guarded by
 `if(TARGET welder_warnings)` so a *consumer* using those helpers is unaffected. The

@@ -1,7 +1,8 @@
 // Backend-free smoke test for the installed welder package: mark a type with the
 // vocabulary and read welder's resolution back at compile time. If this compiles,
-// the exported welder::headers target carried the vocabulary, <meta>, C++26 and
-// -freflection all the way to a consumer TU.
+// the exported welder::headers target carried the vocabulary + <meta> to a consumer
+// TU (the consumer supplies C++26 + -freflection itself, per its CMakeLists — welder
+// checks those but does not propagate them).
 #include <welder/vocabulary.hpp>  // the annotation vocabulary (lang / weld / policy)
 #include <welder/welder.hpp>      // the core: entry point + welder::welded_for
 

@@ -149,10 +149,12 @@ for the full walkthrough.
 
 welder is **header-only** and **does not require Conan** — plain CMake is enough. It
 exports the core only: you bring your own backend (pybind11/nanobind/sol2/LuaBridge3)
-and wire it, however you already manage dependencies. The one target you link,
-`welder::headers`, carries the vocabulary, the core, C++26 and the `-freflection`
-flag; the package also defines the build helpers (`welder_sol2_add_module`,
-`welder_pybind11_generate_stubs`, …) that produce the loadable module.
+and wire it, however you already manage dependencies. `welder::headers` is just the
+include path — welder does **not** force the C++ standard or gcc's `-freflection`
+onto your target, so you set those yourself (welder *checks* them and fails with a
+clear message if they're missing, rather than imposing them). The package also
+defines the build helpers (`welder_sol2_add_module`, `welder_pybind11_generate_stubs`,
+…) that produce the loadable module.
 
 Pulled in as a subproject, welder builds *nothing* of its own — no backends, no
 tests, no install rules — so all it needs is a C++26 compiler.
@@ -167,6 +169,8 @@ FetchContent_Declare(welder
 FetchContent_MakeAvailable(welder)
 
 target_link_libraries(my_bindings PRIVATE welder::headers)
+target_compile_features(my_bindings PRIVATE cxx_std_26)   # welder needs C++26 …
+target_compile_options(my_bindings PRIVATE -freflection)  # … + gcc-16's reflection flag
 ```
 
 **Install, then `find_package`** — nothing of welder's own compiles, so disable the
@@ -183,6 +187,8 @@ cmake --install build --prefix /your/prefix
 ```cmake
 find_package(welder REQUIRED)   # with /your/prefix on CMAKE_PREFIX_PATH
 target_link_libraries(my_bindings PRIVATE welder::headers)
+target_compile_features(my_bindings PRIVATE cxx_std_26)
+target_compile_options(my_bindings PRIVATE -freflection)
 ```
 
 **Conan** — optional, if your project already uses it. welder also ships a recipe;

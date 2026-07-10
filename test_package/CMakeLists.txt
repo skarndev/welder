@@ -5,10 +5,12 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# The one line a downstream project needs. welder::headers pulls in welder::flags
-# (the gcc-16 -freflection carrier) and the cxx_std_26 feature, so no reflection
-# flags are set here — that is exactly what this test verifies.
+# welder checks its requirements at find_package() time (compiler + C++ standard) but
+# imposes nothing on this target: the consumer owns the standard (C++26, set above)
+# and gcc's -freflection. This is exactly what the test proves — welder::headers is
+# just the include path.
 find_package(welder REQUIRED)
 
 add_executable(welder_smoke src/smoke.cpp)
 target_link_libraries(welder_smoke PRIVATE welder::headers)
+target_compile_options(welder_smoke PRIVATE -freflection)  # welder does not add this for you

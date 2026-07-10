@@ -11,19 +11,24 @@ add_library(welder::headers ALIAS welder_headers)
 target_include_directories(welder_headers INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(welder_headers INTERFACE cxx_std_26)
-target_link_libraries(welder_headers INTERFACE welder_flags)
+# welder::headers carries ONLY the include path. It deliberately does not force the
+# C++ standard (no cxx_std_26) or gcc's -freflection onto a consumer's target — those
+# are the consumer's to set, checked (WelderRequirements + the <welder/lang.hpp> guard)
+# not imposed. welder's own in-tree targets get -freflection from a directory-scoped
+# add_compile_options in the top-level CMakeLists, which does not reach consumers.
 
 # --- language rods (header-only adapters over the core resolution API) --------
 add_subdirectory(welder/rods)
 
 # --- installation / packaging -------------------------------------------------
-# Header-only delivery: install the header tree and export the two INTERFACE
-# targets a consumer links — welder::headers and welder::flags (the -freflection
-# carrier headers pulls in) — as a relocatable CMake package, plus the reusable
+# Header-only delivery: install the header tree and export the one INTERFACE target
+# a consumer links — welder::headers (the include path; it imposes neither the C++
+# standard nor -freflection, which the consumer sets and WelderRequirements + the
+# <welder/lang.hpp> guard check) — as a relocatable CMake package, plus the reusable
 # build helpers so find_package(welder) also defines welder_*_add_module /
-# welder_*_generate_stubs. Rods are NOT exported: welder ships core headers only,
-# and a consumer brings their own backend (pybind11/nanobind/sol2/LuaBridge3).
+# welder_*_generate_stubs and runs welder_check_requirements(). Rods are NOT exported:
+# welder ships core headers only, and a consumer brings their own backend
+# (pybind11/nanobind/sol2/LuaBridge3).
 # Default ON only at top level (developing/packaging welder). A consumer pulling
 # welder in via add_subdirectory()/FetchContent() gets it OFF, so welder's install
 # rules never leak into their `cmake --install` — they just link welder::headers.
@@ -32,16 +37,13 @@ if(WELDER_INSTALL)
   include(GNUInstallDirs)
   include(CMakePackageConfigHelpers)
 
-  # Export as welder::headers / welder::flags (the namespaced ALIAS names), not
-  # welder::welder_headers — EXPORT_NAME renames the real target in the export set;
-  # the alias itself can't be exported.
+  # Export as welder::headers (the namespaced ALIAS name), not welder::welder_headers
+  # — EXPORT_NAME renames the real target in the export set; the alias itself can't be
+  # exported. Only the include-path target is exported; welder ships no flags target
+  # (the standard + -freflection are the consumer's, checked not propagated).
   set_target_properties(welder_headers PROPERTIES EXPORT_NAME headers)
-  set_target_properties(welder_flags PROPERTIES EXPORT_NAME flags)
 
-  # welder_flags lives in the top-level CMakeLists; both are defined by now, so a
-  # single export set (with the welder:: namespace applied on install) captures the
-  # welder::headers -> welder::flags link that carries -freflection to consumers.
-  install(TARGETS welder_headers welder_flags
+  install(TARGETS welder_headers
     EXPORT welder-targets
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
@@ -59,6 +61,7 @@ if(WELDER_INSTALL)
   # Ship the build helpers so welder-config.cmake can include() them (see
   # cmake/welder-config.cmake.in).
   install(FILES
+    ${CMAKE_SOURCE_DIR}/cmake/WelderRequirements.cmake
     ${CMAKE_SOURCE_DIR}/cmake/WelderPybind11Stubgen.cmake
     ${CMAKE_SOURCE_DIR}/cmake/WelderSol2Module.cmake
     ${CMAKE_SOURCE_DIR}/cmake/WelderLuaBridgeModule.cmake

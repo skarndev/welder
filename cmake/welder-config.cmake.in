@@ -1,9 +1,16 @@
 @PACKAGE_INIT@
 
-# welder is header-only. This config surfaces the exported INTERFACE targets a
-# consumer links — `welder::headers` (the vocabulary + core + rod headers) and
-# `welder::flags` (the gcc-16 `-freflection` carrier `welder::headers` pulls in) —
-# plus the reusable build helpers below.
+# welder is header-only. This config surfaces the one exported INTERFACE target a
+# consumer links — `welder::headers` (the include path for the vocabulary + core +
+# rod headers) — plus the reusable build helpers below. welder::headers imposes
+# neither the C++ standard nor gcc's `-freflection` on your target; set both yourself
+# (e.g. `set(CMAKE_CXX_STANDARD 26)` + `-freflection`). welder_check_requirements()
+# below verifies the compiler and standard at find_package() time, and the header
+# guard in <welder/lang.hpp> is the compile-time backstop.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+include("${CMAKE_CURRENT_LIST_DIR}/WelderRequirements.cmake")
+welder_check_requirements()
+
 include("${CMAKE_CURRENT_LIST_DIR}/welder-targets.cmake")
 
 # The reusable CMake build helpers, shipped alongside this config so that
@@ -17,7 +24,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/welder-targets.cmake")
 # including them here merely defines the functions. A consumer who calls one must
 # have set that backend up themselves — welder ships core headers only; you bring
 # your own backend (see the "Consuming welder" guide).
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
 include("${CMAKE_CURRENT_LIST_DIR}/WelderPybind11Stubgen.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/WelderSol2Module.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/WelderLuaBridgeModule.cmake")
