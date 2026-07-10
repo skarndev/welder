@@ -86,13 +86,10 @@ routes, all landing on the same `welder::headers` target:
   ```bash
   conan create . -pr:a conan/profiles/gcc16 --build=missing   # → local ~/.conan2 cache
   ```
-  `test_package/` is the consumer proof: `find_package(welder)` + link
-  `welder::headers`, with the consumer setting `CMAKE_CXX_STANDARD 26` +
-  `-freflection` on its own target, then a backend-free
-  `static_assert(welder::welded_for(^^T, …))` smoke TU. Compiling it proves the
-  exported include path + the consumer-supplied flags reach a downstream TU (and that
-  the requirements check passes). A sibling project then just
-  `requires("welder/0.1.0")`.
+  A downstream project then just `requires("welder/0.1.0")` and consumes the package
+  through the same `find_package(welder)` / `welder::headers` wiring as the pure-CMake
+  routes. (There is **no** Conan `test_package/` — it was a convention CI never ran, so
+  it was removed; the documented consume paths are the reference instead.)
 - **GitHub note:** GitHub Packages has **no Conan support**, so there's no
   `conan upload` target there. The eventual "remote on GitHub" path is a Conan 2.4+
   `local-recipes-index` repo (conan-center-index layout, added as a remote from a

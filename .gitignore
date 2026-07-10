@@ -6,8 +6,6 @@ CMakeUserPresets.json
 # Conan
 /conan/data/
 conan.lock
-# Conan test_package build tree (from `conan create`); only its sources are tracked
-/test_package/build/
 
 # Python
 __pycache__/
