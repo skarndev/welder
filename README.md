@@ -65,7 +65,8 @@ Rectangle {
 
     [[=welder::mark::exclude]] std::uint64_t cacheHandle{0};   // internal, bound nowhere
 
-    [[=welder::doc(R"(Compute the area of the rectangle.
+    [[=welder::doc(R"(
+        Compute the area of the rectangle.
 
         Width and height are treated as unsigned extents; a
         degenerate (zero) side yields zero area.)"),
