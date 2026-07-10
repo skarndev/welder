@@ -1,21 +1,24 @@
 #pragma once
 #include <concepts>
 #include <meta>
+#include <ranges>
 #include <string>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
 /** @file
     The **core interface concepts** welder's static polymorphism rests on, gathered
     in one catalogue: the customization-point contracts a rod (or a user) plugs into.
 
-    Four concepts live here, each the compile-time *shape guard* for one seam:
+    Five concepts live here, each the compile-time *shape guard* for one seam:
 
     - @ref welder::rod — the emission contract a **rod** (a welding rod: the backend
       that lays a framework's bindings down) satisfies to plug into the carriage.
     - @ref welder::caster_oracle — the one bindability fact a rod must expose: can it
       represent a type *natively*, without welder registering a class/enum for it?
+    - @ref welder::resolution — the *which-participates* contract a **resolution**
+      (the carriage's other injected policy) satisfies: it reads welder's markers to
+      decide what the carriage binds, kept apart from the rod's *how*.
     - @ref welder::naming::name_style — the per-kind name-styling hooks a naming style
       supplies (`transform_class`, `transform_method`, …).
     - @ref welder::doc_style — how a documentation style folds a @ref
@@ -33,6 +36,20 @@
 */
 
 namespace welder {
+
+namespace detail {
+
+/** A placeholder class type for *shape*-probing a member template inside a concept.
+
+    A concept cannot quantify over every type a member template accepts, so the seam
+    concepts here (@ref welder::caster_oracle, @ref welder::resolution) instantiate the
+    hook once with this stand-in and check only the resulting shape — the value it
+    answers is never inspected. It is a complete, base-less class (so a probe that
+    reflects over its bases sees an empty set) that carries no meaning of its own: it
+    simply spells "the type is irrelevant here". */
+struct any_type {};
+
+} // namespace detail
 
 /** The raw documentation pieces @ref doc_style assembles; its full definition (a data
     struct) lives in `<welder/doc.hpp>`. Forward-declared here so this concepts header
@@ -52,15 +69,14 @@ struct function_doc;
     yields something bool-convertible, so a backend that forgot it fails here with a
     clear "not a `caster_oracle`" instead of a deep error inside bindable(). A
     concept cannot quantify over every @a T, so we probe with a single arbitrary
-    type — `std::monostate`, the std placeholder that spells "the type is
-    irrelevant here". Any complete type would do; the value it answers is never
-    inspected.
+    type — @ref welder::detail::any_type. Any complete type would do; the value it
+    answers is never inspected.
 
     @tparam B the rod type.
 */
 template <class B>
 concept caster_oracle = requires {
-    { B::template has_native_caster<std::monostate> } -> std::convertible_to<bool>;
+    { B::template has_native_caster<detail::any_type> } -> std::convertible_to<bool>;
 };
 
 /** The contract a **rod** (a welder backend, `welder::rods::…::rod`) must satisfy
@@ -136,6 +152,62 @@ concept rod =
         { B::add_submodule(m, s) } -> std::same_as<typename B::module_type>;
         B::set_module_doc(m, s);
         B::close_module(m, session);
+    };
+
+/** The contract a **resolution** — the carriage's *which-participates* policy — must
+    satisfy to be injected as `welder::detail::basic_carriage`'s `Resolution` argument.
+
+    A carriage separates three concerns: *which* entities participate (the reading of
+    welder's markers — the resolution's job), *how* they are emitted (the @ref rod),
+    and *whether* they are representable (the bindability gate, shared). A resolution
+    `R` is a stateless struct of static `consteval` predicates the carriage consults as
+    it walks a reflected type or namespace. Two ship — `marker_resolution` (honor
+    `weld`/`policy`/marks — the default `welder::stitch_welding_carriage`) and
+    `greedy_resolution` (ignore the markers, bind an unmarked library greedily —
+    `welder::tack_welding_carriage`) — and a user may inject a bespoke one.
+
+    **Predicates** (each `static consteval`, mirroring the carriage's call sites):
+    @code
+    static consteval bool participates(std::meta::info entity, lang L);
+        // a leaf type / function / variable participates for language L
+    static consteval bool is_native_base(std::meta::info base, lang L);
+        // base binds separately (as a base of the class handle) vs. being flattened in
+    static consteval bool member_participates(std::meta::info mem, lang L, policy_kind pol);
+        // a namespace member participates under its enclosing scope's policy
+    static consteval bool namespace_participates(std::meta::info ns, lang L, policy_kind pol);
+        // a nested namespace becomes a (recursed) submodule
+    @endcode
+
+    Plus one reflection-templated hook — it takes the derived type and a `lang` as
+    non-type template arguments:
+    @code
+    template <std::meta::info T, lang L> static consteval auto native_bases();
+        // T's native-base reflections (a std::array<std::meta::info, N>), spliced into
+        // the class handle by make_class
+    @endcode
+    A concept cannot quantify over every `T`, so — exactly as @ref caster_oracle probes
+    `has_native_caster` — this probes `native_bases` with the single placeholder
+    @ref welder::detail::any_type and checks only its *shape* (that the hook exists and
+    yields a range of `std::meta::info`). The actual per-type instantiation is still
+    exercised at the carriage's call site.
+
+    @tparam R the candidate resolution type.
+*/
+template <class R>
+concept resolution =
+    requires(std::meta::info e, lang L, policy_kind pol) {
+        { R::participates(e, L) } -> std::convertible_to<bool>;
+        { R::is_native_base(e, L) } -> std::convertible_to<bool>;
+        { R::member_participates(e, L, pol) } -> std::convertible_to<bool>;
+        { R::namespace_participates(e, L, pol) } -> std::convertible_to<bool>;
+    } &&
+    requires {
+        { R::template native_bases<^^detail::any_type, lang{}>() }
+            -> std::ranges::range;
+        requires std::same_as<
+            std::ranges::range_value_t<
+                decltype(R::template native_bases<^^detail::any_type, lang{}>())>,
+            std::meta::info>;
     };
 
 /** A *style* folds a @ref function_doc into one docstring.

@@ -29,7 +29,7 @@ src/welder/
   doc.hpp               doc_of / return_doc_of / param_docs / function_doc struct / function_docstring — uses <meta>. The `doc_style` concept now lives in concepts.hpp (over function_doc, forward-declared there)
   naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + weld_as_of / name_of (weld_as override → else style hook) — uses <meta>, depends on vocabulary (weld_as_spec), NOT annotations.hpp. The `name_style` concept (per-kind transform_* hooks) now lives in concepts.hpp
   bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
-  concepts.hpp          welder's **core interface concepts**, pooled in one catalogue: `welder::rod` (emission contract) + `welder::caster_oracle` (backend leaf test) + `welder::doc_style` + `welder::naming::name_style`. A dependency-light leaf — forward-declares `welder::function_doc` (defined in doc.hpp) rather than including it; the machinery headers (bindable/naming/doc/carriage) include this. Uses <meta>; vocabulary-first for `lang`
+  concepts.hpp          welder's **core interface concepts**, pooled in one catalogue: `welder::rod` (emission contract) + `welder::caster_oracle` (backend leaf test) + `welder::resolution` (the carriage's which-participates policy: participates/is_native_base/member_participates/namespace_participates consteval predicates + the native_bases<T,L> hook, shape-probed with the fixed `welder::detail::any_type` placeholder — the same trick caster_oracle uses for has_native_caster) + `welder::doc_style` + `welder::naming::name_style`. A dependency-light leaf — forward-declares `welder::function_doc` (defined in doc.hpp) rather than including it; the machinery headers (bindable/naming/doc/carriage) include this. Uses <meta>; vocabulary-first for `lang`/`policy_kind`
   bindable.hpp          generic bindability gate (STL-wrapper recursion); the `caster_oracle` concept it uses now lives in concepts.hpp — uses <meta>
   carriage.hpp          the **carriage** (`detail::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). Split out of welder.hpp — uses <meta>
   welder.hpp            the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Includes concepts.hpp + carriage.hpp. Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
@@ -86,11 +86,12 @@ docs/                     the documentation site (gated by WELDER_BUILD_DOCS, OF
 are part of the reflection layer (like `reflect.hpp`/`doc.hpp`): header-only,
 `<meta>`-using, and they do **not** include `annotations.hpp` (the vocabulary
 arrives first via `vocabulary.hpp`). `doc.hpp` follows the same rule.
-`concepts.hpp` is the dependency-light leaf at the bottom — the four interface
-concepts (`rod`, `caster_oracle`, `doc_style`, `naming::name_style`), forward-
-declaring `function_doc` rather than pulling `doc.hpp` — included by the machinery
-headers that need a concept (`bindable.hpp` for `caster_oracle`, `naming.hpp` for
-`name_style`, `doc.hpp` for `doc_style`, `carriage.hpp`/`welder.hpp` for `rod`). `module.hpp` is macro-only and
+`concepts.hpp` is the dependency-light leaf at the bottom — the five interface
+concepts (`rod`, `caster_oracle`, `resolution`, `doc_style`, `naming::name_style`),
+forward-declaring `function_doc` rather than pulling `doc.hpp` — included by the
+machinery headers that need a concept (`bindable.hpp` for `caster_oracle`, `naming.hpp`
+for `name_style`, `doc.hpp` for `doc_style`, `carriage.hpp` for `rod`+`resolution`,
+`welder.hpp` for `rod`). `module.hpp` is macro-only and
 rod-agnostic; each rod's `module.hpp` defines its `WELDER_DETAIL_MODULE_ENTRY_<rod>`
 expansion.
 
@@ -118,7 +119,8 @@ of `weld_type`, via the carriage's `bind_function` / `bind_variable`, which reus
 welded + bindability gates; the entry points hold *no* reflection logic themselves.
 
 **Resolution = stitch vs tack.** The carriage delegates the *which entities participate*
-decision to its `Resolution` policy (in `welder::detail`), keeping it separate from *how*
+decision to its `Resolution` policy (in `welder::detail`, constrained by the
+`welder::resolution` concept in concepts.hpp), keeping it separate from *how*
 they're emitted (the carriage body) and *whether* they're representable (the bindability
 gate, shared by both). `marker_resolution` → **stitch welding** (honor `weld`/`policy`/
 marks; the default `welder::stitch_welding_carriage`). `greedy_resolution` → **tack

@@ -127,9 +127,10 @@ struct greedy_resolution {
     `bind_type`, a nested namespace recurses via `bind_namespace`), so a replacement is
     expected to be a coherent whole rather than a partial override.
 
-    @tparam Resolution the resolution policy: `marker_resolution` or `greedy_resolution`.
+    @tparam Resolution the resolution policy (a @ref welder::resolution):
+                       `marker_resolution` or `greedy_resolution`, or a bespoke one.
 */
-template <class Resolution>
+template <resolution Resolution>
 struct basic_carriage {
   private:
     /** Flatten the eligible public data members, methods and operators of @a Src onto
