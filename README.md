@@ -138,6 +138,33 @@ LUA_CPATH='build/welder-gcc16/examples/lua_poc/?.so' \
 See the [getting-started guide](https://skarndev.github.io/welder/guide/getting-started/)
 for the full walkthrough.
 
+## Consuming welder
+
+welder is **header-only** and ships as a Conan package + a CMake package. It exports
+the core only — you bring your own backend (pybind11/nanobind/sol2/LuaBridge3) and
+wire it, matching the header-only delivery model.
+
+```bash
+# Build & publish to your local Conan cache (needs gcc-16, see Quick start):
+conan create . -pr:a conan/profiles/gcc16 --build=missing
+```
+
+A downstream project then depends on it like any other Conan package
+(`requires("welder/0.1.0")`) and, in CMake:
+
+```cmake
+find_package(welder REQUIRED)
+target_link_libraries(my_bindings PRIVATE welder::headers)  # brings C++26 + -freflection
+```
+
+`welder::headers` carries the vocabulary, the core, C++26 and the `-freflection`
+flag; `find_package(welder)` also defines the build helpers
+(`welder_sol2_add_module`, `welder_pybind11_generate_stubs`, …) for producing the
+actual loadable module. See `test_package/` for a minimal, backend-free consumer.
+
+> **Note:** GitHub Packages doesn't host Conan, so there's no public remote yet —
+> the local cache is the current distribution channel.
+
 ## Documentation
 
 **Full docs → [skarndev.github.io/welder](https://skarndev.github.io/welder/)** — an

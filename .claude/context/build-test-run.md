@@ -33,6 +33,43 @@ local s = require("shapes_lua")
 local r = s.Rect(3.0, 4.0); print(r:area())   -- 12.0
 ```
 
+## Packaging & consuming (Conan / CMake)
+
+welder ships as a **header-only Conan package** + a relocatable CMake package.
+
+- **CMake install/export** (`src/CMakeLists.txt`, guarded by `WELDER_INSTALL`,
+  default ON): installs the `src/welder` header tree to `include/`, exports the two
+  INTERFACE targets a consumer links — `welder::headers` and `welder::flags` (the
+  `-freflection` carrier `headers` pulls in) — as `welder-targets.cmake`, and ships
+  the four `cmake/Welder*.cmake` build helpers next to the generated
+  `welder-config.cmake`. **Only the core is exported — rods are not**: welder is
+  bring-your-own-backend. The config `include()`s the helpers, so
+  `find_package(welder)` also defines `welder_sol2_add_module`,
+  `welder_pybind11_generate_stubs`, etc. Note `EXPORT_NAME` is set on the targets
+  so they export as `welder::headers` (not `welder::welder_headers`) — the ALIAS
+  name alone doesn't export.
+- **Recipe** (`conanfile.py`): `package_type = "header-library"`; `package_id`
+  clears settings (one package for all configs). It carries **no backend deps** —
+  the backends are `test_requires` (never propagated to a consumer), gated by the
+  `with_pybind11`/`with_nanobind`/`with_sol2` options (default **ON**) so a plain
+  `conan install .` still provisions them for building welder's *own*
+  examples/tests, while a consumer's `requires("welder/0.1.0")` stays core-only.
+  `package_info()` sets `cmake_find_mode = "none"` so
+  CMakeDeps defers to welder's own shipped config (which carries the helpers +
+  `-freflection`) rather than synthesizing a thinner one.
+- **Build & publish locally:**
+  ```bash
+  conan create . -pr:a conan/profiles/gcc16 --build=missing   # → local ~/.conan2 cache
+  ```
+  `test_package/` is the consumer proof: `find_package(welder)` + link
+  `welder::headers` + a backend-free `static_assert(welder::welded_for(^^T, …))`
+  smoke TU — compiling it at all proves the exported target propagates `-freflection`
+  + C++26 to a downstream TU. A sibling project then just `requires("welder/0.1.0")`.
+- **GitHub note:** GitHub Packages has **no Conan support**, so there's no
+  `conan upload` target there. The eventual "remote on GitHub" path is a Conan 2.4+
+  `local-recipes-index` repo (conan-center-index layout, added as a remote from a
+  clone) — deferred; local cache is the current publish target.
+
 ## Strict warnings
 welder's own compiled targets (rod tests, examples, the core compile-only checks)
 build under a strict warning set; **library consumers never inherit it**. It lives

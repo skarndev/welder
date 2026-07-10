@@ -1,0 +1,26 @@
+@PACKAGE_INIT@
+
+# welder is header-only. This config surfaces the exported INTERFACE targets a
+# consumer links — `welder::headers` (the vocabulary + core + rod headers) and
+# `welder::flags` (the gcc-16 `-freflection` carrier `welder::headers` pulls in) —
+# plus the reusable build helpers below.
+include("${CMAKE_CURRENT_LIST_DIR}/welder-targets.cmake")
+
+# The reusable CMake build helpers, shipped alongside this config so that
+# `find_package(welder)` also defines them:
+#   welder_pybind11_generate_stubs()  — POST_BUILD .pyi stub generation
+#   welder_sol2_add_module()          — a loadable sol2 Lua C module
+#   welder_luabridge_add_module()     — a loadable LuaBridge3 Lua C module
+#   welder_luacats_generate_stub()    — a LuaCATS (`---@meta`) stub file
+# They are backend-coupled: each references its framework's targets
+# (pybind11::headers, sol2::sol2, LuaBridge, …) only *inside* the function body, so
+# including them here merely defines the functions. A consumer who calls one must
+# have set that backend up themselves — welder ships core headers only; you bring
+# your own backend (see the "Consuming welder" guide).
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+include("${CMAKE_CURRENT_LIST_DIR}/WelderPybind11Stubgen.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/WelderSol2Module.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/WelderLuaBridgeModule.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/WelderLuaCATSStub.cmake")
+
+check_required_components(welder)
