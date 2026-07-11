@@ -21,7 +21,7 @@
     - **signature rendering** — turning a reflected function/constructor into its
       `---@param`/`---@return` lines and `fun(…)` signature, and grouping overloads
       into the idiomatic one-symbol/`---@overload` shape;
-    - the **writer/handle types** (@ref document and the per-entity `*_writer`s) the
+    - the **writer/handle types** (@ref welder::rods::luacats::document and the per-entity `*_writer`s) the
       backend's `module_type`/class-handle/enum-handle deduce to, which accumulate
       text and flush it (RAII, since the driver has no explicit "finish" hook).
 

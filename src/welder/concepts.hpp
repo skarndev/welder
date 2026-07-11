@@ -158,7 +158,7 @@ concept rod =
     satisfy to be injected as `welder::detail::basic_carriage`'s `Resolution` argument.
 
     A carriage separates three concerns: *which* entities participate (the reading of
-    welder's markers — the resolution's job), *how* they are emitted (the @ref rod),
+    welder's markers — the resolution's job), *how* they are emitted (the @ref welder::rod),
     and *whether* they are representable (the bindability gate, shared). A resolution
     `R` is a stateless struct of static `consteval` predicates the carriage consults as
     it walks a reflected type or namespace. Two ship — `marker_resolution` (honor
@@ -185,7 +185,7 @@ concept rod =
         // T's native-base reflections (a std::array<std::meta::info, N>), spliced into
         // the class handle by make_class
     @endcode
-    A concept cannot quantify over every `T`, so — exactly as @ref caster_oracle probes
+    A concept cannot quantify over every `T`, so — exactly as @ref welder::caster_oracle probes
     `has_native_caster` — this probes `native_bases` with the single placeholder
     @ref welder::detail::any_type and checks only its *shape* (that the hook exists and
     yields a range of `std::meta::info`). The actual per-type instantiation is still
@@ -210,7 +210,7 @@ concept resolution =
             std::meta::info>;
     };
 
-/** A *style* folds a @ref function_doc into one docstring.
+/** A *style* folds a @ref welder::function_doc into one docstring.
 
     It is the customization point for how documentation reads in the target
     language; swap it to emit Google-, NumPy-, or any house style. Any type with
@@ -236,7 +236,7 @@ namespace naming {
     `transform_enumerator`, `transform_method`, `transform_static_method`,
     `transform_function`, `transform_field`, `transform_variable` and
     `transform_submodule` as `static consteval std::string(std::meta::info)`. In
-    practice a style *inherits* @ref none (or a single-convention style) and
+    practice a style *inherits* @ref welder::naming::none (or a single-convention style) and
     overrides only the hooks that differ — static-hook hiding does the rest, since
     welder always calls through the concrete style type.
     @tparam S the candidate style type. */

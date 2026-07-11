@@ -40,10 +40,10 @@
       `__ne`/`__gt`/`__ge` — the VM derives `~=`, `>` and `>=` from `__eq`, `__lt`
       and `__le` with swapped operands — so those C++ operators map to *nothing*
       (they still work in Lua, synthesized). Bitwise metamethods exist only on Lua
-      ≥ 5.3 (not on LuaJIT's 5.1 ABI); they are `#if`-gated. See @ref operator_mm.
+      ≥ 5.3 (not on LuaJIT's 5.1 ABI); they are `#if`-gated. See @ref welder::rods::sol2::operator_mm.
     - **Constructors, all at once.** sol2 takes a type's whole constructor set in one
       `sol::constructors<…>`, unlike pybind11's incremental `.def(init<>())`. So this
-      backend registers constructors from reflection inside @ref make_class, and the
+      backend registers constructors from reflection inside @ref welder::rods::sol2::rod::make_class, and the
       driver's per-constructor hooks (`add_default_ctor`, `add_constructor`,
       `add_aggregate_constructor`) are intentional no-ops here.
     - **Enums are tables.** Lua has no enum type; a welded enum becomes a plain
@@ -61,7 +61,7 @@
     @note Overloaded methods, static methods, free functions and operators: sol2
     stores one value per name (and per metamethod slot), so welder gathers a name's
     several C++ overloads into one `sol::overload(…)` — sol2 dispatches among them at
-    call time. The gathering happens in the backend (see @ref method_overloads),
+    call time. The gathering happens in the backend (see @ref welder::rods::lua::method_overload_set),
     because the driver visits each overload individually to suit pybind11's
     incremental `.def`. A same-named member in a derived class still hides the base's
     (C++ name-hiding), as it did before.

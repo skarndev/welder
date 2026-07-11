@@ -20,10 +20,10 @@
 
     Three conventions are provided, matching the three docstring dialects the Python
     ecosystem's doc tools understand:
-    - @ref google_style — Google (`Args:` / `Returns:` blocks; Napoleon-parsed);
-    - @ref numpy_style  — NumPy / numpydoc (underlined `Parameters` / `Returns`
+    - @ref welder::rods::python::google_style — Google (`Args:` / `Returns:` blocks; Napoleon-parsed);
+    - @ref welder::rods::python::numpy_style  — NumPy / numpydoc (underlined `Parameters` / `Returns`
       sections; also Napoleon-parsed);
-    - @ref sphinx_style — Sphinx / reStructuredText (`:param name:` / `:returns:`
+    - @ref welder::rods::python::sphinx_style — Sphinx / reStructuredText (`:param name:` / `:returns:`
       field lists, the format `sphinx-autodoc` emits natively).
 
     Every style's `format` is **`constexpr`**: it is a plain `std::string`

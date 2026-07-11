@@ -38,7 +38,7 @@
     move-consume their parent, and there may be only one "active" registrar at a
     time. welder's driver instead holds a stable module handle and mutates class /
     module handles across many separate `add_*` calls. The two are bridged with a
-    **re-open-by-path** model: @ref module_scope is a light, copyable
+    **re-open-by-path** model: @ref welder::rods::luabridge::module_scope is a light, copyable
     `{lua_State*, namespace path}`, and every emission primitive re-walks
     `getGlobalNamespace(L).beginNamespace(path…)` in a single chained expression and
     lets it unwind cleanly. `beginNamespace` reuses an existing namespace table (no
@@ -49,8 +49,9 @@
       welder::rods::lua::lua_metamethod_name), registered by their `__name` string via
       `addFunction("__add", …)`.
     - **Constructors, all at once** — LuaBridge3 takes the whole set in one
-      `addConstructor<Sig…>()`, so this rod gathers them from reflection in @ref
-      make_class and the driver's per-constructor hooks are no-ops (aggregates ride
+      `addConstructor<Sig…>()`, so this rod gathers them from reflection in
+      @ref welder::rods::luabridge::rod::make_class and the driver's per-constructor
+      hooks are no-ops (aggregates ride
       C++26 parenthesized init).
     - **Multiple / virtual inheritance** binds (unlike nanobind): LuaBridge3's
       `deriveClass<T, Base…>` records each base with a computed cast offset and its

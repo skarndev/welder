@@ -61,7 +61,7 @@ inline std::string one_line(const char* text) {
 // --- the C++ -> LuaCATS type map --------------------------------------------
 
 /** The dotted LuaCATS name of a namespace-or-type reflection: its own identifier
-    prefixed by each enclosing named namespace, joined with `.` (so
+    prefixed by each enclosing named namespace, dot-joined (so
     `geometry::Point` → `"geometry.Point"`). Class scopes and the global namespace
     contribute nothing.
     @param ent a reflection of the namespace or type to name.
