@@ -36,10 +36,21 @@ jobs:
       - uses: actions/checkout@v4
 
       # doxygen renders the C++ reference; graphviz (dot) draws the class graphs.
+      # Doxygen comes from the official binary release, NOT apt: Ubuntu 24.04 ships
+      # 1.9.8, but doxygen-awesome-css v2.4.2 and our header/search-box customizations
+      # target Doxygen's page-nav layout (1.11+, docs/CMakeLists.txt). On 1.9.8 the
+      # generated DOM differs — e.g. the dark-mode toggle lands at the page bottom
+      # instead of beside the search box. Pin to the version developers build with
+      # locally so the deployed site matches.
       - name: Install Doxygen + Graphviz
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends doxygen graphviz
+          sudo apt-get install -y --no-install-recommends graphviz
+          DOXY_VER=1.17.0
+          curl -fsSL "https://github.com/doxygen/doxygen/releases/download/Release_${DOXY_VER//./_}/doxygen-${DOXY_VER}.linux.bin.tar.gz" \
+            | sudo tar xz -C /opt
+          sudo ln -sf "/opt/doxygen-${DOXY_VER}/bin/doxygen" /usr/local/bin/doxygen
+          doxygen --version
 
       # uv provisions the isolated docs env (mkdocs-material + lark) that
       # docs/CMakeLists.txt syncs and runs `mkdocs build` from.
