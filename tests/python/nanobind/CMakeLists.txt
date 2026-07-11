@@ -61,7 +61,8 @@ welder_add_nanobind_test_module(welder_test_nanobind)
 # Python runtime), so they are registered before the uv-env gate. welder::nanobind
 # carries the nanobind + welder includes; Python::Module adds the Python.h include.
 foreach(neg operand_not_welded container_of_unwelded
-            virtual_needs_trampoline trampoline_missing_override)
+            virtual_needs_trampoline trampoline_missing_override
+            trampoline_ambiguous)
   add_library(welder_neg_nanobind_${neg} OBJECT EXCLUDE_FROM_ALL cpp/neg/${neg}.cpp)
   target_compile_features(welder_neg_nanobind_${neg} PRIVATE cxx_std_26)
   target_link_libraries(welder_neg_nanobind_${neg} PRIVATE welder::nanobind Python::Module)

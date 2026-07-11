@@ -108,7 +108,8 @@ Because of that, a welded type carrying an overridable virtual must do one of tw
 things.
 
 **1. Register a trampoline.** Write the subclass with welder's neutral macros — one
-storage line, one line per virtual — and point `trampoline_for` at it:
+storage line, one line per virtual — and mark it a trampoline. welder infers the
+base from the subclass and discovers it by scanning that base's namespace:
 
 ```cpp
 #include <welder/rods/python/nanobind/trampoline.hpp>   // before your trampoline
@@ -122,14 +123,11 @@ struct [[=welder::weld(welder::lang::py)]] Animal {
     }
 };
 
-struct PyAnimal : Animal {
+struct [[=welder::rods::python::trampoline]] PyAnimal : Animal {
     WELDER_PY_TRAMPOLINE(Animal);                            // slot count = reflected
     std::string speak() const override { WELDER_PY_OVERRIDE(speak); }
     int         legs()  const override { WELDER_PY_OVERRIDE(legs); }
 };
-
-template <> constexpr std::meta::info
-    welder::rods::python::trampoline_for<Animal> = ^^PyAnimal;
 ```
 
 Now a Python subclass overrides as expected, and — the whole point — a C++ call
@@ -147,9 +145,23 @@ the method name, and whether the method is pure are all read from reflection, so
 macro body never repeats them. The trampoline's slot count is reflected from the
 class, so it never drifts. welder checks at **compile time** that the trampoline
 overrides *every* overridable virtual — a forgotten override is a build error, not a
-method that silently never reaches Python. The registration is a variable-template
-specialization (like [`trust_bindable`](trust-casters.md)), so it works even for
-third-party types you cannot annotate.
+method that silently never reaches Python.
+
+!!! note "The explicit form: `trampoline_for<T>`"
+    The `[[=trampoline]]` annotation is discovered by scanning the base's namespace,
+    so the trampoline must live in the **same namespace** as its welded base (there
+    is no global type enumeration in reflection). For a **third-party** base you
+    cannot annotate, a trampoline kept in a **different** namespace, or to
+    disambiguate two trampolines deriving from the same base, register it explicitly
+    with a variable-template specialization instead — it takes precedence over the
+    annotation:
+
+    ```cpp
+    template <> constexpr std::meta::info
+        welder::rods::python::trampoline_for<Animal> = ^^PyAnimal;   // no [[=trampoline]] needed
+    ```
+
+    This is the type-level counterpart of [`trust_bindable`](trust-casters.md).
 
 **2. Opt out with `bind_flat`.** A type produced by C++ and never subclassed in
 Python does not need a trampoline; mark it (or an individual virtual) as bound flat:
@@ -181,12 +193,10 @@ struct [[=welder::weld(welder::lang::py)]] Shape {
     virtual double area() const = 0;                 // pure virtual
     double scaled_area(double f) const { return area() * f; }
 };
-struct PyShape : Shape {
+struct [[=welder::rods::python::trampoline]] PyShape : Shape {
     WELDER_PY_TRAMPOLINE(Shape);
     double area() const override { WELDER_PY_OVERRIDE(area); }
 };
-template <> constexpr std::meta::info
-    welder::rods::python::trampoline_for<Shape> = ^^PyShape;
 ```
 
 ```python

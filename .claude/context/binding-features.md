@@ -75,12 +75,19 @@ virtual; generating those *declarations* needs member injection, absent from P29
 share the base method's exact name. welder automates everything *around* it via
 reflection; the declarations stay hand-written.
 
-**Discovery:** virtuals are auto-detected (`virtual_slot_count` > 0, destructor and
-per-method `bind_flat` excluded). The `T→trampoline` map is
-`welder::rods::python::trampoline_for<T>` — a specializable `std::meta::info` var
-template (the `trust_bindable` pattern), specialized in the *binding TU* (where the
-backend-specific `PyT` lives), not a class annotation (which would drag a backend
-type into the neutral header).
+**Discovery (two forms; explicit wins):** virtuals are auto-detected
+(`virtual_slot_count` > 0, destructor and per-method `bind_flat` excluded). The
+`T→trampoline` mapping resolves as: (1) explicit `trampoline_for<T>` — a specializable
+`std::meta::info` var template (the `trust_bindable` pattern); else (2) annotation —
+`[[=welder::rods::python::trampoline]]` on `PyT`, discovered by `scanned_trampoline_of`
+scanning `parent_of(^^T)` for a `trampoline`-annotated type whose `bases_of` includes
+`T`. No global type enumeration in reflection ⇒ the scan needs a known scope, so the
+annotation form requires `PyT` in `T`'s namespace; the explicit form has no such
+constraint (third-party / cross-namespace) and disambiguates >1 candidate (ambiguity
+is a `static_assert` in make_class). The var-template read needs a *type* param (can't
+splice a function param), so make_class reads `trampoline_for<T>` and passes `^^T` to
+the info-taking scan. NB: naming the marker `trampoline` collided with `trampoline`
+params in `declares_override`/`trampoline_covers` under -Wshadow → renamed to `tramp`.
 
 **Abstract bases (pure virtuals):** an abstract `T` is not `is_default_constructible`,
 so the carriage would register no ctor and even a subclass would be uninstantiable

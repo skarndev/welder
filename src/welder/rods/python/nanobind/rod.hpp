@@ -280,8 +280,19 @@ struct rod {
                            std::index_sequence<I...> seq) {
         namespace py = ::welder::rods::python;
         if constexpr (py::has_virtual_methods(^^T)) {
-            if constexpr (py::trampoline_for<T> != std::meta::info{}) {
-                using Trampoline = [:py::trampoline_for<T>:];
+            // Resolve the trampoline: an explicit `trampoline_for<T>` wins; otherwise
+            // scan T's namespace for a `[[=trampoline]]`-annotated subclass.
+            constexpr auto scanned{py::scanned_trampoline_of(^^T)};
+            static_assert(
+                py::trampoline_for<T> != std::meta::info{} || !scanned.ambiguous,
+                "welder: more than one [[=welder::rods::python::trampoline]] class in "
+                "this namespace derives from T; disambiguate by specializing "
+                "welder::rods::python::trampoline_for<T>.");
+            constexpr std::meta::info tramp{py::trampoline_for<T> != std::meta::info{}
+                                                ? py::trampoline_for<T>
+                                                : scanned.type};
+            if constexpr (tramp != std::meta::info{}) {
+                using Trampoline = [:tramp:];
                 static_assert(
                     py::trampoline_covers(^^T, ^^Trampoline),
                     "welder: the trampoline registered for this type does not "
@@ -293,8 +304,9 @@ struct rod {
                     py::bound_flat(^^T),
                     "welder: this welded type has virtual methods but no trampoline "
                     "is registered, so a Python subclass could not override them. "
-                    "Specialize welder::rods::python::trampoline_for<T> with a "
-                    "trampoline subclass, or annotate T with "
+                    "Register one — a [[=welder::rods::python::trampoline]] subclass "
+                    "in T's namespace, or a welder::rods::python::trampoline_for<T> "
+                    "specialization — or annotate T with "
                     "[[=welder::rods::python::bind_flat]] to bind it non-overridably.");
                 return _make_class<T, void, Bases>(m, name, doc, seq);
             }

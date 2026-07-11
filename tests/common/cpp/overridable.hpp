@@ -63,18 +63,19 @@ Shape {
     double scaled_area(double factor) const { return area() * factor; }
 };
 
-struct PyShape : Shape {
+// This trampoline uses the *annotation* form: the [[=trampoline]] mark lets welder
+// discover it by scanning Shape's namespace — no trampoline_for<Shape> needed.
+struct [[=welder::rods::python::trampoline]] PyShape : Shape {
     WELDER_PY_TRAMPOLINE(Shape);
     double area() const override { WELDER_PY_OVERRIDE(area); }
 };
 
 } // namespace overridable
 
-// Register each trampoline (in the binding TU, next to the trampoline classes).
+// Animal uses the explicit registration form (trampoline_for); Shape uses the
+// annotation form above. Both discovery paths are thus exercised.
 template <> constexpr std::meta::info
     welder::rods::python::trampoline_for<overridable::Animal> = ^^overridable::PyAnimal;
-template <> constexpr std::meta::info
-    welder::rods::python::trampoline_for<overridable::Shape> = ^^overridable::PyShape;
 
 inline void register_overridable(WELDER_TEST_MODULE_T& m) {
     auto sub{WELDER_TEST_SUBMODULE(m, "overridable")};
