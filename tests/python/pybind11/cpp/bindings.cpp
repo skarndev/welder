@@ -23,6 +23,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <welder/rods/python/pybind11/rod.hpp>
+#include <welder/rods/python/pybind11/trampoline.hpp> // virtual-override support
 #include <welder/rods/python/naming.hpp> // the PEP 8 style for the naming group
 
 // Rod selection for the shared case headers (tests/common/cpp): they are
@@ -52,6 +53,7 @@
 #include "resolution.hpp"
 #include "methods.hpp"
 #include "inheritance.hpp"
+#include "overridable.hpp"
 #include "namespace.hpp"
 #include "doc.hpp"
 #include "operators.hpp"
@@ -69,6 +71,7 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_resolution(m);  // <-> test_resolution.py
     register_methods(m);     // <-> test_methods.py
     register_inheritance(m); // <-> test_inheritance.py
+    register_overridable(m); // <-> test_trampoline.py
     register_namespace(m);   // <-> test_namespace.py
     register_freestanding(m); // <-> test_namespace.py (semi-manual weld_function/variable)
     register_foreign(m);     // <-> test_namespace.py (tack-welding an unmarked namespace)

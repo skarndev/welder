@@ -66,6 +66,7 @@ differ:
 | Enums | `IntEnum` (`py::native_enum`) | `IntEnum` (`nb::is_arithmetic`) |
 | Single welded base | ✅ | ✅ |
 | **Multiple / virtual welded bases** | ✅ | ❌ single base only |
+| [Virtual overriding from Python](../guide/inheritance.md#overriding-virtual-methods-from-python) (trampolines) | ✅ `trampoline_for` + `WELDER_PY_*` | ✅ `trampoline_for` + `WELDER_PY_*` |
 | Data-member / function docstrings | ✅ | ✅ |
 | Live get/set namespace variables | ✅ | ✅ |
 | `.pyi` stub generation | via `pybind11-stubgen` | **bundled** `nanobind_add_stub` |

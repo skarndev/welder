@@ -256,9 +256,18 @@ struct basic_carriage {
             m, cls_name, welder::doc_of<^^T>(),
             std::make_index_sequence<bases.size()>{})};
 
-        // Constructors.
-        if constexpr (std::is_default_constructible_v<T>)
+        // Constructors. The type welder actually constructs may be a rod-nominated
+        // substitute — a Python trampoline standing in for an abstract base, so a
+        // subclass stays constructible even though the base itself is not — exposed
+        // as an optional `B::construction_type<T>`; fall back to T when a rod names
+        // none (e.g. the Lua rods).
+        if constexpr (requires { typename B::template construction_type<T>; }) {
+            if constexpr (std::is_default_constructible_v<
+                              typename B::template construction_type<T>>)
+                B::add_default_ctor(cls);
+        } else if constexpr (std::is_default_constructible_v<T>) {
             B::add_default_ctor(cls);
+        }
         template for (constexpr auto ctor :
                       std::define_static_array(std::meta::members_of(^^T, ctx))) {
             if constexpr (is_bindable_constructor(ctor)) {

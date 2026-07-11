@@ -59,6 +59,60 @@ nearest welded ancestors reached *through* non-welded ones (deduplicated). A
 recursively (honoring its own marks/policy). Virtual diamonds work; a non-virtual
 diamond with a shared welded base is a C++ ambiguity (not worked around).
 
+## Virtual-method overriding (trampolines) — Python rods
+Files: `src/welder/rods/python/trampoline.hpp` (shared, backend-neutral) +
+`src/welder/rods/python/{nanobind,pybind11}/trampoline.hpp` (per-backend dispatch +
+macros). Both Python rods support it; the user's trampoline source is identical, only
+the backend `trampoline.hpp` include differs (nanobind adds a `detail::trampoline<N>`
+storage member; pybind11 needs none — `get_override(this,name)`). Tests:
+`tests/common/cpp/overridable.hpp` ↔ `tests/python/test_trampoline.py` (runs on both;
+skips if the `overridable` submodule is absent); neg-compile
+`tests/python/{nanobind,pybind11}/cpp/neg/{virtual_needs_trampoline,trampoline_missing_override}.cpp`.
+
+**Why hand-authored:** a trampoline is a C++ subclass with one `override` per
+virtual; generating those *declarations* needs member injection, absent from P2996
+(`define_aggregate` is data-members-only), and the vtable forces each override to
+share the base method's exact name. welder automates everything *around* it via
+reflection; the declarations stay hand-written.
+
+**Discovery:** virtuals are auto-detected (`virtual_slot_count` > 0, destructor and
+per-method `bind_flat` excluded). The `T→trampoline` map is
+`welder::rods::python::trampoline_for<T>` — a specializable `std::meta::info` var
+template (the `trust_bindable` pattern), specialized in the *binding TU* (where the
+backend-specific `PyT` lives), not a class annotation (which would drag a backend
+type into the neutral header).
+
+**Abstract bases (pure virtuals):** an abstract `T` is not `is_default_constructible`,
+so the carriage would register no ctor and even a subclass would be uninstantiable
+("no constructor defined!"). Fix: the carriage's default-ctor gate uses the optional
+`B::construction_type<T>` (Python rods → the trampoline if registered, else `T`;
+`construction_type_of` in the shared header) — detected via `requires`, so Lua rods
+fall back to `is_default_constructible_v<T>` unchanged. `nb::init<>()`/`py::init<>()`
+already construct the alias for abstract T. Consequence (framework behavior, not
+welder's): the base becomes constructible and an unoverridden pure virtual raises at
+call time (`RuntimeError`), not at construction. `is_overridable_virtual` counts pure
+virtuals, so coverage requires them in the trampoline.
+
+**Gate (strict):** the Python rod's `make_class` (`rod.hpp`) branches on
+`has_virtual_methods(^^T)`: trampoline registered → splice `class_<T, PyT, Bases…>`
+via `_make_class`'s new `Trampoline` param + `static_assert(trampoline_covers(...))`
+(every overridable virtual is redeclared in `PyT`, matched by name + `type_of` — full
+signature incl. cv/ref, so overloads/covariant returns don't false-match); else
+`static_assert(bound_flat(^^T))` — a virtual type must register a trampoline or carry
+`[[=welder::rods::python::bind_flat]]` (type-level = whole type flat; per-method =
+that virtual stays a plain bound method, out of slot count + coverage).
+
+**Dispatch:** `WELDER_PY_OVERRIDE(fn, args…)` → each backend's
+`override_dispatch<^^welder_py_base::fn>` (name/return-type/pure-ness — and, pybind11,
+declaring base via `parent_of` — all from reflection). Base fallback is a **textually
+qualified** `welder_py_base::fn(args)` lambda — NOT `self.[:Fn:]()`, which splices to
+a *virtual* call and infinitely recurses. `WELDER_PY_TRAMPOLINE(Base)` injects the
+`welder_py_base` alias + inherited ctors, plus (nanobind only) a
+`nb::detail::trampoline<slot_count>` storage member; pybind11 uses `get_override` +
+`detail::cast_safe`, no storage. Reference/pointer returns are `static_assert`-rejected
+(lifetime). Macros are neutrally named so one trampoline source compiles under either
+Python rod.
+
 ## Whole-namespace binding — `weld_namespace<^^ns>(m)`
 `weld` gates *leaf entities only* (class type / free function / namespace-scope
 variable; namespaces are never welded); the namespace `policy` (default automatic)

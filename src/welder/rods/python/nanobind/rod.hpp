@@ -42,6 +42,7 @@
 #include <welder/welder.hpp>     // welder::welder + the rod contract + driver
 #include <welder/rods/python/doc_style.hpp> // welder::rods::python::google_style
 #include <welder/rods/python/operators.hpp> // welder::rods::python::operator_dunder
+#include <welder/rods/python/trampoline.hpp> // trampoline_for / gate / coverage
 #include <welder/bind_traits.hpp>// param_types / param_names / aggregate_fields
 #include <welder/doc.hpp>        // function_docstring
 
@@ -223,12 +224,21 @@ struct rod {
         @param name the Python class name.
         @param doc  the class docstring, or `nullptr`.
     */
-    template <class T, auto Bases, std::size_t... I>
+    template <class T, class Trampoline, auto Bases, std::size_t... I>
     static auto _make_class(nb::module_& m, const char* name, const char* doc,
                             std::index_sequence<I...>) {
-        if (doc)
-            return nb::class_<T, typename [:Bases[I]:]...>(m, name, doc);
-        return nb::class_<T, typename [:Bases[I]:]...>(m, name);
+        if constexpr (std::is_void_v<Trampoline>) {
+            if (doc)
+                return nb::class_<T, typename [:Bases[I]:]...>(m, name, doc);
+            return nb::class_<T, typename [:Bases[I]:]...>(m, name);
+        } else {
+            // The trampoline is an extra `nb::class_` template argument (nanobind
+            // accepts base and trampoline in either order); Python subclasses then
+            // instantiate it, so their overrides capture C++ virtual calls.
+            if (doc)
+                return nb::class_<T, Trampoline, typename [:Bases[I]:]...>(m, name, doc);
+            return nb::class_<T, Trampoline, typename [:Bases[I]:]...>(m, name);
+        }
     }
 
   public:
@@ -248,11 +258,49 @@ struct rod {
 
     // --- class binding ------------------------------------------------------
 
-    /** Create the `nb::class_<T, Bases…>` handle. @see _make_class @see welder::rod */
+    /** The type welder constructs when binding @a T — its registered trampoline if
+        one exists, else @a T — so an abstract base with a trampoline stays
+        constructible from a Python subclass. The driver reads this to decide default
+        constructibility. @see welder::rods::python::construction_type_of */
+    template <class T>
+    using construction_type =
+        [: ::welder::rods::python::construction_type_of<T>() :];
+
+    /** Create the `nb::class_<T, Bases…>` handle, weaving in a trampoline when @a T
+        is a welded virtual type with a registered
+        `welder::rods::python::trampoline_for`.
+
+        A type carrying virtual methods is bound *overridable* — it must register a
+        trampoline (so Python subclasses can override those virtuals) or opt out with
+        `[[=welder::rods::python::bind_flat]]`. When a trampoline is present, its
+        coverage of @a T's virtuals is checked at compile time. @see _make_class
+        @see welder::rods::python::trampoline_for @see welder::rod */
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type& m, const char* name, const char* doc,
                            std::index_sequence<I...> seq) {
-        return _make_class<T, Bases>(m, name, doc, seq);
+        namespace py = ::welder::rods::python;
+        if constexpr (py::has_virtual_methods(^^T)) {
+            if constexpr (py::trampoline_for<T> != std::meta::info{}) {
+                using Trampoline = [:py::trampoline_for<T>:];
+                static_assert(
+                    py::trampoline_covers(^^T, ^^Trampoline),
+                    "welder: the trampoline registered for this type does not "
+                    "override all of its virtual methods; every virtual needs an "
+                    "override forwarding to Python (see WELDER_PY_OVERRIDE).");
+                return _make_class<T, Trampoline, Bases>(m, name, doc, seq);
+            } else {
+                static_assert(
+                    py::bound_flat(^^T),
+                    "welder: this welded type has virtual methods but no trampoline "
+                    "is registered, so a Python subclass could not override them. "
+                    "Specialize welder::rods::python::trampoline_for<T> with a "
+                    "trampoline subclass, or annotate T with "
+                    "[[=welder::rods::python::bind_flat]] to bind it non-overridably.");
+                return _make_class<T, void, Bases>(m, name, doc, seq);
+            }
+        } else {
+            return _make_class<T, void, Bases>(m, name, doc, seq);
+        }
     }
 
     /** Bind the default constructor. @see welder::rod */

@@ -93,4 +93,125 @@ How much of the C++ inheritance graph survives depends on the target framework:
   won't bind there. See the
   [Python rods comparison](../backends/python.md#feature-comparison).
 
+## Overriding virtual methods from Python
+
+If a welded type has `virtual` methods, a Python subclass can only override them
+when the class is bound with a **trampoline** — a C++ subclass that captures each
+virtual call and forwards it to Python. welder cannot generate that subclass for
+you: emitting the override declarations would need member-injection, which C++26
+reflection does not provide, and each override must be a real member function
+sharing the base method's name (a vtable requirement). So the trampoline is still
+hand-written — but welder drives everything *around* it from reflection and refuses
+to silently bind a virtual type as non-overridable.
+
+Because of that, a welded type carrying an overridable virtual must do one of two
+things.
+
+**1. Register a trampoline.** Write the subclass with welder's neutral macros — one
+storage line, one line per virtual — and point `trampoline_for` at it:
+
+```cpp
+#include <welder/rods/python/nanobind/trampoline.hpp>   // before your trampoline
+
+struct [[=welder::weld(welder::lang::py)]] Animal {
+    virtual ~Animal() = default;
+    virtual std::string speak() const { return "..."; }
+    virtual int legs() const { return 4; }
+    std::string describe() const {                  // C++ calls the virtuals
+        return speak() + " on " + std::to_string(legs()) + " legs";
+    }
+};
+
+struct PyAnimal : Animal {
+    WELDER_PY_TRAMPOLINE(Animal);                            // slot count = reflected
+    std::string speak() const override { WELDER_PY_OVERRIDE(speak); }
+    int         legs()  const override { WELDER_PY_OVERRIDE(legs); }
+};
+
+template <> constexpr std::meta::info
+    welder::rods::python::trampoline_for<Animal> = ^^PyAnimal;
+```
+
+Now a Python subclass overrides as expected, and — the whole point — a C++ call
+routes *back into* the override:
+
+```python
+class Dog(mymod.Animal):
+    def speak(self): return "woof"
+
+Dog().describe()   # "woof on 4 legs"  — describe() (C++) called speak() (Python)
+```
+
+`WELDER_PY_OVERRIDE(name, args…)` forwards the method's arguments; the return type,
+the method name, and whether the method is pure are all read from reflection, so the
+macro body never repeats them. The trampoline's slot count is reflected from the
+class, so it never drifts. welder checks at **compile time** that the trampoline
+overrides *every* overridable virtual — a forgotten override is a build error, not a
+method that silently never reaches Python. The registration is a variable-template
+specialization (like [`trust_bindable`](trust-casters.md)), so it works even for
+third-party types you cannot annotate.
+
+**2. Opt out with `bind_flat`.** A type produced by C++ and never subclassed in
+Python does not need a trampoline; mark it (or an individual virtual) as bound flat:
+
+```cpp
+struct [[=welder::weld(welder::lang::py)]]
+       [[=welder::rods::python::bind_flat]]        // whole type: not overridable
+Handle { virtual ~Handle() = default; virtual int fd() const { return -1; } };
+
+struct [[=welder::weld(welder::lang::py)]] Animal {
+    virtual ~Animal() = default;
+    virtual std::string speak() const { return "..."; }        // overridable
+    [[=welder::rods::python::bind_flat]]
+    virtual std::string kingdom() const { return "Animalia"; } // this one: flat
+};
+```
+
+A per-method `bind_flat` keeps that virtual a plain, callable bound method but drops
+it from the trampoline's slot count and coverage requirement, while the type's other
+virtuals stay overridable.
+
+### Abstract bases (pure virtuals)
+
+A pure virtual works the same way — the trampoline's override supplies it:
+
+```cpp
+struct [[=welder::weld(welder::lang::py)]] Shape {
+    virtual ~Shape() = default;
+    virtual double area() const = 0;                 // pure virtual
+    double scaled_area(double f) const { return area() * f; }
+};
+struct PyShape : Shape {
+    WELDER_PY_TRAMPOLINE(Shape);
+    double area() const override { WELDER_PY_OVERRIDE(area); }
+};
+template <> constexpr std::meta::info
+    welder::rods::python::trampoline_for<Shape> = ^^PyShape;
+```
+
+```python
+class Circle(mymod.Shape):
+    def __init__(self, r): super().__init__(); self.r = r
+    def area(self): return 3.14159 * self.r ** 2
+
+Circle(2).scaled_area(10)   # 125.66 — C++ scaled_area() called the Python area()
+```
+
+An abstract type is not default-constructible in C++, so welder registers the
+*trampoline's* constructor instead (that is what `construction_type` selects) — so a
+Python subclass is constructible. A consequence of the frameworks: the base itself
+becomes constructible too, and calling a pure virtual that a subclass did not
+override raises at call time (a `RuntimeError`), rather than being blocked at
+construction.
+
+!!! note "Backend support"
+    Virtual-override support works on **both** Python rods (pybind11 and nanobind).
+    The vocabulary (`trampoline_for`, `bind_flat`, the `WELDER_PY_*` macros) lives
+    under `welder::rods::python` and is backend-neutral: the *same* trampoline source
+    compiles under either rod — only the `#include` of the backend's `trampoline.hpp`
+    differs (nanobind keeps a small per-instance storage member; pybind11 needs none).
+    A virtual returning a reference or pointer cannot be trampolined (neither backend
+    can keep the referent alive across the boundary) — return by value or use
+    `bind_flat`.
+
 Next: [Namespaces & modules](namespaces-modules.md).
