@@ -78,12 +78,10 @@ struct rod {
     static constexpr lang language{lang::py}; /**< welder::lang::py. */
     using module_type = nb::module_;          /**< nanobind's module handle. */
 
-    /** The class / enum handles the per-class / per-enum hooks operate on — what
-        `make_class` / `make_enum` yield (the class handle in its canonical
-        `nb::class_<T>` form; `make_class` may hand back a single-base specialization,
-        which shares the member-adding API). Named as associated types so the @ref
-        welder::rod concept can shape-check the per-handle hooks against them. */
-    template <class T> using class_handle_type = nb::class_<T>;
+    /** The enum handle `make_enum` yields — exactly its return type. (The class handle
+        `class_handle_type` is defined next to `make_class` below, since it tracks that
+        function's return.) Named as an associated type so the @ref welder::rod concept
+        can shape-check the per-enum hooks against it. */
     template <class E> using enum_handle_type = nb::enum_<E>;
 
   protected:
@@ -322,6 +320,16 @@ struct rod {
             return _make_class<T, void, Bases>(m, name, doc, seq);
         }
     }
+
+    /** The class handle `make_class` yields for @a T — exactly its return type for a
+        base-less @a T (so it captures the woven-in trampoline for a virtual @a T); the
+        single welded base nanobind supports is chosen by the carriage's *resolution*,
+        not by @a T, so it is appended by `make_class` and is not a function of @a T
+        alone. Named as an associated type so the @ref welder::rod concept can
+        shape-check the per-class hooks against it. */
+    template <class T>
+    using class_handle_type = decltype(make_class<T, std::array<std::meta::info, 0>{}>(
+        std::declval<module_type&>(), nullptr, nullptr, std::index_sequence<>{}));
 
     /** Bind the default constructor. @see welder::rod */
     static void add_default_ctor(auto& cls) { cls.def(nb::init<>()); }

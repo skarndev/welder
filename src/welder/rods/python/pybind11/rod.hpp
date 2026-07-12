@@ -431,13 +431,17 @@ struct rod {
         }
     };
 
-    /** The class / enum handles the per-class / per-enum hooks operate on — what
-        `make_class` / `make_enum` yield (the class handle is given in its canonical
-        `py::class_<T>` form; `make_class` may hand back a trampoline/base-parameterized
-        specialization, which shares the member-adding API). Named as associated types
-        so the @ref welder::rod concept can shape-check the per-handle hooks against
-        them. (Co-located with `enum_handle`, its definition.) */
-    template <class T> using class_handle_type = py::class_<T>;
+    /** The class / enum handles the per-class / per-enum hooks operate on — exactly what
+        `make_class` / `make_enum` yield. `class_handle_type<T>` tracks `make_class`
+        itself (so it captures the woven-in trampoline for a virtual `T`); it is its
+        return type for a **base-less** `T` — welded bases, chosen by the carriage's
+        *resolution* rather than by `T`, are appended by `make_class` and so cannot be a
+        function of `T` alone. Named as associated types so the @ref welder::rod concept
+        can shape-check the per-handle hooks against them. (Co-located with `enum_handle`,
+        its definition.) */
+    template <class T>
+    using class_handle_type = decltype(make_class<T, std::array<std::meta::info, 0>{}>(
+        std::declval<module_type&>(), nullptr, nullptr, std::index_sequence<>{}));
     template <class E> using enum_handle_type = enum_handle<E>;
 
     /** Create the `enum_handle` for @a E (a non-null @a doc becomes its docstring).
