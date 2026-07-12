@@ -21,6 +21,12 @@ Normalization strips the annotation wrapper (``[[=…]]``), template argument li
 (``rod<>``, ``welder<Rod, Style, Carriage>``) and trailing call parentheses
 (``doc("text")``), so the common ways the guide spells an entity all resolve.
 
+Include-path spans link to the header's file page: ``<welder/vocabulary.hpp>``
+(with or without a leading ``#include``) and bare ``.hpp`` paths (``lang.hpp``,
+``rods/python/doc_style.hpp``) resolve against the tag file's file compounds,
+keyed by each header's path under ``src/`` with an implicit ``welder/`` prefix —
+so a non-welder header (``shapes.hpp``, ``<sol/sol.hpp>``) never links.
+
 Like ``inject_reference.py``, the tag file is found via the ``WELDER_DOXYGEN_API``
 environment variable (it sits *next to* the ``api/`` dir, so it is never published):
 without it — e.g. a bare ``mkdocs build`` — the hook is a silent no-op and the guide
@@ -36,6 +42,8 @@ import xml.etree.ElementTree as ET
 _symbols: dict[str, str] = {}
 # Last path segment -> distinct target URLs, for the unique-short-name fallback.
 _short: dict[str, set[str]] = {}
+# Include path under src/ ("welder/rods/python/pybind11/rod.hpp") -> file-page URL.
+_includes: dict[str, str] = {}
 
 # Compound kinds worth linking to (files/dirs/pages are not API entities).
 _COMPOUND_KINDS = {"class", "struct", "union", "namespace", "concept"}
@@ -66,10 +74,16 @@ def _load_tagfile(path: str) -> None:
         kind = compound.get("kind")
         cname = compound.findtext("name") or ""
         cfile = compound.findtext("filename") or ""
+        if cfile and not cfile.endswith(".html"):
+            cfile += ".html"
         if kind in _COMPOUND_KINDS and cfile:
-            if not cfile.endswith(".html"):
-                cfile += ".html"
             _register(cname, cfile)
+        if kind == "file" and cfile and cname.endswith(".hpp"):
+            # Key the file page by its include path: the source path under src/
+            # ("…/src/welder/rods/…/") plus the header name.
+            src_path = compound.findtext("path") or ""
+            if "/src/" in src_path:
+                _includes[src_path.split("/src/", 1)[1] + cname] = cfile
         if kind not in _COMPOUND_KINDS and kind != "file":
             continue
         for member in compound.findall("member"):
@@ -129,6 +143,27 @@ def _normalize(span_text: str) -> str | None:
     return t if _QUALIFIED.fullmatch(t) else None
 
 
+# `<welder/vocabulary.hpp>` / `#include <welder/vocabulary.hpp>` / `lang.hpp`.
+_INCLUDE_ANGLED = re.compile(r"(?:#\s*include\s+)?<([\w./-]+\.hpp)>")
+_INCLUDE_BARE = re.compile(r"[\w./-]+\.hpp")
+# Bare names that collide with a real top-level header but mean "the rod's file"
+# in prose ("include the rod's `module.hpp`") — never linked unqualified.
+_INCLUDE_DENY = {"module.hpp", "rod.hpp"}
+
+
+def _resolve_include(span_text: str) -> tuple[str, str] | None:
+    """Resolve an include-path span to (include path, file-page URL), or None."""
+    t = html.unescape(span_text).strip()
+    angled = _INCLUDE_ANGLED.fullmatch(t)
+    key = angled.group(1) if angled else _INCLUDE_BARE.fullmatch(t) and t
+    if not key or key in _INCLUDE_DENY:
+        return None
+    for candidate in (key, "welder/" + key):
+        if candidate in _includes:
+            return candidate, _includes[candidate]
+    return None
+
+
 def _resolve(name: str) -> tuple[str, str] | None:
     """Return (qualified name, api-relative URL), or None."""
     if name in _DENY:
@@ -163,8 +198,10 @@ def on_page_content(content, page, config, files):
     to_root = "../" * page.url.count("/")
 
     def link_span(match: re.Match) -> str:
-        name = _normalize(match.group(1))
-        resolved = _resolve(name) if name else None
+        resolved = _resolve_include(match.group(1))
+        if not resolved:
+            name = _normalize(match.group(1))
+            resolved = _resolve(name) if name else None
         if not resolved:
             return match.group(0)
         qualified, url = resolved

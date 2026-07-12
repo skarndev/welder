@@ -243,8 +243,14 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
   `detail`, `impl`, pybind11's `export_values`, … — which read as the *user's*
   code when bare). Normalization strips `[[=…]]` wrappers, template args and call
   parens (`weld_type<T>(m)` → `weld_type`); existing `<a>`/`<pre>` regions are
-  left untouched. Renamed/removed symbols just stop linking (never 404): the map
-  is rebuilt from the tag file on every docs build.
+  left untouched. **Include paths** link to the header's file page:
+  `<welder/vocabulary.hpp>` (optionally with `#include`) and bare `.hpp` paths
+  (`lang.hpp`, `rods/python/doc_style.hpp`) resolve against the tag file's file
+  compounds keyed by path-under-`src/` with an implicit `welder/` prefix — so
+  foreign headers (`<sol/sol.hpp>`) never link; `_INCLUDE_DENY` blocks bare
+  `module.hpp`/`rod.hpp` (prose means "the rod's file", not `welder/module.hpp`).
+  Renamed/removed symbols just stop linking (never 404): the map is rebuilt from
+  the tag file on every docs build.
 - **Targets:** `welder-docs` (Doxygen → `<bin>/docs/reference`, *then*
   `mkdocs build` → `<build>/docs/site/index.html`, hooks grafting + auto-linking
   the reference; order matters, so both are steps of one target);
