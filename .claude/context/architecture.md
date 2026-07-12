@@ -212,9 +212,17 @@ type map still emits the raw C++ name (it sees only a `std::meta::info`, no Styl
 (`document.hpp` `apply_type_renames`) — deferring to render means declaration order is
 irrelevant.
 
-The concept statically checks the associated types and the module machinery; the
-class/per-member hooks are templated on a reflection, so they are
-contract-by-documentation, enforced when the driver instantiates. The nanobind
+The concept statically checks the associated types, the module machinery, and every
+hook probeable without instantiating a hook body — `special_method_name`,
+`add_function`, `add_variable` (probed with the `any_type`/`^^int` placeholders, like
+`caster_oracle`/`resolution` do). The class/enum **factories** (`make_class`,
+`make_enum`) return `auto`, so naming them in the concept would instantiate their
+bodies with a placeholder — which a real `make_class` (e.g. sol2 registers ctors
+inside it) doesn't survive — and that in turn blocks probing the per-handle hooks
+(`add_field`/`add_method`/`add_operator`/ctor hooks/enum hooks), which take the deduced
+handle. So those stay **contract-by-documentation**, enforced when the driver
+instantiates the rod over a real welded type (the reasoning is spelled out in the
+`rod` concept's `@note`). The nanobind
 rod is nearly a copy of the pybind11 one (same class-handle model), diverging
 only where nanobind's API does — `def_rw`/`def_ro`, `nb::init`, a
 placement-`__init__` aggregate factory, module docstrings via `__doc__`, the

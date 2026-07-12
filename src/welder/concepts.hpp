@@ -83,10 +83,26 @@ concept caster_oracle = requires {
     to plug into the generic driver.
 
     A rod `B` is a stateless struct; nothing is inherited, and every member is
-    static. The concept statically checks the associated types and the module
-    machinery; the class-level and per-member hooks are templated on a
-    reflection/type, so they are contract-by-documentation, enforced at the
-    driver's instantiation.
+    static. The concept *shape*-checks the associated types, the module/session
+    machinery, and every hook that can be probed without instantiating a hook body:
+    `special_method_name`, `add_function` and `add_variable` (all `void`/explicit-return
+    and needing only a module handle + session). The templated hooks can't be quantified
+    over every type/reflection, so — as @ref welder::caster_oracle probes
+    `has_native_caster` — they are probed once with fixed placeholders (@ref
+    welder::detail::any_type, `^^int`), checking *shape* (the hook exists with a
+    compatible signature), not per-type correctness.
+
+    @note **What the concept does NOT check, and why.** The class/enum factories
+    (`make_class`, `make_enum`) return `auto`, so merely naming them in a requirement
+    forces their bodies to be instantiated to deduce the return (handle) type — and a
+    rod's `make_class` legitimately does real work there (e.g. the sol2 rod registers a
+    type's constructors inside it), which a non-representative placeholder type does not
+    survive. That in turn blocks probing the per-handle hooks (`make_class`/`add_field`/
+    `add_method`/`add_static_method`/`add_operator`/`add_default_ctor`/`add_constructor`/
+    `add_aggregate_constructor`/`make_enum`/`add_enumerator`/`finish_enum`), since they
+    take the deduced handle by reference. Those remain **contract-by-documentation**,
+    enforced when the driver instantiates the rod over a real welded type. The block
+    below is the complete set that *is* safely probeable.
 
     **Associated:**
     @code
@@ -145,6 +161,13 @@ concept rod =
         { B::language } -> std::convertible_to<lang>;
         typename B::module_type;
     } &&
+    // Module / session machinery + the handle-free per-entity hooks. Every requirement
+    // here takes concrete arguments and returns void or an explicit type, so only the
+    // signatures are substituted — no hook body is instantiated (the reflection/type
+    // template arguments, e.g. `^^int` / `detail::any_type`, reach only the bodies,
+    // which a requires-expression leaves untouched). This is the full set of hooks that
+    // are *safely* probeable; the class/enum factories and their per-handle hooks are
+    // not (see the caveat in the concept's documentation).
     requires(typename B::module_type& m, const char* s,
              std::remove_cvref_t<decltype(B::open_module(
                  std::declval<typename B::module_type&>()))> session) {
@@ -152,6 +175,9 @@ concept rod =
         { B::add_submodule(m, s) } -> std::same_as<typename B::module_type>;
         B::set_module_doc(m, s);
         B::close_module(m, session);
+        { B::special_method_name(^^int) } -> std::convertible_to<const char*>;
+        B::template add_function<^^int, detail::any_type>(m);
+        B::template add_variable<^^int, detail::any_type>(m, session);
     };
 
 /** The contract a **resolution** — the carriage's *which-participates* policy — must
