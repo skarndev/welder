@@ -35,25 +35,34 @@ namespace py = ::pybind11;
 /** Dispatch a captured virtual call to its Python override, else to the C++ base.
 
     The reflection-driven replacement for `PYBIND11_OVERRIDE`/`PYBIND11_OVERRIDE_PURE`:
-    the method name (for the Python lookup), the return type, the declaring base class
-    (for `get_override`'s `this` cast), and whether the method is pure are all read
-    from @a Fn — a reflection of the *base* virtual — rather than spelled by hand.
+    the method name (for the Python lookup), the return type, and whether the method is
+    pure are all read from @a Fn — a reflection of the *base* virtual — rather than
+    spelled by hand.
+
+    @a self is the trampoline instance viewed as the *welded* type it is bound under
+    (`welder_py_base`), **not** the virtual's declaring class. pybind11's
+    `get_override(const T*, name)` keys the Python-object lookup off `typeid(T)` — the
+    static pointer type — so `T` must be the type the instance is *registered* as
+    (`class_<T, Trampoline, …>`). For a virtual @a type inherits from a base, the
+    declaring class differs from the registered type; casting to the declaring class
+    would look the instance up under the wrong registration and miss the override (C++
+    would silently see the base implementation). The caller (`WELDER_PY_OVERRIDE`) casts
+    `*this` to `welder_py_base` for exactly this reason.
 
     The base-class fallback is passed in as @a base_call rather than derived from
     @a Fn: splicing a member function into a member access (`self.[:Fn:]()`) performs
     a *virtual* call, which would re-enter the override and recurse. The caller
-    (`WELDER_PY_OVERRIDE`) supplies a lambda doing a textually *qualified*
-    `Base::method(...)` call, which is non-virtual — matching what `PYBIND11_OVERRIDE`'s
-    `cname::fn(...)` tail does.
+    supplies a lambda doing a textually *qualified* `Base::method(...)` call, which is
+    non-virtual — matching what `PYBIND11_OVERRIDE`'s `cname::fn(...)` tail does.
 
     @tparam Fn a reflection of the base virtual member function.
-    @param self      the trampoline instance (for the `get_override` `this` cast).
+    @param self      the trampoline instance as its registered welded type (for the
+                     `get_override` lookup).
     @param base_call an invocable performing the qualified base-class call.
     @param args      the forwarded call arguments. */
 template <auto Fn, typename Self, typename BaseCall, typename... Args>
 decltype(auto) override_dispatch(const Self& self, BaseCall&& base_call,
                                  Args&&... args) {
-    using base_type = [:std::meta::parent_of(Fn):];
     using ret_type = [:std::meta::return_type_of(Fn):];
     static_assert(
         !std::is_reference_v<ret_type>,
@@ -65,8 +74,7 @@ decltype(auto) override_dispatch(const Self& self, BaseCall&& base_call,
         std::define_static_string(std::meta::identifier_of(Fn))};
 
     py::gil_scoped_acquire gil;
-    py::function override{
-        py::get_override(static_cast<const base_type*>(&self), name)};
+    py::function override{py::get_override(&self, name)};
     if (override)
         return py::detail::cast_safe<ret_type>(
             override(std::forward<Args>(args)...));
@@ -99,7 +107,7 @@ decltype(auto) override_dispatch(const Self& self, BaseCall&& base_call,
     each Python rod defines it against its own dispatch. */
 #define WELDER_PY_OVERRIDE(FUNC, ...)                                          \
     return ::welder::rods::pybind11::override_dispatch<^^welder_py_base::FUNC>( \
-        *this,                                                               \
+        static_cast<const welder_py_base&>(*this),                           \
         [&](auto&&... _welder_a) -> decltype(auto) {                         \
             return welder_py_base::FUNC(                                      \
                 static_cast<decltype(_welder_a)&&>(_welder_a)...);           \

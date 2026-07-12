@@ -75,6 +75,16 @@ virtual; generating those *declarations* needs member injection, absent from P29
 share the base method's exact name. welder automates everything *around* it via
 reflection; the declarations stay hand-written.
 
+**Inherited virtuals:** the slot set (`overridable_virtuals`, behind
+`virtual_slot_count` / `has_virtual_methods` / `trampoline_covers`) walks the whole
+base chain, not just `members_of` (own members) — a virtual a welded type merely
+*inherits* is still an overridable slot, so a derived welded type's trampoline must
+cover the inherited virtuals too (a Python subclass can override them, and dispatch
+runs through the derived type's own trampoline, not the base's). Slots dedup by name +
+`type_of`, keeping the most-derived declaration; that decl's `bind_flat` mark governs.
+Regression: `Bird : Animal` in `overridable.hpp` (inherits speak/legs, adds fly) with
+`test_derived_class_overrides_{inherited,own}_virtual`.
+
 **Discovery (two forms; explicit wins):** virtuals are auto-detected
 (`virtual_slot_count` > 0, destructor and per-method `bind_flat` excluded). The
 `T→trampoline` mapping resolves as: (1) explicit `trampoline_for<T>` — a specializable
@@ -110,8 +120,14 @@ signature incl. cv/ref, so overloads/covariant returns don't false-match); else
 that virtual stays a plain bound method, out of slot count + coverage).
 
 **Dispatch:** `WELDER_PY_OVERRIDE(fn, args…)` → each backend's
-`override_dispatch<^^welder_py_base::fn>` (name/return-type/pure-ness — and, pybind11,
-declaring base via `parent_of` — all from reflection). Base fallback is a **textually
+`override_dispatch<^^welder_py_base::fn>` (name/return-type/pure-ness from reflection).
+pybind11's `get_override(const T*, name)` keys the Python-object lookup off `typeid(T)`
+— the *static* pointer type — so the macro casts `*this` to `welder_py_base` (the
+**registered** welded type, `class_<T, Trampoline, …>`), **not** the virtual's declaring
+class. For an inherited virtual those differ; casting to the declaring base looks the
+instance up under the wrong registration and silently misses the override (C++ sees the
+base impl). nanobind is unaffected — it dispatches through its own trampoline storage +
+`detail::ticket`, not `typeid`. Base fallback is a **textually
 qualified** `welder_py_base::fn(args)` lambda — NOT `self.[:Fn:]()`, which splices to
 a *virtual* call and infinitely recurses. `WELDER_PY_TRAMPOLINE(Base)` injects the
 `welder_py_base` alias + inherited ctors, plus (nanobind only) a

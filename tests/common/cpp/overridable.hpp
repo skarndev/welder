@@ -70,12 +70,35 @@ struct [[=welder::rods::python::trampoline]] PyShape : Shape {
     double area() const override { WELDER_PY_OVERRIDE(area); }
 };
 
+// A *derived* welded polymorphic type. Bird adds one new virtual (fly) but inherits
+// Animal's speak()/legs() without re-declaring them. Its trampoline must therefore
+// cover the INHERITED virtuals too — a Python subclass of Bird can override speak(),
+// and that dispatch runs through Bird's own trampoline, not Animal's. welder's
+// virtual_slot_count / trampoline_covers fold inherited virtuals in (they walk the
+// base chain, not just members_of), so PyBird must redeclare speak + legs + fly;
+// omitting the inherited ones is a coverage static_assert failure.
+struct
+[[=welder::weld(welder::lang::py)]]
+Bird : Animal {
+    [[=welder::doc("How this bird flies.")]]
+    virtual std::string fly() const { return "flap"; }
+};
+
+struct PyBird : Bird {
+    WELDER_PY_TRAMPOLINE(Bird);
+    std::string speak() const override { WELDER_PY_OVERRIDE(speak); }  // inherited
+    int legs() const override { WELDER_PY_OVERRIDE(legs); }            // inherited
+    std::string fly() const override { WELDER_PY_OVERRIDE(fly); }      // own
+};
+
 } // namespace overridable
 
 // Animal uses the explicit registration form (trampoline_for); Shape uses the
 // annotation form above. Both discovery paths are thus exercised.
 template <> constexpr std::meta::info
     welder::rods::python::trampoline_for<overridable::Animal> = ^^overridable::PyAnimal;
+template <> constexpr std::meta::info
+    welder::rods::python::trampoline_for<overridable::Bird> = ^^overridable::PyBird;
 
 inline void register_overridable(WELDER_TEST_MODULE_T& m) {
     auto sub{WELDER_TEST_SUBMODULE(m, "overridable")};

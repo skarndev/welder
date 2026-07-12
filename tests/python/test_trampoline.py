@@ -112,6 +112,35 @@ def test_pure_virtual_not_overridden_in_subclass_raises(ov: ModuleType) -> None:
         NotAShape().area()
 
 
+# --- a derived class overriding an INHERITED virtual ------------------------
+def test_derived_class_overrides_inherited_virtual(ov: ModuleType) -> None:
+    # Bird inherits Animal.speak()/legs() without re-declaring them. A Python subclass
+    # of Bird overrides the *inherited* speak(); the C++ describe() (defined on Animal,
+    # calling speak() polymorphically) must dispatch into the override — proving Bird's
+    # trampoline covers inherited virtuals, not just Bird's own fly().
+    class Sparrow(ov.Bird):
+        def speak(self) -> str:
+            return "tweet"
+
+    s = Sparrow()
+    assert s.speak() == "tweet"
+    assert s.fly() == "flap"  # inherited-through-trampoline C++ default
+    assert s.describe() == "tweet on 4 legs"  # C++ -> Python, via the inherited virtual
+
+
+def test_derived_class_overrides_own_virtual(ov: ModuleType) -> None:
+    class Penguin(ov.Bird):
+        def fly(self) -> str:
+            return "cannot fly"
+
+        def legs(self) -> int:  # inherited virtual
+            return 2
+
+    p = Penguin()
+    assert p.fly() == "cannot fly"
+    assert p.describe() == "... on 2 legs"  # inherited speak default + overridden legs
+
+
 # --- a per-method bind_flat virtual -----------------------------------------
 def test_bind_flat_virtual_is_bound_but_not_overridable(ov: ModuleType) -> None:
     # kingdom() is virtual but marked [[=welder::rods::python::bind_flat]]: it is

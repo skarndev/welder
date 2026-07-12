@@ -147,6 +147,15 @@ class, so it never drifts. welder checks at **compile time** that the trampoline
 overrides *every* overridable virtual — a forgotten override is a build error, not a
 method that silently never reaches Python.
 
+!!! note "Derived welded types cover inherited virtuals too"
+    If you weld a class that *inherits* virtuals from a welded base — whether or not it
+    re-declares them — its own trampoline must override the inherited virtuals as well,
+    because a Python subclass can override them and the dispatch runs through the
+    derived type's trampoline, not the base's. welder's slot count and coverage check
+    walk the whole base chain, so this is enforced at compile time; write one
+    `WELDER_PY_OVERRIDE` line per inherited virtual just as you would for the type's
+    own. (A virtual overridden along the way counts once, as a single slot.)
+
 !!! note "The explicit form: `trampoline_for<T>`"
     The `[[=trampoline]]` annotation is discovered by scanning the base's namespace,
     so the trampoline must live in the **same namespace** as its welded base (there

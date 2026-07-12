@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <meta>
+#include <vector>
 
 #include <welder/vocabulary.hpp> // the annotation vocabulary (for structural specs)
 
@@ -166,6 +167,8 @@ consteval scanned_trampoline scanned_trampoline_of(std::meta::info base) {
 
     Excludes the (virtual) destructor, which is not an overridable slot, and any
     method marked @ref bind_flat, which is bound as a plain non-overridable method.
+    A *per-declaration* predicate; the whole-type slot set is @ref
+    overridable_virtuals, which additionally folds inherited virtuals in.
     @param member a reflection of a class member.
     @return `true` iff @a member is a virtual method exposed for Python override. */
 consteval bool is_overridable_virtual(std::meta::info member) {
@@ -173,29 +176,87 @@ consteval bool is_overridable_virtual(std::meta::info member) {
            !std::meta::is_destructor(member) && !bound_flat(member);
 }
 
-/** The number of overridable virtual member functions of @a type.
+namespace detail {
+
+/** Accumulate the *most-derived* declaration of every virtual member function
+    reachable in @a type's complete object into @a slots, deduplicating by name plus
+    `type_of` (the full signature).
+
+    `members_of` lists a class's *own* members only, so a virtual a subclass merely
+    inherits is invisible there — the reason a whole-hierarchy walk is needed. @a
+    type's own members are visited before its bases, so the first declaration recorded
+    for a given (name, signature) is the most-derived one; a base's re-declaration of an
+    already-seen slot is skipped. @ref bind_flat is *not* consulted here — the filter is
+    applied by @ref overridable_virtuals on the kept most-derived declaration, so a
+    subclass can un-flatten a virtual its base marked `bind_flat` (and vice versa).
+    @param type  a reflection of the class type.
+    @param slots the accumulator of most-derived virtual declarations. */
+consteval void collect_virtuals(std::meta::info type,
+                                std::vector<std::meta::info>& slots) {
+    for (auto m :
+         std::meta::members_of(type, std::meta::access_context::current())) {
+        if (!std::meta::is_function(m) || !std::meta::is_virtual(m) ||
+            std::meta::is_destructor(m) || !std::meta::has_identifier(m))
+            continue;
+        auto name{std::meta::identifier_of(m)};
+        auto sig{std::meta::type_of(m)};
+        bool seen{false};
+        for (auto s : slots)
+            if (std::meta::identifier_of(s) == name &&
+                std::meta::type_of(s) == sig) {
+                seen = true;
+                break;
+            }
+        if (!seen)
+            slots.push_back(m);
+    }
+    for (auto b :
+         std::meta::bases_of(type, std::meta::access_context::current()))
+        collect_virtuals(std::meta::dealias(std::meta::type_of(b)), slots);
+}
+
+} // namespace detail
+
+/** Every overridable virtual slot of @a type — the ones welder routes through a
+    trampoline — folding in virtuals inherited from any base.
+
+    Unlike a bare `members_of` scan this sees a virtual @a type only *inherits* (never
+    re-declares), which a trampoline must still cover: a Python subclass of @a type can
+    override it, and dispatch runs through @a type's own trampoline, not the base's. A
+    slot is identified by name + full signature; when a class overrides an inherited
+    virtual, only the most-derived declaration is kept, and its @ref bind_flat mark
+    (not the base's) decides whether the slot is exposed.
+    @param type a reflection of the class type.
+    @return the most-derived declaration of each exposed overridable virtual. */
+consteval std::vector<std::meta::info> overridable_virtuals(std::meta::info type) {
+    std::vector<std::meta::info> all{};
+    detail::collect_virtuals(type, all);
+    std::vector<std::meta::info> out{};
+    for (auto s : all)
+        if (!bound_flat(s))
+            out.push_back(s);
+    return out;
+}
+
+/** The number of overridable virtual member functions of @a type, inherited ones
+    included.
 
     This is the `N` in `NB_TRAMPOLINE(Base, N)` / a trampoline's slot count — the
     virtuals actually routed through the trampoline, so per-method @ref bind_flat
-    marks (and the destructor) are excluded.
+    marks (and the destructor) are excluded. Counts inherited virtuals too (see
+    @ref overridable_virtuals), so a subclass whose virtuals all come from a base still
+    reports a non-zero count and gets a correctly sized trampoline.
     @param type a reflection of the class type.
     @return the count of @a type's overridable virtual member functions. */
 consteval std::size_t virtual_slot_count(std::meta::info type) {
-    std::size_t n{0};
-    for (auto m :
-         std::meta::members_of(type, std::meta::access_context::current())) {
-        if (is_overridable_virtual(m)) {
-            ++n;
-        }
-    }
-    return n;
+    return overridable_virtuals(type).size();
 }
 
 /** Does @a type declare or inherit any overridable virtual method?
     @param type a reflection of the class type.
     @return `true` iff @a type has at least one overridable virtual slot. */
 consteval bool has_virtual_methods(std::meta::info type) {
-    return virtual_slot_count(type) > 0;
+    return !overridable_virtuals(type).empty();
 }
 
 /** The type welder constructs when binding @a T: its registered/annotated trampoline
@@ -251,20 +312,21 @@ consteval bool declares_override(std::meta::info tramp, std::meta::info vfn) {
     return false;
 }
 
-/** Does @a tramp override every virtual method of @a type?
+/** Does @a tramp override every virtual method of @a type — inherited ones included?
 
     The coverage guard behind welder's compile-time check: a virtual left
     un-overridden would bind, but calls to it from C++ would never dispatch into a
-    Python override. @param type a reflection of the welded base type. @param
-    tramp a reflection of its registered trampoline. @return `true` iff every
-    overridable virtual of @a type is redeclared in @a tramp. */
+    Python override. Iterates @ref overridable_virtuals, so a virtual @a type merely
+    *inherits* must also be redeclared in @a tramp (its dispatch runs through @a type's
+    own trampoline, not the base's). @a tramp is scanned by @ref declares_override,
+    which lists @a tramp's *own* members — so the trampoline is expected to redeclare
+    every override itself, inherited slots included. @param type a reflection of the
+    welded base type. @param tramp a reflection of its registered trampoline. @return
+    `true` iff every overridable virtual of @a type is redeclared in @a tramp. */
 consteval bool trampoline_covers(std::meta::info type, std::meta::info tramp) {
-    for (auto m :
-         std::meta::members_of(type, std::meta::access_context::current())) {
-        if (is_overridable_virtual(m) && !declares_override(tramp, m)) {
+    for (auto m : overridable_virtuals(type))
+        if (!declares_override(tramp, m))
             return false;
-        }
-    }
     return true;
 }
 
