@@ -188,6 +188,13 @@ struct rod {
         bool scoped;
     };
 
+    /** The class / enum handles the per-class / per-enum hooks receive — exactly what
+        `make_class` / `make_enum` return (the enum handle carries no type parameter).
+        Named as associated types so the @ref welder::rod concept can shape-check the
+        per-handle hooks against them. */
+    template <class T> using class_handle_type = class_handle<T>;
+    template <class> using enum_handle_type = enum_handle;
+
   protected:
     // --- implementation helpers (not part of the welder::rod contract) --
 

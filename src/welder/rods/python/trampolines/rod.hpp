@@ -74,6 +74,13 @@ struct rod {
     static constexpr lang language{lang::py}; /**< Trampolines are a Python concept. */
     using module_type = module_handle;
 
+    /** The class / enum handles the per-class / per-enum hooks receive — exactly what
+        `make_class` / `make_enum` return (a generator handle carries no type
+        parameter). Named as associated types so the @ref welder::rod concept can
+        shape-check the per-handle hooks against them. */
+    template <class> using class_handle_type = class_handle;
+    template <class> using enum_handle_type = enum_handle;
+
     struct session {}; /**< No deferred module state. */
 
     /** Permissive: the generator only reproduces virtual *signatures* (via splices,

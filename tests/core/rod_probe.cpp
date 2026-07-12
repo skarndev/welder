@@ -36,6 +36,12 @@ struct probe_rod {
     static constexpr welder::lang language{welder::lang::py};
     using module_type = probe_module;
 
+    // The class / enum handle types make_class / make_enum yield (here the same opaque
+    // handle for both). Named as associated types so welder::rod can shape-check the
+    // per-handle hooks against them without deducing them from a factory call.
+    template <class> using class_handle_type = probe_class;
+    template <class> using enum_handle_type = probe_class;
+
     // caster_oracle leaf: pretend the "native" convertible types are the
     // arithmetic scalars (as if the backend shipped casters for them). A welded
     // class member is not native, so bindability then defers to `welded_for`.

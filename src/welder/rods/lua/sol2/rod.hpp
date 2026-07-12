@@ -450,6 +450,13 @@ struct rod {
   public:
     // --- caster oracle + emission primitives (the welder::rod contract) --
 
+    /** The class / enum handles the per-class / per-enum hooks operate on — exactly
+        what `make_class` / `make_enum` return. Named as associated types so the @ref
+        welder::rod concept can shape-check the per-handle hooks against them (`sol2`'s
+        `_enum_binding` is an internal type, exposed here only through this alias). */
+    template <class T> using class_handle_type = ::sol::usertype<T>;
+    template <class E> using enum_handle_type = _enum_binding<E>;
+
     /** `caster_oracle`: @a T converts without welder registering a usertype iff
         sol2 does not classify it as needs-registration.
         @tparam T the type to classify.

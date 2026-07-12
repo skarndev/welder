@@ -175,7 +175,10 @@ headers instead of the struct: the Python dunder map into
   bool has_native_caster;` — the `caster_oracle` leaf: is `T` convertible *without*
   welder registering a class for it? (false ⇒ welder requires `T` welded). This is
   the one bindability fact the core can't know; the STL-wrapper recursion in
-  `bindable.hpp` is shared.
+  `bindable.hpp` is shared. Plus two handle-type aliases —
+  `template<class T> using class_handle_type` / `template<class E> using enum_handle_type`
+  — naming what `make_class`/`make_enum` yield, so the `rod` concept can shape-check the
+  per-handle hooks against them (see the concept caveat below).
 - **Type binding:** `make_class<T, Bases…>`, `add_default_ctor`, `add_constructor<Ctor>`,
   `add_aggregate_constructor<T>`, `add_field<Mem, Style>`, `add_method<Fn, Style>`,
   `add_static_method<Fn, Style>`, `add_operator<Fn>`, and `consteval special_method_name(op)`
@@ -212,17 +215,19 @@ type map still emits the raw C++ name (it sees only a `std::meta::info`, no Styl
 (`document.hpp` `apply_type_renames`) — deferring to render means declaration order is
 irrelevant.
 
-The concept statically checks the associated types, the module machinery, and every
-hook probeable without instantiating a hook body — `special_method_name`,
-`add_function`, `add_variable` (probed with the `any_type`/`^^int` placeholders, like
-`caster_oracle`/`resolution` do). The class/enum **factories** (`make_class`,
-`make_enum`) return `auto`, so naming them in the concept would instantiate their
-bodies with a placeholder — which a real `make_class` (e.g. sol2 registers ctors
-inside it) doesn't survive — and that in turn blocks probing the per-handle hooks
-(`add_field`/`add_method`/`add_operator`/ctor hooks/enum hooks), which take the deduced
-handle. So those stay **contract-by-documentation**, enforced when the driver
-instantiates the rod over a real welded type (the reasoning is spelled out in the
-`rod` concept's `@note`). The nanobind
+The concept statically checks almost the whole contract — associated types, the module
+machinery, and *every* emission hook (probed with the `any_type`/`any_enum`/`^^int`
+placeholders, like `caster_oracle`/`resolution` do). The per-class/per-enum hooks
+(`add_field`/`add_method`/`add_operator`/ctor hooks/enum hooks) are probed against two
+new **associated aliases** each rod exposes — `class_handle_type<T>` / `enum_handle_type<E>`,
+naming what `make_class`/`make_enum` yield — rather than deducing the handle from a
+factory call. That is the trick: the class/enum **factories** themselves return `auto`,
+so naming *them* in the concept would instantiate their bodies with a placeholder —
+which a real `make_class` (sol2 registers ctors inside it) doesn't survive — so only
+`make_class`/`make_enum` stay **contract-by-documentation** (their output type is still
+described, via the aliases). Adding a rod = two extra alias lines; `rod_probe.cpp` is
+the reference minimal rod and the `compile.rod_probe` CTest guards the contract. The
+reasoning is spelled out in the `rod` concept's `@note`. The nanobind
 rod is nearly a copy of the pybind11 one (same class-handle model), diverging
 only where nanobind's API does — `def_rw`/`def_ro`, `nb::init`, a
 placement-`__init__` aggregate factory, module docstrings via `__doc__`, the

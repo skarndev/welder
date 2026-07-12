@@ -49,6 +49,11 @@ namespace detail {
     simply spells "the type is irrelevant here". */
 struct any_type {};
 
+/** A placeholder *enum* type for shape-probing the enum hooks against a rod's
+    `enum_handle_type<E>` — @ref any_type is a class, so it cannot stand in for an
+    enum. Empty on purpose; the concept never inspects its enumerators. */
+enum class any_enum {};
+
 } // namespace detail
 
 /** The raw documentation pieces @ref doc_style assembles; its full definition (a data
@@ -83,36 +88,40 @@ concept caster_oracle = requires {
     to plug into the generic driver.
 
     A rod `B` is a stateless struct; nothing is inherited, and every member is
-    static. The concept *shape*-checks the associated types, the module/session
-    machinery, and every hook that can be probed without instantiating a hook body:
-    `special_method_name`, `add_function` and `add_variable` (all `void`/explicit-return
-    and needing only a module handle + session). The templated hooks can't be quantified
+    static. The concept *shape*-checks almost the whole contract — the associated types,
+    the module/session machinery, and every emission hook — so a rod that omits or
+    mis-signs one fails here with a clear "not a `welder::rod`" rather than a deep error
+    the first time the driver instantiates it. The templated hooks can't be quantified
     over every type/reflection, so — as @ref welder::caster_oracle probes
     `has_native_caster` — they are probed once with fixed placeholders (@ref
-    welder::detail::any_type, `^^int`), checking *shape* (the hook exists with a
-    compatible signature), not per-type correctness.
+    welder::detail::any_type, @ref welder::detail::any_enum, `^^int`), checking *shape*
+    (the hook exists with a compatible signature), not per-type correctness. The
+    per-class / per-enum hooks are probed against the rod's own declared handle types
+    (`class_handle_type` / `enum_handle_type`); every emission hook returns void, so only
+    signatures are substituted and no hook body is instantiated.
 
-    @note **What the concept does NOT check, and why.** The class/enum factories
-    (`make_class`, `make_enum`) return `auto`, so merely naming them in a requirement
-    forces their bodies to be instantiated to deduce the return (handle) type — and a
-    rod's `make_class` legitimately does real work there (e.g. the sol2 rod registers a
-    type's constructors inside it), which a non-representative placeholder type does not
-    survive. That in turn blocks probing the per-handle hooks (`make_class`/`add_field`/
-    `add_method`/`add_static_method`/`add_operator`/`add_default_ctor`/`add_constructor`/
-    `add_aggregate_constructor`/`make_enum`/`add_enumerator`/`finish_enum`), since they
-    take the deduced handle by reference. Those remain **contract-by-documentation**,
-    enforced when the driver instantiates the rod over a real welded type. The block
-    below is the complete set that *is* safely probeable.
+    @note **The one gap: the factories themselves.** `make_class` and `make_enum`
+    return `auto`, so merely naming them in a requirement would force their bodies to be
+    instantiated to deduce the return type — and a rod's `make_class` legitimately does
+    real work there (the sol2 rod registers a type's constructors inside it), which a
+    placeholder type does not survive. So the two factories stay
+    **contract-by-documentation**, enforced when the driver instantiates the rod over a
+    real welded type. The concept sidesteps them by requiring the handle types as
+    *associated aliases* (`class_handle_type<T>` / `enum_handle_type<E>` — what the
+    factories yield) rather than deducing them from a factory call, which is what lets
+    the per-handle hooks be checked without instantiating any factory body.
 
     **Associated:**
     @code
     static constexpr lang language;   // the target language B binds to
     using  module_type = ...;         // B's module handle (passed by ref)
     template <class T> static constexpr bool has_native_caster;  // caster_oracle
+    template <class T> using class_handle_type = ...;  // what make_class yields for T
+    template <class E> using enum_handle_type  = ...;  // what make_enum  yields for E
     @endcode
 
-    **Type binding** (the class handle is whatever `make_class` returns; deduced).
-    The per-member hooks take a trailing `class Style` (a
+    **Type binding** (the class handle is `class_handle_type<T>`, what `make_class`
+    returns). The per-member hooks take a trailing `class Style` (a
     @ref welder::naming::name_style) so the rod resolves its own name via
     `welder::name_of<Mem, language, Style, ent_kind::…>()` — which also applies any
     `[[=welder::weld_as]]` override. The class name is styled by the driver and
@@ -165,9 +174,9 @@ concept rod =
     // here takes concrete arguments and returns void or an explicit type, so only the
     // signatures are substituted — no hook body is instantiated (the reflection/type
     // template arguments, e.g. `^^int` / `detail::any_type`, reach only the bodies,
-    // which a requires-expression leaves untouched). This is the full set of hooks that
-    // are *safely* probeable; the class/enum factories and their per-handle hooks are
-    // not (see the caveat in the concept's documentation).
+    // which a requires-expression leaves untouched). The per-handle hooks follow in
+    // their own conjunct below; only the make_class/make_enum factories stay unprobed
+    // (see the concept's @note).
     requires(typename B::module_type& m, const char* s,
              std::remove_cvref_t<decltype(B::open_module(
                  std::declval<typename B::module_type&>()))> session) {
@@ -178,6 +187,23 @@ concept rod =
         { B::special_method_name(^^int) } -> std::convertible_to<const char*>;
         B::template add_function<^^int, detail::any_type>(m);
         B::template add_variable<^^int, detail::any_type>(m, session);
+    } &&
+    // The per-class / per-enum hooks, probed against the rod's declared handle types
+    // (@ref class_handle_type / @ref enum_handle_type — the associated types naming what
+    // make_class / make_enum yield). All return void, so given the handle type only the
+    // signatures are checked; the placeholder reflections (`^^int`) / types
+    // (@ref detail::any_type) reach only the bodies, which are not instantiated.
+    requires(typename B::template class_handle_type<detail::any_type>& cls,
+             typename B::template enum_handle_type<detail::any_enum>& en) {
+        B::add_default_ctor(cls);
+        B::template add_constructor<^^int>(cls);
+        B::template add_aggregate_constructor<detail::any_type>(cls);
+        B::template add_field<^^int, detail::any_type>(cls);
+        B::template add_method<^^int, detail::any_type>(cls);
+        B::template add_static_method<^^int, detail::any_type>(cls);
+        B::template add_operator<^^int>(cls);
+        B::template add_enumerator<^^int, detail::any_type>(en);
+        B::template finish_enum<detail::any_enum>(en);
     };
 
 /** The contract a **resolution** — the carriage's *which-participates* policy — must

@@ -81,6 +81,13 @@ struct rod {
     static constexpr lang language{lang::lua}; /**< Stubs are for the Lua binding. */
     using module_type = module_writer;
 
+    /** The class / enum handles the per-class / per-enum hooks write into — exactly
+        what `make_class` / `make_enum` return (a stub handle carries no type
+        parameter). Named as associated types so the @ref welder::rod concept can
+        shape-check the per-handle hooks against them. */
+    template <class> using class_handle_type = class_writer;
+    template <class> using enum_handle_type = enum_writer;
+
     struct session {}; /**< No deferred module state. */
 
   protected:
