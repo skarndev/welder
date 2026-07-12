@@ -40,12 +40,17 @@ two **Python** (**pybind11**, **nanobind**) and two **Lua** (**sol2**,
 **LuaBridge3**) — all sharing the same core and the *same* backend-neutral C++ test
 cases, which each rod binds and asserts (pytest for Python, busted `.lua` specs for
 Lua) as a cross-rod consistency check. The two Lua rods run the *same* busted specs
-(selected by `WELDER_TEST_LUA_MODULE`). A fifth, **`welder::rods::luacats::rod`**, is
-a *build-time* rod that reflects the same welded Lua types through the same driver and
-emits a **LuaCATS (`---@meta`) stub file** — the Lua analogue of the Python `.pyi`
-stubs, carrying the docstrings Lua has no runtime slot for. Further languages are
-designed-for but not yet implemented. For the feature-by-feature detail and test
-locations, see the context files below.
+(selected by `WELDER_TEST_LUA_MODULE`). Two more are *build-time* text-emitting rods
+over the same driver: **`welder::rods::luacats::rod`** reflects the welded Lua types and
+emits a **LuaCATS (`---@meta`) stub file** (the Lua analogue of the Python `.pyi` stubs,
+carrying the docstrings Lua has no runtime slot for); **`welder::rods::trampolines::rod`**
+reflects the welded *virtual* Python types and emits a **`.hpp` of ready-to-compile,
+backend-neutral pybind11/nanobind trampoline subclasses** — so a Python subclass can
+override their virtuals without the trampolines being hand-written (each override splices
+the base virtual's reflected types, so signatures match by construction; a C-variadic
+virtual with no `bind_flat` is a hard error). Further languages are designed-for but not
+yet implemented. For the feature-by-feature detail and test locations, see the context
+files below.
 
 ## The idea / public API
 

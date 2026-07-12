@@ -200,3 +200,15 @@ endif()
 add_library(welder_luacats INTERFACE)
 add_library(welder::luacats ALIAS welder_luacats)
 target_link_libraries(welder_luacats INTERFACE welder_headers)
+
+# --- welder::trampolines : Python trampoline-generator rod ---------------
+# The Python counterpart of the LuaCATS stub rod: a text-emitting rod that reflects
+# the welded virtual types (via the same generic driver as pybind11/nanobind) and
+# writes a .hpp of ready-to-compile, backend-neutral trampoline subclasses, so a
+# Python subclass can override their virtuals without the trampolines being written
+# by hand. Pure reflection + text — it depends on neither pybind11 nor nanobind — so
+# this is an unconditional INTERFACE target over the header-only core. Generate a
+# header with welder_generate_trampolines() (see cmake/WelderTrampolines.cmake).
+add_library(welder_trampolines INTERFACE)
+add_library(welder::trampolines ALIAS welder_trampolines)
+target_link_libraries(welder_trampolines INTERFACE welder_headers)

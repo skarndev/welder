@@ -136,6 +136,26 @@ a *virtual* call and infinitely recurses. `WELDER_PY_TRAMPOLINE(Base)` injects t
 (lifetime). Macros are neutrally named so one trampoline source compiles under either
 Python rod.
 
+**Generating trampolines (`welder::rods::trampolines::rod`).** The hand-written
+trampoline is mechanical, so a build-time text-emitting rod emits it — the Python
+analogue of the LuaCATS stub rod, over the same driver. Files:
+`src/welder/rods/python/trampolines/{document,rod,module}.hpp`; CMake helper
+`cmake/WelderTrampolines.cmake` (`welder_generate_trampolines()`); target
+`welder::trampolines`. Only `make_class<T>` emits (a `struct … : T { WELDER_PY_TRAMPOLINE;
+one WELDER_PY_OVERRIDE per overridable virtual };` + a `trampoline_for<T>` spec), skipping
+a whole-type `bind_flat` and types with no overridable virtuals; every other rod hook is a
+no-op and `has_native_caster` is permissive (it reproduces only virtual *signatures*). Each
+override **splices** the base virtual's reflected return/param types
+(`[: std::meta::type_of(overridable_virtuals(^^T)[k]) :]`), so signatures match by
+construction — validated across 35/36 hostile shapes (`scratchpad`), the lone gap being a
+**C-variadic** virtual (P2996 has no ellipsis query → `is_c_variadic` reads the display
+string and emits a `static_assert` unless `bind_flat`). The generated header is
+backend-neutral (neutral macros), so one header serves both Python rods. Tests:
+`tests/common/cpp/gen_trampolines.hpp` (welded types, no hand trampolines) +
+`tests/python/gen_trampolines_gen.cpp` (the generator) → `test_gen_trampolines.py`, wired
+into both `bindings.cpp` via `tests/python/CMakeLists.txt` (`welder_generate_trampolines`)
+so both extensions compile the *same* generated header — a cross-rod consistency check.
+
 ## Whole-namespace binding — `weld_namespace<^^ns>(m)`
 `weld` gates *leaf entities only* (class type / free function / namespace-scope
 variable; namespaces are never welded); the namespace `policy` (default automatic)

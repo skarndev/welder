@@ -233,4 +233,31 @@ construction.
     can keep the referent alive across the boundary) — return by value or use
     `bind_flat`.
 
+### Generating trampolines automatically
+
+Writing the trampoline by hand is mechanical — one `WELDER_PY_OVERRIDE` line per
+virtual — so welder can **generate the whole header for you** from the same
+reflection, via the build-time `welder::rods::trampolines` rod. You still can't have
+welder *synthesize* the subclass as a live type (C++ has no way to inject the override
+declarations), but the rod emits it as ordinary source the binding TU compiles:
+
+```cpp
+#include <welder/rods/python/trampolines/module.hpp>
+WELDER_TRAMPOLINES_MAIN(mymod)   // a generator main() that writes mymod's trampolines
+```
+
+`welder_generate_trampolines()` (CMake) builds that generator and runs it into a
+`.hpp` of `struct … : T { WELDER_PY_TRAMPOLINE(T); … };` blocks plus their
+`trampoline_for<T>` registrations — one per welded virtual type in the namespace,
+inherited virtuals covered, `bind_flat` honoured. The binding TU includes the active
+backend's `trampoline.hpp`, then the generated header, then binds as usual; the
+generated header is **backend-neutral**, so one header serves pybind11 and nanobind.
+Each override *splices* the base virtual's own reflected return/parameter types, so the
+signature matches by construction no matter how hairy the type.
+
+The one shape reflection cannot reproduce is a **C-style variadic** virtual
+(`f(int, ...)`): C++26 reflection exposes no ellipsis query. Such a virtual makes the
+generator emit a `static_assert` (a clear compile error) unless you mark it
+`[[=welder::rods::python::bind_flat]]`.
+
 Next: [Namespaces & modules](namespaces-modules.md).

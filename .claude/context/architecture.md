@@ -44,6 +44,11 @@ src/welder/
       pybind11/module.hpp   the pybind11 WELDER_MODULE entry-point macro (WELDER_DETAIL_MODULE_ENTRY_pybind11); include only for full automation
       nanobind/rod.hpp      nanobind rod: the same, against nanobind's API (def_rw/def_ro, nb::init, placement-__init__, is_base_caster gate, NB_MODULE)
       nanobind/module.hpp   the nanobind WELDER_MODULE entry-point macro
+      trampoline.hpp        shared, backend-neutral virtual-override machinery: trampoline_for / bind_flat / the [[=trampoline]] annotation + scan / overridable_virtuals (walks the base chain, folds inherited virtuals in) / virtual_slot_count / trampoline_covers / construction_type_of
+      {pybind11,nanobind}/trampoline.hpp  per-backend override_dispatch + the neutral WELDER_PY_TRAMPOLINE / WELDER_PY_OVERRIDE macros (pybind11 casts to the *registered* welded type for get_override; nanobind uses trampoline storage + ticket)
+      trampolines/rod.hpp      trampoline-GENERATOR rod: text-emitting welder::rod (welder::rods::trampolines::rod) over the SAME driver; emits ready-to-compile pybind11/nanobind trampoline subclasses for welded virtual types (only make_class emits; other hooks no-op); whole-header generate<^^Ns>(os)
+      trampolines/module.hpp   the WELDER_TRAMPOLINES_MAIN generator-main() macro; include only for a trampoline-generator TU
+      trampolines/document.hpp the emission core: render_trampoline (splices each virtual's reflected return/param types + WELDER_PY_OVERRIDE) + render_registration (trampoline_for spec) + the document; is_c_variadic hard-error (no P2996 ellipsis query)
     lua/
       overloads.hpp         Overload-set selectors shared by ALL Lua rods — welder::rods::lua::{method,operator,function}_overload_set / is_overload_leader / overload_group; all gather a name's overloads (sol2 → sol::overload, luabridge → variadic addFunction, luacats → ---@overload) because the driver visits overloads one at a time. Mirrors rods/python/doc_style.hpp.
       metamethods.hpp       C++-operator → Lua metamethod NAME map shared by BOTH runtime Lua rods — welder::rods::lua::lua_metamethod_name (the asymmetric set: no __ne/__gt/__ge; ^→__bxor; 5.3-gated bitwise). sol2 pairs each name with its sol::meta_function slot; luabridge registers by the name string directly.
@@ -63,6 +68,7 @@ cmake/
   WelderSol2Module.cmake       welder_sol2_add_module() — build a loadable Lua .so (bare name, host-symbol link model, module-scan OFF)
   WelderLuaBridgeModule.cmake  welder_luabridge_add_module() — same, for the LuaBridge3 rod (links welder::luabridge)
   WelderLuaCATSStub.cmake      welder_luacats_generate_stub() — build a generator exe (welder::luacats) + run it → <name>.lua (ALL target)
+  WelderTrampolines.cmake      welder_generate_trampolines() — build a generator exe (welder::trampolines) + run it → <name>.trampolines.hpp (ALL target); the Python trampoline analogue of the LuaCATS stub helper
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
@@ -307,9 +313,14 @@ shadow `::luabridge`, so it aliases `namespace lb = ::luabridge;` (like the Pyth
 The **`welder::rods::luacats::rod`**
 stub rod also targets `lang::lua` (it emits the Lua *type stub*, so it reflects the
 same `weld(…, lang::lua)` types), but is a *build-time text emitter*, not a runtime
-binding — see below and `docs-and-doxygen.md`. (`welder::rods` is deliberately a
-grouping namespace with room for non-rod helpers alongside the rods, e.g.
-`welder::rods::python` / `welder::rods::lua`.)
+binding — see below and `docs-and-doxygen.md`. The **`welder::rods::trampolines::rod`**
+is the Python analogue: also `lang::py`, also a build-time text emitter, but it emits
+*C++ trampoline source* (not a stub) — its `make_class<T>` renders a trampoline subclass
+for a welded virtual type; every other primitive is a no-op, and `has_native_caster` is
+permissive (it only reproduces virtual *signatures*, which splicing handles for any
+type, so it needs no bindability oracle). (`welder::rods` is deliberately a grouping
+namespace with room for non-rod helpers alongside the rods, e.g. `welder::rods::python`
+/ `welder::rods::lua`.)
 
 Complex/custom type conversions are intended to be registered per-rod via each
 framework's own mechanisms, separately from core resolution — design pending.
@@ -354,6 +365,14 @@ framework's own mechanisms, separately from core resolution — design pending.
   stub with `welder_luacats_generate_stub()` (cmake/WelderLuaCATSStub.cmake), which
   builds a `WELDER_LUACATS_MAIN` generator executable and runs it into `<name>.lua`
   as an ALL target (`CXX_SCAN_FOR_MODULES OFF`, matching the Lua-side TUs).
+- **`welder::trampolines`** — INTERFACE, the Python trampoline-generator rod. Like
+  `welder::luacats` it is pure reflection → text and depends on neither pybind11 nor
+  nanobind, so it is **unconditional** — just `welder::headers`. Emit trampolines with
+  `welder_generate_trampolines()` (cmake/WelderTrampolines.cmake), which builds a
+  `WELDER_TRAMPOLINES_MAIN` generator executable and runs it into
+  `<name>.trampolines.hpp` as an ALL target. The generated header is backend-neutral;
+  the consuming binding TU adds it on its include path, `#include`s it after the active
+  backend's `trampoline.hpp`, and depends on the generation target so it exists first.
 
 Reflection flags are **not** propagated to consumers: `welder::headers` is the include
 path only (no `cxx_std_26`, no `-freflection`). welder's own build applies

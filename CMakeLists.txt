@@ -65,6 +65,7 @@ include(WelderPybind11Stubgen)
 include(WelderSol2Module)
 include(WelderLuaBridgeModule)
 include(WelderLuaCATSStub)
+include(WelderTrampolines)
 include(WelderRequirements)
 
 # Check (don't impose) welder's compiler + language-standard requirements — shared
