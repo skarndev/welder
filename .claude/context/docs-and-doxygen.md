@@ -228,15 +228,29 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
 - Both run from an **isolated uv env** (`docs/pyproject.toml` → mkdocs-material +
   lark; `docs/uv.lock` committed like `tests/`), the same interpreter used for the
   Doxygen filter (the one guaranteed to have `lark`). Doxygen writes the reference
-  into `docs/content/api/` (**inside** mkdocs' `docs_dir`, generated + gitignored),
-  so mkdocs copies it into the site as static files for *both* `build` and `serve`
-  — hence Doxygen runs **before** mkdocs. The guide's `reference.md` links to
+  **out of source** (`<bin>/docs/reference/api`); the `inject_reference.py` mkdocs
+  hook grafts it into `<site>/api` after every build/serve rebuild (path via the
+  `WELDER_DOXYGEN_API` env var set by the CMake targets; unset → silent no-op), so
+  `docs_dir` stays the clean worktree. The guide's `reference.md` links to
   `../api/index.html` (a raw `<a>` so mkdocs doesn't warn).
-- **Targets:** `welder-docs` (Doxygen → `content/api`, *then* `mkdocs build` copies
-  it alongside the guide → `<build>/docs/site/index.html`; order matters, so both
-  are steps of one target); `welder-docs-serve` (Doxygen once, then `mkdocs serve`
-  — the guide live-reloads, the reference is a static snapshot that *is* served, no
-  404). Both self-skip (with a warning) if `doxygen`/`uv` are absent. Graphviz
+- **API auto-links (`docs/apilink.py`):** Doxygen also emits a **tag file**
+  (`GENERATE_TAGFILE` → `<bin>/docs/reference/welder.tag`, *next to* `api/` so it
+  is never published). The `apilink.py` mkdocs hook loads it (path derived from
+  `WELDER_DOXYGEN_API`; missing → no-op) and wraps inline `<code>` spans naming
+  welder API entities in links to their reference pages. Resolution order: exact
+  qualified name → implicit `welder::` prefix → `welder::welder::` member (the
+  entry points) → unique short name (len ≥ 4, and never the `_DENY` words —
+  `detail`, `impl`, pybind11's `export_values`, … — which read as the *user's*
+  code when bare). Normalization strips `[[=…]]` wrappers, template args and call
+  parens (`weld_type<T>(m)` → `weld_type`); existing `<a>`/`<pre>` regions are
+  left untouched. Renamed/removed symbols just stop linking (never 404): the map
+  is rebuilt from the tag file on every docs build.
+- **Targets:** `welder-docs` (Doxygen → `<bin>/docs/reference`, *then*
+  `mkdocs build` → `<build>/docs/site/index.html`, hooks grafting + auto-linking
+  the reference; order matters, so both are steps of one target);
+  `welder-docs-serve` (Doxygen once, then `mkdocs serve` — the guide live-reloads,
+  the reference is a static snapshot that *is* served, no 404). Both self-skip
+  (with a warning) if `doxygen`/`uv` are absent. Graphviz
   (`dot`) is optional (class graphs). NB mkdocs mermaid diagrams: don't hardcode
   node `fill`/`color` (Material flips the label color per theme and htmlLabels
   ignore per-node `color`, giving unreadable text in dark mode) — use `stroke`

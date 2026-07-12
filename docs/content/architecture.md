@@ -190,6 +190,11 @@ flowchart LR
 - CMake (`docs/CMakeLists.txt`) provisions an isolated `uv` environment, builds the
   guide, then grafts the Doxygen HTML into `site/api/` (the `inject_reference.py`
   mkdocs hook).
+- Inline code naming a welder API entity — `welder::welder`, `weld_type`,
+  `WELDER_MODULE`, … — links into the reference **automatically**: the
+  `apilink.py` mkdocs hook resolves each span against the Doxygen **tag file**,
+  so the guide never hand-writes a reference URL and a renamed symbol simply
+  stops linking instead of 404ing.
 
 Build it with:
 

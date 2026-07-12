@@ -14,8 +14,13 @@ copyright: Built from the real sources by welder's own Doxygen filter.
 # inside docs_dir — keeping the worktree clean while serve live-reloads the guide.
 docs_dir: content
 
+# inject_reference grafts the Doxygen HTML into <site>/api; apilink turns inline
+# code spans naming welder API entities into links onto those pages (driven by the
+# Doxygen tag file — see each hook's docstring). Both no-op without
+# WELDER_DOXYGEN_API, so a bare `mkdocs build` still works.
 hooks:
   - inject_reference.py
+  - apilink.py
 
 theme:
   name: material

@@ -16,6 +16,11 @@ HTML_OUTPUT            = api
 GENERATE_LATEX         = NO
 GENERATE_XML           = NO
 
+# The symbol -> URL map consumed by the mkdocs apilink.py hook (which auto-links
+# inline code spans in the guide to these reference pages). Lives next to api/,
+# not inside it, so it is never published with the site.
+GENERATE_TAGFILE       = @DOXYGEN_OUTPUT_DIR@/welder.tag
+
 # --- Inputs: the whole library, internals included ---------------------------
 INPUT                  = @WELDER_SRC@ \
                          @DOXYGEN_MAINPAGE@
