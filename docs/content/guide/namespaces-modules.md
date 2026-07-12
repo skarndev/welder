@@ -166,8 +166,8 @@ calls. The namespace token doubles as the module name, and the namespace `doc`
 becomes the module docstring (where the language has one). Include the rod's
 `module.hpp` (not just its `rod.hpp`) to pull the macro in.
 
-The `rod` selector is the **rod name** (`pybind11`, `nanobind`, `sol2`), not
-the language. Everything above `WELDER_MODULE` — the namespace and its annotations
+The `rod` selector is the **rod name** (`pybind11`, `nanobind`, `sol2`,
+`luabridge`), not the language. Everything above `WELDER_MODULE` — the namespace and its annotations
 — is identical; only the includes and the selector change:
 
 === "Python (pybind11)"

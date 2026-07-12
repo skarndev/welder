@@ -1,6 +1,6 @@
 # Enums
 
-A welded enum — scoped or unscoped — binds via the same `bind<T>` entry point
+A welded enum — scoped or unscoped — binds via the same `weld_type<T>` entry point
 (dispatched to the enum path by `is_enum_v`). Each **enumerator resolves like a
 data member**: the enum's `policy` plus per-enumerator `exclude`/`include` marks
 decide what binds. What it becomes in the target language differs:

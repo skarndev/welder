@@ -9,7 +9,7 @@ gcc extensions, but today only one compiler implements the papers it needs:
 |---|---|
 | Compiler (P2996 + P3394) | **gcc-16** — the only one so far (`g++-16`, GCC ≥ 16.1); install it from whatever package manager or source build you prefer |
 | Build system | CMake ≥ 3.28; the presets drive **Ninja** |
-| Packages *(examples/tests only)* | Conan 2 (`conanfile.py`) provisions the backends → pybind11 / nanobind (Python), sol2 (Lua). **Not needed to consume welder** — see [Consuming welder](#consuming-welder). |
+| Packages *(examples/tests only)* | Conan 2 (`conanfile.py`) provisions the backends → pybind11 / nanobind (Python), sol2 (Lua); LuaBridge3 is FetchContent-pinned instead. **Not needed to consume welder** — see [Consuming welder](#consuming-welder). |
 | Python | a `python3` with development headers (for the Python modules) |
 | Lua | headers via conan `sol2` (pulls Lua); a Lua interpreter to load the module |
 
@@ -72,12 +72,12 @@ Point {
 ```
 
 1.  `weld` is *required* to bind, and lists the target languages. Without it,
-    `bind<Point>` is a no-op-by-contract. Weld for only the languages you want.
+    `weld_type<Point>` is a no-op-by-contract. Weld for only the languages you want.
 2.  `mark::exclude` (no argument) hides `internal_id` from **all** welded
     languages. `mark::exclude(welder::lang::py)` would hide it from Python only.
 
 Then a small translation unit per rod registers it. The `#include`s and the
-`bind` call differ; **the annotated type above does not.**
+`weld_type` call differ; **the annotated type above does not.**
 
 === "Python (pybind11)"
 
@@ -222,4 +222,4 @@ A C++20 `import welder;` module wrapper is planned but currently deferred — se
 [Header-only for now](../header-only.md) for the toolchain reasons why.
 
 Next: the [annotation vocabulary](annotations.md). When you're ready to pick or
-combine rods, see the [Rods](../backends/index.md) section.
+combine rods, see the [Languages](../backends/index.md) section.

@@ -189,6 +189,7 @@ reference), each through its own entry point and style transformers:
 
     ```cpp
     // geom_lua.cpp — the require-able Lua module (luaopen_geom)
+    #include <sol/sol.hpp>
     #include <welder/rods/lua/sol2/module.hpp>
 
     WELDER_MODULE(geom, sol2) {}   // binds namespace ^^geom into the module
@@ -196,6 +197,7 @@ reference), each through its own entry point and style transformers:
 
     ```cpp
     // geom_stub.cpp — emits geom.lua (LuaCATS ---@meta) at build time
+    #include <iostream>
     #include <welder/rods/lua/luacats/rod.hpp>
 
     int main() {
@@ -298,8 +300,8 @@ purpose, it does not try to:
 
     ---
 
-    `weld`, `policy`, `mark`, `doc`, `returns`, `tparam`. Say what binds and to
-    which languages; welder resolves the rest at compile time.
+    `weld`, `policy`, `mark`, `doc`, `returns`, `tparam`, `weld_as`. Say what
+    binds and to which languages; welder resolves the rest at compile time.
 
     [:octicons-arrow-right-24: Annotation vocabulary](guide/annotations.md)
 
@@ -312,12 +314,12 @@ purpose, it does not try to:
 
     [:octicons-arrow-right-24: The bindability gate](guide/bindability.md)
 
--   :material-book-open-variant:{ .lg .middle } **One annotation, two audiences**
+-   :material-book-open-variant:{ .lg .middle } **One annotation, several audiences**
 
     ---
 
-    A `doc` becomes the Python `__doc__` *and* — via a Doxygen filter — the C++
-    reference. Write it once.
+    A `doc` becomes the Python `__doc__`, the Lua LuaCATS stub, *and* — via a
+    Doxygen filter — the C++ reference. Write it once.
 
     [:octicons-arrow-right-24: Docstrings](guide/docstrings.md)
 
@@ -355,7 +357,8 @@ weld it once.
 !!! warning "Early proof-of-concept"
 
     welder targets **C++26 and newer only**, and today **gcc-16 is the only
-    compiler** that implements P2996 + P3394. Three rods — **pybind11** and
-    **nanobind** (Python) and **sol2** (Lua) — are verified end-to-end against the
-    *same* shared C++ cases; properties and further languages are designed-for but
-    not yet implemented.
+    compiler** that implements P2996 + P3394. Four runtime rods — **pybind11** and
+    **nanobind** (Python), **sol2** and **LuaBridge3** (Lua) — are verified
+    end-to-end against the *same* shared C++ cases, plus two build-time rods
+    (the **LuaCATS** stub and the Python **trampoline** generators). Further
+    languages are designed-for but not yet implemented.

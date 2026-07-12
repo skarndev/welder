@@ -23,7 +23,7 @@ the annotation vocabulary, and each binding feature with runnable examples.
     Every feature here is **backend-agnostic** — the same annotated C++ binds to
     Python and Lua alike. Examples are shown per language in tabs; pick your tab and
     the whole guide follows it. When you're ready to choose or combine rods, the
-    [Rods](../backends/index.md) section covers each one and how to
+    [Languages](../backends/index.md) section covers each one and how to
     [ship several from one build](../backends/multiple.md).
 
 ## The mental model

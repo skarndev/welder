@@ -85,7 +85,7 @@ The virtual-base limitation is the one behavioral gap: LuaBridge3 computes a bas
 cast offset as plain pointer arithmetic, which a virtual base breaks, so a *virtual*
 diamond that binds under sol2 does not under LuaBridge3 (welder still supports its
 **non-virtual** multiple inheritance). Everything else — [enums](../guide/enums.md)
-as name→value tables, [operators](lua.md#operators-metamethods) as metamethods
+as name→value tables, [operators](lua.md#operators-become-metamethods) as metamethods
 (`operator[]` rides LuaBridge3's index fallback so it coexists with member access),
 [docstrings](../guide/docstrings.md) dropped at runtime and recovered in the
 [LuaCATS stub](lua.md#stubs-luacats) — matches sol2.

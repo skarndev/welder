@@ -62,7 +62,7 @@ differ:
 | Synthesized aggregate field constructor | ✅ | ✅ (placement `__init__`) |
 | Named params → keyword arguments | ✅ | ✅ |
 | Overloaded methods / constructors | ✅ dispatched | ✅ dispatched |
-| Member & free operators → dunders | ✅ | ✅ |
+| Member operators → dunders (free operators [not yet](../guide/binding-types.md#overloaded-operators)) | ✅ | ✅ |
 | Enums | `IntEnum` (`py::native_enum`) | `IntEnum` (`nb::is_arithmetic`) |
 | Single welded base | ✅ | ✅ |
 | **Multiple / virtual welded bases** | ✅ | ❌ single base only |

@@ -30,7 +30,7 @@ entry point is a one-line forward to the carriage, so a user can also subclass
 <welder/rods/python/pybind11/rod.hpp>` → `<welder/welder.hpp>`). The optional C++20
 `import welder;` module wrapper was **removed** until the gcc-16 `-freflection`/
 modules bugs are fixed and another toolchain (Clang/MSVC) implements P2996 — see
-`docs/content/guide/header-only.md` and `.claude/context/gcc16-toolchain.md`. The
+`docs/content/header-only.md` and `.claude/context/gcc16-toolchain.md`. The
 vocabulary headers are still kept std-include-free so the wrapper can return
 unchanged. We also deliberately do *not* modularize internally.
 

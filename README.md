@@ -39,6 +39,7 @@ same annotated type binds through any rod you weld it for:
 |---|---|---|
 | Python | [pybind11] | extension module + `.pyi` typing stubs |
 | Python | [nanobind] | extension module + `.pyi` typing stubs |
+| Python | trampolines | build-time `.hpp` of virtual-override trampolines (serves both Python rods) |
 | Lua | [sol2] | loadable module |
 | Lua | [LuaBridge3] | loadable module |
 | Lua | [LuaCATS] | build-time `---@meta` stub file |
@@ -55,6 +56,7 @@ welder lay the bindings down:
 #include <welder/vocabulary.hpp>            // annotation vocabulary (header-only)
 #include <pybind11/pybind11.h>
 #include <welder/rods/python/pybind11/rod.hpp>
+#include <welder/rods/python/naming.hpp>    // welder::rods::python::pep8
 
 struct [[=welder::weld(welder::lang::py, welder::lang::lua),   // expose to py + lua
          =welder::policy::automatic,                           // reflect all members

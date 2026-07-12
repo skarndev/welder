@@ -3,7 +3,8 @@
 welder binds your annotated C++ to **Python** and **Lua** today. The piece that
 turns welder's reflection into a given framework's real registration calls is a
 **rod** (a welding rod) — Python has two (pybind11 and nanobind), Lua has two
-(sol2 and LuaBridge3), plus a build-time rod that writes a Lua editor stub. The
+(sol2 and LuaBridge3), plus two build-time rods: one writes a Lua editor stub,
+one generates the Python virtual-override trampolines. The
 [guide](../guide/index.md) is deliberately rod-agnostic — the annotations, the
 resolution rule, inheritance, and the bindability gate are all shared core. This
 section covers what changes *per rod*: the exact `weld_type` call, the framework it
@@ -21,12 +22,16 @@ point `welder::welder<Rod>`:
 | **sol2** | `welder::rods::sol2::rod` | Lua | [sol2](https://sol2.readthedocs.io/) | `luaopen_<name>` |
 | **luabridge** | `welder::rods::luabridge::rod` | Lua | [LuaBridge3](https://github.com/kunitoki/LuaBridge3) | `luaopen_<name>` |
 | **luacats** | `welder::rods::luacats::rod` | *(build-time)* | LuaCATS `---@meta` stub | — |
+| **trampolines** | `welder::rods::trampolines::rod` | *(build-time)* | Python trampoline `.hpp` (pybind11 & nanobind) | — |
 
 The first four are **runtime** rods: each emits registration code so an
-importable/`require`-able module exists at run time. `welder::rods::luacats::rod` is
-a **build-time** rod — it walks the same welded Lua types through the same driver
-and writes a [LuaCATS stub file](lua.md#stubs-luacats) instead of runtime code (the
-Lua analogue of Python's `.pyi` stubs).
+importable/`require`-able module exists at run time. The last two are
+**build-time** rods over the same driver: `welder::rods::luacats::rod` walks the
+welded Lua types and writes a [LuaCATS stub file](lua.md#stubs-luacats) instead of
+runtime code (the Lua analogue of Python's `.pyi` stubs);
+`welder::rods::trampolines::rod` walks the welded *virtual* Python types and
+[generates their trampoline subclasses](../guide/inheritance.md#generating-trampolines-automatically)
+as a backend-neutral header that either Python rod compiles.
 
 All of them plug into the *same* core:
 `welder::welder<Rod>::weld_type<T>(m)`, `weld_namespace<^^ns>(m)`, and the

@@ -3,8 +3,8 @@
 This is the **generated C++ reference** for welder: every class, template, concept,
 namespace and file under `src/welder/` — public API *and* `detail/` internals — read
 straight from the real headers through welder's own
-[Doxygen INPUT_FILTER](https://github.com/) so the `[[=welder::doc/returns/tparam]]`
-annotations come through.
+[Doxygen INPUT_FILTER](https://github.com/skarndev/welder/blob/main/tools/welder_doxygen_filter.py)
+so the `[[=welder::doc/returns/tparam]]` annotations come through.
 
 > **New to welder?** Read the narrative **Guide** first — it explains *why* each
 > piece exists, with runnable examples. This reference is the exhaustive *what*.
@@ -24,16 +24,15 @@ annotations come through.
 - **The reflection layer** — `reflect.hpp` (`welded_for`, `member_bound`,
   `public_bases`), `bind_traits.hpp` (what binds), `bindable.hpp` (the bindability
   gate), `doc.hpp` (docstring folding).
-- **The vocabulary** — `lang.hpp`, `annotations.hpp` (std-free; the `welder` module
-  exports exactly these).
+- **The vocabulary** — `lang.hpp`, `annotations.hpp` (kept std-free, so a future
+  `import welder;` module wrapper can re-export exactly these).
 - **The pybind11 rod** — `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod<>`).
 
 ## How this reference is built
 
-welder's sources are documented with ordinary comments today; this reference is
-generated with `EXTRACT_ALL` so the full structure — templates, internal helpers,
-class relationships — is browsable, with a source browser throughout. As Doxygen
-`///` comments and `[[=welder::doc]]` annotations are added to the headers, they
-flow into these pages automatically (the same filter that powers the runtime
-docstrings). See the guide's *Generating C++ docs* page for the filter's design and
+welder's headers carry `/** … */` Doxygen comments, and the `[[=welder::doc]]`
+annotations flow in through the same filter that powers the runtime docstrings.
+The reference is generated with `EXTRACT_ALL` so the full structure — templates,
+internal helpers, class relationships — is browsable, with a source browser
+throughout. See the guide's *Generating C++ docs* page for the filter's design and
 fail-safety contract.
