@@ -94,7 +94,11 @@ PYBIND11_MODULE(mymod, m) {
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for
 `L` → false; else `automatic` → true; else (`opt_in`) → true iff explicitly
 included for `L`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
-exclude/include spec is the sentinel for "all languages".
+exclude/include spec is the sentinel for "all languages". The lang value space
+is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
+user languages from 16–31 for out-of-tree rods (locked by
+`tests/core/user_lang.cpp`; third-party rods should take their lang as a
+template parameter so apps can re-point colliding slots).
 
 ## Conventions (always)
 

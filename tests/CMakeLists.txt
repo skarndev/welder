@@ -79,6 +79,18 @@ add_test(NAME compile.rod_probe
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_rod_probe --config $<CONFIG>)
 
+# User-defined-language semantics (compile-only): the lang value space is open
+# — welder::user_lang<Slot> mints bits 16–31, resolves through the annotation
+# vocabulary and core (welded_for / excluded_for) exactly like a shipped lang,
+# and a rod may declare a user value as its `language`. static_asserts + a
+# rod_probe-shaped driver exercise; same compile-to-pass shape as above.
+add_library(welder_user_lang OBJECT EXCLUDE_FROM_ALL core/user_lang.cpp)
+target_compile_features(welder_user_lang PRIVATE cxx_std_26)
+target_link_libraries(welder_user_lang PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.user_lang
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_user_lang --config $<CONFIG>)
+
 # Template ↔ annotation semantics (compile-only): annotations on a template
 # declaration are readable through every *instantiation* (primary / partial /
 # explicit precedence; member, weld/mark and parameter annotations included) —

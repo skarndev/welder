@@ -134,6 +134,51 @@ Out of tree, all it takes is a header and a target that links
 `welder::rods::…` is a convention of the shipped rods, not a requirement of
 the concept.
 
+### Binding a new language
+
+A rod for a language welder doesn't ship needs one more thing: a language
+*identity* for the annotations to name. The `lang` value space is open for
+exactly this — welder reserves bit indices 0–15 of the language mask, and
+`welder::user_lang<Slot>` mints identities from the user range (16–31),
+compile-time-checked so they can never collide with a shipped language or
+overflow the mask:
+
+```cpp
+inline constexpr welder::lang ruby{welder::user_lang<0>};
+
+struct [[=welder::weld(ruby)]] Gem { /* … */ };
+```
+
+A user language is a first-class `lang`: it works in `weld`, the per-language
+`mark`s, `trust_bindable` and `weld_as` alike, and the core resolves it under
+the same [resolution rule](annotations.md#the-resolution-rule).
+
+Two conventions keep it sound:
+
+- **One constant.** Mint the identity once — in the application that owns the
+  binding — and spell both the annotations and the rod's language from that
+  single constant, so the two can never disagree (an annotation naming one bit
+  while the rod reads another would simply bind nothing).
+- **Make the rod's language injectable.** A *published* rod shouldn't hardcode
+  its slot; take it as a template parameter with a default, so an application
+  combining two third-party rods that happened to pick the same slot can
+  re-point one at instantiation:
+
+```cpp
+template <welder::lang Language = welder::user_lang<0>>
+struct rod {
+    static constexpr welder::lang language{Language};
+    // … emission primitives …
+};
+
+// the app owns the slot assignment — two third-party rods, disjoint slots:
+using ruby_rod = rods_ruby::rod<welder::user_lang<0>>;
+using r_rod    = rods_r::rod<welder::user_lang<1>>;
+```
+
+These semantics are locked by the compile-time test
+[`tests/core/user_lang.cpp`](https://github.com/skarndev/welder/blob/main/tests/core/user_lang.cpp).
+
 ## Custom traversal: resolutions and carriages
 
 The traversal driver — the **carriage** — is itself a policy template,
@@ -195,10 +240,11 @@ struct my_welder : welder::welder<welder::rods::pybind11::rod<>,
 
 ## Stability
 
-These three seams — the `welder::rod` and `welder::resolution` concepts,
-`welder::carriages::basic_carriage`, and subclassing `welder::welder` — are
-welder's *supported* extension surface: out-of-tree code should need nothing
-from `welder::detail`. Pre-1.0 the hook signatures may still evolve (see the
+These seams — the `welder::rod` and `welder::resolution` concepts,
+`welder::carriages::basic_carriage`, the open language value space
+(`welder::user_lang`), and subclassing `welder::welder` — are welder's
+*supported* extension surface: out-of-tree code should need nothing from
+`welder::detail`. Pre-1.0 the hook signatures may still evolve (see the
 status note in the [README](https://github.com/skarndev/welder#readme));
 changes will be called out per release.
 

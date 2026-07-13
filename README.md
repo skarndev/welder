@@ -45,8 +45,9 @@ same annotated type binds through any rod you weld it for:
 | Lua | [LuaBridge3] | loadable module |
 | Lua | [LuaCATS] | build-time `---@meta` stub file |
 
-Adding a language is one rod struct; the language-agnostic core is reused verbatim.
-Further backends are designed-for but not yet implemented.
+Adding a language is one rod struct; the language-agnostic core is reused verbatim,
+and the language identity space is open (`welder::user_lang`), so an out-of-tree rod
+can bind a language welder doesn't ship.
 
 ## The idea
 

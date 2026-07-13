@@ -29,8 +29,12 @@ struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // py + lua
 Widget { /* … */ };
 ```
 
-A `lang` is stored as a bit in an `unsigned` mask. `weld` is *required*: a type with
-no `weld` binds to nothing.
+A `lang` is stored as a bit in an `unsigned` mask, and the value space is **open**:
+`welder::lang::py` / `lua` name the shipped languages, while
+`welder::user_lang<Slot>` mints an identity for a language welder doesn't ship —
+usable everywhere a `lang` is (see
+[Binding a new language](extending.md#binding-a-new-language)). `weld` is
+*required*: a type with no `weld` binds to nothing.
 
 !!! info "`weld` is not an inheritance directive"
 
