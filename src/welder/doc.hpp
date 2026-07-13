@@ -17,8 +17,8 @@
     whichever style fits its target language.
 
     @note Like `<welder/reflect.hpp>`, this depends on the welder vocabulary
-    (`welder::doc_spec`, `fixed_string`) but deliberately does NOT include
-    `<welder/annotations.hpp>`. Provide the vocabulary first — `#include
+    (`welder::detail::doc_spec`, `detail::fixed_string`) but deliberately does NOT
+    include `<welder/annotations.hpp>`. Provide the vocabulary first — `#include
     <welder/vocabulary.hpp>` — then this header.
 */
 
@@ -109,7 +109,8 @@ consteval std::string cleandoc(std::string_view text) {
 
     @tparam Ent      a reflection of the entity to read.
     @tparam SpecTmpl a class template whose specialization has a `.text` member
-                     convertible to a C string (`doc_spec`, `return_doc_spec`).
+                     convertible to a C string (`detail::doc_spec`,
+                     `detail::return_doc_spec`).
     @return the annotation text, @ref cleandoc "dedented" and with static storage
             (`define_static_string`, so usable at runtime), or `nullptr`.
 */
@@ -135,7 +136,7 @@ consteval const char* annotation_text_of() {
 */
 template <std::meta::info Ent>
 consteval const char* doc_of() {
-    return annotation_text_of<Ent, ^^doc_spec>();
+    return annotation_text_of<Ent, ^^detail::doc_spec>();
 }
 
 /** The `returns` text on function @a Fn (documentation of its return value), or
@@ -145,15 +146,17 @@ consteval const char* doc_of() {
 */
 template <std::meta::info Fn>
 consteval const char* return_doc_of() {
-    return annotation_text_of<Fn, ^^return_doc_spec>();
+    return annotation_text_of<Fn, ^^detail::return_doc_spec>();
 }
 
+namespace detail {
 /** One documented template parameter of an entity: the parameter's name (as
     spelled in the `tparam` annotation) and its doc text. Both have static storage. */
 struct tparam_doc {
     const char* name{nullptr}; /**< The template parameter's name. */
     const char* text{nullptr}; /**< Its documentation. */
 };
+} // namespace detail
 
 /** How many `tparam` annotations @a Ent carries.
 
@@ -168,7 +171,7 @@ consteval size_type tparam_count() {
     for (auto a : std::meta::annotations_of(Ent)) {
         auto t{std::meta::type_of(a)};
         if (std::meta::has_template_arguments(t) &&
-            std::meta::template_of(t) == ^^tparam_spec)
+            std::meta::template_of(t) == ^^detail::tparam_spec)
             ++n;
     }
     return n;
@@ -184,44 +187,46 @@ consteval size_type tparam_count() {
     annotations textually, so the C++ docs need no instantiation.
 
     @tparam Ent a reflection of the entity.
-    @return an array of tparam_doc, one per `tparam` annotation, in order.
+    @return an array of detail::tparam_doc, one per `tparam` annotation, in order.
 */
 template <std::meta::info Ent>
 consteval auto tparam_docs() {
-    std::array<tparam_doc, tparam_count<Ent>()> out{};
+    std::array<detail::tparam_doc, tparam_count<Ent>()> out{};
     size_type i{0};
     template for (constexpr auto a :
                   std::define_static_array(std::meta::annotations_of(Ent))) {
         constexpr std::meta::info t{std::meta::type_of(a)};
         if constexpr (std::meta::has_template_arguments(t) &&
-                      std::meta::template_of(t) == ^^tparam_spec) {
+                      std::meta::template_of(t) == ^^detail::tparam_spec) {
             using spec_type = [:t:];
             constexpr auto spec{std::meta::extract<spec_type>(a)};
-            out[i++] = tparam_doc{std::define_static_string(spec.name.data),
-                                  std::define_static_string(spec.text.data)};
+            out[i++] = detail::tparam_doc{std::define_static_string(spec.name.data),
+                                          std::define_static_string(spec.text.data)};
         }
     }
     return out;
 }
 
+namespace detail {
 /** One function parameter's documentation: its identifier (`nullptr` if unnamed)
     and its `doc` text (`nullptr` if undocumented). */
 struct param_doc {
     const char* name{nullptr}; /**< The parameter's identifier, or `nullptr`. */
     const char* text{nullptr}; /**< Its `doc` text, or `nullptr`. */
 };
+} // namespace detail
 
 /** The parameter docs of function @a Fn, in declaration order.
 
     Names and texts use static storage, so the array (and spans over it) stay valid
     at runtime.
     @tparam Fn a reflection of the function.
-    @return an array of param_doc, one per parameter, in declaration order.
+    @return an array of detail::param_doc, one per parameter, in declaration order.
 */
 template <std::meta::info Fn>
 consteval auto param_docs() {
     constexpr size_type n{std::meta::parameters_of(Fn).size()};
-    std::array<param_doc, n> out{};
+    std::array<detail::param_doc, n> out{};
     // The final `i++` in the unrolled `template for` is a dead store (its result is
     // never read), which trips -Wunused-but-set-variable; the counter is genuinely
     // used to index `out`, so mark it maybe_unused rather than restructure.
@@ -231,13 +236,14 @@ consteval auto param_docs() {
         const char* name{std::meta::has_identifier(p)
                              ? std::define_static_string(std::meta::identifier_of(p))
                              : nullptr};
-        out[i++] = param_doc{name, doc_of<p>()};
+        out[i++] = detail::param_doc{name, doc_of<p>()};
     }
     return out;
 }
 
 // --- docstring styles -------------------------------------------------------
 
+namespace detail {
 /** The raw documentation pieces of a function, handed to a style to assemble.
 
     A struct (rather than a growing argument list) so adding future sections — a
@@ -249,6 +255,7 @@ struct function_doc {
     std::span<const param_doc> params{}; /**< Per-parameter `doc`, declaration order. */
     const char* returns{nullptr};        /**< The function's `returns`. */
 };
+} // namespace detail
 
 // The `doc_style` concept — the customization point that folds a `function_doc`
 // into one docstring — lives in <welder/concepts.hpp> (with welder's other
@@ -268,9 +275,9 @@ struct function_doc {
 template <std::meta::info Fn, doc_style Style>
 std::string function_docstring() {
     static constexpr auto pds{param_docs<Fn>()};
-    return Style::format(function_doc{doc_of<Fn>(),
-                                      std::span<const param_doc>{pds},
-                                      return_doc_of<Fn>()});
+    return Style::format(detail::function_doc{doc_of<Fn>(),
+                                              std::span<const detail::param_doc>{pds},
+                                              return_doc_of<Fn>()});
 }
 
 } // namespace welder

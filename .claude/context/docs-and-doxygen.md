@@ -10,10 +10,12 @@ House doc-comment style is `/** */` not `///` (less noise) — rely on autobrief
 `[[=welder::doc("…")]]` on a class/namespace/function/parameter,
 `[[=welder::returns("…")]]` on a function. A return value isn't a reflectable
 entity, so its doc rides on the function as a *distinct* spec type
-(`return_doc_spec`), told apart from the summary by spec type.
+(`detail::return_doc_spec`), told apart from the summary by spec type.
 `function_docstring<^^Fn, Style>()` folds summary + param docs + return doc (via a
-`function_doc` parts struct, extensible to future `Raises:`/`Note:` without
+`detail::function_doc` parts struct, extensible to future `Raises:`/`Note:` without
 re-breaking the style API) under a pluggable style; surfaced as Python `__doc__`.
+The stored-form/service structs (`*_spec`, `function_doc`/`param_doc`/`tparam_doc`)
+all live in `welder::detail`; users only ever spell the factories.
 `doc.hpp` keeps only the neutral `doc_style` concept + `function_docstring` (no
 default style); the concrete styles live in `<welder/rods/python/doc_style.hpp>`
 under `welder::rods::python`, shared by both Python rods. Three are shipped —
@@ -41,7 +43,7 @@ submodules, asserted in `tests/python/test_doc.py` for both backends.
 
 **Multiline docs work** — a `doc`/`returns`/param text is just a `const char[N]`,
 so a raw string literal (`R"(…)"`) with newlines/blank lines/quotes/backslashes
-flows through `fixed_string` to `__doc__` (common case: function docs carrying
+flows through `detail::fixed_string` to `__doc__` (common case: function docs carrying
 `>>> `-style examples). Such text is **dedented** at read time by `doc.hpp`
 `cleandoc` (Python `inspect.cleandoc`/PEP 257 semantics: strip the first line,
 remove the indentation common to the rest, trim leading/trailing blank lines —
@@ -62,7 +64,7 @@ getter's doc is surfaced (a Python `property` has one `__doc__`), so no setter
 docstring is emitted. Tested via `Circle.r` / `Marker` in `doc.hpp` + `test_doc.py`.
 **Namespace-variable** docs remain intentionally ignored by binding rods (a bound
 module attribute has no `__doc__`); the Doxygen filter surfaces them on the C++ side.
-Doc text is stored *inline* (`fixed_string`) — a `const char*` to a literal isn't a
+Doc text is stored *inline* (`detail::fixed_string`) — a `const char*` to a literal isn't a
 permitted annotation constant on gcc-16.
 
 **Lua (sol2):** Lua has no runtime docstring slot, so the sol2 rod ignores

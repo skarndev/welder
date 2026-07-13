@@ -5,6 +5,11 @@
     The annotation vocabulary users attach to their types — `weld`, `policy`,
     `mark`, `doc`, `returns`, `tparam`.
 
+    Users spell these through the factory functions and the `policy` / `mark`
+    objects below; the *stored forms* each one produces (the `*_spec` structs the
+    reflection layer reads back) are implementation detail, tucked into
+    `welder::detail` so they don't crowd the public `welder::` namespace.
+
     Like `<welder/lang.hpp>`, this header is kept std-include-free so a future
     `welder` C++20 module can re-export it without leaking std into importers.
 */
@@ -41,6 +46,21 @@ consteval unsigned lang_mask(Ls... ls) {
     return (0u | ... | lang_bit(ls));
 }
 
+/** How greedily a type's members are reflected for binding. */
+enum class policy_kind : unsigned char {
+    automatic, /**< Reflect every member unless explicitly excluded (default). */
+    opt_in,    /**< Reflect only members explicitly marked `include`. */
+};
+
+/** The stored forms of the annotation vocabulary.
+
+    Each `*_spec` here is what a factory below (`weld`, `doc`, …) or a `policy` /
+    `mark` object produces and what the reflection layer extracts back off an
+    entity's annotations. Users never name these types — they spell the factories —
+    so they live in `detail` to keep `welder::` uncluttered.
+*/
+namespace detail {
+
 // --- weld: the type-level annotation declaring target languages -------------
 
 /** The stored form of a `weld` annotation: the mask of target languages. */
@@ -48,40 +68,12 @@ struct weld_spec {
     unsigned mask = 0; /**< The languages this entity is welded for. */
 };
 
-/** Build a `weld` annotation naming the target languages.
-
-    Usage: `[[=welder::weld(welder::lang::py, welder::lang::lua)]]`.
-
-    @tparam Ls the language enum types (deduced).
-    @param ls  the target languages this entity is exposed to.
-    @return a weld_spec carrying the language mask.
-*/
-template <class... Ls>
-consteval weld_spec weld(Ls... ls) {
-    return weld_spec{lang_mask(ls...)};
-}
-
 // --- policy: how greedily members are reflected -----------------------------
-
-/** How greedily a type's members are reflected for binding. */
-enum class policy_kind : unsigned char {
-    automatic, /**< Reflect every member unless explicitly excluded (default). */
-    opt_in,    /**< Reflect only members explicitly marked `include`. */
-};
 
 /** The stored form of a `policy` annotation. */
 struct policy_spec {
     policy_kind kind = policy_kind::automatic; /**< The chosen policy. */
 };
-
-/** The `policy` annotation values.
-
-    Usage: `[[=welder::policy::opt_in]]` (`auto` is reserved, hence `automatic`).
-*/
-namespace policy {
-inline constexpr policy_spec automatic{policy_kind::automatic}; /**< @see policy_kind::automatic */
-inline constexpr policy_spec opt_in{policy_kind::opt_in};       /**< @see policy_kind::opt_in */
-} // namespace policy
 
 // --- mark: member-level include/exclude -------------------------------------
 
@@ -138,8 +130,8 @@ struct include_spec {
 
     This is the *member* granularity — it trusts this member's type(s): the data
     member's type, or a function's whole signature. For the *type* granularity see
-    the #trust_bindable variable template. Usable bare (all languages) or scoped,
-    like exclude_spec.
+    the #welder::trust_bindable variable template. Usable bare (all languages) or
+    scoped, like exclude_spec.
 */
 struct trust_bindable_spec {
     unsigned mask = 0; /**< The languages to trust for; `0` == all languages. */
@@ -153,28 +145,6 @@ struct trust_bindable_spec {
         return trust_bindable_spec{lang_mask(ls...)};
     }
 };
-
-/** The type-level trust customization point: specialize to `true` to trust @a T
-    wherever it appears (member, parameter, return, container element, …).
-
-    A plain `bool`, so it trusts @a T for every language at once. Usage (at
-    namespace scope, before binding a type that uses @a T):
-    @code
-    template <> inline constexpr bool welder::trust_bindable<Foo> = true;
-    @endcode
-
-    @tparam T the type to trust everywhere. See trust_bindable_spec for the
-              per-member granularity.
-*/
-template <class T>
-inline constexpr bool trust_bindable = false;
-
-/** The bare `mark` annotation objects — use directly or call to scope by language. */
-namespace mark {
-inline constexpr exclude_spec exclude{};                 /**< @see exclude_spec */
-inline constexpr include_spec include{};                 /**< @see include_spec */
-inline constexpr trust_bindable_spec trust_bindable{};   /**< @see trust_bindable_spec */
-} // namespace mark
 
 // --- doc: human-readable documentation --------------------------------------
 
@@ -206,23 +176,6 @@ struct doc_spec {
     fixed_string<N> text; /**< The docstring text. */
 };
 
-/** Attach a docstring to a namespace, class, function, or function parameter.
-
-    Backends surface it in the target language (e.g. a Python `__doc__`, with
-    parameter docs folded into the function's docstring). Reading the text back is
-    the reflection layer's job (`<welder/doc.hpp>`).
-
-    Usage: `[[=welder::doc("Summary line.")]]`.
-
-    @tparam N the text length (deduced).
-    @param s  the docstring text.
-    @return a doc_spec holding the text.
-*/
-template <size_type N>
-consteval doc_spec<N> doc(const char (&s)[N]) {
-    return doc_spec<N>{fixed_string<N>{s}};
-}
-
 /** The stored form of a `returns` annotation: a function's return-value doc.
 
     A return value is not a reflectable entity, so its documentation is attached to
@@ -235,19 +188,6 @@ template <size_type N>
 struct return_doc_spec {
     fixed_string<N> text; /**< The return-value documentation. */
 };
-
-/** Document a function's return value.
-
-    Usage: `[[=welder::returns("what the call yields")]]` on a function.
-
-    @tparam N the text length (deduced).
-    @param s  the return-value documentation.
-    @return a return_doc_spec holding the text.
-*/
-template <size_type N>
-consteval return_doc_spec<N> returns(const char (&s)[N]) {
-    return return_doc_spec<N>{fixed_string<N>{s}};
-}
 
 /** The stored form of a `tparam` annotation: one template parameter's doc.
 
@@ -274,21 +214,6 @@ struct tparam_spec {
     fixed_string<N> name; /**< The documented template parameter's name. */
     fixed_string<M> text; /**< Its documentation. */
 };
-
-/** Document a template parameter (repeatable, ordered).
-
-    Usage: `[[=welder::tparam("T", "what T is")]]` on a class/function template.
-
-    @tparam N the parameter-name length (deduced).
-    @tparam M the text length (deduced).
-    @param name the template parameter's name, matching the declaration.
-    @param text its documentation.
-    @return a tparam_spec pairing the name with the text.
-*/
-template <size_type N, size_type M>
-consteval tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M]) {
-    return tparam_spec<N, M>{fixed_string<N>{name}, fixed_string<M>{text}};
-}
 
 // --- weld_as: force an entity's target-language name verbatim ----------------
 
@@ -317,6 +242,107 @@ struct weld_as_spec {
     fixed_string<N> name; /**< The verbatim target-language name. */
 };
 
+} // namespace detail
+
+// --- weld: the type-level annotation declaring target languages -------------
+
+/** Build a `weld` annotation naming the target languages.
+
+    Usage: `[[=welder::weld(welder::lang::py, welder::lang::lua)]]`.
+
+    @tparam Ls the language enum types (deduced).
+    @param ls  the target languages this entity is exposed to.
+    @return a weld_spec carrying the language mask.
+*/
+template <class... Ls>
+consteval detail::weld_spec weld(Ls... ls) {
+    return detail::weld_spec{lang_mask(ls...)};
+}
+
+// --- policy: how greedily members are reflected -----------------------------
+
+/** The `policy` annotation values.
+
+    Usage: `[[=welder::policy::opt_in]]` (`auto` is reserved, hence `automatic`).
+*/
+namespace policy {
+inline constexpr detail::policy_spec automatic{policy_kind::automatic}; /**< @see policy_kind::automatic */
+inline constexpr detail::policy_spec opt_in{policy_kind::opt_in};       /**< @see policy_kind::opt_in */
+} // namespace policy
+
+// --- mark: member-level include/exclude / trust_bindable --------------------
+
+/** The type-level trust customization point: specialize to `true` to trust @a T
+    wherever it appears (member, parameter, return, container element, …).
+
+    A plain `bool`, so it trusts @a T for every language at once. Usage (at
+    namespace scope, before binding a type that uses @a T):
+    @code
+    template <> inline constexpr bool welder::trust_bindable<Foo> = true;
+    @endcode
+
+    @tparam T the type to trust everywhere. See welder::detail::trust_bindable_spec
+              for the per-member granularity.
+*/
+template <class T>
+inline constexpr bool trust_bindable = false;
+
+/** The bare `mark` annotation objects — use directly or call to scope by language. */
+namespace mark {
+inline constexpr detail::exclude_spec exclude{};               /**< @see welder::detail::exclude_spec */
+inline constexpr detail::include_spec include{};               /**< @see welder::detail::include_spec */
+inline constexpr detail::trust_bindable_spec trust_bindable{}; /**< @see welder::detail::trust_bindable_spec */
+} // namespace mark
+
+// --- doc: human-readable documentation --------------------------------------
+
+/** Attach a docstring to a namespace, class, function, or function parameter.
+
+    Backends surface it in the target language (e.g. a Python `__doc__`, with
+    parameter docs folded into the function's docstring). Reading the text back is
+    the reflection layer's job (`<welder/doc.hpp>`).
+
+    Usage: `[[=welder::doc("Summary line.")]]`.
+
+    @tparam N the text length (deduced).
+    @param s  the docstring text.
+    @return a doc_spec holding the text.
+*/
+template <size_type N>
+consteval detail::doc_spec<N> doc(const char (&s)[N]) {
+    return detail::doc_spec<N>{detail::fixed_string<N>{s}};
+}
+
+/** Document a function's return value.
+
+    Usage: `[[=welder::returns("what the call yields")]]` on a function.
+
+    @tparam N the text length (deduced).
+    @param s  the return-value documentation.
+    @return a return_doc_spec holding the text.
+*/
+template <size_type N>
+consteval detail::return_doc_spec<N> returns(const char (&s)[N]) {
+    return detail::return_doc_spec<N>{detail::fixed_string<N>{s}};
+}
+
+/** Document a template parameter (repeatable, ordered).
+
+    Usage: `[[=welder::tparam("T", "what T is")]]` on a class/function template.
+
+    @tparam N the parameter-name length (deduced).
+    @tparam M the text length (deduced).
+    @param name the template parameter's name, matching the declaration.
+    @param text its documentation.
+    @return a tparam_spec pairing the name with the text.
+*/
+template <size_type N, size_type M>
+consteval detail::tparam_spec<N, M> tparam(const char (&name)[N], const char (&text)[M]) {
+    return detail::tparam_spec<N, M>{detail::fixed_string<N>{name}, detail::fixed_string<M>{text}};
+}
+
+// --- weld_as: force an entity's target-language name verbatim ----------------
+
 /** Force @a s as the target name in **every** welded language.
 
     The bare, all-languages form of @ref weld_as — the common case, spelled as its own
@@ -329,8 +355,8 @@ struct weld_as_spec {
     @return a weld_as_spec with mask `0` (all languages).
 */
 template <size_type N>
-consteval weld_as_spec<N> weld_as(const char (&s)[N]) {
-    return weld_as_spec<N>{0u, fixed_string<N>{s}};
+consteval detail::weld_as_spec<N> weld_as(const char (&s)[N]) {
+    return detail::weld_as_spec<N>{0u, detail::fixed_string<N>{s}};
 }
 
 namespace detail {
@@ -379,8 +405,8 @@ consteval auto weld_as_name(lang, Rest&&... rest) {
 */
 template <class... Args>
 consteval auto weld_as(Args&&... args) {
-    return weld_as_spec{detail::weld_as_mask(static_cast<Args&&>(args)...),
-                        detail::weld_as_name(static_cast<Args&&>(args)...)};
+    return detail::weld_as_spec{detail::weld_as_mask(static_cast<Args&&>(args)...),
+                                detail::weld_as_name(static_cast<Args&&>(args)...)};
 }
 
 } // namespace welder

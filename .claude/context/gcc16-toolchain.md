@@ -81,5 +81,5 @@ header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
 - `identifier_of` **throws** for non-identifier reflections (aliases like
   `uint32_t`, specializations like `string_view`); use `display_string_of` for
   type names.
-- Doc/annotation text must be stored *inline* (`fixed_string`) — a `const char*` to
+- Doc/annotation text must be stored *inline* (`detail::fixed_string`) — a `const char*` to
   a literal isn't a permitted annotation constant on gcc-16.

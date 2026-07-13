@@ -211,8 +211,8 @@ them for free):
   `[[=welder::weld_as("name")]]` (all langs), `…weld_as(lang, "name")` (one), or
   `…weld_as(lang, lang, …, "name")` (several at once); repeat the annotation for a
   different name per language. It forces the target name **verbatim** — never through
-  `Style`. Stored as a templated `weld_as_spec<N>` (mask + `fixed_string`, like
-  `doc_spec`); read by `weld_as_of<Ent, L>()`, which `name_of` checks first. A pack
+  `Style`. Stored as a templated `detail::weld_as_spec<N>` (mask + `detail::fixed_string`, like
+  `detail::doc_spec`); read by `weld_as_of<Ent, L>()`, which `name_of` checks first. A pack
   can't precede a deduced trailing string, so the multi-marker form is a single
   forwarding-pack overload with two `detail` helpers (`weld_as_mask`/`weld_as_name`)
   that walk the args — mask the leading `lang`s, peel to the name (bound by reference

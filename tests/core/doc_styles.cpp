@@ -21,18 +21,18 @@ namespace py = welder::rods::python;
 // summary, two documented parameters (the second spanning two lines), and a
 // return doc. Static storage so the spans stay valid; constexpr so format() folds
 // it at compile time.
-constexpr welder::param_doc params[]{
+constexpr welder::detail::param_doc params[]{
     {"a", "the first operand"},
     {"b", "the second operand,\nspanning two lines"},
 };
-constexpr welder::function_doc full{
-    "Combine two values.", std::span<const welder::param_doc>{params},
+constexpr welder::detail::function_doc full{
+    "Combine two values.", std::span<const welder::detail::param_doc>{params},
     "the combined result"};
 
 // True iff Style::format(d) equals expected (compared in a consteval predicate so
 // the transient std::string never escapes into the constant).
 template <class Style>
-consteval bool fmt_is(const welder::function_doc& d, std::string_view expected) {
+consteval bool fmt_is(const welder::detail::function_doc& d, std::string_view expected) {
     return Style::format(d) == expected;
 }
 
@@ -77,13 +77,13 @@ static_assert(fmt_is<py::sphinx_style>(
     ":returns: the combined result"sv));
 
 // --- Undocumented function: every style yields the empty string -----------------
-constexpr welder::function_doc empty{};
+constexpr welder::detail::function_doc empty{};
 static_assert(fmt_is<py::google_style>(empty, ""sv));
 static_assert(fmt_is<py::numpy_style>(empty, ""sv));
 static_assert(fmt_is<py::sphinx_style>(empty, ""sv));
 
 // --- Summary only (no params, no returns): the summary verbatim, no blocks ------
-constexpr welder::function_doc summary_only{"Just a summary."};
+constexpr welder::detail::function_doc summary_only{"Just a summary."};
 static_assert(fmt_is<py::google_style>(summary_only, "Just a summary."sv));
 static_assert(fmt_is<py::numpy_style>(summary_only, "Just a summary."sv));
 static_assert(fmt_is<py::sphinx_style>(summary_only, "Just a summary."sv));

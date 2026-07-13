@@ -6,7 +6,7 @@
     language, decide what participates in binding. Backends consume these
     predicates and never re-implement the annotation semantics.
 
-    @note This header depends on the welder vocabulary (`welder::weld_spec`,
+    @note This header depends on the welder vocabulary (`welder::detail::weld_spec`,
     `lang`, …) but deliberately does NOT include `<welder/annotations.hpp>`.
     Provide the vocabulary first — `#include <welder/vocabulary.hpp>` — then
     include this header.
@@ -22,9 +22,9 @@ namespace welder {
     @return `true` iff @a type's `weld` annotation lists @a L.
 */
 consteval bool welded_for(std::meta::info type, lang L) {
-    auto anns{std::meta::annotations_of_with_type(type, ^^weld_spec)};
+    auto anns{std::meta::annotations_of_with_type(type, ^^detail::weld_spec)};
     return !anns.empty() &&
-           (std::meta::extract<weld_spec>(anns[0]).mask & lang_bit(L)) != 0;
+           (std::meta::extract<detail::weld_spec>(anns[0]).mask & lang_bit(L)) != 0;
 }
 
 /** The reflection policy declared on @a type, defaulting to `automatic`.
@@ -33,9 +33,9 @@ consteval bool welded_for(std::meta::info type, lang L) {
     @return the type's `policy` annotation, or `policy_kind::automatic` if none.
 */
 consteval policy_kind policy_of(std::meta::info type) {
-    auto anns{std::meta::annotations_of_with_type(type, ^^policy_spec)};
+    auto anns{std::meta::annotations_of_with_type(type, ^^detail::policy_spec)};
     return anns.empty() ? policy_kind::automatic
-                        : std::meta::extract<policy_spec>(anns[0]).kind;
+                        : std::meta::extract<detail::policy_spec>(anns[0]).kind;
 }
 
 /** Does @a member carry an `exclude` mark covering language @a L?
@@ -46,8 +46,8 @@ consteval policy_kind policy_of(std::meta::info type) {
             covers all languages).
 */
 consteval bool excluded_for(std::meta::info member, lang L) {
-    for (auto a : std::meta::annotations_of_with_type(member, ^^exclude_spec)) {
-        auto s{std::meta::extract<exclude_spec>(a)};
+    for (auto a : std::meta::annotations_of_with_type(member, ^^detail::exclude_spec)) {
+        auto s{std::meta::extract<detail::exclude_spec>(a)};
         if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
             return true;
     }
@@ -62,8 +62,8 @@ consteval bool excluded_for(std::meta::info member, lang L) {
             covers all languages).
 */
 consteval bool included_for(std::meta::info member, lang L) {
-    for (auto a : std::meta::annotations_of_with_type(member, ^^include_spec)) {
-        auto s{std::meta::extract<include_spec>(a)};
+    for (auto a : std::meta::annotations_of_with_type(member, ^^detail::include_spec)) {
+        auto s{std::meta::extract<detail::include_spec>(a)};
         if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
             return true;
     }
@@ -82,8 +82,8 @@ consteval bool included_for(std::meta::info member, lang L) {
             all languages).
 */
 consteval bool trusted_for(std::meta::info member, lang L) {
-    for (auto a : std::meta::annotations_of_with_type(member, ^^trust_bindable_spec)) {
-        auto s{std::meta::extract<trust_bindable_spec>(a)};
+    for (auto a : std::meta::annotations_of_with_type(member, ^^detail::trust_bindable_spec)) {
+        auto s{std::meta::extract<detail::trust_bindable_spec>(a)};
         if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
             return true;
     }

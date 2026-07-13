@@ -37,7 +37,7 @@
     the rods (e.g. `welder::rods::python::pep8`).
 
     @note Like `<welder/reflect.hpp>`/`<welder/doc.hpp>`, this depends on the welder
-    vocabulary (`welder::weld_as_spec`, `lang`, `lang_bit`) but deliberately does NOT
+    vocabulary (`welder::detail::weld_as_spec`, `lang`, `lang_bit`) but deliberately does NOT
     include `<welder/annotations.hpp>`: the vocabulary may instead arrive via `import
     welder;`. Provide the vocabulary first, then this header.
 */
@@ -249,7 +249,7 @@ enum class ent_kind {
 
 /** The verbatim `weld_as` name forced on @a Ent for language @a L, or `nullptr`.
 
-    Scans @a Ent's annotations for a @ref weld_as_spec covering @a L (a mask of `0`
+    Scans @a Ent's annotations for a @ref detail::weld_as_spec covering @a L (a mask of `0`
     covers all languages); the first match wins. The returned string has static
     storage (`define_static_string`), so it is usable at runtime.
 
@@ -263,7 +263,7 @@ consteval const char* weld_as_of() {
                   std::define_static_array(std::meta::annotations_of(Ent))) {
         constexpr std::meta::info t{std::meta::type_of(a)};
         if constexpr (std::meta::has_template_arguments(t) &&
-                      std::meta::template_of(t) == ^^weld_as_spec) {
+                      std::meta::template_of(t) == ^^detail::weld_as_spec) {
             using spec_type = [:t:];
             constexpr auto spec{std::meta::extract<spec_type>(a)};
             if constexpr (spec.mask == 0 || (spec.mask & lang_bit(L)) != 0)

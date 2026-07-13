@@ -56,7 +56,7 @@ Returns:
 !!! info "Why `returns` is separate from `doc`"
 
     A return value isn't a reflectable entity, so its doc can't live *on* one. It
-    rides on the function as a distinct spec type (`return_doc_spec`), told apart
+    rides on the function as a distinct spec type (`welder::detail::return_doc_spec`), told apart
     from the summary by spec type — which also keeps the door open for future
     `Raises:` / `Note:` blocks without re-breaking the style API.
 
@@ -227,7 +227,7 @@ Box { T value; };
 
 !!! note "Docs are stored inline"
 
-    Doc text is stored inline as a `fixed_string`. A `const char*` to a string
+    Doc text is stored inline as a `welder::detail::fixed_string`. A `const char*` to a string
     literal isn't a permitted annotation constant on gcc-16, so welder can't hold
     a pointer — it holds the characters.
 

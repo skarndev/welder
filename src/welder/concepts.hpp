@@ -22,7 +22,7 @@
     - @ref welder::naming::name_style — the per-kind name-styling hooks a naming style
       supplies (`transform_class`, `transform_method`, …).
     - @ref welder::doc_style — how a documentation style folds a @ref
-      welder::function_doc into one docstring.
+      welder::detail::function_doc into one docstring.
 
     The concepts are pooled here — rather than each sitting inside the header of the
     machinery it constrains — so the interface surface reads as one place; the
@@ -59,7 +59,9 @@ enum class any_enum {};
 /** The raw documentation pieces @ref doc_style assembles; its full definition (a data
     struct) lives in `<welder/doc.hpp>`. Forward-declared here so this concepts header
     stays a dependency-light leaf the machinery headers can include. */
+namespace detail {
 struct function_doc;
+} // namespace detail
 
 /** The one bindability fact a backend must provide: can it natively convert a
     type *without* welder registering it?
@@ -262,18 +264,18 @@ concept resolution =
             std::meta::info>;
     };
 
-/** A *style* folds a @ref welder::function_doc into one docstring.
+/** A *style* folds a @ref welder::detail::function_doc into one docstring.
 
     It is the customization point for how documentation reads in the target
     language; swap it to emit Google-, NumPy-, or any house style. Any type with
-    `static std::string format(const function_doc&)` qualifies. Concrete styles
+    `static std::string format(const detail::function_doc&)` qualifies. Concrete styles
     live with the rods that share them (e.g. `welder::rods::python::google_style`
     in `<welder/rods/python/doc_style.hpp>`), keeping this core layer neutral.
 
     @tparam S the candidate style type.
 */
 template <class S>
-concept doc_style = requires(const function_doc& d) {
+concept doc_style = requires(const detail::function_doc& d) {
     { S::format(d) } -> std::same_as<std::string>;
 };
 

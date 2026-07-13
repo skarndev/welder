@@ -3,14 +3,14 @@
 #include <string>
 #include <string_view>
 
-#include <welder/doc.hpp> // function_doc / param_doc / doc_style concept
+#include <welder/doc.hpp> // detail::function_doc / detail::param_doc / doc_style concept
 
 /** @file
     Docstring styles shared by welder's Python backends.
 
     The language-agnostic documentation layer (`<welder/doc.hpp>`) reads the
     `[[=welder::doc(...)]]` / `returns` / parameter annotations off a reflected
-    function and hands the raw pieces (@ref welder::function_doc) to a *style* — a
+    function and hands the raw pieces (@ref welder::detail::function_doc) to a *style* — a
     type satisfying @ref welder::doc_style — which folds them into one docstring.
     This header holds the styles the Python backends (pybind11, nanobind, …) share,
     so neither re-derives how a Python docstring reads. A backend selects one via
@@ -67,7 +67,7 @@ constexpr void blank_line(std::string& out) {
 
 /** Whether @a d has at least one documented parameter (so a params block is worth
     opening). An undocumented parameter contributes nothing to any style. */
-constexpr bool any_param_doc(const ::welder::function_doc& d) {
+constexpr bool any_param_doc(const ::welder::detail::function_doc& d) {
     for (const auto& p : d.params)
         if (p.text)
             return true;
@@ -93,7 +93,7 @@ struct google_style {
     /** Assemble @a d into a Google-style docstring.
         @param d the documentation pieces.
         @return the formatted docstring (possibly empty). */
-    static constexpr std::string format(const ::welder::function_doc& d) {
+    static constexpr std::string format(const ::welder::detail::function_doc& d) {
         std::string out{};
         if (d.summary)
             out += d.summary;
@@ -140,7 +140,7 @@ struct numpy_style {
     /** Assemble @a d into a NumPy-style docstring.
         @param d the documentation pieces.
         @return the formatted docstring (possibly empty). */
-    static constexpr std::string format(const ::welder::function_doc& d) {
+    static constexpr std::string format(const ::welder::detail::function_doc& d) {
         std::string out{};
         // Append an underlined section header (`title` then a rule of matching
         // length), separated from prior content by a blank line.
@@ -191,7 +191,7 @@ struct sphinx_style {
     /** Assemble @a d into a Sphinx (reStructuredText) docstring.
         @param d the documentation pieces.
         @return the formatted docstring (possibly empty). */
-    static constexpr std::string format(const ::welder::function_doc& d) {
+    static constexpr std::string format(const ::welder::detail::function_doc& d) {
         std::string out{};
         if (d.summary)
             out += d.summary;
