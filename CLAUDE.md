@@ -104,6 +104,12 @@ exclude/include spec is the sentinel for "all languages".
   so a future `import welder;` module wrapper can re-export them safely. Anything
   needing `<meta>`/std stays in `reflect.hpp`/rods. (This is the vocabulary-vs-`<meta>`
   boundary — details in `.claude/context/gcc16-toolchain.md`.)
+- **Every welder namespace opens inside the ABI inline namespace** —
+  `namespace welder::inline v0 { … }` (ODR guard for mixed-welder-version links).
+  `src/welder/version.hpp` is the version's single source of truth
+  (`WELDER_VERSION_*`; CMake + conanfile.py parse it) and defines
+  `WELDER_ABI_NAMESPACE`; bump the namespace only on ABI-breaking releases. The
+  Doxygen filter strips the token for the docs (see the architecture file map).
 - Keep the core rod-agnostic. New languages are new rods under
   `src/welder/rods/`, each with its own `welder::<framework>` CMake target
   (e.g. `welder::pybind11`) exposing one `welder::rods::<name>::rod` struct.

@@ -103,7 +103,11 @@ copes with the C++26 sources but silently discards `[[=…]]` annotations, and i
 whose stdout is what Doxygen parses (disk untouched). The filter translates the doc
 vocabulary into Doxygen comments: `doc` → `/** … */`, `returns` → `@return`,
 `tparam` → `@tparam`; `weld`/`policy`/`mark`/`trust_bindable` are stripped (doc
-*scope* control is Doxygen-native — `EXCLUDE_SYMBOLS`).
+*scope* control is Doxygen-native — `EXCLUDE_SYMBOLS`). It also strips welder's
+ABI inline-namespace token (`::inline v0` — the textual `ABI_NS` regex pass at
+the top of `transform()`, ahead of the annotation work) so Doxygen documents
+`welder::…`, never `welder::v0::…` — which would otherwise break every page
+name and apilink.py tag-file lookup. Locked by the corpus golden.
 
 The parsing lives in a **Lark grammar** (`tools/welder_doxygen_filter.lark`, needs
 `pip install lark`), two layers sharing one lexer:

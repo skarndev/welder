@@ -22,7 +22,7 @@ point are reused verbatim. The core never depends on a rod.
 
 ```
 src/welder/
-  detail/config.hpp     WELDER_EXPORT macro (export under the module, else empty)
+  version.hpp           WELDER_VERSION_MAJOR/MINOR/PATCH + WELDER_VERSION + WELDER_VERSION_STRING + WELDER_ABI_NAMESPACE — std-free, reflection-free; the version's SINGLE SOURCE OF TRUTH (top-level CMakeLists.txt and conanfile.py parse it — bump it here only). EVERY welder namespace opens `namespace welder::inline v0 { … }` (the ABI inline namespace: mixed-welder-version links keep distinct symbols instead of silently merging weak symbols / ODR UB; bump only on ABI-breaking releases; a static_assert drift guard ties the macro to the literal `v0` the headers spell). The Doxygen INPUT_FILTER strips `::inline vN` so reference pages / the tag file stay `welder::…`
   lang.hpp              enum class lang                       — std-free vocabulary
   annotations.hpp       weld / policy / mark / doc + mask helpers — std-free vocabulary. Users spell the factory fns + policy/mark objects; the stored-form structs each produces (`weld_spec`, `doc_spec`, `weld_as_spec`, …) are tucked into `welder::detail` so they don't crowd `welder::`
   reflect.hpp           welded_for / policy_of / member_bound / trusted_for / public_bases — uses <meta>

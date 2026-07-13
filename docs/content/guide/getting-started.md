@@ -218,6 +218,13 @@ A consuming TU brings the vocabulary in first, then the rod header:
 #include <welder/rods/python/pybind11/rod.hpp>
 ```
 
+The vocabulary also carries welder's version identity (`<welder/version.hpp>`):
+`WELDER_VERSION_MAJOR` / `MINOR` / `PATCH`, a comparable `WELDER_VERSION`, and
+`WELDER_VERSION_STRING`, for feature-gating against future releases. Every
+`welder::` name lives in a versioned *inline* namespace — invisible in source, but
+it keeps binaries built against different welder versions from silently mixing;
+see [the ABI inline namespace](../header-only.md#header-only-and-odr-the-abi-inline-namespace).
+
 A C++20 `import welder;` module wrapper is planned but currently deferred — see
 [Header-only for now](../header-only.md) for the toolchain reasons why.
 

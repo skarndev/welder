@@ -28,7 +28,8 @@ static analysis come along for free.
 > **Status: early proof-of-concept.** Verified end-to-end (an importable Python
 > module; a `require`-able Lua module), but the API is still moving and **gcc-16 is
 > the only compiler** that implements the papers it needs. Targets **C++26 and newer
-> only**.
+> only**. Pre-1.0, a 0.x **minor** release may change the API (a 0.x patch only
+> fixes); 1.0.0 comes once the API settles and a second compiler ships P2996.
 
 ## Supported languages
 
@@ -132,6 +133,24 @@ not convert your types for you (that stays the framework's job — a [pybind11]
 `type_caster`, a [nanobind] caster, a [sol2] usertype), it does not replace the
 binding framework, and it does not flatten the languages into one
 lowest-common-denominator API.
+
+## Known limitations
+
+- **gcc-16 only** today — the sole compiler implementing P2996 + P3394. The C++20
+  `import welder;` wrapper is deferred until the gcc-16 reflection/modules
+  conflicts are fixed ([why](https://skarndev.github.io/welder/header-only/)).
+- **Member operators** bind; free (non-member) operators don't yet.
+- **Properties** (getter/setter pairs) are designed-for, not yet implemented.
+- No per-function **ownership / return-value-policy control** yet — exclude such a
+  member and hand-bind it beside welder (welder composes with manual binding code).
+- Backend-inherited gaps: [nanobind] is single-base-only; [LuaBridge3] rejects
+  virtual base classes (use [sol2] for virtual diamonds); [LuaCATS] stubs can't
+  type comparison/subscript metamethods (they still work at runtime).
+
+Planned next, roughly in order: properties, free operators, richer
+ownership/lifetime annotations, further language rods (runtime-registration
+languages — Ruby, Node, PHP, R — fit the existing rod model directly), and the
+module wrapper once toolchains allow.
 
 ## Quick start
 

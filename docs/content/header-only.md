@@ -73,6 +73,28 @@ needed:
   and backported to `releases/gcc-16`, but not yet in the released 16.1.0 bottle
   most people install.
 
+## Header-only and ODR: the ABI inline namespace
+
+Header-only has one classic failure mode. Every consuming TU instantiates its own
+(weak) copy of the welder templates it uses; when two libraries built against
+*different* welder versions end up linked into one binary, the linker silently
+merges those symbols across versions — an ODR violation, and undefined behavior
+that surfaces as subtly wrong bindings in one of the two.
+
+welder guards against that the way fmt and Abseil do: every `welder::` name
+actually lives in a versioned **inline namespace** — `namespace welder::inline v0
+{ … }` throughout the headers. Inline, so it is invisible in source (you spell
+`welder::weld`, `welder::welder<Rod>` as ever), but it *is* part of the mangled
+symbol names — so the two libraries above keep distinct symbol sets, each runs the
+welder it was built with, and passing welder types between them fails loudly
+(different types) instead of corrupting silently. The namespace is bumped only on
+ABI-breaking releases.
+
+The version itself lives in `<welder/version.hpp>` (std-include-free, no
+reflection use): `WELDER_VERSION_MAJOR` / `MINOR` / `PATCH`, a comparable
+`WELDER_VERSION`, `WELDER_VERSION_STRING`, and `WELDER_ABI_NAMESPACE`. It is the
+single source of truth — CMake and the Conan recipe parse it.
+
 ## What has to change for the module to return
 
 We plan to reintroduce the `import welder;` wrapper. It becomes worthwhile once:
