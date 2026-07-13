@@ -178,7 +178,14 @@ headers instead of the struct: the Python dunder map into
   `bindable.hpp` is shared. Plus two handle-type aliases —
   `template<class T> using class_handle_type` / `template<class E> using enum_handle_type`
   — naming what `make_class`/`make_enum` yield, so the `rod` concept can shape-check the
-  per-handle hooks against them (see the concept caveat below).
+  per-handle hooks against them (see the concept caveat below). The concrete handle/session
+  structs a rod's own aliases point at (`class_handle`, `enum_handle`, `session`, and a
+  custom `module_type` like luabridge's `module_scope` / trampolines' `module_handle`) are
+  **nested inside the `rod` struct**, not at namespace scope — the contract reaches them
+  only via the aliases + `decltype(open_module(…))`, so their names are rod-private and stay
+  out of `rods::<name>::`. (The runtime Python/sol2 rods define no such structs at all —
+  they reuse backend types like `py::class_` / `py::dict` / `sol::table`. luacats keeps its
+  `module_writer` / `class_writer` in `document.hpp` as a deliberate document object model.)
 - **Type binding:** `make_class<T, Bases…>`, `add_default_ctor`, `add_constructor<Ctor>`,
   `add_aggregate_constructor<T>`, `add_field<Mem, Style>`, `add_method<Fn, Style>`,
   `add_static_method<Fn, Style>`, `add_operator<Fn>`, and `consteval special_method_name(op)`

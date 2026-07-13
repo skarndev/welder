@@ -45,23 +45,6 @@
 
 namespace welder::rods::trampolines {
 
-/** A copyable handle onto the growing @ref document that the driver threads through
-    every emission primitive (the rod's `module_type`). @a prefix carries the dotted
-    module path for parity with the other rods; the generator keys entirely off each
-    type's own reflected namespace, so it is unused here. */
-struct module_handle {
-    document* doc{};
-    std::string prefix{};
-};
-
-/** The class handle the driver threads to the per-member hooks. The generator emits a
-    whole trampoline from `make_class` alone, so the per-member hooks are no-ops and
-    this carries nothing. */
-struct class_handle {};
-
-/** The enum handle. Enums have no virtuals, so nothing is emitted for them. */
-struct enum_handle {};
-
 /** The trampoline-generator rod: a stateless @ref welder::rod that, instead of
     registering a live module, appends a compilable trampoline `struct` (plus its
     `trampoline_for` registration) for every welded *virtual* type it visits.
@@ -72,7 +55,24 @@ struct enum_handle {};
     trampolines. */
 struct rod {
     static constexpr lang language{lang::py}; /**< Trampolines are a Python concept. */
+
+    /** A copyable handle onto the growing @ref document that the driver threads through
+        every emission primitive (the rod's `module_type`). @a prefix carries the dotted
+        module path for parity with the other rods; the generator keys entirely off each
+        type's own reflected namespace, so it is unused here. */
+    struct module_handle {
+        document* doc{};
+        std::string prefix{};
+    };
     using module_type = module_handle;
+
+    /** The class handle the driver threads to the per-member hooks. The generator emits a
+        whole trampoline from `make_class` alone, so the per-member hooks are no-ops and
+        this carries nothing. */
+    struct class_handle {};
+
+    /** The enum handle. Enums have no virtuals, so nothing is emitted for them. */
+    struct enum_handle {};
 
     /** The class / enum handles the per-class / per-enum hooks receive — exactly what
         `make_class` / `make_enum` return (a generator handle carries no type

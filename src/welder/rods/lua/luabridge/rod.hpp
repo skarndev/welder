@@ -38,7 +38,7 @@
     move-consume their parent, and there may be only one "active" registrar at a
     time. welder's driver instead holds a stable module handle and mutates class /
     module handles across many separate `add_*` calls. The two are bridged with a
-    **re-open-by-path** model: @ref welder::rods::luabridge::module_scope is a light, copyable
+    **re-open-by-path** model: @ref welder::rods::luabridge::rod::module_scope is a light, copyable
     `{lua_State*, namespace path}`, and every emission primitive re-walks
     `getGlobalNamespace(L).beginNamespace(path…)` in a single chained expression and
     lets it unwind cleanly. `beginNamespace` reuses an existing namespace table (no
@@ -137,18 +137,6 @@ T make_object(A... args) {
     return T(std::move(args)...);
 }
 
-/** A copyable handle to a welded module (or submodule) table: the borrowed Lua
-    state plus the namespace path from the global table.
-
-    LuaBridge3's registrar is move-based and single-active, which does not match the
-    driver's stable-handle model, so instead of holding a live registrar this names
-    *where* the module lives and every emission primitive re-opens it via
-    `getGlobalNamespace(L).beginNamespace(path…)`. @see the file overview. */
-struct module_scope {
-    lua_State* L{nullptr};             /**< The borrowed Lua state. */
-    std::vector<std::string> path{};   /**< Namespace segments under `_G`. */
-};
-
 /** The LuaBridge3 rod: a stateless policy type satisfying @ref welder::rod.
 
     Its public static members are the emission primitives welder's driver calls; the
@@ -161,6 +149,18 @@ struct module_scope {
     in `<welder/rods/lua/metamethods.hpp>`. */
 struct rod {
     static constexpr lang language{lang::lua}; /**< welder::lang::lua. */
+
+    /** A copyable handle to a welded module (or submodule) table: the borrowed Lua
+        state plus the namespace path from the global table.
+
+        LuaBridge3's registrar is move-based and single-active, which does not match the
+        driver's stable-handle model, so instead of holding a live registrar this names
+        *where* the module lives and every emission primitive re-opens it via
+        `getGlobalNamespace(L).beginNamespace(path…)`. @see the file overview. */
+    struct module_scope {
+        lua_State* L{nullptr};             /**< The borrowed Lua state. */
+        std::vector<std::string> path{};   /**< Namespace segments under `_G`. */
+    };
     using module_type = module_scope;          /**< A Lua module is a named table. */
 
     /** Per-module session — unused: LuaBridge3 registers namespace variables as
