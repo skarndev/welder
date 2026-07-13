@@ -22,7 +22,7 @@
     provide the vocabulary first (`#include <welder/vocabulary.hpp>`), then this.
 */
 
-namespace welder::detail {
+namespace welder::inline v0::detail {
 
 // --- function / parameter introspection -------------------------------------
 

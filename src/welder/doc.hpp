@@ -22,7 +22,7 @@
     <welder/vocabulary.hpp>` — then this header.
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 /** Normalize a docstring the way Python's `inspect.cleandoc` (PEP 257) does, so a
     multiline `doc`/`returns` can be indented to line up with the surrounding C++

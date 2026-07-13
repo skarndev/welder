@@ -14,7 +14,7 @@
     `welder` C++20 module can re-export it without leaking std into importers.
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 /** `std::size_t` named without a standard-library include, keeping this
     vocabulary header std-free (see the file note). `sizeof` yields `std::size_t`

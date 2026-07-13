@@ -26,7 +26,7 @@
     the docs for why modularization is deferred.
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 /** The set of target languages welder can generate bindings for.
 

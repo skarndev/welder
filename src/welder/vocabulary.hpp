@@ -12,5 +12,6 @@
     `<welder/rods/python/pybind11/rod.hpp>`) pulls in.
 */
 
+#include <welder/version.hpp>
 #include <welder/lang.hpp>
 #include <welder/annotations.hpp>

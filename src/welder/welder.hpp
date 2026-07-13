@@ -29,7 +29,7 @@
     header (each backend header includes it for you).
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 /** welder's binding entry point, parameterized on a **rod**.
 

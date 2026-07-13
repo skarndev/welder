@@ -42,7 +42,7 @@
     the rest of the reflection layer.
 */
 
-namespace welder::rods::python {
+namespace welder::inline v0::rods::python {
 
 // --- bind_flat: opt out of trampoline support for a virtual type -------------
 

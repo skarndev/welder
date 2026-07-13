@@ -34,7 +34,7 @@
     header (`<welder/welder.hpp>`, and each backend header, includes it for you).
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 namespace detail {
 

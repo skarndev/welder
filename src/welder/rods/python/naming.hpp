@@ -24,7 +24,7 @@
     the rest of the reflection layer.
 */
 
-namespace welder::rods::python {
+namespace welder::inline v0::rods::python {
 
 /** PEP 8 naming: **CapWords** (PascalCase) for classes and enum types, **snake_case**
     for everything callable or data — methods, static methods, free functions, data

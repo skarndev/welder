@@ -37,7 +37,7 @@
     the rest of the reflection layer.
 */
 
-namespace welder::rods::python {
+namespace welder::inline v0::rods::python {
 
 namespace detail {
 

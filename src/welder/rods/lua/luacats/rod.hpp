@@ -59,7 +59,7 @@
 #include <welder/bind_traits.hpp>      // aggregate_fields / is_unary_operator
 #include <welder/doc.hpp>              // doc_of / param_docs / return_doc_of
 
-namespace welder::rods::luacats {
+namespace welder::inline v0::rods::luacats {
 
 // The overload-set selectors are shared with the sol2 backend
 // (`<welder/rods/lua/overloads.hpp>`; both gather a name's C++ overloads that the

@@ -1,5 +1,19 @@
 cmake_minimum_required(VERSION 3.28)
-project(welder VERSION 0.1.0 LANGUAGES CXX)
+
+# The version's single source of truth is src/welder/version.hpp (conanfile.py
+# reads it the same way) — bump it there only.
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/welder/version.hpp" _welder_version_hpp)
+foreach(_part MAJOR MINOR PATCH)
+  if(NOT _welder_version_hpp MATCHES "#define WELDER_VERSION_${_part} ([0-9]+)")
+    message(FATAL_ERROR "welder: WELDER_VERSION_${_part} not found in src/welder/version.hpp")
+  endif()
+  set(_welder_version_${_part} ${CMAKE_MATCH_1})
+endforeach()
+unset(_welder_version_hpp)
+
+project(welder
+  VERSION ${_welder_version_MAJOR}.${_welder_version_MINOR}.${_welder_version_PATCH}
+  LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

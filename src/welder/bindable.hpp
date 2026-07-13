@@ -44,7 +44,7 @@
     container/optional/variant/smart-pointer handling for free.
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 namespace detail {
 

@@ -30,7 +30,7 @@
 
     Requires the welder vocabulary first (`#include <welder/vocabulary.hpp>`). */
 
-namespace welder::rods::trampolines {
+namespace welder::inline v0::rods::trampolines {
 
 // --- small consteval text helpers -------------------------------------------
 

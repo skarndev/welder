@@ -196,3 +196,11 @@ int bare( bool wide = sizeof(int) < 8 /**< bare comparison param */);
    [[=welder::doc("inside a spliced comment - must not transform")]]
 
 } // namespace workshop
+
+// --- ABI inline namespace: the versioned token is stripped for Doxygen -------
+// welder's headers open `namespace welder { … }` (<welder/version.hpp>);
+// Doxygen must see the namespaces users spell, never `welder::v0::…`.
+namespace welder { inline constexpr int in_v0{0}; }
+namespace welder::detail { struct probe {}; }
+// like the annotation pass the strip is textual: prose saying  loses
+// the token; a plain `inline` or `v0` alone survives.

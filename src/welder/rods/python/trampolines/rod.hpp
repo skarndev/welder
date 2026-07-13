@@ -43,7 +43,7 @@
 #include <welder/welder.hpp>                              // driver + rod contract
 #include <welder/rods/python/trampolines/document.hpp>    // the emission core
 
-namespace welder::rods::trampolines {
+namespace welder::inline v0::rods::trampolines {
 
 /** The trampoline-generator rod: a stateless @ref welder::rod that, instead of
     registering a live module, appends a compilable trampoline `struct` (plus its

@@ -48,7 +48,7 @@
 
 #include <nanobind/nanobind.h>
 
-namespace welder::rods::nanobind {
+namespace welder::inline v0::rods::nanobind {
 
 // Inside `welder::rods::nanobind`, the unqualified name `nanobind` resolves to *this*
 // namespace, not the library. Alias the real one once — the way nanobind's own

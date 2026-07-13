@@ -19,7 +19,7 @@
     the rest of the reflection layer.
 */
 
-namespace welder::rods::python {
+namespace welder::inline v0::rods::python {
 
 /** The Python special-method ("dunder") name for a member operator, or `nullptr`
     if welder does not expose that operator.

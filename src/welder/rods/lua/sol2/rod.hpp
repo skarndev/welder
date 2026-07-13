@@ -80,7 +80,7 @@
 
 #include <sol/sol.hpp>
 
-namespace welder::rods::sol2 {
+namespace welder::inline v0::rods::sol2 {
 
 // Note: the namespace is `welder::rods::sol2`; the library namespace is `::sol`. They do
 // not collide, so `sol::` below refers to the library without an alias (unlike the

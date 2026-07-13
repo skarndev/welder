@@ -12,7 +12,7 @@
     include this header.
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 /** Is @a type welded for language @a L — i.e. does it carry a matching `weld`
     annotation?

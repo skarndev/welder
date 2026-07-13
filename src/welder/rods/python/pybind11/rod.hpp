@@ -42,7 +42,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/native_enum.h> // py::native_enum (stdlib enum binding)
 
-namespace welder::rods::pybind11 {
+namespace welder::inline v0::rods::pybind11 {
 
 // Inside `welder::rods::pybind11`, the unqualified name `pybind11` resolves to *this*
 // namespace, not the library. Alias the real one once — the way pybind11's own

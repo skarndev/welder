@@ -26,7 +26,7 @@
     defines your trampoline subclass.
 */
 
-namespace welder::rods::pybind11 {
+namespace welder::inline v0::rods::pybind11 {
 
 // The unqualified name `pybind11` resolves to *this* namespace inside it; alias the
 // real library the way pybind11's own docs do (see rod.hpp).

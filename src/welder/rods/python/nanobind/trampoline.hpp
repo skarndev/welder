@@ -25,7 +25,7 @@
     defines your trampoline subclass.
 */
 
-namespace welder::rods::nanobind {
+namespace welder::inline v0::rods::nanobind {
 
 // The unqualified name `nanobind` resolves to *this* namespace inside it; alias the
 // real library the way nanobind's own docs do (see rod.hpp).

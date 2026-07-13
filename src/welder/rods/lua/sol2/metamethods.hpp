@@ -21,7 +21,7 @@
     `<sol/sol.hpp>`.
 */
 
-namespace welder::rods::sol2 {
+namespace welder::inline v0::rods::sol2 {
 
 /** A member operator's sol2 metamethod, or `{…, nullptr}` if welder does not expose
     it. */

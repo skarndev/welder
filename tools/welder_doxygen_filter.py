@@ -22,6 +22,9 @@ How it works:
     comma-separated elements with nested balanced groups. This script is
     only the driver:
 
+    * strip welder's ABI inline-namespace token (``::inline v0``, see
+      <welder/version.hpp>) so Doxygen documents ``welder::…``, not
+      ``welder::v0::…``;
     * find each block's extent in the token stream (``]]`` is
       context-dependent in C++ — see the grammar header — so this is a
       small bracket-depth scan, not grammar work);
@@ -108,6 +111,14 @@ CLASS_KEYWORDS = frozenset({'struct', 'class', 'union', 'enum', 'namespace'})
 SKIP = frozenset({'WS', 'BLOCK_COMMENT', 'LINE_COMMENT'})
 
 PREFIX = 'welder::'
+
+# welder's headers live in a versioned inline ABI namespace
+# (`namespace welder::inline v0 { … }`, see <welder/version.hpp>). Doxygen
+# would document it as a real nested namespace (`welder::v0::…`), breaking
+# every page name and tag-file lookup — strip the token so Doxygen sees the
+# namespaces users spell. Textual like the rest of the filter: the sequence
+# cannot occur in ordinary code outside a namespace-definition.
+ABI_NS = re.compile(r'::inline\s+v[0-9]+\b')
 
 # Simple-escape-sequence values for unescape(); unknown escapes (\x41, \u…,
 # octal) are kept verbatim rather than guessed at.
@@ -877,6 +888,7 @@ def transform(text):
         there is nothing to do or a block cannot be handled (fail-safe,
         noted on stderr).
     """
+    text = ABI_NS.sub('', text)
     if PREFIX not in text or '[[' not in text:
         return text
     toks = list(parser().lex(text, dont_ignore=True))

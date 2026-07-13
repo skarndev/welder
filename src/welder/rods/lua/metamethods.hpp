@@ -33,7 +33,7 @@
     `<LuaBridge/LuaBridge.h>`) so `LUA_VERSION_NUM` is visible.
 */
 
-namespace welder::rods::lua {
+namespace welder::inline v0::rods::lua {
 
 /** Map a member operator to its Lua metamethod `__name`, or `nullptr` if welder
     does not expose it (which also gates operator eligibility in the driver).

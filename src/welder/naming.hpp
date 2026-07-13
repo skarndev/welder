@@ -42,7 +42,7 @@
     welder;`. Provide the vocabulary first, then this header.
 */
 
-namespace welder::naming {
+namespace welder::inline v0::naming {
 
 // --- identifier word-splitting ----------------------------------------------
 
@@ -231,7 +231,7 @@ static_assert(name_style<pascal_case>, "welder: naming::pascal_case is not a nam
 
 } // namespace welder::naming
 
-namespace welder {
+namespace welder::inline v0 {
 
 /** The nameable entity kinds welder distinguishes, one per name-style hook —
     picked by the driver/rod so @ref name_of calls the right transform. */

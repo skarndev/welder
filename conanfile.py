@@ -1,8 +1,9 @@
 import os
+import re
 
 from conan import ConanFile
 from conan.tools.cmake import CMake, cmake_layout
-from conan.tools.files import copy
+from conan.tools.files import copy, load
 
 
 class WelderConan(ConanFile):
@@ -23,7 +24,6 @@ class WelderConan(ConanFile):
     """
 
     name = "welder"
-    version = "0.1.0"
     license = "MIT"
     author = "Sergey Shumakov"
     url = "https://github.com/skarndev/welder"
@@ -58,6 +58,17 @@ class WelderConan(ConanFile):
     exports_sources = "CMakeLists.txt", "src/*", "cmake/*", "LICENSE"
 
     generators = "CMakeToolchain", "CMakeDeps"
+
+    def set_version(self):
+        # The version's single source of truth is src/welder/version.hpp (the
+        # top-level CMakeLists.txt parses it the same way) — bump it there only.
+        header = load(self, os.path.join(self.recipe_folder,
+                                         "src", "welder", "version.hpp"))
+        parts = {
+            part: re.search(rf"#define WELDER_VERSION_{part} (\d+)", header)[1]
+            for part in ("MAJOR", "MINOR", "PATCH")
+        }
+        self.version = "{MAJOR}.{MINOR}.{PATCH}".format(**parts)
 
     def build_requirements(self):
         # Backends are a development convenience only (see the class docstring), so

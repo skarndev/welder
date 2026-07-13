@@ -35,7 +35,7 @@
     `#include <welder/vocabulary.hpp>` — then any header that pulls this in.
 */
 
-namespace welder {
+namespace welder::inline v0 {
 
 namespace detail {
 

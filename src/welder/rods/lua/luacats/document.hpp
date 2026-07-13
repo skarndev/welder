@@ -32,7 +32,7 @@
     the rest of the reflection layer.
 */
 
-namespace welder::rods::luacats {
+namespace welder::inline v0::rods::luacats {
 
 // --- signature rendering ----------------------------------------------------
 

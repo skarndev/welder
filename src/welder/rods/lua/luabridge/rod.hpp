@@ -103,7 +103,7 @@ template <class E>
 struct Stack<E, std::enable_if_t<std::is_enum_v<E>>> : Enum<E> {};
 } // namespace luabridge
 
-namespace welder::rods::luabridge {
+namespace welder::inline v0::rods::luabridge {
 
 // The welder rod namespace `welder::rods::luabridge` would shadow the library's
 // `::luabridge`, so alias it (as the Python rods alias pybind11/nanobind) and use

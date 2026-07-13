@@ -34,7 +34,7 @@
     already behaves.
 */
 
-namespace welder::rods::lua {
+namespace welder::inline v0::rods::lua {
 
 /** The bound method overloads sharing @a fn's name and static-ness, from the class
     where @a fn is declared, in declaration order.
