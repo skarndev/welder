@@ -148,9 +148,9 @@ lowest-common-denominator API.
   type comparison/subscript metamethods (they still work at runtime).
 
 Planned next, roughly in order: properties, free operators, richer
-ownership/lifetime annotations, further language rods (runtime-registration
-languages — Ruby, Node, PHP, R — fit the existing rod model directly), and the
-module wrapper once toolchains allow.
+ownership/lifetime annotations, and the module wrapper once toolchains allow.
+Further language rods are where the architecture invites community
+contributions — adding a language is one rod struct.
 
 ## Quick start
 
