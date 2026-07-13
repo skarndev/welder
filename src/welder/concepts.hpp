@@ -209,7 +209,7 @@ concept rod =
     };
 
 /** The contract a **resolution** — the carriage's *which-participates* policy — must
-    satisfy to be injected as `welder::detail::basic_carriage`'s `Resolution` argument.
+    satisfy to be injected as `welder::carriages::basic_carriage`'s `Resolution` argument.
 
     A carriage separates three concerns: *which* entities participate (the reading of
     welder's markers — the resolution's job), *how* they are emitted (the @ref welder::rod),

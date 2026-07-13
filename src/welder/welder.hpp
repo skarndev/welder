@@ -79,7 +79,7 @@ namespace welder::inline v0 {
                   what walks a type/namespace and orchestrates the rod's emission.
                   Defaults to @ref welder::stitch_welding_carriage (marker-directed);
                   inject @ref welder::tack_welding_carriage to bind an unmarked library
-                  greedily, or any `basic_carriage<Resolution>`.
+                  greedily, or any `welder::carriages::basic_carriage<Resolution>`.
 */
 template <rod B, class Style = naming::none, class Carriage = carriage>
 struct welder {

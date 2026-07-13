@@ -36,7 +36,7 @@
 
 namespace welder::inline v0 {
 
-namespace detail {
+namespace carriages {
 
 // --- resolution policies ----------------------------------------------------
 //
@@ -64,7 +64,7 @@ struct marker_resolution {
     /** @a T's native (welded) base list, for the class handle. */
     template <std::meta::info T, lang L>
     static consteval auto native_bases() {
-        return native_base_types<T, L>();
+        return detail::native_base_types<T, L>();
     }
     /** A namespace member (class/enum/function/variable) participates. */
     static consteval bool member_participates(std::meta::info mem, lang L,
@@ -74,7 +74,7 @@ struct marker_resolution {
     /** A nested namespace participates (recurse + submodule). */
     static consteval bool namespace_participates(std::meta::info ns, lang L,
                                                  policy_kind pol) {
-        return member_bound(ns, L, pol) && namespace_has_bound(ns, L);
+        return member_bound(ns, L, pol) && detail::namespace_has_bound(ns, L);
     }
 };
 
@@ -103,7 +103,7 @@ struct greedy_resolution {
     }
     static consteval bool namespace_participates(std::meta::info ns, lang L,
                                                  policy_kind pol) {
-        return member_bound(ns, L, pol) && namespace_has_bindable(ns, L);
+        return member_bound(ns, L, pol) && detail::namespace_has_bindable(ns, L);
     }
 };
 
@@ -170,13 +170,13 @@ struct basic_carriage {
 
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
-            if constexpr (is_bindable_method(fn, L, pol)) {
+            if constexpr (detail::is_bindable_method(fn, L, pol)) {
                 welder::assert_callable_bindable<B, fn, L>();
                 if constexpr (std::meta::is_static_member(fn))
                     B::template add_static_method<fn, Style>(cls);
                 else
                     B::template add_method<fn, Style>(cls);
-            } else if constexpr (is_operator_candidate(fn, L, pol) &&
+            } else if constexpr (detail::is_operator_candidate(fn, L, pol) &&
                                  B::special_method_name(fn) != nullptr) {
                 // A member operator binds like a method, under the backend's special-
                 // method name for it (operator+ -> __add__, ...). The specific overload
@@ -270,14 +270,14 @@ struct basic_carriage {
         }
         template for (constexpr auto ctor :
                       std::define_static_array(std::meta::members_of(^^T, ctx))) {
-            if constexpr (is_bindable_constructor(ctor)) {
+            if constexpr (detail::is_bindable_constructor(ctor)) {
                 welder::assert_callable_bindable<B, ctor, L>();
                 B::template add_constructor<ctor>(cls);
             }
         }
         // An aggregate declares no constructors, so the loop above binds none; give it
         // a synthesized field constructor (brace-init) when eligible.
-        if constexpr (aggregate_initializable<T, L>())
+        if constexpr (detail::aggregate_initializable<T, L>())
             B::template add_aggregate_constructor<T>(cls);
 
         // Data members + methods + operators (T's own, plus flattened bases).
@@ -452,19 +452,19 @@ struct basic_carriage {
     }
 };
 
-} // namespace detail
+} // namespace carriages
 
 /** The **stitch-welding** carriage (the default): binds only where welder's `weld` /
     `policy` / marks direct — intermittent, marker-driven, like a stitch weld. This is
-    `welder::welder`'s default `Carriage`. @see welder::detail::basic_carriage */
-using stitch_welding_carriage = detail::basic_carriage<detail::marker_resolution>;
+    `welder::welder`'s default `Carriage`. @see welder::carriages::basic_carriage */
+using stitch_welding_carriage = carriages::basic_carriage<carriages::marker_resolution>;
 
 /** The **tack-welding** carriage: binds an *unmarked* library greedily — every
     reflectable type / function / global, namespaces recursed, bases flattened —
     ignoring the `weld` markers, while still enforcing the bindability gate. For
     consuming a third-party library that carries no welder annotations. @see
-    welder::detail::greedy_resolution for the exact rules and caveats. */
-using tack_welding_carriage = detail::basic_carriage<detail::greedy_resolution>;
+    welder::carriages::greedy_resolution for the exact rules and caveats. */
+using tack_welding_carriage = carriages::basic_carriage<carriages::greedy_resolution>;
 
 /** The default carriage — an alias for @ref welder::stitch_welding_carriage. */
 using carriage = stitch_welding_carriage;

@@ -91,7 +91,7 @@ participate* — a **resolution** policy. Two ship, each with a carriage alias:
 Both run the same traversal and the same [bindability
 gate](guide/bindability.md) — tack welding drops the *marker* requirement,
 never the representability one. The seam is open: a custom
-`welder::detail::basic_carriage<Resolution>` plugs in any resolution that can
+`welder::carriages::basic_carriage<Resolution>` plugs in any resolution that can
 answer the five participation questions (does this entity/member/nested
 namespace participate? is this base native? which bases are native?).
 

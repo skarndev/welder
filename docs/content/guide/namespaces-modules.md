@@ -145,7 +145,7 @@ PYBIND11_MODULE(thirdparty, m) {
 
 Both carriages ship as `welder::stitch_welding_carriage` (the default) and
 `welder::tack_welding_carriage`; a custom traversal is a
-`welder::detail::basic_carriage<Resolution>` with your own resolution policy.
+`welder::carriages::basic_carriage<Resolution>` with your own resolution policy.
 
 !!! tip "Subclassing `welder::welder`"
 
