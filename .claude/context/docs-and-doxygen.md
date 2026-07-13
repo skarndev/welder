@@ -239,7 +239,13 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
   `WELDER_DOXYGEN_API`; missing → no-op) and wraps inline `<code>` spans naming
   welder API entities in links to their reference pages. Resolution order: exact
   qualified name → implicit `welder::` prefix → `welder::welder::` member (the
-  entry points) → unique short name (len ≥ 4, and never the `_DENY` words —
+  entry points) → **rod-contract hook**: a bare name that ≥3 of the
+  `welder::rods::…::rod` structs declare as a public member (`make_class`,
+  `add_field`, `special_method_name`, …) links to the `welder::rod` *concept*
+  page — it is ambiguous *because* every rod implements it, and the prose means
+  the contract, not one rod's implementation (`_`-prefixed helpers and ≤2-rod
+  extras like `generate`/`construction_type` are excluded) → unique short name
+  (len ≥ 4, and never the `_DENY` words —
   `detail`, `impl`, pybind11's `export_values`, … — which read as the *user's*
   code when bare). Normalization strips `[[=…]]` wrappers, template args and call
   parens (`weld_type<T>(m)` → `weld_type`); existing `<a>`/`<pre>` regions are

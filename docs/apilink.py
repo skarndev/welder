@@ -14,7 +14,12 @@ Resolution is deliberately conservative, in this order:
 2. the span with an implicit ``welder::`` prefix (``naming::none``, ``policy::opt_in``);
 3. for a bare identifier, a ``welder::welder::`` member (the entry points:
    ``weld_type``, ``weld_namespace``, …);
-4. for a bare identifier of >= 4 chars, a *unique* short name anywhere in the API
+4. for a bare identifier that is a **rod-contract hook** — a member most of the
+   ``welder::rods::…::rod`` structs implement (``make_class``, ``add_field``,
+   ``special_method_name``, …) — the ``welder::rod`` *concept* page: such a name is
+   ambiguous *because* every rod implements it, and what the prose means is the
+   contract, not any one rod's implementation;
+5. for a bare identifier of >= 4 chars, a *unique* short name anywhere in the API
    (``pep8``, ``google_style``, ``cleandoc``) — skipped when ambiguous (``rod``).
 
 Normalization strips the annotation wrapper (``[[=…]]``), template argument lists
@@ -44,6 +49,8 @@ _symbols: dict[str, str] = {}
 _short: dict[str, set[str]] = {}
 # Include path under src/ ("welder/rods/python/pybind11/rod.hpp") -> file-page URL.
 _includes: dict[str, str] = {}
+# Rod-contract hook names (members most `welder::rods::…::rod` structs implement).
+_rod_hooks: set[str] = set()
 
 # Compound kinds worth linking to (files/dirs/pages are not API entities).
 _COMPOUND_KINDS = {"class", "struct", "union", "namespace", "concept"}
@@ -68,7 +75,13 @@ def _register(name: str, url: str) -> None:
     _short.setdefault(name.rsplit("::", 1)[-1], set()).add(_symbols[name])
 
 
+# A rod struct's fully qualified name (the template-less tag-file spelling).
+_ROD_COMPOUND = re.compile(r"welder::rods::\w+::rod")
+
+
 def _load_tagfile(path: str) -> None:
+    # name -> number of distinct rod structs declaring a member of that name.
+    rod_member_rods: dict[str, int] = {}
     root = ET.parse(path).getroot()
     for compound in root.findall("compound"):
         kind = compound.get("kind")
@@ -78,6 +91,12 @@ def _load_tagfile(path: str) -> None:
             cfile += ".html"
         if kind in _COMPOUND_KINDS and cfile:
             _register(cname, cfile)
+        if _ROD_COMPOUND.fullmatch(cname):
+            # Public contract hooks only: the `_`-prefixed members are each rod's
+            # internal helpers, never what prose means by a bare name.
+            for mname in {m.findtext("name") or "" for m in compound.findall("member")}:
+                if mname and not mname.startswith("_"):
+                    rod_member_rods[mname] = rod_member_rods.get(mname, 0) + 1
         if kind == "file" and cfile and cname.endswith(".hpp"):
             # Key the file page by its include path: the source path under src/
             # ("…/src/welder/rods/…/") plus the header name.
@@ -99,6 +118,10 @@ def _load_tagfile(path: str) -> None:
                 _register(mname, url)  # macros are global; bare name
             elif kind in _COMPOUND_KINDS:
                 _register(cname + "::" + mname, url)
+    # A hook is contractual when *most* rods implement it (every current hook is in
+    # all of them); a rod-specific extra (`generate`, `construction_type`) sits at
+    # one or two and must not resolve to the contract.
+    _rod_hooks.update(n for n, rods in rod_member_rods.items() if rods >= 3)
 
 
 def _strip_trailing_parens(text: str) -> str:
@@ -175,6 +198,11 @@ def _resolve(name: str) -> tuple[str, str] | None:
         entry = "welder::welder::" + name
         if entry in _symbols:
             return entry, _symbols[entry]
+        # A rod-contract hook (`make_class`, `add_field`, …) is ambiguous precisely
+        # because every rod implements it; the prose means the contract, so link the
+        # `welder::rod` concept page, which documents each hook's role.
+        if name in _rod_hooks and "welder::rod" in _symbols:
+            return "welder::rod", _symbols["welder::rod"]
         if len(name) >= 4 and len(_short.get(name, ())) == 1:
             (url,) = _short[name]
             return name, url
@@ -184,6 +212,8 @@ def _resolve(name: str) -> tuple[str, str] | None:
 def on_config(config, **kwargs):
     _symbols.clear()
     _short.clear()
+    _includes.clear()
+    _rod_hooks.clear()
     api = os.environ.get("WELDER_DOXYGEN_API")
     if not api:
         return
