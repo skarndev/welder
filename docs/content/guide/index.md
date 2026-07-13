@@ -8,6 +8,7 @@ the annotation vocabulary, and each binding feature with runnable examples.
 -   **[Getting started](getting-started.md)** — toolchain, build, your first module.
 -   **[Annotation vocabulary](annotations.md)** — `weld`, `policy`, `mark`, and how resolution works.
 -   **[Binding a type](binding-types.md)** — fields, constructors, methods, operators.
+-   **[Binding templates](templates.md)** — annotate the template, bind instantiations.
 -   **[Enums](enums.md)** — scoped/unscoped enums and per-enumerator marks.
 -   **[Inheritance](inheritance.md)** — welded bases vs. flattened mixins.
 -   **[Namespaces & modules](namespaces-modules.md)** — bind a whole namespace or module in one line.
@@ -15,6 +16,8 @@ the annotation vocabulary, and each binding feature with runnable examples.
 -   **[The bindability gate](bindability.md)** — why an unrepresentable type is a hard error.
 -   **[Trust & type casters](trust-casters.md)** — escape hatches for types welder can't see.
 -   **[Generating C++ docs](cpp-docs.md)** — the Doxygen INPUT_FILTER that reads the same annotations.
+-   **[Extending welder](extending.md)** — write your own rod, resolution, or entry point.
+-   **[Troubleshooting & FAQ](faq.md)** — the common errors and their fixes.
 
 </div>
 
