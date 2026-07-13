@@ -99,9 +99,13 @@ def _load_tagfile(path: str) -> None:
                     rod_member_rods[mname] = rod_member_rods.get(mname, 0) + 1
         if kind == "file" and cfile and cname.endswith(".hpp"):
             # Key the file page by its include path: the source path under src/
-            # ("…/src/welder/rods/…/") plus the header name.
+            # plus the header name. With STRIP_FROM_PATH (project root) the tag
+            # file's <path> is root-relative ("src/welder/rods/…/"); without it,
+            # absolute ("…/src/welder/rods/…/") — accept both spellings.
             src_path = compound.findtext("path") or ""
-            if "/src/" in src_path:
+            if src_path.startswith("src/"):
+                _includes[src_path[len("src/") :] + cname] = cfile
+            elif "/src/" in src_path:
                 _includes[src_path.split("/src/", 1)[1] + cname] = cfile
         if kind not in _COMPOUND_KINDS and kind != "file":
             continue

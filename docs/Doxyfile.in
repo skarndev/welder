@@ -28,6 +28,16 @@ RECURSIVE              = YES
 FILE_PATTERNS          = *.hpp *.md
 USE_MDFILE_AS_MAINPAGE = @DOXYGEN_MAINPAGE@
 
+# Show file paths relative to the project root ("src/welder/…"), never the
+# absolute checkout path — left unset, doxygen strips only its own working
+# directory, so a CI build leaks /home/runner/work/… into the include/directory
+# graphs, the file pages and the tag file. Include names also strip the include
+# root ("welder/vocabulary.hpp"). NB apilink.py keys its include-path links off
+# the tag file's <path> values, which this makes root-relative — its parsing
+# accepts both the absolute and the stripped spelling.
+STRIP_FROM_PATH        = @CMAKE_SOURCE_DIR@
+STRIP_FROM_INC_PATH    = @CMAKE_SOURCE_DIR@/src
+
 # Read welder annotations via the INPUT_FILTER (needs a Python with `lark`).
 INPUT_FILTER           = "@WELDER_FILTER_PYTHON@ @WELDER_FILTER@"
 

@@ -187,7 +187,12 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
   `INTERNAL_DOCS`, source browser on) — from the real `src/welder/**.hpp` through
   the **same INPUT_FILTER** as above, so `[[=welder::doc/returns/tparam]]` come
   through. `docs/Doxyfile.in` (configured), landing on `docs/api_mainpage.md`
-  (`USE_MDFILE_AS_MAINPAGE`). Themed with **doxygen-awesome-css** (**v2.4.2**,
+  (`USE_MDFILE_AS_MAINPAGE`). `STRIP_FROM_PATH = <project root>` (+
+  `STRIP_FROM_INC_PATH = <root>/src`) keeps every displayed path root-relative
+  (`src/welder/…`) — unset, doxygen strips only its own working dir, so CI builds
+  leaked `/home/runner/work/…` into the include/dir graphs, file pages and tag
+  file; apilink.py's include keying accepts both the stripped and absolute
+  `<path>` spellings. Themed with **doxygen-awesome-css** (**v2.4.2**,
   git-cloned into a version-named build dir at configure time — degrades gracefully
   to the stock theme on network/`git` failure).
   **Version matters:** Doxygen 1.11+ rewrote its navigation to a `#page-nav-*`
