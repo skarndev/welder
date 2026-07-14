@@ -103,8 +103,10 @@ welder via FetchContent and FetchContent-pins the backends (pybind11 v3.0.1,
 nanobind v2.13.0, sol2 v3.5.0, all `OVERRIDE_FIND_PACKAGE` so welder's own
 `find_package(<backend>)` calls redirect to them; made available at the cookbook's
 top scope BEFORE welder so nanobind's `NB_DIR` is inherited by welder's subdir).
-Building it therefore tests the consumer packaging path; CI (Linux + macOS jobs,
-"Cookbook" step; not Windows) redirects the welder fetch to the checkout with
+Building it therefore tests the consumer packaging path; CI (Linux, macOS AND
+Windows jobs, "Cookbook" step — Windows runs it with `WELDER_BUILD_SOL2=OFF` +
+`WELDER_LUABRIDGE_LUA_DIR=<ucrt64>` / 5.5, so LuaBridge3 carries the Lua side
+there) redirects the welder fetch to the checkout with
 `-DFETCHCONTENT_SOURCE_DIR_WELDER=$PWD`:
 
 ```bash
@@ -119,13 +121,20 @@ cmake --build build/cookbook && ctest --test-dir build/cookbook --output-on-fail
 Eight recipes (`01-hello` … `08-tack-welding`), each a self-contained dir with a
 `check.py`/`check.lua` CTest (`cookbook.<name>`), each documented as a page in the
 docs **Cookbook** section (`docs/content/cookbook/` — keep recipe ↔ page in sync).
-Notables: 05 uses `welder_generate_trampolines`, 07 is nanobind + sol2 + LuaCATS +
-nanobind's bundled `.pyi` stubgen from one header (backend-flavored methods via
-`mark::only` + cross-included framework headers — unused inline members aren't
-emitted, so no cross-language symbol leakage; the sol2/luacats/nanobind targets all
-need the *other* framework's include paths), 08 tack-welds an unannotated header
-(needs the type-level `trust_bindable<Vec3>` hatch — under tack, a greedily
-registered class type in signatures is not provably bindable). `WELDER_LUA_DIR`
+Notables: 05 uses `welder_generate_trampolines`, 07 is nanobind + BOTH Lua rods
+(sol2 + LuaBridge3 — both `.so`s answer `require("journal")` from per-rod output
+dirs, the same check.lua asserts both, all entry points via the styled
+`WELDER_MODULE(ns, rod, WelderType)` form) + LuaCATS + nanobind's bundled `.pyi`
+stubgen from one header. Its language-flavored methods via `mark::only`: the py
+flavor uses nb::object (nanobind header cross-included everywhere; unused inline
+members aren't emitted → no cross-language symbol leakage; the Lua/luacats targets
+need the nanobind+Python include paths), the lua flavor is a framework-NEUTRAL
+std::function (one language, two rods — a sol2 type would lock it to sol2), with
+LuaBridge3 taught the conversion by a `luabridge::Stack<std::function<…>>`
+specialization in its own TU (sol2 converts natively; framework glue lives in the
+framework's TU). 08 tack-welds an unannotated header
+(no hatch needed — greedy_resolution's `counts_as_registered` accepts the types
+its own pass registers; see bindability-gate.md). `WELDER_LUA_DIR`
 unset ⇒ the sol2 half of 07 is skipped (message, not error). The umbrella defines
 `cookbook_add_pybind11_module()` (the Python_add_library + hidden-visibility
 boilerplate).

@@ -136,6 +136,27 @@ jobs:
       - name: Test
         run: ctest --preset welder-gcc16 --output-on-failure
 
+      # The cookbook is a standalone consumer super-project: it obtains welder via
+      # FetchContent (redirected to this checkout) and FetchContent-pins the
+      # backends itself — no Conan. On Windows the Lua half of recipe 07 runs on
+      # LuaBridge3 against the ucrt64 Lua 5.5 (sol2 stays off — it rejects 5.5).
+      - name: Cookbook (FetchContent consumption)
+        run: |
+          set -euo pipefail
+          PYVER=$(python -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')")
+          PYEXE=$(cygpath -m "$(python -c 'import sys; print(sys.executable)')")
+          LUA_PREFIX=$(cygpath -m "$MSYSTEM_PREFIX")
+          cmake -S examples/cookbook -B build/cookbook -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFETCHCONTENT_SOURCE_DIR_WELDER="$(cygpath -m "$PWD")" \
+            -DWELDER_PYTHON_VERSION="$PYVER" \
+            -DPython_EXECUTABLE="$PYEXE" \
+            -DWELDER_BUILD_SOL2=OFF \
+            -DWELDER_LUABRIDGE_LUA_VERSION=5.5 \
+            -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX"
+          cmake --build build/cookbook
+          ctest --test-dir build/cookbook --output-on-failure
+
   # ---------------------------------------------------------------------------
   # Windows abi3 — the shippable case. Proves a welder/nanobind extension built
   # with UCRT-MinGW gcc-16 loads in a STOCK MSVC CPython (the interpreter

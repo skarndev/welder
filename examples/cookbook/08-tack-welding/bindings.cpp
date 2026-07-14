@@ -16,13 +16,11 @@
 
 #include "vecmath.hpp" // the "third-party" header — zero welder annotations
 
-// One hatch is needed: vecmath::Vec3 appears in signatures (dot, cross, ...),
-// and the bindability gate proves a class type representable via its weld marker
-// — which a third-party type doesn't have. The greedy pass below DOES register
-// Vec3, so vouch for it with the type-level trust_bindable hatch (the same hatch
-// you'd use for a hand-registered type).
-template <>
-inline constexpr bool welder::trust_bindable<vecmath::Vec3> = true;
+// Note vecmath::Vec3 appears in signatures (dot, cross, ...) without carrying a
+// weld marker: the tack carriage's registration oracle accepts class types its
+// own greedy pass registers, so no trust_bindable hatch is needed for the
+// library's own types. (A type you never tack-weld — or a forward declaration —
+// still trips the bindability gate.)
 
 PYBIND11_MODULE(fastvec, m) {
     m.doc() = "welder cookbook 08 - tack-welding an unannotated library";

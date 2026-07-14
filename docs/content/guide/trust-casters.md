@@ -12,9 +12,10 @@ The third is a **rod-native caster**, so its exact form depends on the rod.
 
 !!! example "In the cookbook"
 
-    [Recipe 07](../cookbook/multilang.md) uses the member mark (a framework type
-    the LuaCATS stub rod can't see); [Recipe 08](../cookbook/tack-welding.md) uses
-    the type-level form to tack-weld a third-party type appearing in signatures.
+    [Recipe 07](../cookbook/multilang.md) uses the member mark for a framework
+    type the LuaCATS stub rod can't see. (Tack welding — [Recipe
+    08](../cookbook/tack-welding.md) — needs *no* hatch for the tacked library's
+    own types: the greedy pass vouches for what it registers itself.)
 
 ## 1. `mark::trust_bindable` — trust one member
 

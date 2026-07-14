@@ -21,8 +21,8 @@ loads the module and proves what bound.
 -   **[06 — Templates](templates.md)** — weld class/function template
     instantiations under explicit names.
 -   **[07 — One library, two languages](multilang.md)** — Python (nanobind) + Lua
-    (sol2) from one header: name styles, per-language `weld_as`, `mark::only`
-    backend flavors, `.pyi` + LuaCATS stubs.
+    (sol2 *and* LuaBridge3) from one header: name styles, per-language `weld_as`,
+    `mark::only` language flavors, `.pyi` + LuaCATS stubs.
 -   **[08 — Tack welding](tack-welding.md)** — greedily bind a third-party library
     that carries no welder annotations at all.
 

@@ -18,13 +18,6 @@ constants, a nested namespace, and **zero welder annotations**.
 ```cpp
 #include "vecmath.hpp" // the "third-party" header — zero welder annotations
 
-// One hatch: vecmath::Vec3 appears in signatures (dot, cross, ...) and the
-// bindability gate proves a class type representable via its weld marker — which
-// a third-party type doesn't have. The greedy pass below DOES register Vec3, so
-// vouch for it with the type-level trust hatch.
-template <>
-inline constexpr bool welder::trust_bindable<vecmath::Vec3> = true;
-
 PYBIND11_MODULE(fastvec, m) {
     using tack = welder::welder<welder::rods::pybind11::rod<>,
                                 welder::naming::none,
@@ -34,13 +27,16 @@ PYBIND11_MODULE(fastvec, m) {
 ```
 
 Under tack welding every reflectable type/function/variable participates, nested
-namespaces recurse greedily into submodules, and public bases are flattened. Two
-things do **not** change:
+namespaces recurse greedily into submodules, and public bases are flattened.
+Note `Vec3` appearing in the library's own signatures (`dot`, `cross`) with no
+annotation and no hatch: the tack carriage's registration oracle accepts class
+types its own greedy pass registers. Two things do **not** change:
 
-- **The [bindability gate](../guide/bindability.md) still holds.** A
-  non-representable member reachable from a bound entity stays a compile error;
-  the [`trust_bindable` hatches](../guide/trust-casters.md) are the escape valve
-  (here: the type-level one, for the library's own class type in signatures).
+- **The [bindability gate](../guide/bindability.md) still holds.** A genuinely
+  non-representable type stays a compile error, as does a **forward-declared**
+  (incomplete) type the walk cannot register; for a type registered elsewhere
+  (hand-bound, another library's bindings), the
+  [`trust_bindable` hatches](../guide/trust-casters.md) remain the escape valve.
 - **Marks are still honored.** If the header does carry a `mark::exclude`
   (perhaps via a patch), it is respected.
 

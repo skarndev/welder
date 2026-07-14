@@ -33,7 +33,7 @@ src/welder/
   bindable.hpp          generic bindability gate (STL-wrapper recursion); the `caster_oracle` concept it uses now lives in concepts.hpp — uses <meta>
   carriage.hpp          the **carriage** (`carriages::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). Split out of welder.hpp — uses <meta>
   welder.hpp            the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Includes concepts.hpp + carriage.hpp. Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
-  module.hpp            WELDER_MODULE(ns, rod) binding-module entry-point dispatch macro (NOT a C++20 module)
+  module.hpp            WELDER_MODULE(ns, rod[, WelderType]) binding-module entry-point dispatch macro (NOT a C++20 module). The optional variadic third arg is the exact welder::welder<…> to weld with (threads a name style / custom carriage through the one-line form; commas in the template-id survive via __VA_ARGS__; detail::module_welder_t picks override-else-default; each rod's entry macro static_asserts the override's module_type matches)
   vocabulary.hpp        the single include a consuming TU uses for the vocabulary: lang+annotations only (welder is header-only; no C++20 `import welder;` today)
   rods/
     python/
@@ -136,8 +136,14 @@ reflectable type/function/global participates, namespaces recurse greedily
 (`namespace_has_bindable`, the welded_for-free twin of `namespace_has_bound` in
 bind_traits), and every public base is *flattened* (Resolution::is_native_base = false, so
 no reliance on a base being separately registered) — for welding a third-party library
-with no welder annotations. Bindability is **still enforced** in tack mode, so a
-non-representable member reachable from a bound entity is a hard error (hatch with
+with no welder annotations. Bindability is **still enforced** in tack mode, but the
+gate's registration oracle adapts: the `resolution` concept requires
+`counts_as_registered(type, L)` (bindable.hpp threads it as `Reg`, default
+`welder::welded_registration` = welded_for) — greedy_resolution accepts any
+*complete*, non-excluded class/enum, so a tacked library's own types pass in its
+signatures without a trust hatch (a pure predicate, never a visited-set → multi-pass
++ forward references stay order-independent; incomplete/forward-declared types still
+hard-error). A genuinely non-representable member is still a hard error (hatch with
 `trust_bindable`); any `mark::exclude` that happens to be present is still honored (via
 `member_bound`). The sol2/luacats free-function overload gathering
 (`rods/lua/overloads.hpp` `function_overload_set`) is resolution-agnostic by gathering

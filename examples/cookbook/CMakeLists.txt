@@ -59,25 +59,46 @@ set(WELDER_PYTHON_VERSION "3.14" CACHE STRING
 find_package(Python ${WELDER_PYTHON_VERSION} REQUIRED
   COMPONENTS Interpreter Development.Module)
 
+# --- welder itself ----------------------------------------------------------------
+# Pulled in as a subproject, welder builds nothing of its own; each WELDER_BUILD_*
+# flipped ON opts into that rod's INTERFACE target + helper wiring.
+set(WELDER_BUILD_PYBIND11 ON)
+set(WELDER_BUILD_NANOBIND ON)
+
+# The Lua rods need a real Lua install to match the interpreter that will
+# `require` the modules (a cross-minor mismatch segfaults at require). sol2 rides
+# WELDER_LUA_DIR (Lua <= 5.4); LuaBridge3 has its own knob defaulting to the sol2
+# one (WELDER_LUABRIDGE_LUA_DIR — point it at a 5.5 install where sol2 can't
+# follow, e.g. ucrt64). Each defaults ON when its Lua is available; pass an
+# explicit -DWELDER_BUILD_<rod>=OFF to override (CI turns sol2 off on Windows).
+if(NOT DEFINED WELDER_BUILD_SOL2)
+  if(WELDER_LUA_DIR)
+    set(WELDER_BUILD_SOL2 ON)
+  else()
+    message(STATUS "cookbook: WELDER_LUA_DIR not set - skipping the sol2 side of "
+      "07-multilang (pass -DWELDER_LUA_DIR=<lua install prefix> to enable it)")
+    set(WELDER_BUILD_SOL2 OFF)
+  endif()
+endif()
+if(NOT DEFINED WELDER_BUILD_LUABRIDGE)
+  if(WELDER_LUABRIDGE_LUA_DIR OR WELDER_LUA_DIR)
+    set(WELDER_BUILD_LUABRIDGE ON)
+  else()
+    message(STATUS "cookbook: no Lua install given - skipping the LuaBridge3 side "
+      "of 07-multilang (pass -DWELDER_LUA_DIR or -DWELDER_LUABRIDGE_LUA_DIR)")
+    set(WELDER_BUILD_LUABRIDGE OFF)
+  endif()
+endif()
+# LuaBridge3 itself is header-only with no package to find — let welder's build
+# FetchContent its pinned copy when the rod is enabled.
+set(WELDER_LUABRIDGE_FETCH ${WELDER_BUILD_LUABRIDGE})
+
 # Make the backends available at THIS scope before welder is pulled in, so their
 # targets/config variables (e.g. nanobind's NB_DIR) are visible to welder's
 # subdirectory when its find_package() calls are redirected here.
-FetchContent_MakeAvailable(pybind11 nanobind sol2)
-
-# --- welder itself ----------------------------------------------------------------
-# Pulled in as a subproject, welder builds nothing of its own; each WELDER_BUILD_*
-# flipped ON opts into that rod's INTERFACE target + helper wiring. sol2 needs a
-# real Lua install to match the interpreter that will `require` the module — point
-# WELDER_LUA_DIR at one (e.g. `brew --prefix lua@5.4`); without it the Lua recipe
-# is skipped.
-set(WELDER_BUILD_PYBIND11 ON)
-set(WELDER_BUILD_NANOBIND ON)
-if(WELDER_LUA_DIR)
-  set(WELDER_BUILD_SOL2 ON)
-else()
-  message(STATUS "cookbook: WELDER_LUA_DIR not set - skipping the sol2 side of "
-    "07-multilang (pass -DWELDER_LUA_DIR=<lua install prefix> to enable it)")
-  set(WELDER_BUILD_SOL2 OFF)
+FetchContent_MakeAvailable(pybind11 nanobind)
+if(WELDER_BUILD_SOL2)
+  FetchContent_MakeAvailable(sol2)
 endif()
 
 FetchContent_Declare(welder
@@ -85,13 +106,22 @@ FetchContent_Declare(welder
   GIT_TAG main)
 FetchContent_MakeAvailable(welder)
 
-# The Lua interpreter that runs the Lua checks — from the same install the sol2
-# module is built against (a cross-minor mismatch would segfault at require).
+# The Lua interpreters that run the Lua checks — each from the same install its
+# module is built against.
 if(WELDER_BUILD_SOL2)
   find_program(WELDER_COOKBOOK_LUA NAMES lua "lua${WELDER_LUA_VERSION}"
     HINTS "${WELDER_LUA_DIR}/bin" NO_DEFAULT_PATH)
   if(NOT WELDER_COOKBOOK_LUA)
     find_program(WELDER_COOKBOOK_LUA NAMES lua "lua${WELDER_LUA_VERSION}")
+  endif()
+endif()
+if(WELDER_BUILD_LUABRIDGE)
+  find_program(WELDER_COOKBOOK_LUABRIDGE_LUA
+    NAMES lua "lua${WELDER_LUABRIDGE_LUA_VERSION}"
+    HINTS "${WELDER_LUABRIDGE_LUA_DIR}/bin" "${WELDER_LUA_DIR}/bin" NO_DEFAULT_PATH)
+  if(NOT WELDER_COOKBOOK_LUABRIDGE_LUA)
+    find_program(WELDER_COOKBOOK_LUABRIDGE_LUA
+      NAMES lua "lua${WELDER_LUABRIDGE_LUA_VERSION}")
   endif()
 endif()
 

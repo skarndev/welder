@@ -152,12 +152,24 @@ PYBIND11_MODULE(thirdparty, m) {
 !!! warning "Bindability is still enforced"
 
     Tack welding drops the *marker* requirement, **not** the [bindability
-    gate](bindability.md). A greedily-bound entity whose type welder can't represent
-    (e.g. a function returning an unbindable type) is still a hard compile error — you
-    just can't `mark::exclude` it, since the header is unannotated. Vouch for such a
-    type with a type-level [`trust_bindable<T>`](trust-casters.md), or point the tack
-    at a narrower sub-namespace. Any `mark::exclude` that *does* happen to be present
-    is still honored, so a partially-annotated header can still prune.
+    gate](bindability.md). The gate's *registration oracle* does adapt: under tack
+    welding, a class/enum type the greedy pass itself registers (any complete,
+    non-excluded type — like `Vec2` in `midpoint`'s signature above) counts as
+    registered, so the library's own types may appear in its signatures with no
+    hatch. Everything else still hard-errors at compile time: a genuinely
+    unrepresentable type, or a **forward-declared** (incomplete) one the walk
+    cannot register. Vouch for a type registered elsewhere with a type-level
+    [`trust_bindable<T>`](trust-casters.md), or point the tack at a narrower
+    sub-namespace. Any `mark::exclude` that *does* happen to be present is still
+    honored, so a partially-annotated header can still prune.
+
+    The flip side of the greedy oracle: it can't know *which* namespaces you tack.
+    A signature naming a registrable type you never actually weld binds fine but
+    raises the framework's unregistered-type error at **call time**. And — a
+    framework property, not welder's — pybind11 renders docstrings at `def` time,
+    so a signature referencing a type declared *later* in the namespace spells the
+    raw C++ name in docstrings/`.pyi` stubs; declare types before the signatures
+    that use them (C++ mostly forces this anyway).
 
 Both carriages ship as `welder::stitch_welding_carriage` (the default) and
 `welder::tack_welding_carriage`; a custom traversal is a
@@ -266,6 +278,17 @@ The `rod` selector is the **rod name** (`pybind11`, `nanobind`, `sol2`,
 Under the hood, `WELDER_MODULE` wraps
 `welder::welder<Rod>::weld_module<^^ns>(m, pre, post)`: a *pre* hook, then
 `weld_namespace`, then a *post* hook (your trailing block).
+
+By default that is the plain `welder::welder<rod>`. An optional **third argument**
+names the exact `welder::welder<…>` type to drive the weld with instead — the way
+to thread a [name style](naming.md) (or a custom carriage) through the one-line
+module form; commas inside the template-id are fine:
+
+```cpp
+WELDER_MODULE(shapes, pybind11,
+              welder::welder<welder::rods::pybind11::rod<>,
+                             welder::rods::python::pep8>) {}
+```
 
 !!! warning "One `WELDER_MODULE` per rod per TU — but several rods can coexist"
 

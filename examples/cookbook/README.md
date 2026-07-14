@@ -22,9 +22,10 @@ ctest --test-dir build/cookbook --output-on-failure
 
 Omit `FETCHCONTENT_SOURCE_DIR_WELDER` to fetch welder from GitHub instead (what a
 reader copying a recipe gets). Omit `WELDER_LUA_DIR` to skip the Lua half of
-recipe 07. The backends (pybind11, nanobind, sol2) are FetchContent-pinned by the
-top-level `CMakeLists.txt` — no Conan, nothing preinstalled beyond gcc-16,
-CMake/Ninja, Python and (optionally) Lua.
+recipe 07 (or point `WELDER_LUABRIDGE_LUA_DIR` at a Lua 5.5 install — e.g. MSYS2
+ucrt64, which is how Windows CI runs it with sol2 off). The backends (pybind11,
+nanobind, sol2, LuaBridge3) are FetchContent-pinned — no Conan, nothing
+preinstalled beyond gcc-16, CMake/Ninja, Python and (optionally) Lua.
 
 | Recipe | Shows |
 |---|---|
@@ -34,5 +35,5 @@ CMake/Ninja, Python and (optionally) Lua.
 | `04-virtuals` | Python subclasses overriding C++ virtuals — hand-written trampolines, both discovery forms, `bind_flat` |
 | `05-generated-trampolines` | the same, with the trampolines generated at build time (`welder_generate_trampolines`) |
 | `06-templates` | welding class/function template instantiations under explicit names |
-| `07-multilang` | one header → Python (nanobind) + Lua (sol2): name styles, per-language `weld_as`, `mark::only` backend flavors, `.pyi` + LuaCATS stubs |
+| `07-multilang` | one header → Python (nanobind) + Lua (sol2 **and** LuaBridge3, same checks): name styles, per-language `weld_as`, `mark::only` language flavors, `.pyi` + LuaCATS stubs |
 | `08-tack-welding` | greedily binding an unannotated third-party library (`tack_welding_carriage`) |

@@ -188,10 +188,15 @@ content. Declaration order.
 ## Whole-module binding — `weld_module<^^ns>(m, pre, post)`
 Fills an *existing* module (pre hook → `weld_namespace` → post hook; namespace
 `doc` → module doc). The C entry symbol `PyInit_<name>` must be preprocessor-pasted,
-so the rod-agnostic `WELDER_MODULE(ns, rod)` macro (`module.hpp`) wraps it
-(namespace token = module name, optional trailing `{ }` post-glue with the module
-handle in scope as `module`). One `WELDER_MODULE` per rod per TU; two Python
-rods collide (both emit `PyInit_<name>`).
+so the rod-agnostic `WELDER_MODULE(ns, rod[, WelderType])` macro (`module.hpp`)
+wraps it (namespace token = module name, optional trailing `{ }` post-glue with the
+module handle in scope as `module`). The optional third argument is the exact
+`welder::welder<…>` to drive the weld — the way to thread a name style / custom
+carriage through the one-line form (variadic, so template-id commas survive;
+`detail::module_welder_t` picks override-else-default; each rod entry macro
+static_asserts the override's `module_type`). Covered by cookbook recipe 07 (all
+three runtime entry points use the styled form). One `WELDER_MODULE` per rod per
+TU; two Python rods collide (both emit `PyInit_<name>`).
 
 ## Template ↔ annotation semantics
 Locked in by `tests/core/template_annotations.cpp` (compile-only static_asserts):

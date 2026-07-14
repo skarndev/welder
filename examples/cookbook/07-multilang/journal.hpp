@@ -2,22 +2,27 @@
 // Cookbook 07 — one C++ library, shipped to Python AND Lua.
 //
 // Everything here is welded for both languages; the per-language shaping happens
-// in the annotations (per-language weld_as; mark::only for backend-flavored
+// in the annotations (per-language weld_as; mark::only for language-flavored
 // members) and at the entry points (a name style per rod). The same header is
-// compiled by the nanobind TU, the sol2 TU and the LuaCATS stub generator.
+// compiled by the nanobind TU, both Lua TUs (sol2 AND LuaBridge3 — one language,
+// two frameworks) and the LuaCATS stub generator.
 //
-// The backend-flavored methods (save_to) are the one place framework types
-// appear: each is gated to its language with mark::only, so the other rod never
-// binds — or even inspects — it. Both frameworks' headers are included so the
-// class definition is identical in every TU; an inline member that a TU never
-// uses is not emitted, so the Python module carries no Lua code and vice versa.
+// The language-flavored methods (save_to) come in two shapes. The Python one uses
+// a real framework type (nanobind::object — a file-like), gated to lang::py with
+// mark::only so no Lua rod ever binds — or even inspects — it; the nanobind
+// header is included here so the class definition is identical in every TU, and
+// an inline member a TU never uses is not emitted, so the Lua modules carry no
+// Python code. The Lua one is deliberately framework-NEUTRAL (std::function):
+// lang::lua is ONE language served by TWO rods here, and a sol2 type in the
+// signature would lock the method to sol2 — the neutral callback binds under
+// both.
+#include <functional>
 #include <string>
 #include <vector>
 
 #include <welder/vocabulary.hpp>
 
 #include <nanobind/nanobind.h> // for the Python-flavored save_to
-#include <sol/sol.hpp>         // for the Lua-flavored save_to
 
 namespace
 [[=welder::doc("A tiny journalling library.")]]
@@ -80,15 +85,15 @@ Notebook {
         file.attr("write")(nanobind::str(renderAll().c_str()));
     }
 
-    //  - Lua: a writer callback, the idiomatic Lua sink. The sol2 rod converts
-    //    sol::protected_function natively, but the LuaCATS stub rod (no sol2
-    //    dependency) cannot know that — mark::trust_bindable(lua) vouches for the
-    //    signature, so the stub emits it (the param types as `any`).
+    //  - Lua: a writer callback, the idiomatic Lua sink — a framework-neutral
+    //    std::function so the SAME method binds under sol2 and LuaBridge3.
+    //    mark::trust_bindable(lua) vouches for the signature toward the LuaCATS
+    //    stub rod, which has no Lua framework whose casters it could consult.
     [[=welder::mark::only(welder::lang::lua),
       =welder::mark::trust_bindable(welder::lang::lua),
       =welder::weld_as("save_to"),
       =welder::doc("Pass each rendered line to a writer function.")]]
-    void saveToWriter(sol::protected_function write) const {
+    void saveToWriter(const std::function<void(const std::string&)>& write) const {
         for (const auto& e : entries_) { write(e.renderLine()); }
     }
 

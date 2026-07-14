@@ -202,9 +202,11 @@ Two resolutions ship, with their carriage aliases:
     library with the tack carriage end to end.
 
 A bespoke resolution is a stateless struct satisfying the `welder::resolution`
-concept — four `consteval` predicates (`participates`, `is_native_base`,
-`member_participates`, `namespace_participates`) plus the `native_bases<T, L>`
-hook. Since the shipped resolutions are ordinary structs, delegation is plain
+concept — five `consteval` predicates (`participates`, `is_native_base`,
+`member_participates`, `namespace_participates`, and `counts_as_registered` —
+the bindability gate's *registration oracle*: which class/enum types may appear
+in bound signatures because welding under this resolution registers them) plus
+the `native_bases<T, L>` hook. Since the shipped resolutions are ordinary structs, delegation is plain
 inheritance. For example, tack-welding a third-party library while skipping
 its underscore-prefixed internals:
 

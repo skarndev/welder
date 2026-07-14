@@ -21,9 +21,27 @@ and the smart-pointer holders (so `std::vector<Unwelded>` is caught, not just a
 bare `Unwelded`). Reflection can enumerate a specialization's arguments but not
 tell which are value-bearing vs. infrastructure (allocator/comparator/hasher/
 deleter/extent), so the per-wrapper leading-arg *count* is the one thing the table
-still records. `bindable<B, T, L>()` folds these: a wrapper binds iff its value
+still records. `bindable<B, T, L, Reg>()` folds these: a wrapper binds iff its value
 args do; a native/user-caster type binds as-is; otherwise it's a
-registration-needing class/enum, bound iff `welded_for`.
+registration-needing class/enum, bound iff the **registration oracle** `Reg`
+promises a registration. `Reg` defaults to `welder::welded_registration`
+(`counts_as_registered` = `welded_for` — the historical behavior, used by every
+direct `bindable`/`assert_*` call); the carriage passes its *Resolution* instead
+(the `resolution` concept now requires the `counts_as_registered(type, L)` hook):
+`marker_resolution` → `welded_for` (identical), `greedy_resolution` → any
+*complete*, non-excluded class/enum — a tack-welded library's own types pass in
+its signatures with no trust hatch (the same greedy pass registers them). The
+oracle is deliberately a **pure predicate of the declaration, never a
+visited-set**: multi-pass welds (several `weld_*` calls, several tacked
+namespaces) and forward references stay order-independent. Consequences, both
+tested: a *forward-declared* (incomplete) type still hard-errors
+(`negcompile.tack_incomplete_param`) since the walk can't register it; and a
+registrable type you never actually tack-weld binds but raises the framework's
+unregistered-type error at call time (trust semantics, documented). pybind11
+caveat (framework, not welder): docstrings render at def time, so a signature
+referencing a type *registered later* spells the raw C++ name in
+docstrings/stubs — the shared `foreign` case avoids fwd-decl hoisting for this
+reason (comment in tests/common/cpp/namespace.hpp).
 
 ## The one rod-specific leaf
 Native-vs-needs-registration is the rod's `has_native_caster<T>`
