@@ -84,6 +84,19 @@ if(WELDER_BUILD_SOL2)
       PATHS "${WELDER_LUA_DIR}/include"
       PATH_SUFFIXES "lua${WELDER_LUA_VERSION}" lua ""
       NO_DEFAULT_PATH)
+    # Pin the library from the same prefix too: FindLua hard-fails without
+    # LUA_LIBRARIES, and a keg-only install (brew lua@5.4) is invisible to its
+    # default search — welder's own conan build never noticed (conan's transitive
+    # lua on CMAKE_PREFIX_PATH supplied a library), but a conan-less consumer
+    # (the cookbook) does. welder never LINKS it (host-symbol model); pinning
+    # just makes WELDER_LUA_DIR self-sufficient and keeps the found version
+    # consistent with the pinned headers.
+    string(REPLACE "." "" _welder_lua_nodot "${WELDER_LUA_VERSION}")
+    unset(LUA_LIBRARY CACHE)
+    find_library(LUA_LIBRARY
+      NAMES lua "lua${WELDER_LUA_VERSION}" "lua-${WELDER_LUA_VERSION}"
+            "lua${_welder_lua_nodot}"
+      PATHS "${WELDER_LUA_DIR}/lib" NO_DEFAULT_PATH)
   endif()
   find_package(Lua MODULE REQUIRED)   # builtin FindLua: system/user, not conan
   if(NOT "${LUA_VERSION_MAJOR}.${LUA_VERSION_MINOR}" STREQUAL WELDER_LUA_VERSION)

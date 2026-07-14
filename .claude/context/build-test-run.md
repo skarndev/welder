@@ -191,7 +191,16 @@ toolchain matures.
 `welder::sol2` needs conan `with_sol2` (for the `sol2` C++ headers). **Lua itself is
 NOT from conan** — `src/welder/rods/CMakeLists.txt` finds it with CMake's builtin
 `FindLua`, pinned to `WELDER_LUA_DIR` so the user's install (not conan's transitive
-`lua`, which shadows the search via `CMAKE_PREFIX_PATH`) provides the headers. A Lua
+`lua`, which shadows the search via `CMAKE_PREFIX_PATH`) provides the headers **and
+the library** (both pinned: FindLua hard-fails without LUA_LIBRARIES, and a
+keg-only install is invisible to its default search — conan always masked this;
+the conan-less cookbook exposed it. welder still never links liblua). Relatedly,
+the sol2/luabridge `WELDER_MODULE` macros export `luaopen_<ns>` explicitly
+(`WELDER_DETAIL_LUAOPEN_EXPORT`: dllexport / default-visibility): a TU that also
+includes nanobind's headers (multi-language shared header) carries explicit
+dllexports, which turns OFF MinGW's export-everything default and `require` then
+fails with "specified procedure could not be found"; ELF/Mach-O gets
+default-visibility pinning against -fvisibility=hidden TUs. A Lua
 extension is created with `welder_sol2_add_module(<name> <sources>)`
 (cmake/WelderSol2Module.cmake): bare `<name>.so`, host-symbol link model, and
 **`CXX_SCAN_FOR_MODULES OFF`** (sol2's `<luaconf.h>` fails p1689 module scanning — a

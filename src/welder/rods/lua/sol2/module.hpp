@@ -15,6 +15,24 @@
 #include <welder/rods/lua/sol2/rod.hpp>
 #include <welder/module.hpp> // the backend-agnostic WELDER_MODULE dispatch
 
+/** @def WELDER_DETAIL_LUAOPEN_EXPORT
+    Export decoration for the emitted `luaopen_<ns>` symbol (platform-conditional
+    by necessity, like pybind11's/nanobind's own entry-point export macros).
+
+    On Windows any *explicit* `dllexport` elsewhere in the TU — e.g. nanobind's
+    headers, when a multi-language header is shared across rods — disables
+    MinGW's export-everything default, so the entry symbol must be exported
+    explicitly or `require` fails with "the specified procedure could not be
+    found". On ELF/Mach-O it pins default visibility, so a TU compiled with
+    `-fvisibility=hidden` (common in Python-extension builds) still exposes it. */
+#ifndef WELDER_DETAIL_LUAOPEN_EXPORT
+#  if defined(_WIN32)
+#    define WELDER_DETAIL_LUAOPEN_EXPORT __declspec(dllexport)
+#  else
+#    define WELDER_DETAIL_LUAOPEN_EXPORT __attribute__((visibility("default")))
+#  endif
+#endif
+
 /** @def WELDER_DETAIL_MODULE_ENTRY_sol2
     sol2's expansion of the backend-agnostic `WELDER_MODULE(ns, sol2)`.
 
@@ -32,7 +50,8 @@
 */
 #define WELDER_DETAIL_MODULE_ENTRY_sol2(ns, ...)                                  \
     static void welder_glue_##ns##_sol2(::sol::table&);                           \
-    extern "C" int luaopen_##ns(lua_State* welder_lua_state_) {                   \
+    extern "C" WELDER_DETAIL_LUAOPEN_EXPORT int luaopen_##ns(                     \
+        lua_State* welder_lua_state_) {                                           \
         ::sol::state_view welder_lua_{welder_lua_state_};                         \
         ::sol::table welder_module_var_{welder_lua_.create_table()};             \
         using welder_weld_ = ::welder::detail::module_welder_t<                   \
