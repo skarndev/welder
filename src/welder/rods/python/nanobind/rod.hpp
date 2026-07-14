@@ -111,42 +111,76 @@ struct rod {
     static constexpr bool _needs_registration =
         nb::detail::is_base_caster_v<nb::detail::make_caster<T>>;
 
+    /** Map welder's neutral @ref welder::rv_kind to nanobind's `rv_policy`.
+
+        nanobind carries the full set, `none` included, so every kind maps.
+        @param k the neutral policy.
+        @return the nanobind policy. */
+    static consteval nb::rv_policy _rv_policy(::welder::rv_kind k) {
+        switch (k) {
+        case ::welder::rv_kind::automatic:           return nb::rv_policy::automatic;
+        case ::welder::rv_kind::automatic_reference: return nb::rv_policy::automatic_reference;
+        case ::welder::rv_kind::take_ownership:      return nb::rv_policy::take_ownership;
+        case ::welder::rv_kind::copy:                return nb::rv_policy::copy;
+        case ::welder::rv_kind::move:                return nb::rv_policy::move;
+        case ::welder::rv_kind::reference:           return nb::rv_policy::reference;
+        case ::welder::rv_kind::reference_internal:  return nb::rv_policy::reference_internal;
+        case ::welder::rv_kind::none:                return nb::rv_policy::none;
+        }
+        return nb::rv_policy::automatic;
+    }
+
     /** Register the function/method reflected by @a Fn onto a nanobind target.
 
         The folded docstring is passed when non-empty, and `nb::arg(name)...` when
         every parameter is named (so Python callers see real keyword arguments, not
-        positional-only).
+        positional-only). Two call policies ride along as trailing `.def` extras:
+        the `[[=welder::return_policy]]` (mapped to `rv_policy`, always passed —
+        `automatic` is nanobind's default, so an unannotated call is unchanged) and
+        each `[[=welder::keep_alive]]` (spliced as `nb::keep_alive<nurse,
+        patient>()`). A reference-category policy on a by-value return is rejected
+        first (@ref welder::validate_return_policy).
         @tparam Fn a reflection of the function.
         @tparam Def the target-adapter callable type.
         @tparam I the parameter index pack.
+        @tparam K the keep_alive-dependency index pack.
         @param name     the Python name.
         @param def_into adapts the target — `cls.def`, `cls.def_static`, or `m.def`.
     */
-    template <std::meta::info Fn, class Def, std::size_t... I>
+    template <std::meta::info Fn, class Def, std::size_t... I, std::size_t... K>
     static void _def_function(const char* name, Def def_into,
-                              std::index_sequence<I...>) {
+                              std::index_sequence<I...>, std::index_sequence<K...>) {
         static constexpr auto names{::welder::detail::param_names<Fn>()};
-        const std::string doc{
-            ::welder::function_docstring<Fn, DocStyle>()};
+        static constexpr auto ka{::welder::detail::keep_alive_pairs<Fn>()};
+        ::welder::validate_return_policy<Fn, language>();
+        constexpr nb::rv_policy rvp{_rv_policy(::welder::return_policy_of(Fn, language))};
+        const std::string doc{::welder::function_docstring<Fn, DocStyle>()};
         if constexpr (::welder::detail::all_params_named<Fn>()) {
             if (doc.empty())
-                def_into(name, &[:Fn:], nb::arg(names[I])...);
+                def_into(name, &[:Fn:], nb::arg(names[I])..., rvp,
+                         nb::keep_alive<ka[K].nurse, ka[K].patient>()...);
             else
-                def_into(name, &[:Fn:], doc.c_str(), nb::arg(names[I])...);
+                def_into(name, &[:Fn:], doc.c_str(), nb::arg(names[I])..., rvp,
+                         nb::keep_alive<ka[K].nurse, ka[K].patient>()...);
         } else {
             if (doc.empty())
-                def_into(name, &[:Fn:]);
+                def_into(name, &[:Fn:], rvp,
+                         nb::keep_alive<ka[K].nurse, ka[K].patient>()...);
             else
-                def_into(name, &[:Fn:], doc.c_str());
+                def_into(name, &[:Fn:], doc.c_str(), rvp,
+                         nb::keep_alive<ka[K].nurse, ka[K].patient>()...);
         }
     }
 
-    /** Convenience overload: derive the parameter index sequence from @a Fn. */
+    /** Convenience overload: derive the parameter and keep_alive index sequences
+        from @a Fn. */
     template <std::meta::info Fn, class Def>
     static void _def_function(const char* name, Def def_into) {
-        _def_function<Fn>(name, def_into,
-                          std::make_index_sequence<
-                              std::meta::parameters_of(Fn).size()>{});
+        _def_function<Fn>(
+            name, def_into,
+            std::make_index_sequence<std::meta::parameters_of(Fn).size()>{},
+            std::make_index_sequence<
+                ::welder::detail::keep_alive_pairs<Fn>().size()>{});
     }
 
     /** Register `nb::init<P0, P1, …>()` for constructor @a Ctor.

@@ -66,6 +66,7 @@ void welder_test_chain_extra(Handle& cls) {
 #include "naming.hpp"
 #include "chaining.hpp"
 #include "overloads.hpp"
+#include "retpolicy.hpp"
 
 // The Lua entry point require("welder_test_luabridge") calls. Builds the module (a
 // named namespace under _G), fills it from every case group (each under its own
@@ -84,6 +85,7 @@ extern "C" int luaopen_welder_test_luabridge(lua_State* L) {
     register_naming(m);       // <-> naming_spec.lua
     register_chaining(m);     // <-> chaining_spec.lua (handles returned by weld_*)
     register_overloads(m);    // <-> overloads_spec.lua (per-overload / per-ctor marks)
+    register_retpolicy(m);    // <-> retpolicy_spec.lua (return_policy is structural in Lua)
     lua_getglobal(L, "welder_test_luabridge"); // the populated module table
     lua_pushnil(L);
     lua_setglobal(L, "welder_test_luabridge"); // keep _G clean

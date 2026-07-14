@@ -112,42 +112,83 @@ struct rod {
         std::is_base_of_v<py::detail::type_caster_base<py::detail::intrinsic_t<T>>,
                           py::detail::make_caster<T>>;
 
+    /** Map welder's neutral @ref welder::rv_kind to pybind11's
+        `return_value_policy`.
+
+        pybind11 has no analogue of nanobind's `none`, so `rv_kind::none` is
+        rejected at the bind site (a `static_assert` in @ref _def_function) rather
+        than mapped here; it falls through to `automatic` only to keep this total.
+        @param k the neutral policy.
+        @return the pybind11 policy. */
+    static consteval py::return_value_policy _return_value_policy(::welder::rv_kind k) {
+        switch (k) {
+        case ::welder::rv_kind::automatic:           return py::return_value_policy::automatic;
+        case ::welder::rv_kind::automatic_reference: return py::return_value_policy::automatic_reference;
+        case ::welder::rv_kind::take_ownership:      return py::return_value_policy::take_ownership;
+        case ::welder::rv_kind::copy:                return py::return_value_policy::copy;
+        case ::welder::rv_kind::move:                return py::return_value_policy::move;
+        case ::welder::rv_kind::reference:           return py::return_value_policy::reference;
+        case ::welder::rv_kind::reference_internal:  return py::return_value_policy::reference_internal;
+        case ::welder::rv_kind::none:                break; // no pybind11 equivalent
+        }
+        return py::return_value_policy::automatic;
+    }
+
     /** Register the function/method reflected by @a Fn onto a pybind11 target.
 
         The folded docstring is passed when non-empty, and `py::arg(name)...` when
         every parameter is named (so Python callers see real keyword arguments, not
-        `arg0`/`arg1`).
+        `arg0`/`arg1`). Two call policies ride along as trailing `.def` extras: the
+        `[[=welder::return_policy]]` (mapped to `return_value_policy`, always passed
+        — `automatic` is pybind11's default, so an unannotated call is unchanged)
+        and each `[[=welder::keep_alive]]` (spliced as `py::keep_alive<nurse,
+        patient>()`). A reference-category policy on a by-value return is rejected
+        first (@ref welder::validate_return_policy).
         @tparam Fn a reflection of the function.
         @tparam Def the target-adapter callable type.
         @tparam I the parameter index pack.
+        @tparam K the keep_alive-dependency index pack.
         @param name     the Python name.
         @param def_into adapts the target — `cls.def`, `cls.def_static`, or `m.def`.
     */
-    template <std::meta::info Fn, class Def, std::size_t... I>
+    template <std::meta::info Fn, class Def, std::size_t... I, std::size_t... K>
     static void _def_function(const char* name, Def def_into,
-                              std::index_sequence<I...>) {
+                              std::index_sequence<I...>, std::index_sequence<K...>) {
         static constexpr auto names{::welder::detail::param_names<Fn>()};
-        const std::string doc{
-            ::welder::function_docstring<Fn, DocStyle>()};
+        static constexpr auto ka{::welder::detail::keep_alive_pairs<Fn>()};
+        ::welder::validate_return_policy<Fn, language>();
+        constexpr ::welder::rv_kind rvk{::welder::return_policy_of(Fn, language)};
+        static_assert(rvk != ::welder::rv_kind::none,
+                      "welder: return_policy 'none' has no pybind11 equivalent "
+                      "(it is nanobind-only) — choose another policy");
+        constexpr py::return_value_policy rvp{_return_value_policy(rvk)};
+        const std::string doc{::welder::function_docstring<Fn, DocStyle>()};
         if constexpr (::welder::detail::all_params_named<Fn>()) {
             if (doc.empty())
-                def_into(name, &[:Fn:], py::arg(names[I])...);
+                def_into(name, &[:Fn:], py::arg(names[I])..., rvp,
+                         py::keep_alive<ka[K].nurse, ka[K].patient>()...);
             else
-                def_into(name, &[:Fn:], doc.c_str(), py::arg(names[I])...);
+                def_into(name, &[:Fn:], doc.c_str(), py::arg(names[I])..., rvp,
+                         py::keep_alive<ka[K].nurse, ka[K].patient>()...);
         } else {
             if (doc.empty())
-                def_into(name, &[:Fn:]);
+                def_into(name, &[:Fn:], rvp,
+                         py::keep_alive<ka[K].nurse, ka[K].patient>()...);
             else
-                def_into(name, &[:Fn:], doc.c_str());
+                def_into(name, &[:Fn:], doc.c_str(), rvp,
+                         py::keep_alive<ka[K].nurse, ka[K].patient>()...);
         }
     }
 
-    /** Convenience overload: derive the parameter index sequence from @a Fn. */
+    /** Convenience overload: derive the parameter and keep_alive index sequences
+        from @a Fn. */
     template <std::meta::info Fn, class Def>
     static void _def_function(const char* name, Def def_into) {
-        _def_function<Fn>(name, def_into,
-                          std::make_index_sequence<
-                              std::meta::parameters_of(Fn).size()>{});
+        _def_function<Fn>(
+            name, def_into,
+            std::make_index_sequence<std::meta::parameters_of(Fn).size()>{},
+            std::make_index_sequence<
+                ::welder::detail::keep_alive_pairs<Fn>().size()>{});
     }
 
     /** Register `py::init<P0, P1, …>()` for constructor @a Ctor.

@@ -325,6 +325,12 @@ struct rod {
     template <auto Grp, class Target, std::size_t... I>
     static void _register_named(Target& t, const char* name,
                                 std::index_sequence<I...>) {
+        // sol2 owns a returned object structurally (a value → a Lua-owned
+        // copy/move; a pointer/reference → a non-owning view), so a
+        // [[=welder::return_policy]] has no runtime effect here — but a
+        // self-contradictory one (a reference to a returned temporary) is still
+        // rejected, uniformly with the Python rods.
+        (::welder::validate_return_policy<Grp[I], language>(), ...);
         if constexpr (sizeof...(I) == 1)
             t[name] = &[:Grp[0]:];
         else
@@ -339,6 +345,7 @@ struct rod {
         @param t the usertype to register the metamethod onto. */
     template <auto Grp, class Target, std::size_t... I>
     static void _register_operator(Target& t, std::index_sequence<I...>) {
+        (::welder::validate_return_policy<Grp[I], language>(), ...);
         constexpr auto slot{operator_mm(Grp[0]).fn};
         if constexpr (sizeof...(I) == 1)
             t[slot] = &[:Grp[0]:];

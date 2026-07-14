@@ -16,7 +16,7 @@ set(WELDER_LUA_CASE_HEADERS
   ${WELDER_TEST_COMMON_CPP}/resolution.hpp ${WELDER_TEST_COMMON_CPP}/methods.hpp
   ${WELDER_TEST_COMMON_CPP}/inheritance.hpp ${WELDER_TEST_COMMON_CPP}/namespace.hpp
   ${WELDER_TEST_COMMON_CPP}/operators.hpp ${WELDER_TEST_COMMON_CPP}/enums.hpp
-  ${WELDER_TEST_COMMON_CPP}/naming.hpp)
+  ${WELDER_TEST_COMMON_CPP}/naming.hpp ${WELDER_TEST_COMMON_CPP}/retpolicy.hpp)
 
 find_program(WELDER_LUAROCKS_EXECUTABLE NAMES luarocks)
 set(WELDER_BUSTED_VERSION "2.3.0" CACHE STRING "busted rock version for the Lua tests")

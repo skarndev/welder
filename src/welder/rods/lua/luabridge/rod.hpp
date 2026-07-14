@@ -324,6 +324,12 @@ struct rod {
     template <auto Grp, class Target, std::size_t... I>
     static void _add_function(Target& t, const char* name,
                               std::index_sequence<I...>) {
+        // LuaBridge3 owns a returned object structurally (a value → a Lua-owned
+        // copy; a pointer/reference → a non-owning view), so a
+        // [[=welder::return_policy]] has no runtime effect here — but a
+        // self-contradictory one (a reference to a returned temporary) is still
+        // rejected, uniformly with the Python rods.
+        (::welder::validate_return_policy<Grp[I], language>(), ...);
         t.addFunction(name, &[:Grp[I]:]...);
     }
 
@@ -331,6 +337,7 @@ struct rod {
     template <auto Grp, class Target, std::size_t... I>
     static void _add_static_function(Target& t, const char* name,
                                      std::index_sequence<I...>) {
+        (::welder::validate_return_policy<Grp[I], language>(), ...);
         t.addStaticFunction(name, &[:Grp[I]:]...);
     }
 

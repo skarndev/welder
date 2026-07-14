@@ -90,6 +90,60 @@ consteval bool trusted_for(std::meta::info member, lang L) {
     return false;
 }
 
+/** The return-value policy declared on callable @a fn for language @a L.
+
+    Reads @a fn's `return_policy` annotations, honoring the first one whose mask
+    covers @a L (a mask of `0` covers all languages). Absent any, the policy is
+    @ref rv_kind::automatic — the rod's default, so an unannotated callable binds
+    exactly as before. A rod with an explicit policy knob (the Python backends)
+    translates the result; the Lua rods ignore it (ownership is structural).
+
+    @param fn a reflection of the function/method/operator.
+    @param L  the target language.
+    @return the resolved policy, or @ref rv_kind::automatic if none applies to @a L.
+*/
+consteval rv_kind return_policy_of(std::meta::info fn, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(fn, ^^detail::return_policy_spec)) {
+        auto s{std::meta::extract<detail::return_policy_spec>(a)};
+        if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
+            return s.kind;
+    }
+    return rv_kind::automatic;
+}
+
+namespace detail {
+/** Diagnostic anchor, never defined: a `return_policy` requesting a
+    reference-category policy (`reference` / `reference_internal`) on a callable
+    that returns *by value* would bind a reference to a temporary. Naming this in
+    constant evaluation is the compile error that says so — drop the policy, or
+    return a pointer/reference. */
+void return_policy_binds_a_reference_to_a_returned_temporary();
+} // namespace detail
+
+/** Reject a `return_policy` on @a Fn (for language @a L) that contradicts @a Fn's
+    return type.
+
+    A reference-category policy (`reference` / `reference_internal`) promises the
+    target a view into a live C++ object; on a by-value (prvalue) return there is
+    no such object — only a temporary — so the view would dangle. This is a
+    contradiction in *any* language, so every rod (Python and Lua alike) runs the
+    check at its per-overload bind site. Anything the framework could plausibly
+    honor passes; only the dangling case is diagnosed.
+
+    @tparam Fn a reflection of the callable being bound.
+    @tparam L  the target language. */
+template <std::meta::info Fn, lang L>
+consteval void validate_return_policy() {
+    constexpr rv_kind k{return_policy_of(Fn, L)};
+    if constexpr (k == rv_kind::reference || k == rv_kind::reference_internal) {
+        constexpr std::meta::info rt{std::meta::return_type_of(Fn)};
+        if constexpr (!(std::meta::is_pointer_type(rt) ||
+                        std::meta::is_lvalue_reference_type(rt) ||
+                        std::meta::is_rvalue_reference_type(rt)))
+            detail::return_policy_binds_a_reference_to_a_returned_temporary();
+    }
+}
+
 namespace detail {
 /** Diagnostic anchor, never defined: a bare `[[=welder::mark::only]]` is
     meaningless ("only, for every language" restricts nothing) — naming this in

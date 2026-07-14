@@ -68,6 +68,32 @@ enum class policy_kind : unsigned char {
     opt_in,    /**< Reflect only members explicitly marked `include`. */
 };
 
+/** How a bound callable's returned object is owned/converted in the target
+    language — welder's backend-neutral spelling of the return-value policy.
+
+    The names mirror pybind11's `return_value_policy` / nanobind's `rv_policy`
+    (the frameworks that *have* an explicit knob): a rod translates each to its
+    framework's enumerator. The garbage-collected Lua runtimes (sol2, LuaBridge3)
+    have no such knob — ownership there is decided *structurally* by the C++
+    return type (a value → a VM-owned copy/move; a pointer/reference → a
+    non-owning view) — so the Lua rods ignore this at runtime, exactly as they
+    ignore @ref welder::doc. What no rod ignores is a *contradiction*: a
+    reference-category policy on a by-value return references a temporary, so it
+    is a hard error for every language (see `validate_return_policy`).
+
+    @see welder::return_policy for the annotation; the `welder::rv` constants for
+         the user-facing spellings. */
+enum class rv_kind : unsigned char {
+    automatic,           /**< The rod default — emit no explicit policy. */
+    automatic_reference, /**< Like `automatic` but never take ownership (used for arguments). */
+    take_ownership,      /**< The target owns the returned pointer and frees it. */
+    copy,                /**< Copy the returned object into a target-owned value. */
+    move,                /**< Move the returned object into a target-owned value. */
+    reference,           /**< A non-owning reference; the caller keeps the C++ object alive. */
+    reference_internal,  /**< A non-owning reference tied to the parent's lifetime (implies keep_alive). */
+    none,                /**< Do not convert (nanobind `rv_policy::none`); pybind11 has no equivalent. */
+};
+
 /** The stored forms of the annotation vocabulary.
 
     Each `*_spec` here is what a factory below (`weld`, `doc`, …) or a `policy` /
@@ -289,6 +315,41 @@ struct weld_as_spec {
     fixed_string<N> name; /**< The verbatim target-language name. */
 };
 
+// --- return_policy: how a returned object is owned/converted ------------------
+
+/** The stored form of a `return_policy` annotation: a return-value policy,
+    optionally scoped to some languages.
+
+    Like a scoped `weld_as` it pairs a language mask (`0` == all languages) with
+    its payload — here the @ref welder::rv_kind rather than a name — so a callable
+    can take one policy in Python and another (or none) in Lua. Not templated, so
+    the reflection layer reads it with the plain `annotations_of_with_type` idiom.
+*/
+struct return_policy_spec {
+    unsigned mask = 0;                        /**< The languages to apply to; `0` == all languages. */
+    rv_kind kind = rv_kind::automatic;        /**< The chosen policy. */
+};
+
+// --- keep_alive: tie one argument's/return's lifetime to another's -----------
+
+/** The stored form of a `keep_alive` annotation: a lifetime dependency between
+    two of a call's entities, addressed by pybind11/nanobind's index convention
+    (`0` = the return value, `1` = the first argument — the implicit `this` for a
+    method — `2` = the second, …).
+
+    Semantics follow pybind11's `keep_alive<Nurse, Patient>` verbatim: the
+    *patient* is kept alive *at least until* the *nurse* is garbage collected. A
+    pure Python-binding concept (both Python frameworks expose it as
+    a call policy); the Lua runtimes have no equivalent, so the Lua rods ignore
+    it. It is repeatable — a call may declare several dependencies. Not
+    language-scoped: every framework that *has* the concept honors it, the rest
+    ignore it.
+*/
+struct keep_alive_spec {
+    unsigned nurse = 0;   /**< The keeper whose collection bounds the dependency (e.g. `1`, the `this`/container). */
+    unsigned patient = 0; /**< The dependant kept alive until the nurse is collected (e.g. `2`, an appended item). */
+};
+
 } // namespace detail
 
 // --- weld: the type-level annotation declaring target languages -------------
@@ -455,6 +516,91 @@ template <class... Args>
 consteval auto weld_as(Args&&... args) {
     return detail::weld_as_spec{detail::weld_as_mask(static_cast<Args&&>(args)...),
                                 detail::weld_as_name(static_cast<Args&&>(args)...)};
+}
+
+// --- return_policy: how a returned object is owned/converted ------------------
+
+/** The return-value policy values, the user-facing spelling of @ref rv_kind.
+
+    Named like `mark::` / `policy::` so they read as `welder::rv::reference` at the
+    annotation site. Pass one to @ref return_policy.
+
+    Usage: `[[=welder::return_policy(welder::rv::reference_internal)]]`.
+*/
+namespace rv {
+inline constexpr rv_kind automatic{rv_kind::automatic};                     /**< @see rv_kind::automatic */
+inline constexpr rv_kind automatic_reference{rv_kind::automatic_reference}; /**< @see rv_kind::automatic_reference */
+inline constexpr rv_kind take_ownership{rv_kind::take_ownership};           /**< @see rv_kind::take_ownership */
+inline constexpr rv_kind copy{rv_kind::copy};                               /**< @see rv_kind::copy */
+inline constexpr rv_kind move{rv_kind::move};                               /**< @see rv_kind::move */
+inline constexpr rv_kind reference{rv_kind::reference};                     /**< @see rv_kind::reference */
+inline constexpr rv_kind reference_internal{rv_kind::reference_internal};   /**< @see rv_kind::reference_internal */
+inline constexpr rv_kind none{rv_kind::none};                               /**< @see rv_kind::none */
+} // namespace rv
+
+namespace detail {
+// The `return_policy(langs…, kind)` argument list is a run of `lang` markers
+// followed by the trailing @ref rv_kind — mirroring `weld_as(langs…, "name")`.
+// Two helpers walk the forwarding pack: one ORs the leading markers, the other
+// peels down to the kind. No std headers, keeping the vocabulary module-safe.
+
+/** The language mask of a `return_policy` argument list: the OR of its leading
+    `lang` markers (the trailing kind contributes nothing; no markers → `0` = all). */
+consteval unsigned return_policy_mask(rv_kind) { return 0u; }
+template <class... Rest>
+consteval unsigned return_policy_mask(lang l, Rest... rest) {
+    return lang_bit(l) | return_policy_mask(rest...);
+}
+
+/** The policy of a `return_policy` argument list: the trailing kind, reached by
+    dropping the leading `lang` markers. */
+consteval rv_kind return_policy_kind(rv_kind k) { return k; }
+template <class... Rest>
+consteval rv_kind return_policy_kind(lang, Rest... rest) {
+    return return_policy_kind(rest...);
+}
+} // namespace detail
+
+/** Force a return-value policy on a callable, optionally scoped to one or more
+    languages.
+
+    The @ref rv_kind is the **last** argument; zero or more `lang` markers precede
+    it. With no marker the policy covers every welded language; with one or several
+    it is scoped to those — repeat the annotation for a different policy per
+    language. Backends without an explicit policy knob (the Lua rods) ignore it,
+    but a reference-category policy on a by-value return is a hard error for every
+    language (it would reference a temporary).
+    @code
+    [[=welder::return_policy(welder::rv::reference_internal)]]            // all languages
+    [[=welder::return_policy(welder::lang::py, welder::rv::take_ownership)]] // Python only
+    @endcode
+    @tparam Args the leading `lang` markers then the trailing @ref rv_kind (deduced).
+    @param args the language markers (if any) followed by the policy.
+    @return a return_policy_spec carrying the mask of the named languages and the kind.
+*/
+template <class... Args>
+consteval detail::return_policy_spec return_policy(Args... args) {
+    return detail::return_policy_spec{detail::return_policy_mask(args...),
+                                      detail::return_policy_kind(args...)};
+}
+
+// --- keep_alive: tie one argument's/return's lifetime to another's -----------
+
+/** Keep the call entity @a patient alive at least until @a nurse is collected.
+
+    Maps to pybind11 `keep_alive<Nurse, Patient>` / nanobind `keep_alive<Nurse,
+    Patient>`; indices are `0` = return value, `1` = first argument (a method's
+    implicit `this`), `2` = second, … Repeatable — attach several to declare
+    several dependencies. Ignored by backends without the concept (the Lua rods).
+
+    Usage: `[[=welder::keep_alive(1, 2)]]` — keep argument 2 alive as long as the
+    receiver (`this`) lives.
+    @param nurse   the keeper whose collection bounds the dependency.
+    @param patient the dependant kept alive until @a nurse is collected.
+    @return a keep_alive_spec carrying the two indices.
+*/
+consteval detail::keep_alive_spec keep_alive(unsigned nurse, unsigned patient) {
+    return detail::keep_alive_spec{nurse, patient};
 }
 
 } // namespace welder

@@ -292,6 +292,46 @@ them for free):
   rods compile against the threaded contract (`rod_probe.cpp` updated with the trailing
   `Style` hook param).
 
+## Return-value policy & keep_alive — `return_policy` / `keep_alive`
+Two per-callable call policies, resolved **per overload** (read off each `Fn`, not
+the group).
+
+- **Vocabulary** (`annotations.hpp`, std-free): `enum class rv_kind` (welder:: scope,
+  next to `policy_kind`) with the pybind11/nanobind union — `automatic`,
+  `automatic_reference`, `take_ownership`, `copy`, `move`, `reference`,
+  `reference_internal`, `none`; user-facing constants in `namespace welder::rv`.
+  `detail::return_policy_spec { unsigned mask; rv_kind kind; }` (masked like
+  `weld_as`) and `detail::keep_alive_spec { unsigned nurse, patient; }` (not
+  language-scoped). Factories: `return_policy([lang…,] kind)` (a `return_policy_mask`
+  / `return_policy_kind` pack-walk mirroring `weld_as_mask`/`weld_as_name`) and
+  `keep_alive(nurse, patient)` (repeatable).
+- **Readers/validation** (`reflect.hpp`): `return_policy_of(fn, L) -> rv_kind`
+  (plain `annotations_of_with_type` idiom — the spec is non-templated; first mask
+  covering `L` wins, else `automatic`); `validate_return_policy<Fn, L>()` — a
+  consteval that hard-errors (diagnostic anchor
+  `return_policy_binds_a_reference_to_a_returned_temporary`) when a
+  reference-category kind meets a non-pointer/non-reference `return_type_of(Fn)`.
+  `keep_alive_pairs<Fn>()` (`bind_traits.hpp` detail, has `<array>`) materializes the
+  `(nurse, patient)` pairs as a splice-ready static array.
+- **Rod consumption:** both Python rods map in `_def_function<Fn>` — pybind11
+  `_return_value_policy(rv_kind)` (static_asserts against `none`), nanobind
+  `_rv_policy(rv_kind)` (has `none`). The policy is **always appended** to the
+  `.def(...)` extras (mapped `automatic` == the framework default, so unannotated
+  calls are unchanged), and `keep_alive` splices via a second index pack `K...` as
+  `py::/nb::keep_alive<ka[K].nurse, ka[K].patient>()...`. Both rods (and both Lua
+  rods) call `validate_return_policy<Fn, language>()` at their per-overload bind
+  site — sol2 `_register_named`/`_register_operator`, LuaBridge3
+  `_add_function`/`_add_static_function` (a `(…, ...)` fold over `Grp[I]`) — so the
+  contradiction check is uniform; the Lua rods otherwise **ignore** the policy
+  (ownership is structural: value → VM-owned copy/move, pointer/reference →
+  non-owning view) and have no `keep_alive` analogue.
+- **Tests:** `tests/common/cpp/retpolicy.hpp` (`Owner::view`=reference_internal vs
+  `snapshot`=copy; `Registry::track` keep_alive, py-only) ↔ `tests/python/test_retpolicy.py`
+  (reference vs copy divergence + keep_alive, gc-based) and `tests/lua/spec/retpolicy_spec.lua`
+  (structural reference — policy ignored — for both Lua rods). Negative-compile:
+  `tests/python/pybind11/cpp/neg/return_policy_dangling.cpp` (`negcompile.return_policy_dangling`,
+  the reference-to-temporary hard error).
+
 ## Rods
 Four rods implement every feature above from the same driver: **pybind11**
 (`welder::rods::pybind11::rod`), **nanobind** (`welder::rods::nanobind::rod`) — both

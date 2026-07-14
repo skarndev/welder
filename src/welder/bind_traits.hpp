@@ -60,6 +60,34 @@ consteval auto param_names() {
     return names;
 }
 
+/** A `keep_alive` lifetime dependency: a (nurse, patient) index pair. */
+struct keep_alive_pair {
+    unsigned nurse;   /**< The keeper whose collection bounds the dependency. */
+    unsigned patient; /**< The dependant kept alive until the nurse is collected. */
+};
+
+/** The `keep_alive` dependencies declared on @a Fn, in declaration order.
+
+    Materialized as a fixed-size static array so a rod can splice each pair back as
+    a `keep_alive<nurse, patient>()` call-policy template argument. Empty when @a Fn
+    carries no `keep_alive` annotation.
+    @tparam Fn a reflection of the callable.
+    @return an array of the (nurse, patient) pairs. */
+template <std::meta::info Fn>
+consteval auto keep_alive_pairs() {
+    constexpr std::size_t n{
+        std::meta::annotations_of_with_type(Fn, ^^keep_alive_spec).size()};
+    std::array<keep_alive_pair, n> out{};
+    if constexpr (n != 0) {
+        std::size_t i{0};
+        for (auto a : std::meta::annotations_of_with_type(Fn, ^^keep_alive_spec)) {
+            auto s{std::meta::extract<keep_alive_spec>(a)};
+            out[i++] = {s.nurse, s.patient};
+        }
+    }
+    return out;
+}
+
 /** Whether every parameter of @a Fn carries an identifier.
 
     Keyword-argument naming is all-or-nothing across backends, so an unnamed
