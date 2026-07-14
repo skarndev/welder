@@ -26,14 +26,22 @@
     function (the technique the Python backends' entry macros use), so both
     `WELDER_MODULE(ns, sol2) { … }` and `WELDER_MODULE(ns, sol2) {}` work. Defined at
     file scope (macros ignore namespaces); see `<welder/module.hpp>`.
-    @param ns the namespace / module name token (doubles as the `luaopen_` symbol).
+    @param ns  the namespace / module name token (doubles as the `luaopen_` symbol).
+    @param ... optionally, the exact `welder::welder<…>` type to weld with (must be
+               over a sol2-module rod) — see @ref WELDER_MODULE.
 */
-#define WELDER_DETAIL_MODULE_ENTRY_sol2(ns)                                       \
+#define WELDER_DETAIL_MODULE_ENTRY_sol2(ns, ...)                                  \
     static void welder_glue_##ns##_sol2(::sol::table&);                           \
     extern "C" int luaopen_##ns(lua_State* welder_lua_state_) {                   \
         ::sol::state_view welder_lua_{welder_lua_state_};                         \
         ::sol::table welder_module_var_{welder_lua_.create_table()};             \
-        using welder_weld_ = ::welder::welder<::welder::rods::sol2::rod>;          \
+        using welder_weld_ = ::welder::detail::module_welder_t<                   \
+            ::welder::welder<::welder::rods::sol2::rod>                           \
+                __VA_OPT__(, ) __VA_ARGS__>;                                      \
+        static_assert(                                                            \
+            ::std::is_same_v<typename welder_weld_::module_type, ::sol::table>,   \
+            "WELDER_MODULE(ns, sol2, W): W must be a welder::welder over a rod "  \
+            "whose module handle is sol::table");                                 \
         welder_weld_::weld_module<^^ns>(                                          \
             welder_module_var_, welder_weld_::noop,                               \
             [](::sol::table& welder_glue_m_) {                                    \

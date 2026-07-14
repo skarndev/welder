@@ -24,12 +24,21 @@
     itself uses for its body), so `WELDER_MODULE(ns, nanobind) { … }` and
     `WELDER_MODULE(ns, nanobind) {}` both work. Defined at file scope (macros ignore
     namespaces); see `<welder/module.hpp>` for the `WELDER_MODULE` dispatch.
-    @param ns the namespace / module name token.
+    @param ns  the namespace / module name token.
+    @param ... optionally, the exact `welder::welder<…>` type to weld with (must be
+               over a nanobind-module rod) — see @ref WELDER_MODULE.
 */
-#define WELDER_DETAIL_MODULE_ENTRY_nanobind(ns)                                   \
+#define WELDER_DETAIL_MODULE_ENTRY_nanobind(ns, ...)                              \
     static void welder_glue_##ns##_nanobind(::nanobind::module_&);                \
     NB_MODULE(ns, welder_module_var_) {                                           \
-        using welder_weld_ = ::welder::welder<::welder::rods::nanobind::rod<>>;    \
+        using welder_weld_ = ::welder::detail::module_welder_t<                   \
+            ::welder::welder<::welder::rods::nanobind::rod<>>                     \
+                __VA_OPT__(, ) __VA_ARGS__>;                                      \
+        static_assert(                                                            \
+            ::std::is_same_v<typename welder_weld_::module_type,                  \
+                             ::nanobind::module_>,                                \
+            "WELDER_MODULE(ns, nanobind, W): W must be a welder::welder over a "  \
+            "rod whose module handle is nanobind::module_");                      \
         welder_weld_::weld_module<^^ns>(                                          \
             welder_module_var_, welder_weld_::noop,                               \
             [](::nanobind::module_& welder_glue_m_) {                             \
