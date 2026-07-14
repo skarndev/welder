@@ -11,6 +11,7 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `mark::exclude` | Exclude member from **all** welded languages. |
 | `mark::exclude(lang…)` | Exclude member from the listed languages only. |
 | `mark::include` / `mark::include(lang…)` | Opt a member in (meaningful under `opt_in`). |
+| `mark::only(lang…)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Always called with ≥ 1 language. |
 | `mark::trust_bindable` / `…(lang…)` | Vouch that a member's type / callable signature is representable outside welder's view. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. |
 | `doc("text")` | Docstring for a class / namespace / function / parameter. |

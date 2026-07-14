@@ -98,8 +98,9 @@ The target name must match the namespace token in `WELDER_MODULE(shapes, sol2)` 
 
 ## How Lua differs from Python
 
-Everything welder resolves (policy, `mark::exclude/include`, inheritance, the
-bindability gate) works identically; the target-language surface is what changes.
+Everything welder resolves (policy, `mark::exclude/include/only`, inheritance,
+the bindability gate) works identically; the target-language surface is what
+changes.
 
 ### Operators become metamethods
 
