@@ -167,3 +167,14 @@ def test_tack_binds_unmarked_constant(foreign: ModuleType) -> None:
 
 def test_tack_recurses_unmarked_nested_namespace(foreign: ModuleType) -> None:
     assert foreign.nested.Gadget().id == 5
+
+
+def test_tack_accepts_own_types_in_signatures(foreign: ModuleType) -> None:
+    # The library's own (unmarked) class types appear in signatures; the greedy
+    # registration oracle accepts them without a trust_bindable hatch, and the
+    # bindings work because the same tack pass registers the types.
+    a, b = foreign.Widget(), foreign.Widget()
+    assert a.merged(b).size == 6  # method: Widget param + Widget return
+    c = foreign.fuse(a, b)  # free function returning the FORWARD-declared Coupler
+    assert (c.left.size, c.right.size) == (3, 3)
+    assert foreign.gadget_id(foreign.nested.Gadget()) == 5  # nested-namespace type

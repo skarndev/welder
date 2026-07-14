@@ -222,12 +222,34 @@ inline constexpr int RENAMABLE{99};
 // bindability (every member here is representable).
 namespace foreign {
 
+// NB: no forward declarations here on purpose. The greedy registration oracle is
+// a pure predicate (not a visited-set), so a forward-declared-then-defined type
+// PASSES the gate and binds — but members_of yields an entity at its FIRST
+// declaration, so a `struct Coupler;` hoist would register Coupler before Widget
+// and pybind11 (which renders docstrings at def time) would then spell Widget's
+// name raw in Coupler's property docstrings, failing the stubgen gate. Same
+// caveat as hand-written pybind11: declare types before signatures that use them.
+
 struct Widget {
     int size{3};
     int doubled() const {
         return size * 2;
     }
+    // The library's own class types in signatures: under greedy resolution these
+    // pass the gate WITHOUT a trust_bindable hatch, because the same tack pass
+    // registers them (counts_as_registered).
+    Widget merged(const Widget& other) const { return Widget{size + other.size}; }
 };
+
+struct Coupler {
+    Widget left{};
+    Widget right{};
+};
+
+// Class-typed parameters + return, including the forward-referenced Coupler.
+Coupler fuse(const Widget& a, const Widget& b) {
+    return Coupler{a, b};
+}
 
 int add(int a, int b) {
     return a + b;
@@ -235,12 +257,17 @@ int add(int a, int b) {
 
 inline constexpr int VERSION{7};
 
-// greedily recursed into a submodule
+// greedily recursed into a submodule; Gadget in a NESTED namespace is likewise
+// accepted by the oracle when referenced from the enclosing one.
 namespace nested {
 struct Gadget {
     int id{5};
 };
 } // namespace nested
+
+int gadget_id(const nested::Gadget& g) {
+    return g.id;
+}
 
 } // namespace foreign
 

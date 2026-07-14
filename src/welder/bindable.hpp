@@ -46,10 +46,27 @@
 
 namespace welder::inline v0 {
 
+/** The default *registration oracle* of the bindability gate: a program-defined
+    class/enum type counts as registered iff it is **welded** for the language.
+
+    The gate's needs-registration leaf asks "will a registration for this type
+    exist by the time the module finishes loading?". Under marker-directed (stitch)
+    welding the `weld` annotation is that promise. A *resolution* that registers
+    types on other grounds — @ref welder::carriages::greedy_resolution registers a
+    whole unmarked library — supplies its own `counts_as_registered` so types it
+    registers itself pass the gate (the resolution concept requires the hook; this
+    struct is the conservative default and a convenient base). */
+struct welded_registration {
+    /** Does welding under this policy provide a registration for @a type? */
+    static consteval bool counts_as_registered(std::meta::info type, lang L) {
+        return welder::welded_for(type, L);
+    }
+};
+
 namespace detail {
 
 /** Forward declaration: bindable() recurses through a container's element types. */
-template <caster_oracle B, class T, lang L>
+template <caster_oracle B, class T, lang L, class Reg>
 consteval bool bindable();
 
 /** One row of the element-wise STL-wrapper table.
@@ -127,12 +144,13 @@ consteval std::array<std::meta::info, N> leading_args() {
 /** Whether every one of a wrapper's value arguments (spliced back to types) binds.
     @tparam B    the rod.
     @tparam L    the target language.
+    @tparam Reg  the registration oracle (see @ref welder::welded_registration).
     @tparam Args the static array of value-argument reflections.
     @tparam I    the index pack over @a Args.
 */
-template <caster_oracle B, lang L, auto Args, std::size_t... I>
+template <caster_oracle B, lang L, class Reg, auto Args, std::size_t... I>
 consteval bool args_bindable(std::index_sequence<I...>) {
-    return (bindable<B, typename [:Args[I]:], L>() && ...);
+    return (bindable<B, typename [:Args[I]:], L, Reg>() && ...);
 }
 
 /** Can the backend convert @a T — stripped of cv/ref/pointer — to a meaningful
@@ -140,12 +158,14 @@ consteval bool args_bindable(std::index_sequence<I...>) {
 
     A listed wrapper is bindable iff its value arguments are; a type with a
     native/user converter binds as-is; otherwise it is a program-defined class/enum
-    the backend must register, so it binds iff it is welded for @a L.
-    @tparam B the rod.
-    @tparam T the type to test.
-    @tparam L the target language.
+    the backend must register, so it binds iff the registration oracle @a Reg
+    promises one (by default: iff it is welded for @a L).
+    @tparam B   the rod.
+    @tparam T   the type to test.
+    @tparam L   the target language.
+    @tparam Reg the registration oracle (see @ref welder::welded_registration).
 */
-template <caster_oracle B, class T, lang L>
+template <caster_oracle B, class T, lang L, class Reg>
 consteval bool bindable() {
     // Strip cv/ref/pointer so the STL-wrapper table below sees the bare
     // specialization (a parameter may arrive as `const std::vector<Foo>&`).
@@ -165,11 +185,12 @@ consteval bool bindable() {
         constexpr long values{wrapper_value_count(u)};
         if constexpr (values >= 0) {
             constexpr auto args{leading_args<u, static_cast<std::size_t>(values)>()};
-            return args_bindable<B, L, args>(std::make_index_sequence<args.size()>{});
+            return args_bindable<B, L, Reg, args>(
+                std::make_index_sequence<args.size()>{});
         } else if constexpr (B::template has_native_caster<typename [:u:]>) {
             return true;
         } else {
-            return welder::welded_for(u, L);
+            return Reg::counts_as_registered(u, L);
         }
     }
 }
@@ -177,27 +198,32 @@ consteval bool bindable() {
 } // namespace detail
 
 /** Is @a T bindable to language @a L under backend @a B? (public spelling.)
-    @tparam B the rod.
-    @tparam T the type to test.
-    @tparam L the target language.
+    @tparam B   the rod.
+    @tparam T   the type to test.
+    @tparam L   the target language.
+    @tparam Reg the registration oracle: which class/enum types count as
+                registered. Defaults to @ref welder::welded_registration (welded ⇒
+                registered); the carriage passes its resolution so, e.g., tack
+                welding accepts the types its own greedy pass registers.
 */
-template <caster_oracle B, class T, lang L>
+template <caster_oracle B, class T, lang L, class Reg = welded_registration>
 consteval bool bindable() {
-    return detail::bindable<B, T, L>();
+    return detail::bindable<B, T, L, Reg>();
 }
 
 /** Hard error the instant welder would bind an unbindable type.
 
     The offending type is the template argument of the failing instantiation, so it
     is named in the diagnostic backtrace.
-    @tparam B the rod.
-    @tparam T the type being bound.
-    @tparam L the target language.
+    @tparam B   the rod.
+    @tparam T   the type being bound.
+    @tparam L   the target language.
+    @tparam Reg the registration oracle (see @ref welder::bindable).
 */
-template <caster_oracle B, class T, lang L>
+template <caster_oracle B, class T, lang L, class Reg = welded_registration>
 consteval void assert_bindable() {
     static_assert(
-        bindable<B, T, L>(),
+        bindable<B, T, L, Reg>(),
         "welder: cannot bind this C++ type to the target language. Weld it with "
         "[[=welder::weld(...)]], or register a backend type converter for it; "
         "otherwise mark::exclude the member that uses it. The offending type is "
@@ -212,10 +238,10 @@ namespace detail {
     @tparam L  the target language.
     @tparam I  the index pack over the parameters.
 */
-template <caster_oracle B, std::meta::info Fn, lang L, std::size_t... I>
+template <caster_oracle B, std::meta::info Fn, lang L, class Reg, std::size_t... I>
 consteval void assert_params_bindable(std::index_sequence<I...>) {
     static constexpr auto params{param_types<Fn>()};
-    (assert_bindable<B, typename [:params[I]:], L>(), ...);
+    (assert_bindable<B, typename [:params[I]:], L, Reg>(), ...);
 }
 
 } // namespace detail
@@ -228,18 +254,19 @@ consteval void assert_params_bindable(std::index_sequence<I...>) {
     @tparam Fn a reflection of the callable.
     @tparam L  the target language.
 */
-template <caster_oracle B, std::meta::info Fn, lang L>
+template <caster_oracle B, std::meta::info Fn, lang L,
+          class Reg = welded_registration>
 consteval void assert_signature_bindable() {
     // Guard n != 0: param_types<Fn> materializes a std::array<info, n>, and
     // std::array<info, 0>::operator[] is not consteval (it must not be
     // instantiated for a parameterless function).
     constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
     if constexpr (n != 0)
-        detail::assert_params_bindable<B, Fn, L>(std::make_index_sequence<n>{});
+        detail::assert_params_bindable<B, Fn, L, Reg>(std::make_index_sequence<n>{});
     if constexpr (!std::meta::is_constructor(Fn)) {
         using R = [:std::meta::return_type_of(Fn):];
         if constexpr (!std::is_void_v<R>)
-            assert_bindable<B, R, L>();
+            assert_bindable<B, R, L, Reg>();
     }
 }
 
@@ -256,10 +283,11 @@ consteval void assert_signature_bindable() {
     @tparam Member a reflection of the data member or variable.
     @tparam L      the target language.
 */
-template <caster_oracle B, std::meta::info Member, lang L>
+template <caster_oracle B, std::meta::info Member, lang L,
+          class Reg = welded_registration>
 consteval void assert_member_bindable() {
     if constexpr (!welder::trusted_for(Member, L))
-        assert_bindable<B, typename [:std::meta::type_of(Member):], L>();
+        assert_bindable<B, typename [:std::meta::type_of(Member):], L, Reg>();
 }
 
 /** Assert a function/method/operator/constructor signature binds, unless trusted.
@@ -267,10 +295,11 @@ consteval void assert_member_bindable() {
     @tparam Fn a reflection of the callable.
     @tparam L  the target language.
 */
-template <caster_oracle B, std::meta::info Fn, lang L>
+template <caster_oracle B, std::meta::info Fn, lang L,
+          class Reg = welded_registration>
 consteval void assert_callable_bindable() {
     if constexpr (!welder::trusted_for(Fn, L))
-        assert_signature_bindable<B, Fn, L>();
+        assert_signature_bindable<B, Fn, L, Reg>();
 }
 
 } // namespace welder

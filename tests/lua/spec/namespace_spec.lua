@@ -94,4 +94,15 @@ describe("tack (unmarked library)", function()
   it("recurses an unmarked nested namespace", function()
     assert.are.equal(5, f.nested.Gadget.new().id)
   end)
+
+  it("accepts the library's own types in signatures", function()
+    -- No trust_bindable hatch: the greedy registration oracle accepts class
+    -- types the same tack pass registers (incl. a forward-declared one).
+    local a, b = f.Widget.new(), f.Widget.new()
+    assert.are.equal(6, a:merged(b).size)
+    local c = f.fuse(a, b)
+    assert.are.equal(3, c.left.size)
+    assert.are.equal(3, c.right.size)
+    assert.are.equal(5, f.gadget_id(f.nested.Gadget.new()))
+  end)
 end)

@@ -76,6 +76,13 @@ struct marker_resolution {
                                                  policy_kind pol) {
         return member_bound(ns, L, pol) && detail::namespace_has_bound(ns, L);
     }
+    /** The gate's registration oracle: welded ⇒ registered (the conservative
+        default, = @ref welder::welded_registration). A pure predicate of the
+        declaration — never a visited-set — so welding in several passes and
+        forward references between welded types stay order-independent. */
+    static consteval bool counts_as_registered(std::meta::info type, lang L) {
+        return welder::welded_for(type, L);
+    }
 };
 
 /** Tack-welding resolution: bind an *unmarked* library greedily.
@@ -104,6 +111,31 @@ struct greedy_resolution {
     static consteval bool namespace_participates(std::meta::info ns, lang L,
                                                  policy_kind pol) {
         return member_bound(ns, L, pol) && detail::namespace_has_bindable(ns, L);
+    }
+    /** The gate's registration oracle: a type the greedy pass itself registers —
+        any *complete* class/enum whose marks don't exclude it for @a L — counts,
+        so an unmarked library's own types may appear in its signatures without a
+        `trust_bindable` hatch.
+
+        Like the stitch oracle this is a pure predicate ("a tack weld of this
+        type's namespace registers it"), never a visited-set: tack-welding several
+        namespaces in separate passes and forward references within one namespace
+        stay order-independent (the frameworks resolve signature types lazily, at
+        call time, so registration order does not matter — only that the
+        registration exists once the module finishes loading). The trust is
+        exactly that: welder cannot know *which* namespaces you tack, so a
+        signature naming a registrable type you never weld surfaces as the
+        framework's unregistered-type error at call time, not at compile time.
+
+        A **forward-declared** (incomplete) type is deliberately rejected: the
+        greedy walk cannot register what has no definition, so a signature naming
+        one keeps failing the gate at compile time. */
+    static consteval bool counts_as_registered(std::meta::info type, lang L) {
+        if (!(std::meta::is_class_type(type) || std::meta::is_enum_type(type)))
+            return false;
+        if (!std::meta::is_complete_type(type))
+            return false;
+        return member_bound(type, L, policy_kind::automatic);
     }
 };
 
@@ -163,7 +195,7 @@ struct basic_carriage {
         template for (constexpr auto mem : std::define_static_array(
                           std::meta::nonstatic_data_members_of(Src, ctx))) {
             if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
-                welder::assert_member_bindable<B, mem, L>();
+                welder::assert_member_bindable<B, mem, L, Resolution>();
                 B::template add_field<mem, Style>(cls);
             }
         }
@@ -171,7 +203,7 @@ struct basic_carriage {
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
             if constexpr (detail::is_bindable_method(fn, L, pol)) {
-                welder::assert_callable_bindable<B, fn, L>();
+                welder::assert_callable_bindable<B, fn, L, Resolution>();
                 if constexpr (std::meta::is_static_member(fn))
                     B::template add_static_method<fn, Style>(cls);
                 else
@@ -181,7 +213,7 @@ struct basic_carriage {
                 // A member operator binds like a method, under the backend's special-
                 // method name for it (operator+ -> __add__, ...). The specific overload
                 // is spliced by add_operator, so unary/binary forms never collide.
-                welder::assert_callable_bindable<B, fn, L>();
+                welder::assert_callable_bindable<B, fn, L, Resolution>();
                 B::template add_operator<fn>(cls);
             }
         }
@@ -271,7 +303,7 @@ struct basic_carriage {
         template for (constexpr auto ctor :
                       std::define_static_array(std::meta::members_of(^^T, ctx))) {
             if constexpr (detail::is_bindable_constructor(ctor)) {
-                welder::assert_callable_bindable<B, ctor, L>();
+                welder::assert_callable_bindable<B, ctor, L, Resolution>();
                 B::template add_constructor<ctor>(cls);
             }
         }
@@ -307,7 +339,7 @@ struct basic_carriage {
         static_assert(Resolution::participates(Fn, L),
                       "welder: weld_function<Fn>: Fn is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
-        welder::assert_callable_bindable<B, Fn, L>();
+        welder::assert_callable_bindable<B, Fn, L, Resolution>();
         // Forward the rod's handle (the bound function object, where the
         // framework has one); a void-returning rod makes this void too.
         return B::template add_function<Fn, Style>(m, name);
@@ -337,7 +369,7 @@ struct basic_carriage {
         static_assert(Resolution::participates(Var, L),
                       "welder: weld_variable<Var>: Var is not welded for this "
                       "backend's language; annotate it with [[=welder::weld(...)]]");
-        welder::assert_member_bindable<B, Var, L>();
+        welder::assert_member_bindable<B, Var, L, Resolution>();
         auto session{B::open_module(m)};
         // Forward the rod's handle if its add_variable yields one (the shipped
         // rods return void — a bound constant is a snapshot, a mutable global a
@@ -393,12 +425,12 @@ struct basic_carriage {
                     bind_enum<B, typename [:mem:], Style>(m, nullptr);
             } else if constexpr (std::meta::is_function(mem)) {
                 if constexpr (Resolution::member_participates(mem, L, pol)) {
-                    welder::assert_callable_bindable<B, mem, L>();
+                    welder::assert_callable_bindable<B, mem, L, Resolution>();
                     B::template add_function<mem, Style>(m);
                 }
             } else if constexpr (std::meta::is_variable(mem)) {
                 if constexpr (Resolution::member_participates(mem, L, pol)) {
-                    welder::assert_member_bindable<B, mem, L>();
+                    welder::assert_member_bindable<B, mem, L, Resolution>();
                     B::template add_variable<mem, Style>(m, session);
                 }
             } else if constexpr (std::meta::is_namespace(mem)) {

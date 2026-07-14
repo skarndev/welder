@@ -230,6 +230,13 @@ concept rod =
         // a namespace member participates under its enclosing scope's policy
     static consteval bool namespace_participates(std::meta::info ns, lang L, policy_kind pol);
         // a nested namespace becomes a (recursed) submodule
+    static consteval bool counts_as_registered(std::meta::info type, lang L);
+        // the bindability gate's registration oracle: does welding under this
+        // resolution provide a registration for this class/enum type? A pure
+        // predicate of the declaration (never a visited-set), so welding in
+        // multiple passes and forward references stay order-independent.
+        // marker_resolution: welded_for; greedy_resolution: any complete
+        // registrable type. welder::welded_registration is the reusable default.
     @endcode
 
     Plus one reflection-templated hook — it takes the derived type and a `lang` as
@@ -254,6 +261,7 @@ concept resolution =
         { R::is_native_base(e, L) } -> std::convertible_to<bool>;
         { R::member_participates(e, L, pol) } -> std::convertible_to<bool>;
         { R::namespace_participates(e, L, pol) } -> std::convertible_to<bool>;
+        { R::counts_as_registered(e, L) } -> std::convertible_to<bool>;
     } &&
     requires {
         { R::template native_bases<^^detail::any_type, lang{}>() }
