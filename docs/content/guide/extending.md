@@ -199,7 +199,9 @@ Two resolutions ship, with their carriage aliases:
 !!! example "In the cookbook"
 
     [Recipe 08 — Tack welding](../cookbook/tack-welding.md) binds a third-party
-    library with the tack carriage end to end.
+    library with the stock tack carriage end to end; [Recipe 09 — Custom
+    traversal](../cookbook/custom-traversal.md) subclasses its resolution to
+    prune the library's `detail` namespace and `_underscore` internals.
 
 A bespoke resolution is a stateless struct satisfying the `welder::resolution`
 concept — five `consteval` predicates (`participates`, `is_native_base`,

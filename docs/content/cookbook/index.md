@@ -25,6 +25,9 @@ loads the module and proves what bound.
     `mark::only` language flavors, `.pyi` + LuaCATS stubs.
 -   **[08 — Tack welding](tack-welding.md)** — greedily bind a third-party library
     that carries no welder annotations at all.
+-   **[09 — Custom traversal](custom-traversal.md)** — subclass the tack
+    resolution to honor a library's privacy convention: prune `detail`
+    namespaces and `_underscore` internals.
 
 </div>
 

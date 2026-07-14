@@ -44,7 +44,9 @@ types its own greedy pass registers. Two things do **not** change:
 
     The tack welder is just another `welder::welder` alias — use the default
     (stitch) welder for your own annotated types and a tack welder for the
-    vendor namespace, in the same module.
+    vendor namespace, in the same module. And when greedy is *too* greedy,
+    [Recipe 09](custom-traversal.md) subclasses the tack resolution to prune the
+    library's `detail` namespace and underscore internals.
 
 ## What the check asserts
 

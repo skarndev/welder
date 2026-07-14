@@ -134,7 +134,13 @@ LuaBridge3 taught the conversion by a `luabridge::Stack<std::function<…>>`
 specialization in its own TU (sol2 converts natively; framework glue lives in the
 framework's TU). 08 tack-welds an unannotated header
 (no hatch needed — greedy_resolution's `counts_as_registered` accepts the types
-its own pass registers; see bindability-gate.md). `WELDER_LUA_DIR`
+its own pass registers; see bindability-gate.md). 09 is the custom-traversal
+recipe: a `skip_private : greedy_resolution` (prunes `detail`/`impl`/underscore
+names via member_participates/namespace_participates AND mirrors the rule in
+counts_as_registered) injected via `basic_carriage<skip_private>` — the runnable
+form of extending.md's resolution section; NB the resolution seam is
+namespace-level only (class members gate on member_bound, not the resolution).
+`WELDER_LUA_DIR`
 unset ⇒ the sol2 half of 07 is skipped (message, not error). The umbrella defines
 `cookbook_add_pybind11_module()` (the Python_add_library + hidden-visibility
 boilerplate).
