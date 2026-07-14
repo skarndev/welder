@@ -558,9 +558,8 @@ struct rod {
             lb::Namespace ns{_open_namespace(m)};
             _add_function<grp>(
                 ns,
-                name ? name
-                     : ::welder::name_of<Fn, language, Style,
-                                         ::welder::ent_kind::function>(),
+                ::welder::name_of_or<Fn, language, Style,
+                                     ::welder::ent_kind::function>(name),
                 std::make_index_sequence<grp.size()>{});
         }
     }
@@ -575,9 +574,8 @@ struct rod {
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session& /*s*/,
                              const char* name = nullptr) {
-        const char* key{name ? name
-                             : ::welder::name_of<Var, language, Style,
-                                                 ::welder::ent_kind::variable>()};
+        const char* key{::welder::name_of_or<Var, language, Style,
+                                             ::welder::ent_kind::variable>(name)};
         lb::Namespace ns{_open_namespace(m)};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Var))) {
             ns.addVariable(key, [:Var:]); // immutable: a value snapshot at load time

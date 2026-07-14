@@ -18,10 +18,16 @@ if(WELDER_BUILD_PYBIND11)
   # Consume pybind11's headers as SYSTEM (as we do for nanobind/sol2/LuaBridge3), so
   # warnings from pybind11-internal code inlined into a binding TU (e.g. a spurious
   # -Wnull-dereference in its dispatcher's std::copy) don't surface under welder's
-  # strict warning set. find_package(pybind11) leaves them non-SYSTEM.
-  get_target_property(_welder_pb_inc pybind11::headers INTERFACE_INCLUDE_DIRECTORIES)
+  # strict warning set. find_package(pybind11) leaves them non-SYSTEM. When pybind11
+  # arrives via FetchContent/add_subdirectory (e.g. the cookbook) pybind11::headers
+  # is an ALIAS, which set_target_properties rejects — resolve to the real target.
+  get_target_property(_welder_pb_tgt pybind11::headers ALIASED_TARGET)
+  if(NOT _welder_pb_tgt)
+    set(_welder_pb_tgt pybind11::headers)
+  endif()
+  get_target_property(_welder_pb_inc ${_welder_pb_tgt} INTERFACE_INCLUDE_DIRECTORIES)
   if(_welder_pb_inc)
-    set_target_properties(pybind11::headers PROPERTIES
+    set_target_properties(${_welder_pb_tgt} PROPERTIES
       INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_welder_pb_inc}")
   endif()
 endif()

@@ -209,7 +209,7 @@ struct basic_carriage {
                       "welder: weld_type<E>: enum E is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
         const char* enum_name{
-            name ? name : welder::name_of<^^E, L, Style, ent_kind::enum_>()};
+            welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
         auto e{B::template make_enum<E>(m, enum_name, welder::doc_of<^^E>())};
         constexpr policy_kind pol{policy_of(^^E)};
         template for (constexpr auto en :
@@ -248,7 +248,7 @@ struct basic_carriage {
         constexpr auto ctx{std::meta::access_context::unchecked()};
 
         const char* cls_name{
-            name ? name : welder::name_of<^^T, L, Style, ent_kind::class_>()};
+            welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
 
         // Native bases → bases of the class handle; the user binds them first.
         constexpr auto bases{Resolution::template native_bases<^^T, L>()};
@@ -432,8 +432,8 @@ struct basic_carriage {
                       "welder: weld_namespace_as_submodule<Ns>: Ns must reflect a "
                       "namespace");
         typename B::module_type sub{B::add_submodule(
-            m, name ? name
-                    : welder::name_of<Ns, B::language, Style, ent_kind::submodule>())};
+            m,
+            welder::name_of_or<Ns, B::language, Style, ent_kind::submodule>(name))};
         bind_namespace<B, Ns, Style>(sub);
         return sub;
     }

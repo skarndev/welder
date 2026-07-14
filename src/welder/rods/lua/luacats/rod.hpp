@@ -349,9 +349,8 @@ struct rod {
             render_overload_group(
                 m.doc->body,
                 (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-                    (name ? name
-                          : ::welder::name_of<Fn, language, Style,
-                                              ::welder::ent_kind::function>()),
+                    ::welder::name_of_or<Fn, language, Style,
+                                         ::welder::ent_kind::function>(name),
                 sigs);
         }
     }
@@ -366,9 +365,8 @@ struct rod {
         out += lua_type(std::meta::type_of(Var));
         out += '\n';
         out += (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-               (name ? name
-                     : ::welder::name_of<Var, language, Style,
-                                         ::welder::ent_kind::variable>()) +
+               ::welder::name_of_or<Var, language, Style,
+                                    ::welder::ent_kind::variable>(name) +
                " = nil\n\n";
     }
 

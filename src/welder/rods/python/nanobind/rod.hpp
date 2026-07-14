@@ -462,9 +462,8 @@ struct rod {
                 overloads) merge onto this same object. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
     static nb::object add_function(module_type& m, const char* name = nullptr) {
-        const char* fn_name{
-            name ? name
-                 : ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>()};
+        const char* fn_name{::welder::name_of_or<Fn, language, Style,
+                                                 ::welder::ent_kind::function>(name)};
         _def_function<Fn>(
             fn_name, [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); });
         return m.attr(fn_name);
@@ -480,9 +479,8 @@ struct rod {
     static void add_variable(module_type& m, nb::dict& live,
                              const char* name_override = nullptr) {
         const char* name{
-            name_override
-                ? name_override
-                : ::welder::name_of<Var, language, Style, ::welder::ent_kind::variable>()};
+            ::welder::name_of_or<Var, language, Style, ::welder::ent_kind::variable>(
+                name_override)};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Var))) {
             m.attr(name) = [:Var:]; // immutable: a value snapshot at bind time
         } else {

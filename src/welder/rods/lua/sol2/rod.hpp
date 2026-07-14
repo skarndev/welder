@@ -609,10 +609,8 @@ struct rod {
     static sol::object add_function(module_type& m, const char* name = nullptr) {
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
-            const char* fn_name{
-                name ? name
-                     : ::welder::name_of<Fn, language, Style,
-                                         ::welder::ent_kind::function>()};
+            const char* fn_name{::welder::name_of_or<
+                Fn, language, Style, ::welder::ent_kind::function>(name)};
             _register_named<grp>(m, fn_name, std::make_index_sequence<grp.size()>{});
             return m.get<sol::object>(fn_name);
         } else {
@@ -634,9 +632,8 @@ struct rod {
         verbatim; `nullptr` falls back to the styled/`weld_as` name. @see welder::rod */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session& s, const char* name = nullptr) {
-        const char* key{name ? name
-                             : ::welder::name_of<Var, language, Style,
-                                                 ::welder::ent_kind::variable>()};
+        const char* key{::welder::name_of_or<Var, language, Style,
+                                             ::welder::ent_kind::variable>(name)};
         if constexpr (std::meta::is_const_type(std::meta::type_of(Var))) {
             m[key] = [:Var:]; // immutable: a value snapshot at load time
         } else {

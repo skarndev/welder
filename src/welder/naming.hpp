@@ -1,5 +1,6 @@
 #pragma once
 #include <meta>
+#include <stdexcept> // name_of_or: missing-override diagnostic
 #include <string>
 #include <string_view>
 #include <vector>
@@ -311,6 +312,44 @@ consteval const char* name_of() {
         return std::define_static_string(Style::transform_variable(Ent));
     else // ent_kind::submodule
         return std::define_static_string(Style::transform_submodule(Ent));
+}
+
+/** Resolve a bound name with a call-site override: @a override_ wins verbatim,
+    `nullptr` falls back to @ref name_of.
+
+    This is the form the driver and every rod use to honor the optional trailing
+    `name` on `weld_type` / `weld_function` / `weld_variable` /
+    `weld_namespace_as_submodule`. It exists because the fallback must be **lazy**:
+    an entity with no identifier — a class/function *template instantiation* like
+    `Box<int>` — can only be named by a `weld_as` or by the call-site override, and
+    a bare `override_ ? override_ : name_of<…>()` would still constant-evaluate the
+    consteval `name_of` (and hard-error on `identifier_of`) even when the override
+    is present. Here the `name_of` fallback is compiled only when the entity is
+    statically nameable; otherwise a missing override throws at binding time (it
+    cannot be a compile-time diagnostic — whether the runtime pointer is null is
+    unknowable there).
+
+    @tparam Ent   a reflection of the entity to name.
+    @tparam L     the target language.
+    @tparam Style the name style (a @ref welder::naming::name_style).
+    @tparam K     which of @a Style's per-kind hooks to apply.
+    @param override_ the verbatim call-site name, or `nullptr` for the resolved one.
+    @return the bound name, in static storage (or @a override_, whose lifetime the
+            caller owns).
+    @throw std::invalid_argument when the entity has neither an identifier nor a
+           `weld_as` for @a L and @a override_ is `nullptr`.
+*/
+template <std::meta::info Ent, lang L, class Style, ent_kind K>
+constexpr const char* name_of_or(const char* override_) {
+    if (override_)
+        return override_;
+    if constexpr (weld_as_of<Ent, L>() != nullptr || std::meta::has_identifier(Ent)) {
+        return name_of<Ent, L, Style, K>();
+    } else {
+        throw std::invalid_argument{
+            "welder: this entity has no identifier (a template instantiation?) and "
+            "no [[=welder::weld_as]] — pass an explicit name at the weld_* call"};
+    }
 }
 
 } // namespace welder

@@ -128,4 +128,31 @@ static_assert(
         welder::weld_as_of<^^demo::FileProcessor::processPython, lang::py>()} ==
     "process"sv);
 
+// --- name_of_or: the call-site override form ---------------------------------
+// The override wins verbatim (beating weld_as); nullptr falls back to name_of.
+static_assert(name_is(
+    welder::name_of_or<^^demo::FileProcessor::processPython, lang::py, nm::snake_case,
+                       ent_kind::method>("forced"),
+    "forced"sv));
+static_assert(name_is(
+    welder::name_of_or<^^demo::FileProcessor::computeChecksum, lang::py,
+                       nm::snake_case, ent_kind::method>(nullptr),
+    "compute_checksum"sv));
+
+// The fallback is LAZY: an entity with no identifier (a template instantiation)
+// still resolves when the override is supplied — the whole reason weld_type<
+// Box<int>>(m, "IntBox") is legitimate. (Without identifier, weld_as or override,
+// name_of_or throws at binding time; that path is runtime-only by design.)
+namespace demo {
+template <class T>
+struct Bucket {
+    T v;
+};
+} // namespace demo
+static_assert(name_is(
+    welder::name_of_or<^^demo::Bucket<int>, lang::py, nm::none, ent_kind::class_>(
+        "IntBucket"),
+    "IntBucket"sv));
+static_assert(!std::meta::has_identifier(^^demo::Bucket<int>)); // why it must be lazy
+
 int main() {}
