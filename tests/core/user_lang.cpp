@@ -112,18 +112,15 @@ struct ruby_rod {
                                  std::index_sequence<I...>) {
         return {};
     }
-    static void add_default_ctor(auto&) {}
-    template <std::meta::info Ctor>
-    static void add_constructor(auto&) {}
-    template <class T>
-    static void add_aggregate_constructor(auto&) {}
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(auto&) {}
     template <std::meta::info Mem, class Style>
     static void add_field(auto&) {}
-    template <std::meta::info Fn, class Style>
+    template <auto Fns, class Style>
     static void add_method(auto&) {}
-    template <std::meta::info Fn, class Style>
+    template <auto Fns, class Style>
     static void add_static_method(auto&) {}
-    template <std::meta::info Fn>
+    template <auto Fns>
     static void add_operator(auto&) {}
 
     template <class E>
@@ -137,7 +134,7 @@ struct ruby_rod {
 
     static ruby_session open_module(module_type&) { return {}; }
     static void set_module_doc(module_type&, const char*) {}
-    template <std::meta::info Fn, class Style>
+    template <auto Fns, class Style>
     static void add_function(module_type&) {}
     template <std::meta::info Var, class Style>
     static void add_variable(module_type&, ruby_session&) {}

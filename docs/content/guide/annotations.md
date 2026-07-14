@@ -101,6 +101,17 @@ binds. `only(py)` is **closed** — nothing outside its list ever binds, no
 matter what languages join the build afterwards. Under `policy::opt_in`, `only`
 also counts as the member's opt-in, so no separate `include` is needed.
 
+!!! note "Marks resolve per overload — constructors included"
+
+    Every **overload** of a name carries its own marks: exclude one and its
+    siblings still bind (welder hands each rod the surviving overload set whole,
+    so this holds on the Lua rods' one-value-per-name tables too). The same goes
+    for individual **constructors** — with one asymmetry: a constructor honors
+    its explicit marks but not `policy::opt_in`'s default-out, since the policy
+    governs which members are *exposed* and a type's constructibility is
+    orthogonal (an opt_in type with no marked constructor would otherwise become
+    uninstantiable).
+
 ## The resolution rule
 
 For a given language `L`, `member_bound(member, L, policy)` decides:

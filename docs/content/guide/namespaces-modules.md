@@ -110,8 +110,13 @@ weld::weld_function<^^geometry::distance>(m, "dist");  // exposed as m.dist
 weld::weld_variable<^^geometry::kUnit>(m, "UNIT");     // exposed as m.UNIT
 ```
 
-An **overloaded** free function must be welded through its namespace (or by
-reflecting the specific overload): `^^fn` on an overload set is ambiguous.
+For an **overloaded** name, `^^fn` on the overload set is ambiguous — reflect a
+specific overload. `weld_function` then welds that overload's *participating*
+same-name siblings along with it, as one group (the same set the namespace walk
+would bind), so the call means the same thing on every rod — including the Lua
+ones, whose tables hold a single value per name. Shape the group with
+[per-overload marks](annotations.md#mark-per-member-overrides); the reflected
+overload itself always welds (the explicit call outranks its own marks).
 
 Where the framework has a per-function object, `weld_function` returns it — the
 bound function (`m.attr(name)`) on the Python rods, the table entry on sol2 —

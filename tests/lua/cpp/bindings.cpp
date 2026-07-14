@@ -53,6 +53,7 @@ inline ::sol::table welder_test_submodule(::sol::table& m, const char* name) {
 #include "enums.hpp"
 #include "naming.hpp"
 #include "chaining.hpp"
+#include "overloads.hpp"
 
 // The Lua entry point require("welder_test_sol2") calls. Builds the module table,
 // fills it from every case group (each under its own submodule table, mirroring
@@ -70,5 +71,6 @@ extern "C" int luaopen_welder_test_sol2(lua_State* L) {
     register_enums(m);       // <-> enums.hpp
     register_naming(m);      // <-> naming_spec.lua
     register_chaining(m);    // <-> chaining_spec.lua (handles returned by weld_*)
+    register_overloads(m);   // <-> overloads_spec.lua (per-overload / per-ctor marks)
     return ::sol::stack::push(L, m);
 }

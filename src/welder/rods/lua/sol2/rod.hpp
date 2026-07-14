@@ -42,10 +42,10 @@
       (they still work in Lua, synthesized). Bitwise metamethods exist only on Lua
       ≥ 5.3 (not on LuaJIT's 5.1 ABI); they are `#if`-gated. See @ref welder::rods::sol2::operator_mm.
     - **Constructors, all at once.** sol2 takes a type's whole constructor set in one
-      `sol::constructors<…>`, unlike pybind11's incremental `.def(init<>())`. So this
-      backend registers constructors from reflection inside @ref welder::rods::sol2::rod::make_class, and the
-      driver's per-constructor hooks (`add_default_ctor`, `add_constructor`,
-      `add_aggregate_constructor`) are intentional no-ops here.
+      `sol::constructors<…>` — exactly the shape of the driver's single
+      @ref welder::rods::sol2::rod::add_constructors call (the participating
+      constructor reflections plus the default/aggregate flags), turned into one
+      assignment here.
     - **Enums are tables.** Lua has no enum type; a welded enum becomes a plain
       name→integer table (an unscoped enum's names are also mirrored onto the
       enclosing module, like C++).
@@ -59,12 +59,10 @@
       current value and writes flow back — matching the Python backends.
 
     @note Overloaded methods, static methods, free functions and operators: sol2
-    stores one value per name (and per metamethod slot), so welder gathers a name's
-    several C++ overloads into one `sol::overload(…)` — sol2 dispatches among them at
-    call time. The gathering happens in the backend (see @ref welder::rods::lua::method_overload_set),
-    because the driver visits each overload individually to suit pybind11's
-    incremental `.def`. A same-named member in a derived class still hides the base's
-    (C++ name-hiding), as it did before.
+    stores one value per name (and per metamethod slot), and the DRIVER hands each
+    name's participating overloads to the rod as one group — registered here as a
+    single `sol::overload(…)`, dispatched among at call time. A same-named member
+    in a derived class still hides the base's (C++ name-hiding), as it did before.
 */
 #include <array>
 #include <cstddef>
@@ -74,9 +72,8 @@
 #include <vector>
 
 #include <welder/welder.hpp>           // welder::welder + rod contract + driver
-#include <welder/rods/lua/overloads.hpp> // shared Lua overload-set selectors
 #include <welder/rods/lua/sol2/metamethods.hpp> // operator -> sol2 metamethod map
-#include <welder/bind_traits.hpp>      // is_bindable_constructor / aggregate_* helpers
+#include <welder/bind_traits.hpp>      // aggregate_* helpers
 
 #include <sol/sol.hpp>
 
@@ -90,16 +87,6 @@ namespace welder::inline v0::rods::sol2 {
     (a namespace-scope alias so it can be reflected as `^^ctor_sig`). */
 template <class T, class... A>
 using ctor_sig = T(A...);
-
-// The overload-set selectors are shared with the LuaCATS stub backend
-// (`<welder/rods/lua/overloads.hpp>`; both gather a name's C++ overloads that the
-// driver visits one at a time) and reuse the core eligibility predicates, so a
-// group is exactly what the driver binds.
-using ::welder::rods::lua::function_overload_set;
-using ::welder::rods::lua::is_overload_leader;
-using ::welder::rods::lua::method_overload_set;
-using ::welder::rods::lua::operator_overload_set;
-using ::welder::rods::lua::overload_group;
 
 /** The sol2 rod: a stateless policy type satisfying @ref welder::rod.
 
@@ -177,33 +164,34 @@ struct rod {
     /** The set of `sol::constructors<…>` signatures to expose for @a T, as function-
         type reflections `T(A...)`.
 
-        Mirrors the driver's constructor selection (default constructor, each public
-        non-copy/move constructor, and — for a baseless aggregate whose fields all
-        bind — a field constructor via C++26 parenthesized aggregate init), but
-        gathered in one place because sol2 wants the whole set at once. Each
-        signature is a `substitute`d, dealiased `ctor_sig<T, Params…>`.
+        Built from the pieces the DRIVER hands to add_constructors — the
+        participating constructor reflections plus the default/aggregate flags —
+        because sol2 wants the whole set in one assignment (aggregates ride C++26
+        parenthesized aggregate init). Each signature is a `substitute`d, dealiased
+        `ctor_sig<T, Params…>`.
 
-        @tparam T the class type.
+        @tparam T          the class type.
+        @tparam Ctors      the participating constructor reflections.
+        @tparam HasDefault whether the default constructor is exposed.
+        @tparam Aggregate  whether the synthesized field constructor is exposed.
         @return the constructor-signature reflections (may be empty: a type with no
                 Lua-constructible form).
     */
-    template <class T>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
     static consteval std::vector<std::meta::info> _ctor_signatures() {
         std::vector<std::meta::info> sigs;
-        constexpr auto ctx{std::meta::access_context::unchecked()};
         auto sig = [](std::vector<std::meta::info> targs) {
             return std::meta::dealias(std::meta::substitute(^^ctor_sig, targs));
         };
-        if (std::is_default_constructible_v<T>)
+        if (HasDefault)
             sigs.push_back(sig({^^T}));
-        for (auto c : std::meta::members_of(^^T, ctx))
-            if (::welder::detail::is_bindable_constructor(c)) {
-                std::vector<std::meta::info> targs{^^T};
-                for (auto p : std::meta::parameters_of(c))
-                    targs.push_back(std::meta::type_of(p));
-                sigs.push_back(sig(targs));
-            }
-        if (::welder::detail::aggregate_initializable<T, lang::lua>()) {
+        for (auto c : Ctors) {
+            std::vector<std::meta::info> targs{^^T};
+            for (auto p : std::meta::parameters_of(c))
+                targs.push_back(std::meta::type_of(p));
+            sigs.push_back(sig(targs));
+        }
+        if (Aggregate) {
             std::vector<std::meta::info> targs{^^T};
             for (auto fld : ::welder::detail::aggregate_fields<T>())
                 targs.push_back(std::meta::type_of(fld));
@@ -212,17 +200,16 @@ struct rod {
         return sigs;
     }
 
-    /** `_ctor_signatures<T>()` as a fixed-size, splice-ready static array.
-        @tparam T the class type.
-        @return the constructor-signature reflections as a static array. */
-    template <class T>
+    /** `_ctor_signatures<T, …>()` as a fixed-size, splice-ready static array. */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
     static consteval auto _ctor_sigs_array() {
-        constexpr std::size_t n{_ctor_signatures<T>().size()};
+        constexpr std::size_t n{
+            _ctor_signatures<T, Ctors, HasDefault, Aggregate>().size()};
         std::array<std::meta::info, n> out{};
         // Guard the fill: std::array<T, 0>::operator[] is not consteval, so it must
         // not be instantiated for a type with no exposed constructors.
         if constexpr (n != 0) {
-            auto v{_ctor_signatures<T>()};
+            auto v{_ctor_signatures<T, Ctors, HasDefault, Aggregate>()};
             for (std::size_t i{0}; i < n; ++i)
                 out[i] = v[i];
         }
@@ -243,15 +230,6 @@ struct rod {
         ut["new"] = ::sol::constructors<typename [:Sigs[I]:]...>();
     }
 
-    /** @see _set_constructors — no-op when @a T exposes no Lua constructor.
-        @tparam T the class type.
-        @param ut the usertype to install the constructors on. */
-    template <class T>
-    static void _register_constructors(::sol::usertype<T>& ut) {
-        constexpr auto sigs{_ctor_sigs_array<T>()};
-        if constexpr (sigs.size() != 0)
-            _set_constructors<T, sigs>(ut, std::make_index_sequence<sigs.size()>{});
-    }
 
     /** Create `m.new_usertype<T, Bases…>(name)` with sol2's base-class linkage.
 
@@ -267,16 +245,14 @@ struct rod {
     template <class T, auto Bases, std::size_t... I>
     static auto _make_usertype(::sol::table& m, const char* name,
                                std::index_sequence<I...>) {
+        // sol::no_constructor suppresses sol2's implicit constructor; the real set
+        // is installed afterwards by add_constructors (the driver's one call).
         if constexpr (sizeof...(I) == 0) {
-            ::sol::usertype<T> ut{m.new_usertype<T>(name, ::sol::no_constructor)};
-            _register_constructors<T>(ut);
-            return ut;
+            return ::sol::usertype<T>{m.new_usertype<T>(name, ::sol::no_constructor)};
         } else {
-            ::sol::usertype<T> ut{m.new_usertype<T>(
+            return ::sol::usertype<T>{m.new_usertype<T>(
                 name, ::sol::no_constructor, ::sol::base_classes,
                 ::sol::bases<typename [:Bases[I]:]...>())};
-            _register_constructors<T>(ut);
-            return ut;
         }
     }
 
@@ -472,8 +448,9 @@ struct rod {
 
     // --- class binding ------------------------------------------------------
 
-    /** Create the `sol::usertype<T>` handle (constructors installed from
-        reflection; @a doc has no Lua runtime home and is ignored).
+    /** Create the `sol::usertype<T>` handle (constructors are installed by the
+        driver's subsequent add_constructors call; @a doc has no Lua runtime home
+        and is ignored).
 
         The driver's @a Bases is welder's *nearest* welded-ancestor set; sol2 needs
         the full transitive closure (see _collect_welded_bases), so this recomputes
@@ -487,16 +464,16 @@ struct rod {
             m, name, std::make_index_sequence<bases.size()>{});
     }
 
-    // Constructors are registered as one set in make_class (sol2 wants them all at
-    // once), so the driver's per-constructor hooks are intentional no-ops here.
-    /** No-op: sol2 registers the whole constructor set in @ref make_class. @see welder::rod */
-    static void add_default_ctor(auto&) {}
-    /** No-op: sol2 registers the whole constructor set in @ref make_class. @see welder::rod */
-    template <std::meta::info /*Ctor*/>
-    static void add_constructor(auto&) {}
-    /** No-op: sol2 registers the whole constructor set in @ref make_class. @see welder::rod */
-    template <class /*T*/>
-    static void add_aggregate_constructor(auto&) {}
+    /** Install @a T's whole constructor set — exactly what sol2 wants (one
+        `sol::constructors<…>` assignment covering the call form `T(…)` and the
+        idiomatic `T.new(…)`), built from the driver-passed pieces.
+        @see _ctor_signatures @see _set_constructors @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(::sol::usertype<T>& ut) {
+        constexpr auto sigs{_ctor_sigs_array<T, Ctors, HasDefault, Aggregate>()};
+        if constexpr (sigs.size() != 0)
+            _set_constructors<T, sigs>(ut, std::make_index_sequence<sigs.size()>{});
+    }
 
     /** Bind data member @a Mem as a usertype property.
 
@@ -514,44 +491,34 @@ struct rod {
             ut[name] = &[:Mem:];
     }
 
-    /** Bind member function @a Fn as a method (`obj:name(…)`). Several C++ overloads
-        of a name are gathered into one `sol::overload(…)`; the driver visits each
-        overload, so the whole group is registered once, on its first member.
-        @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind method overload group @a Fns as one method (`obj:name(…)`) — a single
+        callable when unique, one `sol::overload(…)` when several (sol2 stores one
+        value per table key). The name resolves from `Fns[0]`. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(auto& ut) {
-        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            _register_named<grp>(
-                ut, ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
-                std::make_index_sequence<grp.size()>{});
-        }
+        _register_named<Fns>(
+            ut,
+            ::welder::name_of<Fns[0], language, Style, ::welder::ent_kind::method>(),
+            std::make_index_sequence<Fns.size()>{});
     }
 
-    /** Bind static member function @a Fn as a class-table function (`T.name(…)`);
-        overloads are grouped as in @ref add_method. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind static-method overload group @a Fns as a class-table function
+        (`T.name(…)`), grouped as in @ref add_method. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_static_method(auto& ut) {
-        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            _register_named<grp>(
-                ut,
-                ::welder::name_of<Fn, language, Style,
-                                  ::welder::ent_kind::static_method>(),
-                std::make_index_sequence<grp.size()>{});
-        }
+        _register_named<Fns>(
+            ut,
+            ::welder::name_of<Fns[0], language, Style,
+                              ::welder::ent_kind::static_method>(),
+            std::make_index_sequence<Fns.size()>{});
     }
 
-    /** Bind member operator @a Fn under its Lua metamethod. The specific overload is
-        spliced, so unary/binary forms never collide; several overloads mapping to
-        the *same* metamethod slot are gathered into one `sol::overload(…)`.
-        @see welder::rod */
-    template <std::meta::info Fn>
+    /** Bind operator overload group @a Fns under its Lua metamethod (one operator +
+        arity per group; each overload is spliced, several same-slot overloads become
+        one `sol::overload(…)`). @see welder::rod */
+    template <auto Fns>
     static void add_operator(auto& ut) {
-        if constexpr (is_overload_leader<operator_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<operator_overload_set, Fn, lang::lua>()};
-            _register_operator<grp>(ut, std::make_index_sequence<grp.size()>{});
-        }
+        _register_operator<Fns>(ut, std::make_index_sequence<Fns.size()>{});
     }
 
     // --- enum binding -------------------------------------------------------
@@ -595,27 +562,19 @@ struct rod {
         @see welder::rod */
     static void set_module_doc(module_type&, const char*) {}
 
-    /** Bind free function @a Fn as a module-level function; overloads are gathered
-        into one `sol::overload(…)`, registered once on the group's first member.
+    /** Bind free-function overload group @a Fns as one module-level function
+        (a single callable, or one `sol::overload(…)`; name from `Fns[0]`).
 
         A non-null @a name overrides the resolved name (including any `weld_as`), used
         verbatim; `nullptr` falls back to the styled/`weld_as` name.
         @return the bound function object (the table entry) — the handle for further
-                hand-registration. For a non-leader overload the set was (or will be)
-                registered by its leader, so there is nothing at this call to hand
-                out: an *invalid* `sol::object` (`.valid() == false`) is the null
-                handle. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+                hand-registration. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static sol::object add_function(module_type& m, const char* name = nullptr) {
-        if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
-            const char* fn_name{::welder::name_of_or<
-                Fn, language, Style, ::welder::ent_kind::function>(name)};
-            _register_named<grp>(m, fn_name, std::make_index_sequence<grp.size()>{});
-            return m.get<sol::object>(fn_name);
-        } else {
-            return sol::object{};
-        }
+        const char* fn_name{::welder::name_of_or<
+            Fns[0], language, Style, ::welder::ent_kind::function>(name)};
+        _register_named<Fns>(m, fn_name, std::make_index_sequence<Fns.size()>{});
+        return m.get<sol::object>(fn_name);
     }
 
     /** Bind namespace variable @a Var onto the module.

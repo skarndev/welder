@@ -110,16 +110,15 @@ struct rod {
         return {};
     }
 
-    static void add_default_ctor(class_handle&) {}
-    template <std::meta::info> static void add_constructor(class_handle&) {}
-    template <class T> static void add_aggregate_constructor(class_handle&) {}
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(class_handle&) {}
     template <std::meta::info, class = ::welder::naming::none>
     static void add_field(class_handle&) {}
-    template <std::meta::info, class = ::welder::naming::none>
+    template <auto Fns, class = ::welder::naming::none>
     static void add_method(class_handle&) {}
-    template <std::meta::info, class = ::welder::naming::none>
+    template <auto Fns, class = ::welder::naming::none>
     static void add_static_method(class_handle&) {}
-    template <std::meta::info> static void add_operator(class_handle&) {}
+    template <auto Fns> static void add_operator(class_handle&) {}
 
     // --- enum binding: nothing to emit --------------------------------------
 
@@ -135,7 +134,7 @@ struct rod {
 
     static session open_module(module_type&) { return {}; }
     static void set_module_doc(module_type&, const char*) {}
-    template <std::meta::info, class = ::welder::naming::none>
+    template <auto Fns, class = ::welder::naming::none>
     static void add_function(module_type&, const char* = nullptr) {}
     template <std::meta::info, class = ::welder::naming::none>
     static void add_variable(module_type&, session&, const char* = nullptr) {}

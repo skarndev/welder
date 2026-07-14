@@ -50,7 +50,7 @@ override their virtuals without the trampolines being hand-written (each overrid
 the base virtual's reflected types, so signatures match by construction; a C-variadic
 virtual with no `bind_flat` is a hard error). Further languages are designed-for but not
 yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
-section): a *standalone* super-project of 8 CTest-asserted recipes that obtains welder
+section): a *standalone* super-project of 9 CTest-asserted recipes that obtains welder
 via FetchContent — CI builds it against the checkout, so it doubles as the consumer-
 packaging test (details in `.claude/context/build-test-run.md`). For the
 feature-by-feature detail and test locations, see the context files below.
@@ -97,7 +97,11 @@ PYBIND11_MODULE(mymod, m) {
 `policy::auto` from the original sketch is spelled `policy::automatic` (`auto` is
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for
 `L` → false; else an `only` mark → true iff it names `L` (either policy); else
-`automatic` → true; else (`opt_in`) → true iff explicitly included for `L`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
+`automatic` → true; else (`opt_in`) → true iff explicitly included for `L`. Marks
+resolve **per overload, constructors included** (the carriage computes each name's
+participating overload group from the resolution and hands it to the rod whole);
+one asymmetry: a constructor honors its explicit marks but not `opt_in`'s
+default-out — the policy governs member *exposure*, constructibility is orthogonal. A `lang` is a bit in an `unsigned` mask; mask `0` on an
 exclude/include spec is the sentinel for "all languages". The lang value space
 is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
 user languages from 16–31 for out-of-tree rods (locked by

@@ -1,4 +1,5 @@
 #pragma once
+#include <array> // overload-group probes (std::array<std::meta::info, N> NTTPs)
 #include <concepts>
 #include <meta>
 #include <ranges>
@@ -127,18 +128,28 @@ concept caster_oracle = requires {
     @ref welder::naming::name_style) so the rod resolves its own name via
     `welder::name_of<Mem, language, Style, ent_kind::…>()` — which also applies any
     `[[=welder::weld_as]]` override. The class name is styled by the driver and
-    passed to `make_class` ready-made:
+    passed to `make_class` ready-made.
+
+    Callables arrive as whole **overload groups** — an `auto Fns` non-type argument,
+    a `std::array<std::meta::info, N>` (N ≥ 1, declaration order) of overloads that
+    share one target name. The CARRIAGE computes the group from its resolution and
+    gates every member; the rod only emits — a chained-def framework (pybind11)
+    loops the group, a one-value-per-name framework (the Lua rods) registers it as
+    one overload set. The group's name resolves from `Fns[0]`. Constructors arrive
+    the same way, as one `add_constructors` call carrying the participating
+    constructor reflections plus the two carriage-computed synthesized forms (the
+    default constructor — decided against `construction_type<T>` where the rod
+    nominates one — and the aggregate field constructor):
     @code
     template <class T, auto Bases, std::size_t... I>
       static auto make_class(module_type&, const char* name, const char* doc,
                              std::index_sequence<I...>);   // Bases[I] spliced
-    static void add_default_ctor(auto& cls);
-    template <std::meta::info Ctor> static void add_constructor(auto& cls);
-    template <class T>              static void add_aggregate_constructor(auto& cls);
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+      static void add_constructors(auto& cls);  // the whole participating set
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
-    template <std::meta::info Fn,  class Style> static void add_method(auto& cls);
-    template <std::meta::info Fn,  class Style> static void add_static_method(auto& cls);
-    template <std::meta::info Fn>   static void add_operator(auto& cls); // fixed op name
+    template <auto Fns, class Style> static void add_method(auto& cls);
+    template <auto Fns, class Style> static void add_static_method(auto& cls);
+    template <auto Fns>              static void add_operator(auto& cls); // fixed op name
     static consteval const char* special_method_name(std::meta::info op_fn);
         // target special-method name for a member operator, or nullptr if the
         // backend does not expose it (drives add_operator eligibility)
@@ -157,7 +168,8 @@ concept caster_oracle = requires {
     @code
     static auto open_module(module_type&);              // -> session
     static void set_module_doc(module_type&, const char* doc);
-    template <std::meta::info Fn,  class Style> static void add_function(module_type&, const char* name = nullptr);
+    template <auto Fns, class Style> static void add_function(module_type&, const char* name = nullptr);
+        // a free-function overload group (array NTTP, like add_method)
     template <std::meta::info Var, class Style> static void add_variable(module_type&, session&, const char* name = nullptr);
     static module_type add_submodule(module_type&, const char* name); // name pre-styled
     static void close_module(module_type&, session&);   // finalize the session
@@ -187,7 +199,8 @@ concept rod =
         B::set_module_doc(m, s);
         B::close_module(m, session);
         { B::special_method_name(^^int) } -> std::convertible_to<const char*>;
-        B::template add_function<^^int, detail::any_type>(m);
+        B::template add_function<std::array<std::meta::info, 1>{^^int},
+                                 detail::any_type>(m);
         B::template add_variable<^^int, detail::any_type>(m, session);
     } &&
     // The per-class / per-enum hooks, probed against the rod's declared handle types
@@ -197,13 +210,15 @@ concept rod =
     // (@ref detail::any_type) reach only the bodies, which are not instantiated.
     requires(typename B::template class_handle_type<detail::any_type>& cls,
              typename B::template enum_handle_type<detail::any_enum>& en) {
-        B::add_default_ctor(cls);
-        B::template add_constructor<^^int>(cls);
-        B::template add_aggregate_constructor<detail::any_type>(cls);
+        B::template add_constructors<detail::any_type,
+                                     std::array<std::meta::info, 0>{}, false,
+                                     false>(cls);
         B::template add_field<^^int, detail::any_type>(cls);
-        B::template add_method<^^int, detail::any_type>(cls);
-        B::template add_static_method<^^int, detail::any_type>(cls);
-        B::template add_operator<^^int>(cls);
+        B::template add_method<std::array<std::meta::info, 1>{^^int},
+                               detail::any_type>(cls);
+        B::template add_static_method<std::array<std::meta::info, 1>{^^int},
+                                      detail::any_type>(cls);
+        B::template add_operator<std::array<std::meta::info, 1>{^^int}>(cls);
         B::template add_enumerator<^^int, detail::any_type>(en);
         B::template finish_enum<detail::any_enum>(en);
     };
@@ -228,6 +243,13 @@ concept rod =
         // base binds separately (as a base of the class handle) vs. being flattened in
     static consteval bool member_participates(std::meta::info mem, lang L, policy_kind pol);
         // a namespace member participates under its enclosing scope's policy
+    static consteval bool class_member_participates(std::meta::info mem, lang L, policy_kind pol);
+        // a CLASS member — field / method / operator / constructor (and, loosely,
+        // an enumerator) — participates. Resolved per overload/constructor, so a
+        // mark (or a bespoke signature-level rule) prunes exactly one; the
+        // carriage computes each overload GROUP from this predicate, so what a
+        // rod registers is exactly what the resolution admits. Shipped
+        // resolutions: member_bound (scope policy + the member's own marks).
     static consteval bool namespace_participates(std::meta::info ns, lang L, policy_kind pol);
         // a nested namespace becomes a (recursed) submodule
     static consteval bool counts_as_registered(std::meta::info type, lang L);
@@ -260,6 +282,7 @@ concept resolution =
         { R::participates(e, L) } -> std::convertible_to<bool>;
         { R::is_native_base(e, L) } -> std::convertible_to<bool>;
         { R::member_participates(e, L, pol) } -> std::convertible_to<bool>;
+        { R::class_member_participates(e, L, pol) } -> std::convertible_to<bool>;
         { R::namespace_participates(e, L, pol) } -> std::convertible_to<bool>;
         { R::counts_as_registered(e, L) } -> std::convertible_to<bool>;
     } &&

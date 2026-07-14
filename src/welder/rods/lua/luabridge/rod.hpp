@@ -65,11 +65,10 @@
       value; a mutable one becomes a native `addProperty` get/set over the C++ global
       (LuaBridge3 has first-class properties, so no metatable proxy is needed).
 
-    @note Overloaded methods, static methods, free functions and operators are
-    gathered into one variadic `addFunction(name, f1, f2, …)` — LuaBridge3 dispatches
-    among them by arity/type at call time. The gathering reuses the shared Lua
-    overload selectors (`<welder/rods/lua/overloads.hpp>`), so the group is exactly
-    what the driver binds.
+    @note Overloaded methods, static methods, free functions and operators arrive
+    from the DRIVER as whole groups and register as one variadic
+    `addFunction(name, f1, f2, …)` — LuaBridge3 dispatches among them by arity/type
+    at call time.
 */
 #include <array>
 #include <cstddef>
@@ -80,9 +79,8 @@
 #include <vector>
 
 #include <welder/welder.hpp>              // welder::welder + rod contract + driver
-#include <welder/rods/lua/overloads.hpp>  // shared Lua overload-set selectors
 #include <welder/rods/lua/metamethods.hpp> // shared operator -> Lua __name map
-#include <welder/bind_traits.hpp>         // is_bindable_constructor / aggregate_* helpers
+#include <welder/bind_traits.hpp>         // aggregate_* helpers
 
 // LuaBridge3 requires the Lua headers to be visible first (its Config.h hard-errors
 // otherwise). Pull them in here so a binding TU only needs this rod header, the way
@@ -111,15 +109,6 @@ namespace welder::inline v0::rods::luabridge {
 namespace lb = ::luabridge;
 
 using ::welder::rods::lua::lua_metamethod_name;
-
-// The overload-set selectors are shared with the sol2 and LuaCATS rods
-// (`<welder/rods/lua/overloads.hpp>`): they gather a name's C++ overloads that the
-// driver visits one at a time, reusing the core eligibility predicates.
-using ::welder::rods::lua::function_overload_set;
-using ::welder::rods::lua::is_overload_leader;
-using ::welder::rods::lua::method_overload_set;
-using ::welder::rods::lua::operator_overload_set;
-using ::welder::rods::lua::overload_group;
 
 /** The alias `void(A...)` — a LuaBridge3 constructor signature (a function type
     whose parameters are the constructor arguments; the return type is ignored).
@@ -243,27 +232,23 @@ struct rod {
         return _open_namespace(m).template beginClass<T>(name);
     }
 
-    /** The set of constructor signatures to expose for @a T, as `void(A...)`
-        function-type reflections (the form LuaBridge3's `addConstructor` wants).
-
-        Mirrors the driver's constructor selection (default constructor, each public
-        non-copy/move constructor, and — for a baseless aggregate whose fields all
-        bind — a field constructor via C++26 parenthesized aggregate init), gathered
-        in one place because LuaBridge3 wants the whole set at once. */
-    template <class T>
+    /** The set of constructor argument lists to expose for @a T, built from the
+        pieces the DRIVER hands to add_constructors — the participating constructor
+        reflections plus the default/aggregate flags (aggregates ride C++26
+        parenthesized aggregate init) — gathered into one place because LuaBridge3
+        wants the whole set at once. */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
     static consteval std::vector<std::vector<std::meta::info>> _ctor_arg_lists() {
         std::vector<std::vector<std::meta::info>> lists;
-        constexpr auto ctx{std::meta::access_context::unchecked()};
-        if (std::is_default_constructible_v<T>)
+        if (HasDefault)
             lists.push_back({}); // ()
-        for (auto c : std::meta::members_of(^^T, ctx))
-            if (::welder::detail::is_bindable_constructor(c)) {
-                std::vector<std::meta::info> args;
-                for (auto p : std::meta::parameters_of(c))
-                    args.push_back(std::meta::type_of(p));
-                lists.push_back(args);
-            }
-        if (::welder::detail::aggregate_initializable<T, lang::lua>()) {
+        for (auto c : Ctors) {
+            std::vector<std::meta::info> args;
+            for (auto p : std::meta::parameters_of(c))
+                args.push_back(std::meta::type_of(p));
+            lists.push_back(args);
+        }
+        if (Aggregate) {
             std::vector<std::meta::info> args;
             for (auto fld : ::welder::detail::aggregate_fields<T>())
                 args.push_back(std::meta::type_of(fld));
@@ -274,12 +259,13 @@ struct rod {
 
     /** The `void(A...)` constructor-signature reflections (for `addConstructor`) as a
         fixed-size, splice-ready static array. */
-    template <class T>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
     static consteval auto _ctor_sigs_array() {
-        constexpr std::size_t n{_ctor_arg_lists<T>().size()};
+        constexpr std::size_t n{
+            _ctor_arg_lists<T, Ctors, HasDefault, Aggregate>().size()};
         std::array<std::meta::info, n> out{};
         if constexpr (n != 0) {
-            auto lists{_ctor_arg_lists<T>()};
+            auto lists{_ctor_arg_lists<T, Ctors, HasDefault, Aggregate>()};
             for (std::size_t i{0}; i < n; ++i)
                 out[i] = std::meta::dealias(std::meta::substitute(^^ctor_sig, lists[i]));
         }
@@ -288,12 +274,13 @@ struct rod {
 
     /** The `make_object<T, A...>` factory-function reflections (for the `.new` static
         function) as a fixed-size, splice-ready static array. */
-    template <class T>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
     static consteval auto _factory_array() {
-        constexpr std::size_t n{_ctor_arg_lists<T>().size()};
+        constexpr std::size_t n{
+            _ctor_arg_lists<T, Ctors, HasDefault, Aggregate>().size()};
         std::array<std::meta::info, n> out{};
         if constexpr (n != 0) {
-            auto lists{_ctor_arg_lists<T>()};
+            auto lists{_ctor_arg_lists<T, Ctors, HasDefault, Aggregate>()};
             for (std::size_t i{0}; i < n; ++i) {
                 std::vector<std::meta::info> targs{^^T};
                 for (auto a : lists[i])
@@ -314,28 +301,18 @@ struct rod {
         cls.addStaticFunction("new", &[:Factories[I]:]...);
     }
 
-    /** @see _add_constructors — no-op when @a T exposes no Lua constructor. */
-    template <class T, class Cls>
-    static void _register_constructors(Cls& cls) {
-        constexpr auto sigs{_ctor_sigs_array<T>()};
-        constexpr auto factories{_factory_array<T>()};
-        if constexpr (sigs.size() != 0)
-            _add_constructors<sigs, factories>(
-                cls, std::make_index_sequence<sigs.size()>{});
-    }
-
-    /** Create the class registration with its native (welded nearest-ancestor) bases
-        and constructors, in one chained expression that then unwinds. */
+    /** Create the class registration with its native (welded nearest-ancestor)
+        bases, in one chained expression that then unwinds (constructors are
+        installed by the driver's subsequent add_constructors call, which re-opens
+        the class by path). */
     template <class T, auto Bases, std::size_t... I>
     static void _make_class(const module_scope& m, const char* name,
                             std::index_sequence<I...>) {
         if constexpr (sizeof...(I) == 0) {
             auto cls{_open_namespace(m).template beginClass<T>(name)};
-            _register_constructors<T>(cls);
         } else {
             auto cls{_open_namespace(m)
                          .template deriveClass<T, typename [:Bases[I]:]...>(name)};
-            _register_constructors<T>(cls);
         }
     }
 
@@ -387,16 +364,20 @@ struct rod {
         return class_handle<T>{m, std::string{name}};
     }
 
-    // Constructors are registered as one set in make_class (LuaBridge3 wants them all
-    // at once), so the driver's per-constructor hooks are intentional no-ops here.
-    /** No-op: LuaBridge3 registers the whole constructor set in @ref make_class. @see welder::rod */
-    static void add_default_ctor(auto&) {}
-    /** No-op: LuaBridge3 registers the whole constructor set in @ref make_class. @see welder::rod */
-    template <std::meta::info /*Ctor*/>
-    static void add_constructor(auto&) {}
-    /** No-op: LuaBridge3 registers the whole constructor set in @ref make_class. @see welder::rod */
-    template <class /*T*/>
-    static void add_aggregate_constructor(auto&) {}
+    /** Register @a T's whole constructor set — exactly what LuaBridge3 wants (one
+        variadic `addConstructor` for the call form `T(…)` plus the `.new` factory
+        set) — built from the driver-passed pieces on the re-opened class.
+        @see _ctor_arg_lists @see _add_constructors @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(auto& h) {
+        constexpr auto sigs{_ctor_sigs_array<T, Ctors, HasDefault, Aggregate>()};
+        constexpr auto factories{_factory_array<T, Ctors, HasDefault, Aggregate>()};
+        if constexpr (sigs.size() != 0) {
+            auto cls{_open_class<T>(h.mod, h.name.c_str())};
+            _add_constructors<sigs, factories>(
+                cls, std::make_index_sequence<sigs.size()>{});
+        }
+    }
 
     /** Bind data member @a Mem as a class property (read-only if const, else
         read/write). Lua has no property docstring, so a `[[=welder::doc]]` on the
@@ -421,36 +402,30 @@ struct rod {
             cls.addProperty(name, mp, mp);  // read/write
     }
 
-    /** Bind member function @a Fn as a method (`obj:name(…)`). Several C++ overloads
-        of a name are gathered into one variadic `addFunction`; registered once, on
-        the group's first (decl-order) member. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind method overload group @a Fns as one method (`obj:name(…)`) via a single
+        variadic `addFunction` — LuaBridge3 dispatches by arity/type at call time.
+        The name resolves from `Fns[0]`. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(auto& h) {
         using T = _class_type<decltype(h)>;
-        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            auto cls{_open_class<T>(h.mod, h.name.c_str())};
-            _add_function<grp>(
-                cls,
-                ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
-                std::make_index_sequence<grp.size()>{});
-        }
+        auto cls{_open_class<T>(h.mod, h.name.c_str())};
+        _add_function<Fns>(
+            cls,
+            ::welder::name_of<Fns[0], language, Style, ::welder::ent_kind::method>(),
+            std::make_index_sequence<Fns.size()>{});
     }
 
-    /** Bind static member function @a Fn as a class-table function (`T.name(…)`);
-        overloads are grouped as in @ref add_method. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind static-method overload group @a Fns as a class-table function
+        (`T.name(…)`), grouped as in @ref add_method. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_static_method(auto& h) {
         using T = _class_type<decltype(h)>;
-        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            auto cls{_open_class<T>(h.mod, h.name.c_str())};
-            _add_static_function<grp>(
-                cls,
-                ::welder::name_of<Fn, language, Style,
-                                  ::welder::ent_kind::static_method>(),
-                std::make_index_sequence<grp.size()>{});
-        }
+        auto cls{_open_class<T>(h.mod, h.name.c_str())};
+        _add_static_function<Fns>(
+            cls,
+            ::welder::name_of<Fns[0], language, Style,
+                              ::welder::ent_kind::static_method>(),
+            std::make_index_sequence<Fns.size()>{});
     }
 
     /** Bind member operator @a Fn under its Lua metamethod `__name`. The specific
@@ -475,10 +450,11 @@ struct rod {
         type the adapter therefore coerces the key with `lua_tonumberx` (which accepts a
         numeric string), and only treats a genuinely non-numeric key as a member miss.
         @see welder::rod */
-    template <std::meta::info Fn>
+    template <auto Fns>
     static void add_operator(auto& h) {
         using T = _class_type<decltype(h)>;
-        if constexpr (is_overload_leader<operator_overload_set>(Fn, lang::lua)) {
+        constexpr auto Fn{Fns[0]};
+        {
             auto cls{_open_class<T>(h.mod, h.name.c_str())};
             if constexpr (std::meta::operator_of(Fn) ==
                           std::meta::operators::op_square_brackets) {
@@ -501,10 +477,8 @@ struct rod {
                         }
                     });
             } else {
-                constexpr auto grp{
-                    overload_group<operator_overload_set, Fn, lang::lua>()};
                 constexpr const char* slot{lua_metamethod_name(Fn)};
-                _add_function<grp>(cls, slot, std::make_index_sequence<grp.size()>{});
+                _add_function<Fns>(cls, slot, std::make_index_sequence<Fns.size()>{});
             }
         }
     }
@@ -548,20 +522,18 @@ struct rod {
         @see welder::rod */
     static void set_module_doc(module_type&, const char*) {}
 
-    /** Bind free function @a Fn as a module-level function; overloads are gathered
-        into one variadic `addFunction`. A non-null @a name overrides the resolved
-        name (including any `weld_as`), used verbatim. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind free-function overload group @a Fns as one module-level function (a
+        single variadic `addFunction`; name from `Fns[0]`). A non-null @a name
+        overrides the resolved name (including any `weld_as`), used verbatim.
+        @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
-        if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
-            lb::Namespace ns{_open_namespace(m)};
-            _add_function<grp>(
-                ns,
-                ::welder::name_of_or<Fn, language, Style,
-                                     ::welder::ent_kind::function>(name),
-                std::make_index_sequence<grp.size()>{});
-        }
+        lb::Namespace ns{_open_namespace(m)};
+        _add_function<Fns>(
+            ns,
+            ::welder::name_of_or<Fns[0], language, Style,
+                                 ::welder::ent_kind::function>(name),
+            std::make_index_sequence<Fns.size()>{});
     }
 
     /** Bind namespace variable @a Var onto the module.

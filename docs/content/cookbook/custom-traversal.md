@@ -38,6 +38,24 @@ struct skip_private : welder::carriages::greedy_resolution {
                welder::carriages::greedy_resolution::namespace_participates(ns, L, pol);
     }
 
+    // class members — fields, methods, operators, constructors — resolve here,
+    // PER OVERLOAD: the driver computes each name's overload group from this
+    // predicate. A SIGNATURE-level rule prunes exactly one sibling: the modern
+    // label(string) binds while the legacy label(const char*, int) does not.
+    static consteval bool takes_c_string(std::meta::info fn) {
+        for (auto p : std::meta::parameters_of(fn))
+            if (std::meta::dealias(std::meta::type_of(p)) ==
+                std::meta::dealias(^^const char*))
+                return true;
+        return false;
+    }
+    static consteval bool class_member_participates(std::meta::info mem, welder::lang L,
+                                                    welder::policy_kind pol) {
+        if (hidden(mem) || (std::meta::is_function(mem) && takes_c_string(mem)))
+            return false;
+        return welder::carriages::greedy_resolution::class_member_participates(mem, L, pol);
+    }
+
     // keep the bindability gate's registration oracle consistent (see below)
     static consteval bool counts_as_registered(std::meta::info type, welder::lang L) {
         return !hidden(type) &&
@@ -62,6 +80,16 @@ PYBIND11_MODULE(sensors, m) {
 
 ## Two things worth noticing
 
+**Per-overload, signature-level resolution.** `class_member_participates` is
+consulted for every field, method, operator and constructor — **per overload** —
+and the driver computes each name's overload group from its verdicts before
+handing the group to the rod. That is what lets a signature rule ("skip the
+C-string legacy API") prune exactly one overload of `label` while its modern
+sibling binds, identically on every rod. (The same mechanism is what makes
+[`mark::exclude` on an individual overload or constructor](../guide/annotations.md)
+work under ordinary stitch welding — the marks *are* the stock resolution's
+per-member rule.)
+
 **Override the oracle too.** The gate's registration oracle
 (`counts_as_registered`) is part of the resolution: the greedy default vouches
 for any registrable class type, but a type your skip rule hides is *never*
@@ -69,17 +97,12 @@ registered — mirroring the rule in the oracle keeps a public signature that
 names a hidden type a **compile-time** error instead of a call-time
 unregistered-type surprise.
 
-**The seam is namespace-level.** A resolution decides which namespace members
-participate, which nested namespaces recurse, and which bases are native
-(`participates` / `is_native_base` / `native_bases` complete the contract) — it
-is not consulted per *class member*. Inside a type you own, the
-[marks](../guide/annotations.md) are the per-member tool; inside a type you
-don't, exclude the whole type or wrap it.
-
 ## What the check asserts
 
 The public surface (`Reading`, `take_reading`, `API_LEVEL`, the `units`
 submodule) binds exactly as under plain tack welding; `_CalibrationTable`,
-`_reset_driver`, `_debug_flag` and the entire `detail` namespace do not exist.
+`_reset_driver`, `_debug_flag`, the in-class `_raw`, the legacy
+`label(const char*, int)` overload, and the entire `detail` namespace do not
+exist.
 
 [src]: https://github.com/skarndev/welder/tree/main/examples/cookbook/09-custom-traversal

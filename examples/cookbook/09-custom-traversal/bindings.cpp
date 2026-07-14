@@ -44,6 +44,31 @@ struct skip_private : welder::carriages::greedy_resolution {
                                                                             pol);
     }
 
+    /** The legacy C-string API surface, detected from the SIGNATURE. */
+    static consteval bool takes_c_string(std::meta::info fn) {
+        for (auto p : std::meta::parameters_of(fn))
+            if (std::meta::dealias(std::meta::type_of(p)) ==
+                std::meta::dealias(^^const char*))
+                return true;
+        return false;
+    }
+
+    /** Class members — fields, methods, operators, constructors — resolve here,
+        PER OVERLOAD: the carriage computes each name's overload group from this
+        predicate, so the modern `label(string)` binds while the legacy
+        `label(const char*, int)` sibling is pruned, with no annotation anywhere.
+        The underscore rule applies inside classes too. */
+    static consteval bool class_member_participates(std::meta::info mem,
+                                                    welder::lang L,
+                                                    welder::policy_kind pol) {
+        if (hidden(mem))
+            return false;
+        if (std::meta::is_function(mem) && takes_c_string(mem))
+            return false;
+        return welder::carriages::greedy_resolution::class_member_participates(
+            mem, L, pol);
+    }
+
     /** Keep the bindability gate's registration oracle consistent with the skip
         rule: a type this resolution skips is never registered, so a public
         signature naming one must stay a compile-time error, not a call-time

@@ -118,7 +118,7 @@ cmake -S examples/cookbook -B build/cookbook -G Ninja \
 cmake --build build/cookbook && ctest --test-dir build/cookbook --output-on-failure
 ```
 
-Eight recipes (`01-hello` … `08-tack-welding`), each a self-contained dir with a
+Nine recipes (`01-hello` … `09-custom-traversal`), each a self-contained dir with a
 `check.py`/`check.lua` CTest (`cookbook.<name>`), each documented as a page in the
 docs **Cookbook** section (`docs/content/cookbook/` — keep recipe ↔ page in sync).
 Notables: 05 uses `welder_generate_trampolines`, 07 is nanobind + BOTH Lua rods
@@ -387,6 +387,7 @@ on `MYPYPATH` and asserts the same revealed types — rename-safe because both s
 trees use only relative imports. (nanobind's copy hangs off its stub *target*'s
 POST_BUILD, since its stubs are a separate custom target.) Key locations by feature:
 - `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py` — enums
+- `tests/common/cpp/overloads.hpp` + `tests/python/test_overloads.py` + `tests/lua/spec/overloads_spec.lua` — per-overload / per-constructor marks (carriage-computed overload groups; opt_in-vs-constructibility)
 - `tests/python/{pybind11,nanobind}/cpp/trust.hpp` + `tests/python/test_trust.py` — trust hatches
 - `tests/python/{pybind11,nanobind}/cpp/caster.hpp` + `tests/python/test_caster.py` — self-contained type casters
 - `tests/python/{pybind11,nanobind}/cpp/neg/` — bindability negative-compile (`negcompile.*` CTests, `WILL_FAIL`)

@@ -28,8 +28,8 @@ src/welder/
   reflect.hpp           welded_for / policy_of / member_bound / trusted_for / public_bases — uses <meta>
   doc.hpp               doc_of / return_doc_of / param_docs / detail::function_doc struct / function_docstring — uses <meta>. The `doc_style` concept now lives in concepts.hpp (over detail::function_doc, forward-declared there). The service structs (`function_doc`/`param_doc`/`tparam_doc`) live in `welder::detail`
   naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + weld_as_of / name_of (weld_as override → else style hook) + name_of_or (the call-site-override form the driver/rods use: override wins, name_of fallback compiled ONLY when the entity has an identifier or weld_as — an identifier-less template instantiation with no override throws std::invalid_argument at binding time; the lazy `if constexpr` is what makes weld_type<Box<int>>(m,"IntBox") legal) — uses <meta>, depends on vocabulary (detail::weld_as_spec), NOT annotations.hpp. The `name_style` concept (per-kind transform_* hooks) now lives in concepts.hpp
-  bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member selectors + native-base collection — uses <meta>
-  concepts.hpp          welder's **core interface concepts**, pooled in one catalogue: `welder::rod` (emission contract) + `welder::caster_oracle` (backend leaf test) + `welder::resolution` (the carriage's which-participates policy: participates/is_native_base/member_participates/namespace_participates consteval predicates + the native_bases<T,L> hook, shape-probed with the fixed `welder::detail::any_type` placeholder — the same trick caster_oracle uses for has_native_caster) + `welder::doc_style` + `welder::naming::name_style`. A dependency-light leaf — forward-declares `welder::detail::function_doc` (defined in doc.hpp) rather than including it; the machinery headers (bindable/naming/doc/carriage) include this. Uses <meta>; vocabulary-first for `lang`/`policy_kind`
+  bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member SHAPE selectors (is_method_candidate/is_operator_candidate are shape-only; participation is the Resolution's class_member_participates, composed by the carriage) + the resolution-aware OVERLOAD-GROUP machinery ({method,operator,function}_overload_set<Resolution> / overload_group / is_overload_leader / manual_function_group / ctor_group — moved here from the deleted rods/lua/overloads.hpp; the CARRIAGE computes groups, rods never re-derive membership) + aggregate_initializable<T,L,Resolution> + native-base collection. NB ctor_group resolves ctors under policy_kind::automatic (opt_in governs member exposure, not constructibility; explicit marks still prune) — uses <meta>
+  concepts.hpp          welder's **core interface concepts**, pooled in one catalogue: `welder::rod` (emission contract) + `welder::caster_oracle` (backend leaf test) + `welder::resolution` (the carriage's which-participates policy: participates/is_native_base/member_participates/class_member_participates (per CLASS member — field/method/operator/ctor/enumerator — resolved PER OVERLOAD; the carriage computes overload groups from it)/namespace_participates/counts_as_registered consteval predicates + the native_bases<T,L> hook, shape-probed with the fixed `welder::detail::any_type` placeholder — the same trick caster_oracle uses for has_native_caster) + `welder::doc_style` + `welder::naming::name_style`. A dependency-light leaf — forward-declares `welder::detail::function_doc` (defined in doc.hpp) rather than including it; the machinery headers (bindable/naming/doc/carriage) include this. Uses <meta>; vocabulary-first for `lang`/`policy_kind`
   bindable.hpp          generic bindability gate (STL-wrapper recursion); the `caster_oracle` concept it uses now lives in concepts.hpp — uses <meta>
   carriage.hpp          the **carriage** (`carriages::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). Split out of welder.hpp — uses <meta>
   welder.hpp            the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Includes concepts.hpp + carriage.hpp. Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
@@ -50,7 +50,6 @@ src/welder/
       trampolines/module.hpp   the WELDER_TRAMPOLINES_MAIN generator-main() macro; include only for a trampoline-generator TU
       trampolines/document.hpp the emission core: render_trampoline (splices each virtual's reflected return/param types + WELDER_PY_OVERRIDE) + render_registration (trampoline_for spec) + the document; is_c_variadic hard-error (no P2996 ellipsis query)
     lua/
-      overloads.hpp         Overload-set selectors shared by ALL Lua rods — welder::rods::lua::{method,operator,function}_overload_set / is_overload_leader / overload_group; all gather a name's overloads (sol2 → sol::overload, luabridge → variadic addFunction, luacats → ---@overload) because the driver visits overloads one at a time. Mirrors rods/python/doc_style.hpp.
       metamethods.hpp       C++-operator → Lua metamethod NAME map shared by BOTH runtime Lua rods — welder::rods::lua::lua_metamethod_name (the asymmetric set: no __ne/__gt/__ge; ^→__bxor; 5.3-gated bitwise). sol2 pairs each name with its sol::meta_function slot; luabridge registers by the name string directly.
       sol2/rod.hpp          sol2 Lua rod: struct welder::rods::sol2::rod (emission primitives + protected _ helpers: constructor-set gathering, welded-base closure, overload registration), against sol2's API (module_type = sol::table; usertype/new_usertype; enums as name→value tables)
       sol2/module.hpp       the sol2 WELDER_MODULE entry-point macro (emits luaopen_<ns>)
@@ -145,10 +144,10 @@ signatures without a trust hatch (a pure predicate, never a visited-set → mult
 + forward references stay order-independent; incomplete/forward-declared types still
 hard-error). A genuinely non-representable member is still a hard error (hatch with
 `trust_bindable`); any `mark::exclude` that happens to be present is still honored (via
-`member_bound`). The sol2/luacats free-function overload gathering
-(`rods/lua/overloads.hpp` `function_overload_set`) is resolution-agnostic by gathering
-siblings that share `fn`'s *welded-ness* — so an all-unmarked (tack) group gathers fully
-and an all-welded (stitch) group is unchanged, without the selector knowing the resolution.
+`member_bound`). Overload groups are CARRIAGE-computed from the resolution
+(`bind_traits.hpp` `{method,operator,function}_overload_set<Resolution>`), so a group is
+exactly what the resolution admits on every rod — per-overload marks, signature-level
+custom rules, and mixed welded/unwelded sets under tack all resolve consistently.
 
 **Two seams, both defaulted.** (1) The **name override**: weld_type / weld_function /
 weld_variable / weld_namespace_as_submodule all take an optional trailing `const char*
@@ -193,16 +192,19 @@ headers instead of the struct: the Python dunder map into
   out of `rods::<name>::`. (The runtime Python/sol2 rods define no such structs at all —
   they reuse backend types like `py::class_` / `py::dict` / `sol::table`. luacats keeps its
   `module_writer` / `class_writer` in `document.hpp` as a deliberate document object model.)
-- **Type binding:** `make_class<T, Bases…>`, `add_default_ctor`, `add_constructor<Ctor>`,
-  `add_aggregate_constructor<T>`, `add_field<Mem, Style>`, `add_method<Fn, Style>`,
-  `add_static_method<Fn, Style>`, `add_operator<Fn>`, and `consteval special_method_name(op)`
+- **Type binding:** `make_class<T, Bases…>`, `add_constructors<T, Ctors, HasDefault,
+  Aggregate>` (the whole participating constructor set + the two carriage-computed
+  synthesized forms, in ONE call), `add_field<Mem, Style>`, and the GROUP hooks
+  `add_method<Fns, Style>` / `add_static_method<Fns, Style>` / `add_operator<Fns>`
+  (`Fns` = a std::array<info, N> overload group sharing one target name, resolve it
+  from Fns[0]; carriage-computed + gated), and `consteval special_method_name(op)`
   (the operator→target-name map, e.g. pybind's `operator+`→`__add__`; nullptr =
   not exposed, which also gates operator eligibility in the driver).
 - **Enum binding:** `make_enum<E>`, `add_enumerator<Enum, Style>`, `finish_enum<E>` (the
   whole-enum finalizer, e.g. pybind's `export_values()` for unscoped enums).
 - **Namespace/module binding:** `open_module`→ a per-(sub)module *session* (rod
   scratch state — pybind uses it to batch live variable properties), `set_module_doc`,
-  `add_function<Fn, Style>(m, name=nullptr)`, `add_variable<Var, Style>(m, session,
+  `add_function<Fns, Style>(m, name=nullptr)` (a free-function overload group), `add_variable<Var, Style>(m, session,
   name=nullptr)` (const→snapshot, else a live property), `add_submodule`, `close_module`
   (finalize the session). The trailing `const char* name` on `add_function`/`add_variable`
   is the verbatim override (nullptr → `name_of`); the semi-manual carriage entry points
@@ -263,10 +265,10 @@ the interesting part:
   returns the `__name`, `add_operator` the `sol::meta_function`): no `__ne`/`__gt`/
   `__ge` (Lua derives `~=`/`>`/`>=` from `__eq`/`__lt`/`__le`), `^`→`__bxor` not
   `__pow`, and bitwise metamethods `#if`-gated to Lua ≥ 5.3.
-- **constructors registered up front** in `make_class` from reflection
-  (`sol::constructors<…>` built via `substitute`), because sol2 wants the whole set
-  at once — so `add_default_ctor`/`add_constructor`/`add_aggregate_constructor` are
-  no-ops. Aggregates ride C++26 parenthesized aggregate init.
+- **constructors, all at once**: the driver's single `add_constructors<T, Ctors,
+  HasDefault, Aggregate>` call is turned into one `sol::constructors<…>` assignment
+  (`ctor_sig`s built via `substitute` from the passed pieces). Aggregates ride C++26
+  parenthesized aggregate init.
 - **full welded-base closure**: sol2's `sol::bases<…>` must list *every* welded
   ancestor (it doesn't chain through an intermediate usertype's bases), so the
   rod recomputes the transitive set itself rather than using the core's
@@ -279,10 +281,9 @@ the interesting part:
   methods, free functions and operators are grouped into one `sol::overload(…)`**:
   sol2 stores one value per name/metamethod slot, so the rod gathers a name's
   overloads (mirroring how it already gathers a type's constructors "all at once")
-  rather than letting the last registered win. Grouping happens in the sol2 rod
-  (`method_overloads`/`operator_overloads`/`function_overloads` re-invoke the core
-  selection predicates); the driver still visits overloads one at a time, which suits
-  pybind11's incremental `.def`.
+  rather than letting the last registered win. The DRIVER computes each name's
+  participating group (resolution-aware) and hands it to the rod whole; the Python
+  rods loop the group with chained `.def`s.
 - entry point: `WELDER_MODULE(ns, sol2)` (from `rods/lua/sol2/module.hpp`) emits
   `extern "C" luaopen_<ns>` returning the module table.
 
@@ -310,7 +311,8 @@ different framework, which is where the emission contract stretches in new ways:
   `addIndexMetaMethod` *fallback* (consulted first, returns nil for non-subscript keys so
   member access still resolves). The fallback also coerces a stringified numeric key
   (LuaBridge3's index metamethod runs `lua_tostring` on the key first).
-- **constructors, all at once** (like sol2) in `make_class`: `addConstructor<Sig…>()`
+- **constructors, all at once** (like sol2) from the driver's `add_constructors`
+  call (re-opens the class by path): `addConstructor<Sig…>()`
   for the call form `T(…)` **plus** a variadic `.new` static function over `make_object`
   factories for the idiomatic `T.new(…)` — the two forms sol2 also exposes; the driver's
   per-constructor hooks are no-ops. Aggregates ride C++26 parenthesized init.

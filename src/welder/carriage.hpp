@@ -71,6 +71,14 @@ struct marker_resolution {
                                               policy_kind pol) {
         return welder::welded_for(mem, L) && member_bound(mem, L, pol);
     }
+    /** A *class* member (field / method / operator / constructor — and, loosely,
+        an enumerator) participates: its scope's policy + its own marks decide.
+        Resolved per overload, so a mark on one overload (or one constructor)
+        excludes just that one. */
+    static consteval bool class_member_participates(std::meta::info mem, lang L,
+                                                    policy_kind pol) {
+        return member_bound(mem, L, pol);
+    }
     /** A nested namespace participates (recurse + submodule). */
     static consteval bool namespace_participates(std::meta::info ns, lang L,
                                                  policy_kind pol) {
@@ -106,6 +114,12 @@ struct greedy_resolution {
     }
     static consteval bool member_participates(std::meta::info mem, lang L,
                                               policy_kind pol) {
+        return member_bound(mem, L, pol);
+    }
+    /** Same as stitch: greedy ignores the `weld` marker, not the marks — a mark on
+        an individual overload/constructor still prunes it. */
+    static consteval bool class_member_participates(std::meta::info mem, lang L,
+                                                    policy_kind pol) {
         return member_bound(mem, L, pol);
     }
     static consteval bool namespace_participates(std::meta::info ns, lang L,
@@ -194,27 +208,52 @@ struct basic_carriage {
 
         template for (constexpr auto mem : std::define_static_array(
                           std::meta::nonstatic_data_members_of(Src, ctx))) {
-            if constexpr (std::meta::is_public(mem) && member_bound(mem, L, pol)) {
+            if constexpr (std::meta::is_public(mem) &&
+                          Resolution::class_member_participates(mem, L, pol)) {
                 welder::assert_member_bindable<B, mem, L, Resolution>();
                 B::template add_field<mem, Style>(cls);
             }
         }
 
+        // Methods and operators are emitted as whole OVERLOAD GROUPS: the walk
+        // fires on each group's first participating overload (the leader),
+        // gathers the resolution-admitted set, gates every member, and hands the
+        // group to the rod in one call — so one-value-per-name frameworks (the
+        // Lua rods) register a complete set, and per-overload marks / bespoke
+        // resolutions shape the group identically on every rod.
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
-            if constexpr (detail::is_bindable_method(fn, L, pol)) {
-                welder::assert_callable_bindable<B, fn, L, Resolution>();
-                if constexpr (std::meta::is_static_member(fn))
-                    B::template add_static_method<fn, Style>(cls);
-                else
-                    B::template add_method<fn, Style>(cls);
-            } else if constexpr (detail::is_operator_candidate(fn, L, pol) &&
+            if constexpr (detail::is_method_candidate(fn) &&
+                          Resolution::class_member_participates(fn, L, pol)) {
+                if constexpr (detail::is_overload_leader<
+                                  detail::method_overload_set<Resolution>>(fn, L)) {
+                    constexpr auto grp{detail::overload_group<
+                        detail::method_overload_set<Resolution>, fn, L>()};
+                    template for (constexpr auto member :
+                                  std::define_static_array(grp)) {
+                        welder::assert_callable_bindable<B, member, L, Resolution>();
+                    }
+                    if constexpr (std::meta::is_static_member(fn))
+                        B::template add_static_method<grp, Style>(cls);
+                    else
+                        B::template add_method<grp, Style>(cls);
+                }
+            } else if constexpr (detail::is_operator_candidate(fn) &&
+                                 Resolution::class_member_participates(fn, L, pol) &&
                                  B::special_method_name(fn) != nullptr) {
-                // A member operator binds like a method, under the backend's special-
-                // method name for it (operator+ -> __add__, ...). The specific overload
-                // is spliced by add_operator, so unary/binary forms never collide.
-                welder::assert_callable_bindable<B, fn, L, Resolution>();
-                B::template add_operator<fn>(cls);
+                // A member operator group binds under the backend's special-method
+                // name (operator+ -> __add__, ...); unary/binary forms are distinct
+                // groups (distinct arity), so they never collide.
+                if constexpr (detail::is_overload_leader<
+                                  detail::operator_overload_set<Resolution>>(fn, L)) {
+                    constexpr auto grp{detail::overload_group<
+                        detail::operator_overload_set<Resolution>, fn, L>()};
+                    template for (constexpr auto member :
+                                  std::define_static_array(grp)) {
+                        welder::assert_callable_bindable<B, member, L, Resolution>();
+                    }
+                    B::template add_operator<grp>(cls);
+                }
             }
         }
     }
@@ -246,7 +285,7 @@ struct basic_carriage {
         constexpr policy_kind pol{policy_of(^^E)};
         template for (constexpr auto en :
                       std::define_static_array(std::meta::enumerators_of(^^E))) {
-            if constexpr (member_bound(en, L, pol))
+            if constexpr (Resolution::class_member_participates(en, L, pol))
                 B::template add_enumerator<en, Style>(e);
         }
         B::template finish_enum<E>(e);
@@ -288,29 +327,32 @@ struct basic_carriage {
             m, cls_name, welder::doc_of<^^T>(),
             std::make_index_sequence<bases.size()>{})};
 
-        // Constructors. The type welder actually constructs may be a rod-nominated
-        // substitute — a Python trampoline standing in for an abstract base, so a
-        // subclass stays constructible even though the base itself is not — exposed
-        // as an optional `B::construction_type<T>`; fall back to T when a rod names
-        // none (e.g. the Lua rods).
-        if constexpr (requires { typename B::template construction_type<T>; }) {
-            if constexpr (std::is_default_constructible_v<
-                              typename B::template construction_type<T>>)
-                B::add_default_ctor(cls);
-        } else if constexpr (std::is_default_constructible_v<T>) {
-            B::add_default_ctor(cls);
+        // Constructors, handed to the rod as ONE participating set (several
+        // frameworks want them all at once — sol2's sol::constructors, LuaBridge3's
+        // addConstructor). Three carriage-computed pieces:
+        //  - the default constructor: decided against the type welder actually
+        //    constructs, which may be a rod-nominated substitute — a Python
+        //    trampoline standing in for an abstract base — exposed as an optional
+        //    `B::construction_type<T>` (fall back to T when a rod names none);
+        //  - each participating public non-copy/move constructor (the resolution's
+        //    class_member_participates resolves per constructor, so a mark on one
+        //    excludes just that one), each gated for bindability;
+        //  - for a baseless aggregate whose fields all participate, a synthesized
+        //    field constructor.
+        constexpr bool has_default{[] {
+            if constexpr (requires { typename B::template construction_type<T>; })
+                return std::is_default_constructible_v<
+                    typename B::template construction_type<T>>;
+            else
+                return std::is_default_constructible_v<T>;
+        }()};
+        constexpr auto ctors{detail::ctor_group<Resolution, ^^T, L>()};
+        template for (constexpr auto ctor : std::define_static_array(ctors)) {
+            welder::assert_callable_bindable<B, ctor, L, Resolution>();
         }
-        template for (constexpr auto ctor :
-                      std::define_static_array(std::meta::members_of(^^T, ctx))) {
-            if constexpr (detail::is_bindable_constructor(ctor)) {
-                welder::assert_callable_bindable<B, ctor, L, Resolution>();
-                B::template add_constructor<ctor>(cls);
-            }
-        }
-        // An aggregate declares no constructors, so the loop above binds none; give it
-        // a synthesized field constructor (brace-init) when eligible.
-        if constexpr (detail::aggregate_initializable<T, L>())
-            B::template add_aggregate_constructor<T>(cls);
+        constexpr bool aggregate{
+            detail::aggregate_initializable<T, L, Resolution>()};
+        B::template add_constructors<T, ctors, has_default, aggregate>(cls);
 
         // Data members + methods + operators (T's own, plus flattened bases).
         bind_members<B, ^^T, Style>(cls);
@@ -318,12 +360,17 @@ struct basic_carriage {
         return cls;
     }
 
-    /** Register a single free function @a Fn as a module-level function of @a m.
+    /** Register free function @a Fn — with its participating overload siblings —
+        as a module-level function of @a m.
 
-        The semi-manual leaf: gate then emit one function, without walking a
-        namespace. @a Fn must reflect a single function (not an overload set) that
-        @a Resolution admits for @a B's language; its signature runs the bindability
-        gate.
+        The semi-manual leaf: gate then emit one *name*, without walking a
+        namespace. @a Fn (which resolves the group's target name, and is welded
+        even if its own marks would resolve it out — the explicit call is the
+        stronger statement of intent) must be admitted by @a Resolution for @a B's
+        language; its participating same-name siblings join the group, keeping the
+        call consistent with the namespace walk on every rod (a
+        one-value-per-name framework registers the complete set). Every group
+        member's signature runs the bindability gate.
 
         @tparam B the rod.
         @tparam Fn a reflection of the free function.
@@ -339,10 +386,13 @@ struct basic_carriage {
         static_assert(Resolution::participates(Fn, L),
                       "welder: weld_function<Fn>: Fn is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
-        welder::assert_callable_bindable<B, Fn, L, Resolution>();
+        constexpr auto grp{detail::manual_function_group<Resolution, Fn, L>()};
+        template for (constexpr auto member : std::define_static_array(grp)) {
+            welder::assert_callable_bindable<B, member, L, Resolution>();
+        }
         // Forward the rod's handle (the bound function object, where the
         // framework has one); a void-returning rod makes this void too.
-        return B::template add_function<Fn, Style>(m, name);
+        return B::template add_function<grp, Style>(m, name);
     }
 
     /** Register a single namespace variable @a Var as an attribute of @a m.
@@ -424,9 +474,21 @@ struct basic_carriage {
                 if constexpr (Resolution::member_participates(mem, L, pol))
                     bind_enum<B, typename [:mem:], Style>(m, nullptr);
             } else if constexpr (std::meta::is_function(mem)) {
+                // Free functions bind as whole overload groups, emitted at the
+                // group's first participating overload (see bind_members).
                 if constexpr (Resolution::member_participates(mem, L, pol)) {
-                    welder::assert_callable_bindable<B, mem, L, Resolution>();
-                    B::template add_function<mem, Style>(m);
+                    if constexpr (detail::is_overload_leader<
+                                      detail::function_overload_set<Resolution>>(
+                                      mem, L)) {
+                        constexpr auto grp{detail::overload_group<
+                            detail::function_overload_set<Resolution>, mem, L>()};
+                        template for (constexpr auto member :
+                                      std::define_static_array(grp)) {
+                            welder::assert_callable_bindable<B, member, L,
+                                                             Resolution>();
+                        }
+                        B::template add_function<grp, Style>(m);
+                    }
                 }
             } else if constexpr (std::meta::is_variable(mem)) {
                 if constexpr (Resolution::member_participates(mem, L, pol)) {

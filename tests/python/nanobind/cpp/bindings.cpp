@@ -71,6 +71,7 @@
 #include "enums.hpp"
 #include "naming.hpp"
 #include "chaining.hpp"
+#include "overloads.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -94,4 +95,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_enums(m);       // <-> test_enums.py
     register_naming(m);      // <-> test_naming.py
     register_chaining(m);    // <-> test_chaining.py (handles returned by weld_*)
+    register_overloads(m);   // <-> test_overloads.py (per-overload / per-ctor marks)
 }

@@ -318,22 +318,22 @@ struct rod {
         }
     }
 
-    /** Bind the default constructor. @see welder::rod */
-    static void add_default_ctor(auto& cls) { cls.def(py::init<>()); }
-
-    /** Bind constructor @a Ctor as a `py::init<…>`. @see _def_init @see welder::rod */
-    template <std::meta::info Ctor>
-    static void add_constructor(auto& cls) {
-        _def_init<Ctor>(cls, std::make_index_sequence<
-                                 std::meta::parameters_of(Ctor).size()>{});
-    }
-
-    /** Bind the synthesized aggregate field constructor.
-        @see _def_aggregate_init @see welder::rod */
-    template <class T>
-    static void add_aggregate_constructor(auto& cls) {
-        constexpr auto fields{::welder::detail::aggregate_fields<T>()};
-        _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
+    /** Bind @a T's whole constructor set (a chained-def framework just loops it):
+        the default constructor when @a HasDefault, a `py::init<…>` per member of
+        @a Ctors, and the synthesized aggregate field constructor when
+        @a Aggregate. @see _def_init @see _def_aggregate_init @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(auto& cls) {
+        if constexpr (HasDefault)
+            cls.def(py::init<>());
+        template for (constexpr auto ctor : std::define_static_array(Ctors)) {
+            _def_init<ctor>(cls, std::make_index_sequence<
+                                     std::meta::parameters_of(ctor).size()>{});
+        }
+        if constexpr (Aggregate) {
+            constexpr auto fields{::welder::detail::aggregate_fields<T>()};
+            _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
+        }
     }
 
     /** Bind data member @a Mem as an attribute.
@@ -365,29 +365,42 @@ struct rod {
         }
     }
 
-    /** Bind member function @a Fn as a method. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind method overload group @a Fns (name from `Fns[0]`; pybind11 chains one
+        `.def` per overload and dispatches at call time). @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(auto& cls) {
-        _def_function<Fn>(
-            ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
-            [&cls](auto&&... a) { cls.def(std::forward<decltype(a)>(a)...); });
+        constexpr const char* name{
+            ::welder::name_of<Fns[0], language, Style, ::welder::ent_kind::method>()};
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _def_function<fn>(name, [&cls](auto&&... a) {
+                cls.def(std::forward<decltype(a)>(a)...);
+            });
+        }
     }
 
-    /** Bind static member function @a Fn as a static method. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Bind static-method overload group @a Fns. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_static_method(auto& cls) {
-        _def_function<Fn>(
-            ::welder::name_of<Fn, language, Style, ::welder::ent_kind::static_method>(),
-            [&cls](auto&&... a) { cls.def_static(std::forward<decltype(a)>(a)...); });
+        constexpr const char* name{
+            ::welder::name_of<Fns[0], language, Style,
+                              ::welder::ent_kind::static_method>()};
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _def_function<fn>(name, [&cls](auto&&... a) {
+                cls.def_static(std::forward<decltype(a)>(a)...);
+            });
+        }
     }
 
-    /** Bind member operator @a Fn under its Python dunder. @see welder::rod */
-    template <std::meta::info Fn>
+    /** Bind operator overload group @a Fns under its Python dunder (one operator +
+        arity per group, so `Fns[0]` names the slot). @see welder::rod */
+    template <auto Fns>
     static void add_operator(auto& cls) {
-        _def_function<Fn>(::welder::rods::python::operator_dunder(Fn),
-                          [&cls](auto&&... a) {
-                              cls.def(std::forward<decltype(a)>(a)...);
-                          });
+        constexpr const char* name{::welder::rods::python::operator_dunder(Fns[0])};
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _def_function<fn>(name, [&cls](auto&&... a) {
+                cls.def(std::forward<decltype(a)>(a)...);
+            });
+        }
     }
 
     // --- enum binding -------------------------------------------------------
@@ -486,19 +499,22 @@ struct rod {
     /** Set the (sub)module docstring. @see welder::rod */
     static void set_module_doc(module_type& m, const char* doc) { m.doc() = doc; }
 
-    /** Bind free function @a Fn as a module-level function.
+    /** Bind free-function overload group @a Fns as one module-level function
+        (name from `Fns[0]`; one chained `.def` per overload).
 
         A non-null @a name overrides the resolved name (including any `weld_as`),
         used verbatim; `nullptr` falls back to the styled/`weld_as` name.
         @return the bound function object (`m.attr(name)`) — the handle for
-                further hand-registration; repeated `def`s of one name (C++
-                overloads) merge onto this same object. @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+                further hand-registration. @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static py::object add_function(module_type& m, const char* name = nullptr) {
-        const char* fn_name{::welder::name_of_or<Fn, language, Style,
+        const char* fn_name{::welder::name_of_or<Fns[0], language, Style,
                                                  ::welder::ent_kind::function>(name)};
-        _def_function<Fn>(
-            fn_name, [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); });
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _def_function<fn>(fn_name, [&m](auto&&... a) {
+                m.def(std::forward<decltype(a)>(a)...);
+            });
+        }
         return m.attr(fn_name);
     }
 

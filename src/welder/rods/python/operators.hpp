@@ -10,7 +10,7 @@
     pybind11 and nanobind expose the *same* Python object model, so a member
     operator maps to the same dunder in both (`operator+` → `__add__`, …). This
     header holds that one map so neither backend re-derives it — the Python analogue
-    of `<welder/rods/lua/overloads.hpp>` and `<welder/rods/python/doc_style.hpp>`.
+    of `<welder/rods/lua/metamethods.hpp>` and `<welder/rods/python/doc_style.hpp>`.
     A backend calls @ref welder::rods::python::operator_dunder from its
     `special_method_name` (the map that both gates operator eligibility and names the
     slot) and its `add_operator`.

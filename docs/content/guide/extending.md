@@ -52,19 +52,25 @@ struct my_rod {
     static constexpr bool has_native_caster = /* ... */;
 ```
 
-**Class binding** — a factory plus per-member hooks on the handle it returns:
+**Class binding** — a factory plus per-member hooks on the handle it returns.
+Callables arrive as whole **overload groups**: `auto Fns` is a
+`std::array<std::meta::info, N>` (N ≥ 1) of overloads sharing one target name
+(resolve it from `Fns[0]`), computed and bindability-gated by the driver from its
+resolution — a chained-def framework loops the group, a one-value-per-name
+framework registers it as one overload set. Constructors arrive the same way, as
+one call carrying the participating constructor reflections plus the two
+driver-computed synthesized forms:
 
 ```cpp
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type&, const char* name, const char* doc,
                            std::index_sequence<I...>);        // Bases[I] spliced
-    static void add_default_ctor(auto& cls);
-    template <std::meta::info Ctor>          static void add_constructor(auto& cls);
-    template <class T>                       static void add_aggregate_constructor(auto& cls);
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(auto& cls);   // the whole participating set
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
-    template <std::meta::info Fn,  class Style> static void add_method(auto& cls);
-    template <std::meta::info Fn,  class Style> static void add_static_method(auto& cls);
-    template <std::meta::info Fn>            static void add_operator(auto& cls);
+    template <auto Fns, class Style> static void add_method(auto& cls);
+    template <auto Fns, class Style> static void add_static_method(auto& cls);
+    template <auto Fns>              static void add_operator(auto& cls);
     static consteval const char* special_method_name(std::meta::info op_fn);
         // your language's name for a member operator ("__add__", "__eq"),
         // or nullptr if you don't expose it — this drives add_operator eligibility
@@ -80,10 +86,11 @@ struct my_rod {
 
     static auto open_module(module_type&);                  // -> a "session" (scratch state)
     static void set_module_doc(module_type&, const char* doc);
-    template <std::meta::info Fn,  class Style>
+    template <auto Fns, class Style>
     static auto add_function(module_type&, const char* name = nullptr);
-        // may return the framework's bound-function object — weld_function
-        // forwards whatever this yields (void when there is nothing to hand out)
+        // a free-function overload group; may return the framework's bound-function
+        // object — weld_function forwards whatever this yields (void when there is
+        // nothing to hand out)
     template <std::meta::info Var, class Style>
     static auto add_variable(module_type&, auto& session, const char* name = nullptr);
         // same forwarding rule (the shipped rods return void here)
@@ -204,11 +211,14 @@ Two resolutions ship, with their carriage aliases:
     prune the library's `detail` namespace and `_underscore` internals.
 
 A bespoke resolution is a stateless struct satisfying the `welder::resolution`
-concept — five `consteval` predicates (`participates`, `is_native_base`,
-`member_participates`, `namespace_participates`, and `counts_as_registered` —
-the bindability gate's *registration oracle*: which class/enum types may appear
-in bound signatures because welding under this resolution registers them) plus
-the `native_bases<T, L>` hook. Since the shipped resolutions are ordinary structs, delegation is plain
+concept — six `consteval` predicates (`participates`, `is_native_base`,
+`member_participates`, `class_member_participates` — the per-*class-member*
+verdict, resolved **per overload and per constructor**, from which the driver
+computes each name's overload group, so signature-level rules prune exactly one
+sibling — `namespace_participates`, and `counts_as_registered` — the bindability
+gate's *registration oracle*: which class/enum types may appear in bound
+signatures because welding under this resolution registers them) plus the
+`native_bases<T, L>` hook. Since the shipped resolutions are ordinary structs, delegation is plain
 inheritance. For example, tack-welding a third-party library while skipping
 its underscore-prefixed internals:
 

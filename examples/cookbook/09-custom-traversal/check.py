@@ -13,6 +13,17 @@ def main() -> None:
     assert sensors.API_LEVEL == 3
     assert math.isclose(sensors.units.to_fahrenheit(0.0), 32.0)
 
+    # SIGNATURE-level pruning, per overload: the modern label(str) binds, its
+    # legacy label(const char*, int) sibling — same name! — does not; and the
+    # underscore convention holds inside classes too.
+    assert r.label("outdoor").startswith("outdoor: 21.5")
+    try:
+        r.label("outdoor", 1)
+        raise AssertionError("the legacy C-string overload should not bind")
+    except TypeError:
+        pass
+    assert not hasattr(r, "_raw")
+
     # The library's privacy convention is honored by the custom resolution:
     # underscore-prefixed entities of every kind stay out...
     assert not hasattr(sensors, "_CalibrationTable")  # a type

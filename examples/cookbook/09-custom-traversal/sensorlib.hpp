@@ -4,12 +4,24 @@
 // private: underscore-prefixed names and a `detail` namespace. Plain tack
 // welding would greedily bind all of it; see bindings.cpp for the custom
 // resolution that prunes by the library's own convention.
+#include <string>
+
 namespace sensorlib {
 
 struct Reading {
     double celsius{21.5};
 
     bool fresh() const { return true; }
+
+    // A modern and a legacy C-style overload of ONE name: exactly the shape a
+    // curated binding wants to thin — see the resolution's signature-level rule.
+    std::string label(const std::string& name) const {
+        return name + ": " + std::to_string(celsius);
+    }
+    std::string label(const char* name, int /*legacy_flags*/) const { return name; }
+
+    // Library-internal by convention, inside the class this time.
+    int _raw{0};
 };
 
 // Library-internal by convention: the underscore prefix.

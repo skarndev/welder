@@ -55,20 +55,10 @@
 #include <welder/welder.hpp>           // welder::welder + rod contract + driver
 #include <welder/rods/lua/luacats/document.hpp> // the document + writer handles
 #include <welder/rods/lua/luacats/type_map.hpp> // lua_type / operator map / text
-#include <welder/rods/lua/overloads.hpp> // shared Lua overload-set selectors
 #include <welder/bind_traits.hpp>      // aggregate_fields / is_unary_operator
 #include <welder/doc.hpp>              // doc_of / param_docs / return_doc_of
 
 namespace welder::inline v0::rods::luacats {
-
-// The overload-set selectors are shared with the sol2 backend
-// (`<welder/rods/lua/overloads.hpp>`; both gather a name's C++ overloads that the
-// generic driver visits one at a time). The LuaCATS stub renders the group as one
-// documented `function` plus `---@overload` lines.
-using ::welder::rods::lua::function_overload_set;
-using ::welder::rods::lua::is_overload_leader;
-using ::welder::rods::lua::method_overload_set;
-using ::welder::rods::lua::overload_group;
 
 /** The LuaCATS stub rod: a stateless policy satisfying @ref welder::rod
     that emits text instead of registering a live module.
@@ -184,33 +174,31 @@ struct rod {
         return w;
     }
 
-    /** Emit a no-argument `.new()` constructor overload. @see welder::rod */
-    static void add_default_ctor(class_writer& w) {
-        // A no-argument `.new()` overload returning the class; grouped on flush.
-        func_overload o{};
-        o.ret_line = "---@return " + w.qualified + '\n';
-        o.fun_sig = "fun(): " + w.qualified;
-        w.ctors.push_back(std::move(o));
-    }
-
-    /** Emit a `.new(…)` constructor overload for @a Ctor. @see welder::rod */
-    template <std::meta::info Ctor>
-    static void add_constructor(class_writer& w) {
-        w.ctors.push_back(build_overload<Ctor>(w.qualified));
-    }
-
-    /** Emit the aggregate field constructor (one `.new` param per field).
-        @see welder::rod */
-    template <class T>
-    static void add_aggregate_constructor(class_writer& w) {
-        // C++26 aggregate field constructor: one `.new` param per field.
-        static constexpr auto seq{
-            std::make_index_sequence<::welder::detail::aggregate_fields<T>().size()>{}};
-        func_overload o{};
-        _aggregate_param_lines<T>(o.params, o.args, seq);
-        o.ret_line = "---@return " + w.qualified + '\n';
-        o.fun_sig = "fun(" + _aggregate_fun_params<T>(seq) + "): " + w.qualified;
-        w.ctors.push_back(std::move(o));
+    /** Emit the whole `.new(…)` constructor overload set (the driver-passed
+        pieces: a no-argument overload when @a HasDefault, one per member of
+        @a Ctors, and the aggregate field constructor when @a Aggregate); grouped
+        into `---@overload` lines on flush. @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(class_writer& w) {
+        if constexpr (HasDefault) {
+            func_overload o{};
+            o.ret_line = "---@return " + w.qualified + '\n';
+            o.fun_sig = "fun(): " + w.qualified;
+            w.ctors.push_back(std::move(o));
+        }
+        template for (constexpr auto ctor : std::define_static_array(Ctors)) {
+            w.ctors.push_back(build_overload<ctor>(w.qualified));
+        }
+        if constexpr (Aggregate) {
+            // C++26 aggregate field constructor: one `.new` param per field.
+            static constexpr auto seq{std::make_index_sequence<
+                ::welder::detail::aggregate_fields<T>().size()>{}};
+            func_overload o{};
+            _aggregate_param_lines<T>(o.params, o.args, seq);
+            o.ret_line = "---@return " + w.qualified + '\n';
+            o.fun_sig = "fun(" + _aggregate_fun_params<T>(seq) + "): " + w.qualified;
+            w.ctors.push_back(std::move(o));
+        }
     }
 
     /** Emit a `---@field` line for data member @a Mem (const → a `(read-only)`
@@ -233,62 +221,59 @@ struct rod {
         w.fields += '\n';
     }
 
-    /** Emit a documented `Class:name(…)` method (overloads as `---@overload` lines).
+    /** Emit method overload group @a Fns as one documented `Class:name(…)`
+        (further overloads as `---@overload` lines; name from `Fns[0]`).
         @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(class_writer& w) {
         // A method is `Class:name(...)` (implicit self); reflection's parameters
-        // already exclude self, so the arg list renders directly. Overloads are
-        // gathered into one documented function with `---@overload` signatures, so
-        // the whole group is emitted once, on its first (declaration-order) member.
-        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            std::vector<func_overload> sigs{};
-            collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
-            render_overload_group(
-                w.methods,
-                w.qualified + ":" +
-                    ::welder::name_of<Fn, language, Style, ::welder::ent_kind::method>(),
-                sigs);
-        }
+        // already exclude self, so the arg list renders directly.
+        std::vector<func_overload> sigs{};
+        collect_overloads<Fns>(sigs, std::make_index_sequence<Fns.size()>{});
+        render_overload_group(
+            w.methods,
+            w.qualified + ":" +
+                ::welder::name_of<Fns[0], language, Style,
+                                  ::welder::ent_kind::method>(),
+            sigs);
     }
 
-    /** Emit a documented `Class.name(…)` static method (dotted, no self).
-        @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    /** Emit static-method overload group @a Fns as a documented `Class.name(…)`
+        (dotted, no self). @see welder::rod */
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_static_method(class_writer& w) {
-        if constexpr (is_overload_leader<method_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<method_overload_set, Fn, lang::lua>()};
-            std::vector<func_overload> sigs{};
-            collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
-            render_overload_group(
-                w.methods,
-                w.qualified + "." +
-                    ::welder::name_of<Fn, language, Style,
-                                      ::welder::ent_kind::static_method>(),
-                sigs);
-        }
+        std::vector<func_overload> sigs{};
+        collect_overloads<Fns>(sigs, std::make_index_sequence<Fns.size()>{});
+        render_overload_group(
+            w.methods,
+            w.qualified + "." +
+                ::welder::name_of<Fns[0], language, Style,
+                                  ::welder::ent_kind::static_method>(),
+            sigs);
     }
 
-    /** Emit a `---@operator name(rhs): R` line on the class block. @see welder::rod */
-    template <std::meta::info Fn>
+    /** Emit operator overload group @a Fns as `---@operator name(rhs): R` lines on
+        the class block (one line per overload — LuaCATS has no operator
+        `---@overload` form, the tag itself repeats). @see welder::rod */
+    template <auto Fns>
     static void add_operator(class_writer& w) {
-        // LuaCATS records operators on the class block: `---@operator name(rhs): R`.
-        const char* op{operator_luacats(Fn)};
-        w.fields += "---@operator ";
-        w.fields += op;
-        if constexpr (!::welder::detail::is_unary_operator(Fn)) {
-            constexpr auto types{param_lua_types<Fn>()};
-            w.fields += "(";
-            w.fields += types[0];
-            w.fields += ")";
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            const char* op{operator_luacats(fn)};
+            w.fields += "---@operator ";
+            w.fields += op;
+            if constexpr (!::welder::detail::is_unary_operator(fn)) {
+                constexpr auto types{param_lua_types<fn>()};
+                w.fields += "(";
+                w.fields += types[0];
+                w.fields += ")";
+            }
+            using R = [:std::meta::return_type_of(fn):];
+            if constexpr (!std::is_void_v<R>) {
+                w.fields += ": ";
+                w.fields += lua_type(std::meta::return_type_of(fn));
+            }
+            w.fields += '\n';
         }
-        using R = [:std::meta::return_type_of(Fn):];
-        if constexpr (!std::is_void_v<R>) {
-            w.fields += ": ";
-            w.fields += lua_type(std::meta::return_type_of(Fn));
-        }
-        w.fields += '\n';
     }
 
     // --- enum binding -------------------------------------------------------
@@ -336,23 +321,20 @@ struct rod {
         m.doc->declare_table(m.prefix, doc);
     }
 
-    /** Emit a documented module-level `function` (overloads as `---@overload`).
+    /** Emit free-function overload group @a Fns as one documented module-level
+        `function` (further overloads as `---@overload`; name from `Fns[0]`).
+        A non-null @a name overrides the leaf name (beating any `weld_as`).
         @see welder::rod */
-    template <std::meta::info Fn, class Style = ::welder::naming::none>
+    template <auto Fns, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
-        // Free-function overloads group just like methods (see add_method). A
-        // non-null `name` overrides the leaf name (beating any `weld_as`).
-        if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
-            constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
-            std::vector<func_overload> sigs{};
-            collect_overloads<grp>(sigs, std::make_index_sequence<grp.size()>{});
-            render_overload_group(
-                m.doc->body,
-                (m.prefix.empty() ? std::string{} : m.prefix + ".") +
-                    ::welder::name_of_or<Fn, language, Style,
-                                         ::welder::ent_kind::function>(name),
-                sigs);
-        }
+        std::vector<func_overload> sigs{};
+        collect_overloads<Fns>(sigs, std::make_index_sequence<Fns.size()>{});
+        render_overload_group(
+            m.doc->body,
+            (m.prefix.empty() ? std::string{} : m.prefix + ".") +
+                ::welder::name_of_or<Fns[0], language, Style,
+                                     ::welder::ent_kind::function>(name),
+            sigs);
     }
 
     /** Emit a `---@type`-annotated `<name> = nil` module variable declaration.

@@ -92,38 +92,34 @@ consteval bool is_bindable_constructor(std::meta::info c) {
            !std::meta::parameters_of(c).empty();
 }
 
-/** A member function a backend should expose as a method.
+/** The *shape* of a bindable method: a plain public member function.
 
-    Honors the same exclude/include/policy resolution as data members. Special
-    members, destructors and operators are skipped (operators are classified
-    separately).
-    @param f   a reflection of the member function.
-    @param L   the target language.
-    @param pol the enclosing type's policy.
-    @return `true` iff @a f is an eligible, bound public method.
+    Shape only — whether it *participates* is the resolution's decision (its
+    `class_member_participates` hook; `member_bound` under the shipped
+    resolutions), composed by the carriage. Special members, destructors and
+    operators are skipped (operators are classified separately).
+    @param f a reflection of the member function.
+    @return `true` iff @a f is a public, non-deleted, non-special member function.
 */
-consteval bool is_bindable_method(std::meta::info f, lang L, policy_kind pol) {
+consteval bool is_method_candidate(std::meta::info f) {
     return std::meta::is_function(f) && !std::meta::is_constructor(f) &&
            !std::meta::is_special_member_function(f) &&
            !std::meta::is_destructor(f) && !std::meta::is_operator_function(f) &&
-           std::meta::is_public(f) && !std::meta::is_deleted(f) &&
-           member_bound(f, L, pol);
+           std::meta::is_public(f) && !std::meta::is_deleted(f);
 }
 
-/** A member operator that *resolves* as bound.
+/** The *shape* of a bindable member operator.
 
-    Public, non-deleted, not a special member, `member_bound`. Whether it maps to
-    something in the target language — and under what name — is a backend decision
-    (see `rod::special_method_name`); this is the language-agnostic half.
-    @param f   a reflection of the operator function.
-    @param L   the target language.
-    @param pol the enclosing type's policy.
-    @return `true` iff @a f is an eligible, bound operator candidate.
+    Shape only, like @ref is_method_candidate — participation is the resolution's
+    call. Whether it maps to something in the target language — and under what
+    name — is a backend decision (see `rod::special_method_name`).
+    @param f a reflection of the operator function.
+    @return `true` iff @a f is a public, non-deleted, non-special member operator.
 */
-consteval bool is_operator_candidate(std::meta::info f, lang L, policy_kind pol) {
+consteval bool is_operator_candidate(std::meta::info f) {
     return std::meta::is_function(f) && std::meta::is_operator_function(f) &&
            !std::meta::is_special_member_function(f) && std::meta::is_public(f) &&
-           !std::meta::is_deleted(f) && member_bound(f, L, pol);
+           !std::meta::is_deleted(f);
 }
 
 /** Whether a member operator is unary (0 parameters) vs binary (1 parameter).
@@ -161,18 +157,21 @@ consteval auto aggregate_fields() {
     return fs;
 }
 
-/** Whether to synthesize an aggregate field constructor for @a T (language @a L).
+/** Whether to synthesize an aggregate field constructor for @a T (language @a L,
+    resolution @a Resolution).
 
-    Only for a baseless aggregate with at least one field, *all* of which bind: a
-    based aggregate's brace-init nests the base (a flat field ctor can't express
-    it), and a partially-excluded one would leak an excluded field as a positional
-    parameter (aggregate init is positional and all-or-nothing). An empty aggregate
-    is already covered by the default constructor.
-    @tparam T the aggregate type.
-    @tparam L the target language.
+    Only for a baseless aggregate with at least one field, *all* of which
+    participate: a based aggregate's brace-init nests the base (a flat field ctor
+    can't express it), and a partially-excluded one would leak an excluded field
+    as a positional parameter (aggregate init is positional and all-or-nothing).
+    An empty aggregate is already covered by the default constructor.
+    @tparam T          the aggregate type.
+    @tparam L          the target language.
+    @tparam Resolution the carriage's resolution (its `class_member_participates`
+                       decides whether each field binds).
     @return `true` iff a field constructor should be synthesized.
 */
-template <class T, lang L>
+template <class T, lang L, class Resolution>
 consteval bool aggregate_initializable() {
     if (!std::is_aggregate_v<T> || !welder::public_bases(^^T).empty())
         return false;
@@ -182,7 +181,7 @@ consteval bool aggregate_initializable() {
         return false;
     const policy_kind pol{policy_of(^^T)};
     for (auto m : fields)
-        if (!member_bound(m, L, pol))
+        if (!Resolution::class_member_participates(m, L, pol))
             return false;
     return true;
 }
@@ -262,6 +261,190 @@ consteval bool namespace_has_bindable(std::meta::info ns, lang L) {
         }
     }
     return false;
+}
+
+// --- overload groups (resolution-aware) ---------------------------------------
+//
+// Several target frameworks store ONE entity per name — a Lua table key, a
+// LuaCATS `function` declaration — so a name's C++ overloads must arrive as one
+// group. The CARRIAGE owns that grouping (it visits a group's first participating
+// overload, the *leader*, computes the whole set with these selectors and hands
+// it to the rod's group hook): the rods never re-derive membership, so a group is
+// exactly what the resolution admits — per-overload marks and bespoke
+// (signature-level) resolutions stay consistent across every rod, and a mixed
+// welded/unwelded set under one name can never split into clobbering halves.
+
+/** The participating method overloads sharing @a fn's name and static-ness, from
+    the class where @a fn is declared, in declaration order.
+    @tparam Resolution the carriage's resolution.
+    @param fn a reflection of one participating method (see is_method_candidate).
+    @param L  the target language.
+    @return the overload set (always contains @a fn). */
+template <class Resolution>
+consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn,
+                                                           lang L) {
+    const std::meta::info cls{std::meta::parent_of(fn)};
+    const policy_kind pol{::welder::policy_of(cls)};
+    const auto name{std::meta::identifier_of(fn)};
+    const bool is_static{std::meta::is_static_member(fn)};
+    std::vector<std::meta::info> out{};
+    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+        if (is_method_candidate(m) && Resolution::class_member_participates(m, L, pol) &&
+            std::meta::is_static_member(m) == is_static &&
+            std::meta::identifier_of(m) == name)
+            out.push_back(m);
+    return out;
+}
+
+/** The participating operator overloads sharing @a fn's target slot (same
+    operator and arity — hence the same special-method name), from @a fn's
+    declaring class.
+    @tparam Resolution the carriage's resolution.
+    @param fn a reflection of one participating operator (see is_operator_candidate).
+    @param L  the target language.
+    @return the overload set (always contains @a fn). */
+template <class Resolution>
+consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
+                                                             lang L) {
+    const std::meta::info cls{std::meta::parent_of(fn)};
+    const policy_kind pol{::welder::policy_of(cls)};
+    std::vector<std::meta::info> out{};
+    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+        if (is_operator_candidate(m) && Resolution::class_member_participates(m, L, pol) &&
+            std::meta::operator_of(m) == std::meta::operator_of(fn) &&
+            is_unary_operator(m) == is_unary_operator(fn))
+            out.push_back(m);
+    return out;
+}
+
+/** The participating free-function overloads sharing @a fn's name, from @a fn's
+    declaring namespace, in declaration order. Membership is the resolution's
+    namespace-member verdict, so the set is exactly what the namespace walk binds.
+    @tparam Resolution the carriage's resolution.
+    @param fn a reflection of one participating namespace-scope function.
+    @param L  the target language.
+    @return the overload set (always contains @a fn). */
+template <class Resolution>
+consteval std::vector<std::meta::info> function_overload_set(std::meta::info fn,
+                                                             lang L) {
+    const std::meta::info ns{std::meta::parent_of(fn)};
+    const policy_kind pol{::welder::policy_of(ns)};
+    const auto name{std::meta::identifier_of(fn)};
+    std::vector<std::meta::info> out{};
+    for (auto m : std::meta::members_of(ns, std::meta::access_context::unchecked()))
+        if (std::meta::is_function(m) && Resolution::member_participates(m, L, pol) &&
+            std::meta::identifier_of(m) == name)
+            out.push_back(m);
+    return out;
+}
+
+/** The signature of an overload-set selector specialization. */
+using overload_selector = std::vector<std::meta::info> (*)(std::meta::info, lang);
+
+/** @a Select's overload set for @a Fn as a fixed-size, splice-ready static array.
+    @tparam Select the selector specialization (e.g. `method_overload_set<R>`).
+    @tparam Fn     the representative overload.
+    @tparam L      the target language.
+    @return an array of the group's member reflections, in declaration order. */
+template <overload_selector Select, std::meta::info Fn, lang L>
+consteval auto overload_group() {
+    constexpr std::size_t n{Select(Fn, L).size()};
+    std::array<std::meta::info, n> out{};
+    // Guard the fill: std::array<T, 0>::operator[] is not usable (n is >= 1 for a
+    // group leader, but the guard keeps this well-formed regardless).
+    if constexpr (n != 0) {
+        auto v{Select(Fn, L)};
+        for (std::size_t i{0}; i < n; ++i)
+            out[i] = v[i];
+    }
+    return out;
+}
+
+/** Whether @a fn is the first (declaration order) member of its @a Select overload
+    set — the single visit on which the carriage emits the whole group.
+    @tparam Select the selector specialization.
+    @param fn the candidate overload.
+    @param L  the target language. */
+template <overload_selector Select>
+consteval bool is_overload_leader(std::meta::info fn, lang L) {
+    auto v{Select(fn, L)};
+    return !v.empty() && v.front() == fn;
+}
+
+/** The semi-manual (`weld_function<Fn>`) group: @a Fn first — the user's named
+    entity resolves the group's target name — then @a Fn's participating siblings.
+
+    Gathering the siblings keeps `weld_function` consistent with the namespace
+    walk (and keeps one-value-per-name frameworks from silently clobbering): one
+    call welds the name's participating overload set. @a Fn itself is included
+    even when its own marks would resolve it out — the explicit call is the
+    stronger statement of intent.
+    An identifier-less @a Fn (a template instantiation formed with `substitute`)
+    has no name for siblings to share, so its group is just itself.
+    @tparam Resolution the carriage's resolution.
+    @tparam Fn         the explicitly welded function.
+    @tparam L          the target language.
+    @return the group as a static array, @a Fn first. */
+template <class Resolution, std::meta::info Fn, lang L>
+consteval auto manual_function_group() {
+    if constexpr (!std::meta::has_identifier(Fn)) {
+        return std::array<std::meta::info, 1>{Fn};
+    } else {
+        constexpr std::size_t n{[] {
+            auto v{function_overload_set<Resolution>(Fn, L)};
+            std::size_t extra{1};
+            for (auto m : v)
+                if (m == Fn)
+                    extra = 0;
+            return v.size() + extra;
+        }()};
+        std::array<std::meta::info, n> out{};
+        out[0] = Fn;
+        std::size_t i{1};
+        for (auto m : function_overload_set<Resolution>(Fn, L))
+            if (m != Fn)
+                out[i++] = m;
+        return out;
+    }
+}
+
+/** The participating constructors of @a Type: every bindable-shape constructor
+    (see is_bindable_constructor) the resolution admits, in declaration order.
+
+    The default constructor is decided separately by the carriage (it may be
+    implicit, hence not a member), as is the synthesized aggregate constructor.
+
+    Constructors resolve under `policy_kind::automatic` regardless of the type's
+    own policy: `opt_in` governs which *members are exposed*, and a type's
+    constructibility is orthogonal to that — an opt_in type with no marked
+    constructor would otherwise silently become uninstantiable. Explicit marks
+    (`mark::exclude` / `mark::only` on an individual constructor) still prune,
+    which is the per-constructor control the marks exist for.
+    @tparam Resolution the carriage's resolution.
+    @tparam Type       the class type reflection.
+    @tparam L          the target language.
+    @return the constructor reflections as a static array. */
+template <class Resolution, std::meta::info Type, lang L>
+consteval auto ctor_group() {
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    constexpr policy_kind pol{policy_kind::automatic};
+    constexpr std::size_t n{[] {
+        std::size_t count{0};
+        for (auto c : std::meta::members_of(Type, ctx))
+            if (is_bindable_constructor(c) &&
+                Resolution::class_member_participates(c, L, pol))
+                ++count;
+        return count;
+    }()};
+    std::array<std::meta::info, n> out{};
+    if constexpr (n != 0) {
+        std::size_t i{0};
+        for (auto c : std::meta::members_of(Type, ctx))
+            if (is_bindable_constructor(c) &&
+                Resolution::class_member_participates(c, L, pol))
+                out[i++] = c;
+    }
+    return out;
 }
 
 // --- inheritance: native bases ----------------------------------------------

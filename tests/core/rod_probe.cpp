@@ -63,21 +63,22 @@ struct probe_rod {
                                   std::index_sequence<I...>) {
         return {};
     }
-    static void add_default_ctor(auto&) {}
-    template <std::meta::info Ctor>
-    static void add_constructor(auto&) {}
-    template <class T>
-    static void add_aggregate_constructor(auto&) {}
+    // Constructors arrive as ONE call: the participating constructor reflections
+    // (an array NTTP) plus the carriage-computed default/aggregate flags.
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    static void add_constructors(auto&) {}
     // The name-producing primitives take a trailing name-style parameter (the
     // driver threads welder::welder's Style through); a real rod resolves its own
-    // name via welder::name_of<…, Style, …>. The probe ignores it.
+    // name via welder::name_of<…, Style, …>. The probe ignores it. Callables
+    // arrive as whole overload GROUPS (`auto Fns`, a std::array<std::meta::info,
+    // N> sharing one target name — resolve it from Fns[0]).
     template <std::meta::info Mem, class Style>
     static void add_field(auto&) {}
-    template <std::meta::info Fn, class Style>
+    template <auto Fns, class Style>
     static void add_method(auto&) {}
-    template <std::meta::info Fn, class Style>
+    template <auto Fns, class Style>
     static void add_static_method(auto&) {}
-    template <std::meta::info Fn>
+    template <auto Fns>
     static void add_operator(auto&) {}
 
     // --- enum binding -------------------------------------------------------
@@ -93,7 +94,7 @@ struct probe_rod {
     // --- namespace / module binding -----------------------------------------
     static probe_session open_module(module_type&) { return {}; }
     static void set_module_doc(module_type&, const char*) {}
-    template <std::meta::info Fn, class Style>
+    template <auto Fns, class Style>
     static void add_function(module_type&) {}
     template <std::meta::info Var, class Style>
     static void add_variable(module_type&, probe_session&) {}

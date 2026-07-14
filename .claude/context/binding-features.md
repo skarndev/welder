@@ -11,11 +11,16 @@ All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 Public data members (a mutable member read/write via `def_readwrite`; a **const**
 member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on
 const); a member's `[[=welder::doc]]` becomes its property `__doc__` (see
-`docs-and-doxygen.md`). Constructors (default + each public
+`docs-and-doxygen.md`). Constructors (default + each PARTICIPATING public
 non-copy/move ctor → `pybind11::init<...>`; plus, for a baseless **aggregate**,
 a synthesized field constructor that brace-inits it, giving Python `T(f0, f1, …)`
 — only when every field binds, since aggregate init is positional/all-or-nothing);
-methods, static methods, overloads. Function / method / constructor **parameter
+methods, static methods, overloads. All three pieces reach the rod as ONE
+`add_constructors<T, Ctors, HasDefault, Aggregate>` call (carriage-computed).
+Constructors honor explicit marks (exclude/only on an individual ctor prunes it —
+bind_traits `ctor_group`) but resolve under `policy_kind::automatic` regardless of
+the type's policy: opt_in governs member EXPOSURE, constructibility is orthogonal
+(an opt_in type keeps its unmarked ctors; locked by overloads.hpp `OptInCtor`). Function / method / constructor **parameter
 names** reach Python as keyword arguments (`py::arg`) when every parameter of that
 signature is named.
 
@@ -26,11 +31,25 @@ form diagnosed at resolution (reflect.hpp `member_bound`, anchor fn
 `bare_mark_only_is_meaningless_…`). Cases: `resolution.hpp` `only_py` /
 `only_then_excl` / `only_lua` + test_resolution.py / resolution_spec.lua.
 
+**Marks resolve PER OVERLOAD (ctors included), via the resolution.** Class members
+gate on `Resolution::class_member_participates(mem, L, pol)` (= member_bound for
+the shipped resolutions), and the CARRIAGE computes each name's participating
+overload group (bind_traits `{method,operator,function}_overload_set<Resolution>`)
+before calling the rod's GROUP hooks (`add_method<Fns,Style>` etc., array-NTTP) —
+rods never re-derive membership, so per-overload marks and bespoke signature-level
+resolutions bind identically on every rod (incl. the Lua one-value-per-name
+tables). Cases: `tests/common/cpp/overloads.hpp` + test_overloads.py /
+overloads_spec.lua (a per-language-excluded overload, an everywhere-excluded one,
+an excluded ctor, OptInCtor). weld_function<Fn> is group-aware too: it welds Fn
+PLUS Fn's participating same-name siblings (Fn first — it names the group; an
+identifier-less substitute()d Fn stays alone), keeping the semi-manual route
+consistent with the namespace walk.
+
 **Returned handles (the mixing story):** every `weld_*` forwards its rod hook's
 return — `weld_type` → the class/enum handle (`py::class_<T>` / `nb::class_<T>` /
 `sol::usertype<T>` / luabridge `class_handle`), `weld_function` → the bound
-function object on pybind11/nanobind (`m.attr(name)`) and sol2 (table entry;
-invalid `sol::object` for a non-leader overload), void on luabridge/text rods;
+function object on pybind11/nanobind (`m.attr(name)`) and sol2 (the table
+entry), void on luabridge/text rods;
 `weld_namespace_as_submodule` → the submodule handle; `weld_variable` forwards
 but all shipped rods return void. Carriage bind_function/bind_variable forward
 (`if constexpr is_void` dance around the session in bind_variable). Cases:
@@ -298,13 +317,14 @@ differences are called out (see `architecture.md` for the full per-rod list):
 - **Overloaded methods/functions/operators are grouped** (each Lua slot holds one
   value): sol2 into one `sol::overload(…)`, LuaBridge3 into one variadic
   `addFunction(name, f1, f2, …)`. Either way every overload dispatches at call time
-  rather than the last registered winning. The grouping is done in the rod — the driver
-  visits each overload individually (suiting pybind11's chained `.def`), and the rod
-  gathers a name's siblings with the shared `rods/lua/overloads.hpp` selectors, exactly
-  as it already gathers a type's constructors. A same-named member in a derived class
-  still hides the base's (C++ name-hiding), unchanged.
-- **Constructors, all at once** (both Lua rods want the whole set): sol2 via
-  `sol::constructors`, LuaBridge3 via `addConstructor<Sig…>()`. Both expose the call
+  rather than the last registered winning. The group is computed by the CARRIAGE
+  from its resolution (bind_traits overload-set machinery; the old
+  rods/lua/overloads.hpp is gone) and handed to the rod whole — the Python rods
+  loop it with chained `.def`s. A same-named member in a derived class still hides
+  the base's (C++ name-hiding), unchanged.
+- **Constructors, all at once** (both Lua rods want the whole set): the driver's
+  single `add_constructors` call becomes sol2's `sol::constructors` assignment /
+  LuaBridge3's `addConstructor<Sig…>()`. Both expose the call
   form `T(…)` **and** `T.new(…)` (LuaBridge3 adds `.new` as a variadic static function
   over factory functions). Aggregates ride C++26 parenthesized init.
 - **Namespace variables: const snapshots, mutable live.** A const/constexpr variable

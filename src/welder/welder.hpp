@@ -118,10 +118,15 @@ struct welder {
     /** Reflect over free function @a Fn and register it on module @a m.
 
         The semi-manual analogue of what namespace binding does for a namespace's
-        free functions: bind one hand-picked function directly, without welding the
+        free functions: bind one hand-picked *name* directly, without welding the
         whole enclosing namespace. @a Fn must reflect a single function (an overload
-        set is ambiguous — reflect the specific overload you want); under the default
-        (stitch) carriage it must be welded for `B::language`.
+        set is ambiguous — reflect a specific overload); under the default (stitch)
+        carriage it must be welded for `B::language`. @a Fn's *participating*
+        same-name overload siblings join the weld (as one group, @a Fn naming it) —
+        the same set the namespace walk would bind, so the call is consistent on
+        every rod, including the one-value-per-name Lua tables. Shape the set with
+        per-overload marks; @a Fn itself always welds (the explicit call outranks
+        its own marks).
 
         @tparam Fn a reflection of the free function.
         @param m    the module handle to register onto.
