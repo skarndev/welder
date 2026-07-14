@@ -30,12 +30,16 @@ MEMBER_CASES = [
     pytest.param("resolution", "Automatic", "excl_py", False, id="automatic/exclude-python"),
     pytest.param("resolution", "Automatic", "excl_lua", True, id="automatic/exclude-other-language-kept"),
     pytest.param("resolution", "Automatic", "incl_py", True, id="automatic/redundant-include-kept"),
+    pytest.param("resolution", "Automatic", "only_py", True, id="automatic/only-python-bound"),
+    pytest.param("resolution", "Automatic", "only_then_excl", False, id="automatic/exclude-beats-only"),
     # --- opt_in policy: bind only what is explicitly included ----------------
     pytest.param("resolution", "OptIn", "unmarked", False, id="opt_in/unmarked-not-bound"),
     pytest.param("resolution", "OptIn", "incl_all", True, id="opt_in/include-all-languages"),
     pytest.param("resolution", "OptIn", "incl_py", True, id="opt_in/include-python"),
     pytest.param("resolution", "OptIn", "incl_lua", False, id="opt_in/include-other-language-not-bound"),
     pytest.param("resolution", "OptIn", "incl_then_excl", False, id="opt_in/exclude-beats-include"),
+    pytest.param("resolution", "OptIn", "only_py", True, id="opt_in/only-is-the-opt-in"),
+    pytest.param("resolution", "OptIn", "only_lua", False, id="opt_in/only-other-language-not-bound"),
     # --- methods resolve the same way as data members ------------------------
     pytest.param("methods", "Counter", "increment", True, id="method/bound"),
     pytest.param("methods", "Counter", "value", True, id="method/const-bound"),

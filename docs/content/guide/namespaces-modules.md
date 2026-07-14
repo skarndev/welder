@@ -105,6 +105,14 @@ weld::weld_variable<^^geometry::kUnit>(m, "UNIT");     // exposed as m.UNIT
 An **overloaded** free function must be welded through its namespace (or by
 reflecting the specific overload): `^^fn` on an overload set is ambiguous.
 
+Where the framework has a per-function object, `weld_function` returns it — the
+bound function (`m.attr(name)`) on the Python rods, the table entry on sol2 —
+so it chains like [`weld_type`'s class
+handle](binding-types.md#chaining-on-the-returned-handle); LuaBridge3's fluent
+registrar has none, so there it returns `void`. `weld_namespace_as_submodule`
+returns the new submodule handle for the same reason: keep hand-binding into
+it.
+
 ## Tack welding: an unmarked library
 
 Everything so far needs a `weld` marker. But sometimes you want to bind a

@@ -599,17 +599,24 @@ struct rod {
         into one `sol::overload(…)`, registered once on the group's first member.
 
         A non-null @a name overrides the resolved name (including any `weld_as`), used
-        verbatim; `nullptr` falls back to the styled/`weld_as` name. @see welder::rod */
+        verbatim; `nullptr` falls back to the styled/`weld_as` name.
+        @return the bound function object (the table entry) — the handle for further
+                hand-registration. For a non-leader overload the set was (or will be)
+                registered by its leader, so there is nothing at this call to hand
+                out: an *invalid* `sol::object` (`.valid() == false`) is the null
+                handle. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
-    static void add_function(module_type& m, const char* name = nullptr) {
+    static sol::object add_function(module_type& m, const char* name = nullptr) {
         if constexpr (is_overload_leader<function_overload_set>(Fn, lang::lua)) {
             constexpr auto grp{overload_group<function_overload_set, Fn, lang::lua>()};
-            _register_named<grp>(
-                m,
+            const char* fn_name{
                 name ? name
                      : ::welder::name_of<Fn, language, Style,
-                                         ::welder::ent_kind::function>(),
-                std::make_index_sequence<grp.size()>{});
+                                         ::welder::ent_kind::function>()};
+            _register_named<grp>(m, fn_name, std::make_index_sequence<grp.size()>{});
+            return m.get<sol::object>(fn_name);
+        } else {
+            return sol::object{};
         }
     }
 

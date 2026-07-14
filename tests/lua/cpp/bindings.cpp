@@ -36,6 +36,11 @@ inline ::sol::table welder_test_submodule(::sol::table& m, const char* name) {
 }
 } // namespace
 #define WELDER_TEST_SUBMODULE(m, name) welder_test_submodule((m), (name))
+// Chaining seams (chaining.hpp): hand-written sol2 registrations on the handles
+// weld_type / weld_function return (a sol::usertype and the bound table entry).
+#define WELDER_TEST_CHAIN_CLASS_EXTRA(cls) \
+    (cls)["doubled"] = [](const chaining::Gadget& g) { return g.n * 2; }
+#define WELDER_TEST_CHAIN_FN_ALIAS(sub, fn) (sub)["twice_alias"] = (fn)
 
 // The shared case groups. doc.hpp is omitted: it exercises Python __doc__ (which
 // Lua has no runtime home for) and its build_module hooks use module_::attr; the
@@ -47,6 +52,7 @@ inline ::sol::table welder_test_submodule(::sol::table& m, const char* name) {
 #include "operators.hpp"
 #include "enums.hpp"
 #include "naming.hpp"
+#include "chaining.hpp"
 
 // The Lua entry point require("welder_test_sol2") calls. Builds the module table,
 // fills it from every case group (each under its own submodule table, mirroring
@@ -63,5 +69,6 @@ extern "C" int luaopen_welder_test_sol2(lua_State* L) {
     register_operators(m);   // <-> operators.hpp
     register_enums(m);       // <-> enums.hpp
     register_naming(m);      // <-> naming_spec.lua
+    register_chaining(m);    // <-> chaining_spec.lua (handles returned by weld_*)
     return ::sol::stack::push(L, m);
 }

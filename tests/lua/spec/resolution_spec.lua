@@ -16,15 +16,19 @@ describe("resolution", function()
     local a = m.Automatic.new()
     h.assert_absent(a, "excl_all")
     h.assert_absent(a, "excl_lua")
+    h.assert_absent(a, "only_py")        -- only(py): closed world, lua is out
+    h.assert_absent(a, "only_then_excl") -- exclude beats only
   end)
 
   it("opt_in binds only lua-included members", function()
     local o = m.OptIn.new()
     o.incl_all = 2; assert.are.equal(2, o.incl_all)
     o.incl_lua = 3; assert.are.equal(3, o.incl_lua)
+    o.only_lua = 4; assert.are.equal(4, o.only_lua) -- only(lua) is also the opt-in
     h.assert_absent(o, "unmarked")        -- opt_in, unmarked
     h.assert_absent(o, "incl_py")         -- included for py only
     h.assert_absent(o, "incl_then_excl")  -- exclude wins
+    h.assert_absent(o, "only_py")         -- only(py): closed world, lua is out
   end)
 
   it("respects access control", function()

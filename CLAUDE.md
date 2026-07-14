@@ -83,6 +83,7 @@ PYBIND11_MODULE(mymod, m) {
 | `policy::opt_in` | Conservative: bind only members marked `include`. |
 | `mark::exclude` / `mark::exclude(lang...)` | Exclude member from all / the listed languages. |
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
+| `mark::only(lang...)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Must be called with ≥ 1 lang (bare form diagnosed); `exclude` still beats it; repeats union. |
 | `mark::trust_bindable` / `mark::trust_bindable(lang...)` | Vouch that this member's type (or a callable's whole signature) is representable outside welder's view (e.g. hand-registered with pybind11); suppresses the bindability gate. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. A specializable `bool` variable template, not an attribute. |
 | `doc("text")` | Docstring for a class, namespace, function, function parameter, or data member. Surfaced as `__doc__` by the Python rods (a data member's rides on its property; const → read-only); ignored on namespace variables. Lua has no runtime docstring slot, so the sol2 rod ignores it at runtime — its home there is the generated **LuaCATS (`---@meta`) stub** (`welder::rods::luacats::rod`). |
@@ -92,8 +93,8 @@ PYBIND11_MODULE(mymod, m) {
 
 `policy::auto` from the original sketch is spelled `policy::automatic` (`auto` is
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for
-`L` → false; else `automatic` → true; else (`opt_in`) → true iff explicitly
-included for `L`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
+`L` → false; else an `only` mark → true iff it names `L` (either policy); else
+`automatic` → true; else (`opt_in`) → true iff explicitly included for `L`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
 exclude/include spec is the sentinel for "all languages". The lang value space
 is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
 user languages from 16–31 for out-of-tree rods (locked by

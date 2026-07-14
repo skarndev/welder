@@ -37,6 +37,18 @@ Automatic {
     // redundant under automatic -> kept
     [[=welder::mark::include(welder::lang::py)]]
     int incl_py{0};
+
+    // only(py): the closed-world counterpart of exclude -> py, not lua (nor any
+    // language welded later)
+    [[=welder::mark::only(welder::lang::py)]]
+    int only_py{0};
+
+    // exclude wins over only -> bound nowhere
+    [[
+      =welder::mark::only(welder::lang::py),
+      =welder::mark::exclude(welder::lang::py)
+    ]]
+    int only_then_excl{0};
 };
 
 // --- opt_in policy: bind only what is explicitly included -------------------
@@ -68,6 +80,14 @@ OptIn {
       =welder::mark::exclude(welder::lang::py)
     ]]
     int incl_then_excl{0};
+
+    // only(py) is also the opt-in -> bound for py without an include, not lua
+    [[=welder::mark::only(welder::lang::py)]]
+    int only_py{0};
+
+    // only(lua) likewise -> lua, not py
+    [[=welder::mark::only(welder::lang::lua)]]
+    int only_lua{0};
 };
 
 // --- read/write roundtrip (and the exact bound set) -------------------------

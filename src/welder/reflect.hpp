@@ -90,18 +90,38 @@ consteval bool trusted_for(std::meta::info member, lang L) {
     return false;
 }
 
+namespace detail {
+/** Diagnostic anchor, never defined: a bare `[[=welder::mark::only]]` is
+    meaningless ("only, for every language" restricts nothing) — naming this in
+    constant evaluation is the compile error that says so. Call the mark with
+    the languages: `mark::only(welder::lang::py)`. */
+void bare_mark_only_is_meaningless_call_it_with_languages();
+} // namespace detail
+
 /** The core decision a backend asks for each member: does @a member bind for
     language @a L under policy @a pol?
 
     @param member a reflection of the member to resolve.
     @param L      the target language.
     @param pol    the enclosing type's reflection policy.
-    @return excluded ⇒ `false`; else `automatic` ⇒ `true`; else (`opt_in`) ⇒
-            `true` iff explicitly included.
+    @return excluded ⇒ `false`; else an `only` mark ⇒ `true` iff it names @a L
+            (under either policy — `only` is also the opt-in); else `automatic`
+            ⇒ `true`; else (`opt_in`) ⇒ `true` iff explicitly included.
 */
 consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
     if (excluded_for(member, L))
         return false;
+    auto onlys{std::meta::annotations_of_with_type(member, ^^detail::only_spec)};
+    if (!onlys.empty()) {
+        unsigned mask{0};
+        for (auto a : onlys) {
+            auto s{std::meta::extract<detail::only_spec>(a)};
+            if (s.mask == 0)
+                detail::bare_mark_only_is_meaningless_call_it_with_languages();
+            mask |= s.mask;
+        }
+        return (mask & lang_bit(L)) != 0;
+    }
     if (pol == policy_kind::automatic)
         return true;
     return included_for(member, L);

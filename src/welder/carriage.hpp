@@ -300,7 +300,7 @@ struct basic_carriage {
                     `nullptr` to resolve @a Fn's `weld_as`/styled name.
     */
     template <rod B, std::meta::info Fn, class Style = naming::none>
-    static void bind_function(typename B::module_type& m, const char* name = nullptr) {
+    static auto bind_function(typename B::module_type& m, const char* name = nullptr) {
         constexpr lang L{B::language};
         static_assert(std::meta::is_function(Fn),
                       "welder: weld_function<Fn>: Fn must reflect a (free) function");
@@ -308,7 +308,9 @@ struct basic_carriage {
                       "welder: weld_function<Fn>: Fn is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
         welder::assert_callable_bindable<B, Fn, L>();
-        B::template add_function<Fn, Style>(m, name);
+        // Forward the rod's handle (the bound function object, where the
+        // framework has one); a void-returning rod makes this void too.
+        return B::template add_function<Fn, Style>(m, name);
     }
 
     /** Register a single namespace variable @a Var as an attribute of @a m.
@@ -327,7 +329,7 @@ struct basic_carriage {
                     `nullptr` to resolve @a Var's `weld_as`/styled name.
     */
     template <rod B, std::meta::info Var, class Style = naming::none>
-    static void bind_variable(typename B::module_type& m, const char* name = nullptr) {
+    static auto bind_variable(typename B::module_type& m, const char* name = nullptr) {
         constexpr lang L{B::language};
         static_assert(std::meta::is_variable(Var),
                       "welder: weld_variable<Var>: Var must reflect a namespace "
@@ -337,8 +339,19 @@ struct basic_carriage {
                       "backend's language; annotate it with [[=welder::weld(...)]]");
         welder::assert_member_bindable<B, Var, L>();
         auto session{B::open_module(m)};
-        B::template add_variable<Var, Style>(m, session, name);
-        B::close_module(m, session);
+        // Forward the rod's handle if its add_variable yields one (the shipped
+        // rods return void — a bound constant is a snapshot, a mutable global a
+        // module property; neither has a framework object worth returning), but
+        // the session must still close after the registration.
+        if constexpr (std::is_void_v<decltype(B::template add_variable<Var, Style>(
+                          m, session, name))>) {
+            B::template add_variable<Var, Style>(m, session, name);
+            B::close_module(m, session);
+        } else {
+            auto handle{B::template add_variable<Var, Style>(m, session, name)};
+            B::close_module(m, session);
+            return handle;
+        }
     }
 
     /** Reflect over a whole namespace @a Ns and expose its members on module @a m.

@@ -127,10 +127,15 @@ struct welder {
         @param m    the module handle to register onto.
         @param name the target name, used **verbatim** and taking precedence over any
                     `[[=welder::weld_as]]` on @a Fn; `nullptr` (default) resolves the
-                    `weld_as`/styled name. */
+                    `weld_as`/styled name.
+        @return whatever the rod's `add_function` hands back — the bound function
+                object for the Python rods (`m.attr(name)`) and the sol2 rod (the
+                table entry), for chaining further hand-registration; `void` where
+                the framework has no per-function handle (LuaBridge3, the
+                text-emitting rods). */
     template <std::meta::info Fn>
-    static void weld_function(module_type& m, const char* name = nullptr) {
-        Carriage::template bind_function<B, Fn, Style>(m, name);
+    static auto weld_function(module_type& m, const char* name = nullptr) {
+        return Carriage::template bind_function<B, Fn, Style>(m, name);
     }
 
     /** Reflect over global/namespace variable @a Var and register it on module @a m.
@@ -145,10 +150,14 @@ struct welder {
         @param m    the module handle to register onto.
         @param name the target name, used **verbatim** and taking precedence over any
                     `[[=welder::weld_as]]` on @a Var; `nullptr` (default) resolves the
-                    `weld_as`/styled name. */
+                    `weld_as`/styled name.
+        @return whatever the rod's `add_variable` hands back; the shipped rods
+                return `void` — a bound constant is a value snapshot, a mutable
+                global a module property, neither has a framework object worth
+                returning — but a rod that yields one sees it forwarded. */
     template <std::meta::info Var>
-    static void weld_variable(module_type& m, const char* name = nullptr) {
-        Carriage::template bind_variable<B, Var, Style>(m, name);
+    static auto weld_variable(module_type& m, const char* name = nullptr) {
+        return Carriage::template bind_variable<B, Var, Style>(m, name);
     }
 
     /** Reflect over namespace @a Ns and expose its members on module @a m.

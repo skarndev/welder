@@ -189,4 +189,25 @@ Vec2 {
     `operator=` (a special member). **Free** (non-member) operators aren't bound
     yet.
 
+## Chaining on the returned handle
+
+`weld_type` returns the rod's own class handle — pybind11's `py::class_<T>`,
+nanobind's `nb::class_<T>`, sol2's `sol::usertype<T>` — so hand-written
+framework registrations chain right on: welder lays the reflected boilerplate,
+you add what it shouldn't guess (a lambda-backed helper, a member you
+[excluded](annotations.md#mark-per-member-overrides) to bind manually, a custom
+return-value policy):
+
+```cpp
+auto cls = weld::weld_type<Rectangle>(m);          // welder binds the reflected surface
+cls.def("scaled", [](const Rectangle& r, double k) // …and you weld on by hand
+        { return Rectangle{r.width * k, r.height * k}; });
+```
+
+`weld_function` likewise returns the bound function object where the framework
+has one (the Python rods, sol2), and
+[`weld_namespace_as_submodule`](namespaces-modules.md) returns the new
+submodule handle — every entry point hands back its framework object so
+welder-generated and hand-written bindings mix freely.
+
 Next: [Enums](enums.md).

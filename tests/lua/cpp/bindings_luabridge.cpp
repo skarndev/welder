@@ -35,6 +35,25 @@
 #define WELDER_TEST_SUBMODULE(m, name) \
     ::welder::rods::luabridge::rod::add_submodule((m), (name))
 
+// Chaining seam (chaining.hpp): a hand-written LuaBridge3 registration on the
+// class handle weld_type returns — re-open the class from the handle's recorded
+// module path + name (the rod's own re-open-by-path model) and add a method the
+// LuaBridge3 way. WELDER_TEST_CHAIN_FN_ALIAS is deliberately NOT defined: the
+// fluent registrar has no per-function handle, so weld_function is void here.
+namespace {
+template <class Handle>
+void welder_test_chain_extra(Handle& cls) {
+    ::luabridge::Namespace ns{::luabridge::getGlobalNamespace(cls.mod.L)};
+    for (const auto& seg : cls.mod.path)
+        ns = ns.beginNamespace(seg.c_str());
+    ns.beginClass<typename Handle::type>(cls.name.c_str())
+        .addFunction("doubled",
+                     +[](const typename Handle::type* g) { return g->n * 2; })
+        .endClass();
+}
+} // namespace
+#define WELDER_TEST_CHAIN_CLASS_EXTRA(cls) welder_test_chain_extra(cls)
+
 // The shared case groups. doc.hpp is omitted: it exercises Python __doc__ (which Lua
 // has no runtime home for) and its build_module hooks use module_::attr; the
 // backend-specific trust.hpp / caster.hpp are omitted too.
@@ -45,6 +64,7 @@
 #include "operators.hpp"
 #include "enums.hpp"
 #include "naming.hpp"
+#include "chaining.hpp"
 
 // The Lua entry point require("welder_test_luabridge") calls. Builds the module (a
 // named namespace under _G), fills it from every case group (each under its own
@@ -61,6 +81,7 @@ extern "C" int luaopen_welder_test_luabridge(lua_State* L) {
     register_operators(m);    // <-> operators.hpp
     register_enums(m);        // <-> enums.hpp
     register_naming(m);       // <-> naming_spec.lua
+    register_chaining(m);     // <-> chaining_spec.lua (handles returned by weld_*)
     lua_getglobal(L, "welder_test_luabridge"); // the populated module table
     lua_pushnil(L);
     lua_setglobal(L, "welder_test_luabridge"); // keep _G clean

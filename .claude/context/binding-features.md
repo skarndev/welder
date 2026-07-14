@@ -19,6 +19,24 @@ methods, static methods, overloads. Function / method / constructor **parameter
 names** reach Python as keyword arguments (`py::arg`) when every parameter of that
 signature is named.
 
+**Member resolution marks:** `exclude`/`include` plus `mark::only(lang...)` — the
+closed-world mark: the COMPLETE set of languages the member binds for; under
+`opt_in` it doubles as the opt-in; `exclude` still beats it; repeats union; bare
+form diagnosed at resolution (reflect.hpp `member_bound`, anchor fn
+`bare_mark_only_is_meaningless_…`). Cases: `resolution.hpp` `only_py` /
+`only_then_excl` / `only_lua` + test_resolution.py / resolution_spec.lua.
+
+**Returned handles (the mixing story):** every `weld_*` forwards its rod hook's
+return — `weld_type` → the class/enum handle (`py::class_<T>` / `nb::class_<T>` /
+`sol::usertype<T>` / luabridge `class_handle`), `weld_function` → the bound
+function object on pybind11/nanobind (`m.attr(name)`) and sol2 (table entry;
+invalid `sol::object` for a non-leader overload), void on luabridge/text rods;
+`weld_namespace_as_submodule` → the submodule handle; `weld_variable` forwards
+but all shipped rods return void. Carriage bind_function/bind_variable forward
+(`if constexpr is_void` dance around the session in bind_variable). Cases:
+`chaining.hpp` (+ per-backend `WELDER_TEST_CHAIN_*` seams) + test_chaining.py /
+chaining_spec.lua.
+
 ## Overloaded operators → Python special methods
 A *member* operator binds under its dunder (`operator+` → `__add__`, `operator==`
 → `__eq__`, `operator[]` → `__getitem__`, `operator()` → `__call__`, …), unary vs

@@ -47,6 +47,11 @@
 // The one module-handle op the shared register_* helpers need; the Lua backend,
 // whose handle is a sol::table with no def_submodule, defines it differently.
 #define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)
+// Chaining seams (chaining.hpp): hand-written nanobind registrations on the
+// handles weld_type / weld_function return.
+#define WELDER_TEST_CHAIN_CLASS_EXTRA(cls) \
+    (cls).def("doubled", [](const chaining::Gadget& g) { return g.n * 2; })
+#define WELDER_TEST_CHAIN_FN_ALIAS(sub, fn) (sub).attr("twice_alias") = (fn)
 
 // Case groups. These must come after the vocabulary + backend above: they use
 // both and deliberately do not re-include them. The backend-neutral groups resolve
@@ -65,6 +70,7 @@
 #include "caster.hpp"
 #include "enums.hpp"
 #include "naming.hpp"
+#include "chaining.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -87,4 +93,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_caster(m);      // <-> test_caster.py
     register_enums(m);       // <-> test_enums.py
     register_naming(m);      // <-> test_naming.py
+    register_chaining(m);    // <-> test_chaining.py (handles returned by weld_*)
 }

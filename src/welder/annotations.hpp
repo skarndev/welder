@@ -133,6 +133,37 @@ struct include_spec {
     }
 };
 
+/** The stored form of an `only` mark: the *complete* set of languages a member
+    may bind for — implicitly, not for any other.
+
+    The closed-world counterpart of exclude_spec: `exclude` names languages to
+    hide from (open-ended — a language it doesn't name still binds, including a
+    @ref welder::user_lang minted later), while `only` names everything that may
+    bind. Under `policy::opt_in` it also counts as the member's opt-in, so no
+    separate `include` is needed; an explicit `exclude` covering a language still
+    beats an `only` naming it. Repeated `only` marks union their languages.
+
+    Unlike the other marks there is no meaningful bare form — "only, for every
+    language" restricts nothing — so it must be *called*:
+    @code
+    [[=welder::mark::only(welder::lang::py)]]   // binds for py, nowhere else
+    @endcode
+    A bare `[[=welder::mark::only]]` is diagnosed when the member is resolved.
+*/
+struct only_spec {
+    unsigned mask = 0; /**< The only languages to bind for; `0` == the (diagnosed) bare form. */
+
+    /** Name the complete set of languages the member may bind for.
+        @tparam Ls further language enum types (deduced).
+        @param first the first language — at least one is required.
+        @param rest  further languages.
+        @return a scoped only_spec. */
+    template <class... Ls>
+    consteval only_spec operator()(lang first, Ls... rest) const {
+        return only_spec{lang_mask(first, rest...)};
+    }
+};
+
 // --- trust_bindable: vouch that a type is representable outside welder's view --
 
 /** The stored form of a `trust_bindable` member mark.
@@ -307,6 +338,7 @@ inline constexpr bool trust_bindable = false;
 namespace mark {
 inline constexpr detail::exclude_spec exclude{};               /**< @see welder::detail::exclude_spec */
 inline constexpr detail::include_spec include{};               /**< @see welder::detail::include_spec */
+inline constexpr detail::only_spec only{};                     /**< @see welder::detail::only_spec — must be called with ≥ 1 language */
 inline constexpr detail::trust_bindable_spec trust_bindable{}; /**< @see welder::detail::trust_bindable_spec */
 } // namespace mark
 

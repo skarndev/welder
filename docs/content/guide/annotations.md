@@ -70,8 +70,10 @@ The policy on a type decides the default for its members:
 
 ## `mark` — per-member overrides
 
-`exclude` and `include` are the per-member overrides. Both accept an optional
-language list; with no argument they apply to **all** welded languages.
+`exclude`, `include` and `only` are the per-member overrides. `exclude` and
+`include` accept an optional language list; with no argument they apply to
+**all** welded languages. `only` names the *complete* set of languages the
+member may bind for, so it must always be called with at least one:
 
 ```cpp
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
@@ -80,8 +82,16 @@ Mixed {
     [[=welder::mark::exclude]] std::uint32_t second;                  // bound nowhere
     [[=welder::mark::exclude(welder::lang::lua)]] std::string third;  // py, not lua
     [[=welder::mark::include(welder::lang::py)]] std::string last;    // opt-in
+    [[=welder::mark::only(welder::lang::py)]] std::uint64_t handle;   // py, and ONLY py
 };
 ```
+
+`exclude` and `only` differ in world-view: `exclude(lua)` is **open** — it names
+the languages to hide from, and any language it doesn't name (including a
+[user-defined one](extending.md#binding-a-new-language) minted later) still
+binds. `only(py)` is **closed** — nothing outside its list ever binds, no
+matter what languages join the build afterwards. Under `policy::opt_in`, `only`
+also counts as the member's opt-in, so no separate `include` is needed.
 
 ## The resolution rule
 
@@ -91,8 +101,12 @@ For a given language `L`, `member_bound(member, L, policy)` decides:
 flowchart TD
     S([member, language L]) --> X{excluded for L?}
     X -- yes --> N[false]
-    X -- no --> P{policy?}
-    P -- automatic --> T[true]
+    X -- no --> O{an only mark?}
+    O -- yes --> M{does it name L?}
+    M -- yes --> T[true]
+    M -- no --> N
+    O -- no --> P{policy?}
+    P -- automatic --> T
     P -- opt_in --> I{included for L?}
     I -- yes --> T
     I -- no --> N
@@ -100,11 +114,16 @@ flowchart TD
     style N stroke:#999,stroke-width:2px
 ```
 
-- Excluded for `L` → **false**.
+- Excluded for `L` → **false** (exclude is the strongest word — it beats an
+  `only` naming `L` too).
+- Else an `only` mark → **true iff** it names `L`, under either policy
+  (repeated `only` marks union their languages).
 - Else `automatic` → **true**.
 - Else (`opt_in`) → **true iff** explicitly included for `L`.
 
-A mask of `0` on an `exclude`/`include` spec is the sentinel for "all languages".
+A mask of `0` on an `exclude`/`include` spec is the sentinel for "all languages"
+(a bare `mark::only` has no such meaning — "only, for every language" restricts
+nothing — and is diagnosed at compile time).
 
 !!! note "Naming deviation"
 

@@ -457,13 +457,17 @@ struct rod {
 
         A non-null @a name overrides the resolved name (including any `weld_as`),
         used verbatim; `nullptr` falls back to the styled/`weld_as` name.
-        @see welder::rod */
+        @return the bound function object (`m.attr(name)`) — the handle for
+                further hand-registration; repeated `def`s of one name (C++
+                overloads) merge onto this same object. @see welder::rod */
     template <std::meta::info Fn, class Style = ::welder::naming::none>
-    static void add_function(module_type& m, const char* name = nullptr) {
-        _def_function<Fn>(
+    static nb::object add_function(module_type& m, const char* name = nullptr) {
+        const char* fn_name{
             name ? name
-                 : ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>(),
-            [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); });
+                 : ::welder::name_of<Fn, language, Style, ::welder::ent_kind::function>()};
+        _def_function<Fn>(
+            fn_name, [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); });
+        return m.attr(fn_name);
     }
 
     /** Bind namespace variable @a Var as a module attribute.

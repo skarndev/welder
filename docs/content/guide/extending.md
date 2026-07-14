@@ -81,9 +81,12 @@ struct my_rod {
     static auto open_module(module_type&);                  // -> a "session" (scratch state)
     static void set_module_doc(module_type&, const char* doc);
     template <std::meta::info Fn,  class Style>
-    static void add_function(module_type&, const char* name = nullptr);
+    static auto add_function(module_type&, const char* name = nullptr);
+        // may return the framework's bound-function object — weld_function
+        // forwards whatever this yields (void when there is nothing to hand out)
     template <std::meta::info Var, class Style>
-    static void add_variable(module_type&, auto& session, const char* name = nullptr);
+    static auto add_variable(module_type&, auto& session, const char* name = nullptr);
+        // same forwarding rule (the shipped rods return void here)
     static module_type add_submodule(module_type&, const char* name);
     static void close_module(module_type&, auto& session); // finalize the session
 };
