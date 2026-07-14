@@ -95,6 +95,47 @@ routes, all landing on the same `welder::headers` target:
   `local-recipes-index` repo (conan-center-index layout, added as a remote from a
   clone) — deferred; local cache is the current publish target.
 
+## The cookbook (examples/cookbook — the FetchContent consumption test)
+
+A **standalone** consumer super-project (own `project()`, NOT add_subdirectory'd
+from welder's build — nesting would clash with welder's own targets): it obtains
+welder via FetchContent and FetchContent-pins the backends (pybind11 v3.0.1,
+nanobind v2.13.0, sol2 v3.5.0, all `OVERRIDE_FIND_PACKAGE` so welder's own
+`find_package(<backend>)` calls redirect to them; made available at the cookbook's
+top scope BEFORE welder so nanobind's `NB_DIR` is inherited by welder's subdir).
+Building it therefore tests the consumer packaging path; CI (Linux + macOS jobs,
+"Cookbook" step; not Windows) redirects the welder fetch to the checkout with
+`-DFETCHCONTENT_SOURCE_DIR_WELDER=$PWD`:
+
+```bash
+cmake -S examples/cookbook -B build/cookbook -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=g++-16 \
+  -DFETCHCONTENT_SOURCE_DIR_WELDER="$PWD" \
+  -DWELDER_LUA_DIR="$(brew --prefix lua@5.4)" \
+  -DPython_EXECUTABLE="$(brew --prefix python@3.14)/bin/python3.14"
+cmake --build build/cookbook && ctest --test-dir build/cookbook --output-on-failure
+```
+
+Eight recipes (`01-hello` … `08-tack-welding`), each a self-contained dir with a
+`check.py`/`check.lua` CTest (`cookbook.<name>`), each documented as a page in the
+docs **Cookbook** section (`docs/content/cookbook/` — keep recipe ↔ page in sync).
+Notables: 05 uses `welder_generate_trampolines`, 07 is nanobind + sol2 + LuaCATS +
+nanobind's bundled `.pyi` stubgen from one header (backend-flavored methods via
+`mark::only` + cross-included framework headers — unused inline members aren't
+emitted, so no cross-language symbol leakage; the sol2/luacats/nanobind targets all
+need the *other* framework's include paths), 08 tack-welds an unannotated header
+(needs the type-level `trust_bindable<Vec3>` hatch — under tack, a greedily
+registered class type in signatures is not provably bindable). `WELDER_LUA_DIR`
+unset ⇒ the sol2 half of 07 is skipped (message, not error). The umbrella defines
+`cookbook_add_pybind11_module()` (the Python_add_library + hidden-visibility
+boilerplate).
+
+Two consumer-path fixes this build flushed out (kept in core): the
+pybind11::headers SYSTEM promotion resolves `ALIASED_TARGET` first
+(FetchContent'd pybind11 is an ALIAS; conan's is IMPORTED), and `name_of_or`
+(naming.hpp) makes the weld_* call-site name override lazy so identifier-less
+template instantiations bind (recipe 06; locked by tests/core/naming.cpp).
+
 ## Strict warnings
 welder's own compiled targets (rod tests, examples, the core compile-only checks)
 build under a strict warning set; **library consumers never inherit it**. It lives

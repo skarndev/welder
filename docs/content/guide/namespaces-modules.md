@@ -3,6 +3,14 @@
 Binding types one at a time is fine, but welder can also bind a **whole namespace**
 — or emit an **entire importable module** — from a single declaration.
 
+!!! example "In the cookbook"
+
+    [Recipe 02 — Discovery rules](../cookbook/discovery.md) drives a whole module
+    through `WELDER_MODULE`, submodules and pruning included; [Recipe 01 — One of
+    everything](../cookbook/hello.md) shows the semi-manual `weld_function` /
+    `weld_variable` route; [Recipe 08 — Tack welding](../cookbook/tack-welding.md)
+    binds an unmarked library greedily.
+
 ## Binding a namespace
 
 `welder::welder<Rod>::weld_namespace<^^ns>(m)` walks a namespace and binds its

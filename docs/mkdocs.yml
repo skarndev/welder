@@ -127,6 +127,16 @@ nav:
       - Generating C++ docs: guide/cpp-docs.md
       - Extending welder: guide/extending.md
       - Troubleshooting & FAQ: guide/faq.md
+  - Cookbook:
+      - cookbook/index.md
+      - 01 One of everything: cookbook/hello.md
+      - 02 Discovery rules: cookbook/discovery.md
+      - 03 Inheritance: cookbook/inheritance.md
+      - 04 Virtual methods: cookbook/virtuals.md
+      - 05 Generated trampolines: cookbook/generated-trampolines.md
+      - 06 Templates: cookbook/templates.md
+      - 07 One library, two languages: cookbook/multilang.md
+      - 08 Tack welding: cookbook/tack-welding.md
   - Languages:
       - backends/index.md
       - Python (pybind11 & nanobind): backends/python.md

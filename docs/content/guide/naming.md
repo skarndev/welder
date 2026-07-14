@@ -12,6 +12,12 @@ verbatim (the style is [`welder::naming::none`](#name-styles)).
 
 [pep8]: https://peps.python.org/pep-0008/
 
+!!! example "In the cookbook"
+
+    [Recipe 07 — One library, two languages](../cookbook/multilang.md) binds one
+    camelCase C++ header with PEP 8 names for Python and snake_case for Lua, and
+    uses per-language `weld_as` to give one entity a different name in each.
+
 ## A style is the second `welder::welder` argument
 
 ```cpp

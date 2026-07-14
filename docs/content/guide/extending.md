@@ -196,6 +196,11 @@ Two resolutions ship, with their carriage aliases:
 | `welder::carriages::marker_resolution` | `welder::stitch_welding_carriage` (default) | Bind only where `weld` / `policy` / marks direct |
 | `welder::carriages::greedy_resolution` | `welder::tack_welding_carriage` | Bind an unmarked library greedily (marks still prune) |
 
+!!! example "In the cookbook"
+
+    [Recipe 08 — Tack welding](../cookbook/tack-welding.md) binds a third-party
+    library with the tack carriage end to end.
+
 A bespoke resolution is a stateless struct satisfying the `welder::resolution`
 concept — four `consteval` predicates (`participates`, `is_native_base`,
 `member_participates`, `namespace_participates`) plus the `native_bases<T, L>`

@@ -19,6 +19,13 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). |
 | `weld_as([lang…,] "name")` | Force this entity's target name **verbatim**, bypassing the [name style](naming.md). The name is last; any languages it applies to come first (none = all). |
 
+!!! example "In the cookbook"
+
+    [Recipe 02 — Discovery rules](../cookbook/discovery.md) exercises most of this
+    vocabulary in one runnable module: policies, marks, namespace pruning and
+    `weld_as`. [Recipe 07](../cookbook/multilang.md) adds the per-language pieces
+    (`mark::only`, per-language `weld_as`, `mark::trust_bindable`).
+
 ## `weld` — the discovery marker
 
 `weld` does two things: it declares a type **discoverable** (an independently

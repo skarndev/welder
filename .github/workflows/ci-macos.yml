@@ -64,3 +64,19 @@ jobs:
 
       - name: Test
         run: ctest --preset welder-gcc16 --output-on-failure
+
+      # The cookbook is a standalone consumer super-project: it obtains welder via
+      # FetchContent (redirected to this checkout) and FetchContent-pins the
+      # backends itself — no Conan — so this step also tests the consumer
+      # packaging path against the current commit.
+      - name: Cookbook (FetchContent consumption)
+        run: |
+          set -euo pipefail
+          cmake -S examples/cookbook -B build/cookbook -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=g++-16 \
+            -DFETCHCONTENT_SOURCE_DIR_WELDER="$PWD" \
+            -DWELDER_LUA_DIR="$(brew --prefix lua@5.4)" \
+            -DPython_EXECUTABLE="$(brew --prefix python@3.14)/bin/python3.14"
+          cmake --build build/cookbook
+          ctest --test-dir build/cookbook --output-on-failure

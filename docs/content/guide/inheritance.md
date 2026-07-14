@@ -14,6 +14,13 @@ flowchart TD
     style M stroke:#e64a19,stroke-width:3px
 ```
 
+!!! example "In the cookbook"
+
+    [Recipe 03 — Inheritance](../cookbook/inheritance.md) runs all three flavors
+    (native base, flattened mixin, welded-through-a-bridge);
+    [04](../cookbook/virtuals.md) and [05](../cookbook/generated-trampolines.md)
+    cover virtual overriding, hand-written and generated.
+
 ## Welded base → native base
 
 A **welded** base becomes a native base class in the target framework (pybind11

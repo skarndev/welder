@@ -49,8 +49,11 @@ backend-neutral pybind11/nanobind trampoline subclasses** — so a Python subcla
 override their virtuals without the trampolines being hand-written (each override splices
 the base virtual's reflected types, so signatures match by construction; a C-variadic
 virtual with no `bind_flat` is a hard error). Further languages are designed-for but not
-yet implemented. For the feature-by-feature detail and test locations, see the context
-files below.
+yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
+section): a *standalone* super-project of 8 CTest-asserted recipes that obtains welder
+via FetchContent — CI builds it against the checkout, so it doubles as the consumer-
+packaging test (details in `.claude/context/build-test-run.md`). For the
+feature-by-feature detail and test locations, see the context files below.
 
 ## The idea / public API
 

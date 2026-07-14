@@ -201,9 +201,17 @@ and including member, parameter and `weld`/mark annotations; `substitute()`d
 function/variable-template instantiations carry them too. Only the *uninstantiated*
 template (or concept) reflection refuses `annotations_of` (P2996 restriction) — but
 any instantiation handed to welder has full docs, and `weld` on a class template
-makes `weld_type<Welded<int>>(m, "name")` legitimate today — the explicit name is
-required (a specialization `has_identifier` == false; the `identifier_of` name
-default would throw).
+makes `weld_type<Welded<int>>(m, "name")` legitimate — the explicit name is
+required (a specialization `has_identifier` == false), and it WORKS because the
+driver/rods resolve names through `name_of_or` (naming.hpp), whose `name_of`
+fallback is compiled only when the entity is statically nameable (identifier or
+weld_as); a missing override then throws std::invalid_argument at binding time.
+(Previously `name ? name : name_of<…>()` constant-evaluated the consteval
+`name_of` unconditionally and hard-errored even WITH the override.) Function-
+template instantiations bind the same way:
+`weld_function<std::meta::substitute(^^ns::fn, {^^int})>(m, "name")`. Runtime
+coverage: cookbook recipe 06 (examples/cookbook/06-templates); compile lock:
+tests/core/naming.cpp name_of_or asserts.
 
 ## Naming conventions & `weld_as`
 Two pieces, both rod-agnostic (they live in the core / driver, so every rod gets

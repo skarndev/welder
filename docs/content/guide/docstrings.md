@@ -13,6 +13,12 @@ for Lua — the latter is where Lua's docs live, since Lua has no runtime slot).
 | `returns("text")` | function | a `Returns:` block |
 | `tparam("T", "text")` | template (repeatable, ordered) | template-parameter docs |
 
+!!! example "In the cookbook"
+
+    [Recipe 07 — One library, two languages](../cookbook/multilang.md) carries one
+    set of `doc`/`returns` annotations into Python `__doc__`, a `.pyi` stub *and*
+    a LuaCATS stub.
+
 ## `doc` and `returns`
 
 ```cpp

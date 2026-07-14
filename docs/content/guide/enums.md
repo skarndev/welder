@@ -9,6 +9,11 @@ decide what binds. What it becomes in the target language differs:
   `nb::is_arithmetic`; int-convertible).
 - **Lua** — a plain `name → value` **table** (Lua has no enum type).
 
+!!! example "In the cookbook"
+
+    [Recipe 01 — One of everything](../cookbook/hello.md) welds a scoped enum and
+    asserts the `IntEnum` surface from Python.
+
 !!! warning "Grammar: the annotation goes *after* the enumerator name"
 
     Unlike a struct member (whose annotation precedes it), a C++ enumerator's

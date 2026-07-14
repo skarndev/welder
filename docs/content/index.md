@@ -351,6 +351,7 @@ binds to **Python** (pybind11 or nanobind) and **Lua** (sol2 or LuaBridge3) — 
 weld it once.
 
 [:octicons-arrow-right-24: Read the architecture](architecture.md){ .md-button }
+[:octicons-arrow-right-24: Cook from the recipes](cookbook/index.md){ .md-button }
 [:octicons-arrow-right-24: Explore the languages](backends/index.md){ .md-button }
 [:octicons-arrow-right-24: Browse the C++ reference](reference.md){ .md-button .md-button--primary }
 

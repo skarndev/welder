@@ -205,6 +205,12 @@ imposing them:
     local cache; a downstream `requires("welder/0.1.0")` then resolves the same
     `find_package(welder)` / `welder::headers`.
 
+!!! example "In the cookbook"
+
+    The [Cookbook](../cookbook/index.md) recipes are complete standalone projects
+    consuming welder exactly this way (FetchContent, backends included, no Conan)
+    — copy one as a starting point. CI builds them all on every commit.
+
 `find_package(welder)` (and the FetchContent pull) also define the build helpers —
 `welder_pybind11_generate_stubs`, `welder_sol2_add_module`,
 `welder_luabridge_add_module`, `welder_luacats_generate_stub` — for producing the

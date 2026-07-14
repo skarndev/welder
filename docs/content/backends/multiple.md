@@ -5,6 +5,13 @@ is just a different *compile* of the same types. So shipping one library to seve
 languages — or letting your users choose a Python rod — is a build-system
 question, not a code question. This page is the CMake recipe.
 
+!!! example "In the cookbook"
+
+    [Recipe 07 — One library, two languages](../cookbook/multilang.md) is this
+    page as a buildable project — nanobind + sol2 from one header, with name
+    styles, per-language `weld_as`, `mark::only` backend flavors and both stub
+    kinds, all CI-asserted.
+
 ## The shape of it
 
 Keep the annotated types in a **rod-free header**, then give each rod a tiny

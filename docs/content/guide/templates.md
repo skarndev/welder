@@ -7,6 +7,12 @@ bind. C++26 reflection enforces this literally: `annotations_of` refuses an
 a template **declaration** are carried by every **instantiation**, so welder's
 model is simple — **annotate the template, bind instantiations.**
 
+!!! example "In the cookbook"
+
+    [Recipe 06 — Binding template instantiations](../cookbook/templates.md) is
+    this page as a runnable module, including a `substitute()`-formed
+    function-template instantiation.
+
 ## The model
 
 Two consequences follow directly:
@@ -60,11 +66,11 @@ PYBIND11_MODULE(mymod, m) {
 
 For a plain class, `weld_type<T>(m)` defaults the target name to `T`'s C++
 identifier. A template specialization **has no identifier** — reflection's
-`has_identifier(^^Box<int>)` is `false`, and asking for one is a compile-time
-error, not a mangled name. And `Box<int>` wouldn't be a valid Python or Lua
-identifier anyway; welder does not invent a spelling. So you pass the trailing
-name override: it is used **verbatim** (it bypasses the [name style](naming.md)
-and beats `weld_as`).
+`has_identifier(^^Box<int>)` is `false`, and `Box<int>` wouldn't be a valid
+Python or Lua identifier anyway; welder does not invent a spelling. So you pass
+the trailing name override: it is used **verbatim** (it bypasses the
+[name style](naming.md) and beats `weld_as`). Omitting it — with no `weld_as` to
+fall back on — fails at binding time with a message pointing you here.
 
 !!! info "Why not `weld_as` on the template?"
 

@@ -12,6 +12,13 @@ type's policy decide what participates.
 The examples below weld one struct and show how it looks from each language. The
 C++ is the same; pick your tab.
 
+!!! example "In the cookbook"
+
+    [Recipe 01 — One of everything](../cookbook/hello.md) welds a type (fields,
+    methods, operators, the synthesized aggregate constructor) alongside an enum,
+    a free function and a namespace variable; [Recipe 06](../cookbook/templates.md)
+    does the same for template instantiations.
+
 ## Data members
 
 Public data members bind as read/write attributes.

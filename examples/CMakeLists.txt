@@ -1,3 +1,8 @@
+# NOTE: examples/cookbook/ is deliberately NOT added here — it is a standalone
+# super-project that obtains welder via FetchContent (testing the consumer
+# packaging path), so it must be configured on its own; see its CMakeLists.txt
+# and docs/content/cookbook/. CI builds it as a separate step.
+#
 # Each example may emit .pyi stubs next to its module via
 # welder_pybind11_generate_stubs() (called in its own CMakeLists, since POST_BUILD
 # must attach to a target in the same directory). It's opt-in: examples build

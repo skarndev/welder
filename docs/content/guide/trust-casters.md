@@ -10,6 +10,12 @@ The first two — the `trust_bindable` marks — are **backend-agnostic vocabula
 they suppress the gate wherever the type appears and leave the registration to you.
 The third is a **rod-native caster**, so its exact form depends on the rod.
 
+!!! example "In the cookbook"
+
+    [Recipe 07](../cookbook/multilang.md) uses the member mark (a framework type
+    the LuaCATS stub rod can't see); [Recipe 08](../cookbook/tack-welding.md) uses
+    the type-level form to tack-weld a third-party type appearing in signatures.
+
 ## 1. `mark::trust_bindable` — trust one member
 
 A member mark vouches for **that member's type** (or, on a method, the whole
