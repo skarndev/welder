@@ -17,10 +17,16 @@ a synthesized field constructor that brace-inits it, giving Python `T(f0, f1, �
 — only when every field binds, since aggregate init is positional/all-or-nothing);
 methods, static methods, overloads. All three pieces reach the rod as ONE
 `add_constructors<T, Ctors, HasDefault, Aggregate>` call (carriage-computed).
-Constructors honor explicit marks (exclude/only on an individual ctor prunes it —
-bind_traits `ctor_group`) but resolve under `policy_kind::automatic` regardless of
-the type's policy: opt_in governs member EXPOSURE, constructibility is orthogonal
-(an opt_in type keeps its unmarked ctors; locked by overloads.hpp `OptInCtor`). Function / method / constructor **parameter
+Constructors resolve SYMMETRICALLY (policy + per-ctor marks — opt_in binds only
+marked-include ctors; bind_traits `ctor_group<R,Type,L,Pol>`), with two
+fail-safes: the DEFAULT ctor is exempt from opt_in's default-out (an implicit one
+has no declaration to mark; explicit marks on a declared `T() = default` ARE
+honored — `default_ctor_admitted`), and the carriage's no-constructor-left
+static_assert hard-errors when filtering leaves a type with no ctor at all UNLESS
+the same resolution under `automatic` would also yield none (mark::exclude-ing
+every ctor = the explicit factory-only escape; a custom resolution pruning under
+any policy doesn't false-fire). Locked by overloads.hpp `OptInCtor`/`FactoryOnly`/
+`NoDefault` + negcompile.optin_uninstantiable. Function / method / constructor **parameter
 names** reach Python as keyword arguments (`py::arg`) when every parameter of that
 signature is named.
 

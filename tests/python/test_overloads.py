@@ -49,9 +49,28 @@ def test_free_function_overloads_resolve_per_overload(ov: ModuleType) -> None:
     assert ov.pick("s") == "s!"  # kept for py (excluded for lua only)
 
 
-# --- opt_in policy vs constructibility ----------------------------------------
-def test_opt_in_governs_members_not_constructors(ov: ModuleType) -> None:
-    # The unmarked constructor stays usable under policy::opt_in...
-    o = ov.OptInCtor(7)
-    assert o.kept == 7  # ...and only the included member is exposed.
-    assert not hasattr(o, "hidden")
+# --- opt_in resolves constructors symmetrically --------------------------------
+def test_opt_in_filters_unmarked_constructors(ov: ModuleType) -> None:
+    # The default ctor is exempt (an implicit one has nothing to mark)...
+    o = ov.OptInCtor()
+    assert o.kept == 0
+    # ...the unmarked value ctor is filtered, the included one binds.
+    with pytest.raises(TypeError):
+        ov.OptInCtor(7)
+    assert ov.OptInCtor(3, 4).kept == 7
+    assert not hasattr(ov.OptInCtor(3, 4), "hidden")
+
+
+# --- explicit constructor emptiness --------------------------------------------
+def test_factory_only_surface(ov: ModuleType) -> None:
+    # Every ctor mark::exclude-d: not constructible from Python (the explicit
+    # escape from the no-constructor-left guard), instances arrive from C++.
+    with pytest.raises(TypeError):
+        ov.FactoryOnly(1)
+    assert ov.forge(9).id == 9
+
+
+def test_declared_default_ctor_honors_exclude(ov: ModuleType) -> None:
+    with pytest.raises(TypeError):
+        ov.NoDefault()
+    assert ov.NoDefault(5).v == 5

@@ -99,9 +99,12 @@ reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded 
 `L` → false; else an `only` mark → true iff it names `L` (either policy); else
 `automatic` → true; else (`opt_in`) → true iff explicitly included for `L`. Marks
 resolve **per overload, constructors included** (the carriage computes each name's
-participating overload group from the resolution and hands it to the rod whole);
-one asymmetry: a constructor honors its explicit marks but not `opt_in`'s
-default-out — the policy governs member *exposure*, constructibility is orthogonal. A `lang` is a bit in an `unsigned` mask; mask `0` on an
+participating overload group from the resolution and hands it to the rod whole).
+Constructors resolve symmetrically (opt_in binds only marked-include ctors), with
+two fail-safes: the default ctor is exempt from opt_in's default-out (an implicit
+one has nothing to mark; explicit marks on a declared one ARE honored), and
+filtering that leaves a type with NO constructor is a hard error unless explicit
+(mark::exclude on every ctor = a deliberate factory-only surface). A `lang` is a bit in an `unsigned` mask; mask `0` on an
 exclude/include spec is the sentinel for "all languages". The lang value space
 is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
 user languages from 16–31 for out-of-tree rods (locked by

@@ -43,7 +43,7 @@ welder_add_pybind11_test_module(welder_test_pybind11)
 # compiler (no Python runtime), so they are registered before the uv-env gate.
 foreach(neg operand_not_welded container_of_unwelded
             virtual_needs_trampoline trampoline_missing_override
-            trampoline_ambiguous tack_incomplete_param)
+            trampoline_ambiguous tack_incomplete_param optin_uninstantiable)
   add_library(welder_neg_${neg} OBJECT EXCLUDE_FROM_ALL cpp/neg/${neg}.cpp)
   target_compile_features(welder_neg_${neg} PRIVATE cxx_std_26)
   target_link_libraries(welder_neg_${neg} PRIVATE welder::pybind11)

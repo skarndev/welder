@@ -33,9 +33,21 @@ describe("overload marks", function()
     assert.has_error(function() return m.pick("s") end) -- exclude(lua)
   end)
 
-  it("keeps an opt_in type's unmarked constructor", function()
-    local o = m.OptInCtor.new(7)
+  it("resolves opt_in constructors symmetrically (default ctor exempt)", function()
+    assert.are.equal(0, m.OptInCtor.new().kept)                       -- default: exempt
+    assert.has_error(function() return m.OptInCtor.new(7) end)        -- unmarked: filtered
+    local o = m.OptInCtor.new(3, 4)                                   -- included: bound
     assert.are.equal(7, o.kept)
     assert.is_nil(o.hidden)
+  end)
+
+  it("supports an explicit factory-only surface", function()
+    assert.has_error(function() return m.FactoryOnly.new(1) end) -- all ctors excluded
+    assert.are.equal(9, m.forge(9).id)                           -- instances from C++
+  end)
+
+  it("honors exclude on a declared default constructor", function()
+    assert.has_error(function() return m.NoDefault.new() end)
+    assert.are.equal(5, m.NoDefault.new(5).v)
   end)
 end)

@@ -9,9 +9,13 @@
 // identical across all rods (a one-value-per-name Lua slot never silently swallows
 // a pruned or surviving sibling).
 //
-// A type's constructors honor explicit marks, but NOT the opt_in policy default —
-// `policy::opt_in` governs which members are exposed; constructibility is
-// orthogonal (OptInCtor locks that: an opt_in type keeps its unmarked ctor).
+// Constructors resolve SYMMETRICALLY with every other member (opt_in binds only
+// marked-include ctors), with two fail-safes locked below: the implicit/declared
+// default constructor stays outside opt_in's default-out (you cannot `include`
+// an implicit ctor) while its explicit marks are honored, and filtering that
+// would leave a type with no constructor at all is a hard compile error unless
+// the emptiness is explicit (negcompile.optin_uninstantiable; FactoryOnly shows
+// the explicit mark::exclude escape).
 //
 // #included by bindings.cpp after the welder vocabulary + the active backend.
 #include <string>
@@ -55,20 +59,54 @@ inline int pick(int x) { return x; }
 ]]
 inline std::string pick(const std::string& s) { return s + "!"; }
 
-// opt_in exposes only marked members — but the unmarked constructor stays.
+// opt_in binds only marked members — constructors included (symmetric). The
+// default constructor is exempt from the default-out (an implicit one has no
+// declaration to mark), so the type stays default-instantiable.
 struct
 [[
   =welder::weld(welder::lang::py, welder::lang::lua),
   =welder::policy::opt_in
 ]]
 OptInCtor {
-    OptInCtor() = default;
-    OptInCtor(int seed) : kept{seed} {} // unmarked, still constructible
+    OptInCtor() = default; // default ctor: outside opt_in's default-out
+
+    OptInCtor(int seed) : kept{seed} {} // unmarked -> NOT bound under opt_in
+
+    [[=welder::mark::include]]
+    OptInCtor(int a, int b) : kept{a + b} {} // included -> bound
 
     [[=welder::mark::include]]
     int kept{0};
 
     int hidden{0}; // not included -> not bound
+};
+
+// The explicit factory-only escape: mark::exclude on every constructor zeroes
+// the guard's automatic baseline, so "no constructor at all" compiles as a
+// deliberate surface (instances arrive from C++ only).
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+FactoryOnly {
+    [[=welder::mark::exclude]]
+    FactoryOnly(int tag) : id{tag} {}
+
+    int id{0};
+};
+
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+inline FactoryOnly forge(int tag) { return FactoryOnly{tag}; }
+
+// A DECLARED default constructor's explicit marks are honored: T() is
+// suppressed while the value constructor stays.
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+NoDefault {
+    [[=welder::mark::exclude]]
+    NoDefault() = default;
+
+    NoDefault(int seed) : v{seed} {}
+
+    int v{0};
 };
 
 } // namespace overloads

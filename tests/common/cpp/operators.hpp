@@ -113,6 +113,9 @@ struct
 OpOptIn {
     [[=welder::mark::include]] int v{0};  // included so the test can read a result
     OpOptIn() = default;
+    // Constructors resolve symmetrically under opt_in (see overloads.hpp), so the
+    // value ctor the specs use is opted in like everything else.
+    [[=welder::mark::include]]
     explicit OpOptIn(int x) : v{x} {}
     [[=welder::mark::include]]
     OpOptIn operator+(const OpOptIn& o) const { return OpOptIn{v + o.v}; } // __add__ (included -> bound)

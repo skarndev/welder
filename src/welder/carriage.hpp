@@ -330,28 +330,55 @@ struct basic_carriage {
         // Constructors, handed to the rod as ONE participating set (several
         // frameworks want them all at once — sol2's sol::constructors, LuaBridge3's
         // addConstructor). Three carriage-computed pieces:
-        //  - the default constructor: decided against the type welder actually
-        //    constructs, which may be a rod-nominated substitute — a Python
-        //    trampoline standing in for an abstract base — exposed as an optional
-        //    `B::construction_type<T>` (fall back to T when a rod names none);
-        //  - each participating public non-copy/move constructor (the resolution's
-        //    class_member_participates resolves per constructor, so a mark on one
-        //    excludes just that one), each gated for bindability;
+        //  - the default constructor: constructibility is decided against the type
+        //    welder actually constructs, which may be a rod-nominated substitute —
+        //    a Python trampoline standing in for an abstract base — exposed as an
+        //    optional `B::construction_type<T>` (fall back to T when a rod names
+        //    none); a *declared* default constructor's explicit marks are honored
+        //    (default_ctor_admitted);
+        //  - each participating public non-copy/move constructor — resolved
+        //    SYMMETRICALLY with every other member (the type's policy + the
+        //    constructor's own marks, per constructor) — each gated for
+        //    bindability;
         //  - for a baseless aggregate whose fields all participate, a synthesized
         //    field constructor.
-        constexpr bool has_default{[] {
-            if constexpr (requires { typename B::template construction_type<T>; })
-                return std::is_default_constructible_v<
-                    typename B::template construction_type<T>>;
-            else
-                return std::is_default_constructible_v<T>;
-        }()};
-        constexpr auto ctors{detail::ctor_group<Resolution, ^^T, L>()};
+        constexpr bool has_default{
+            [] {
+                if constexpr (requires {
+                                  typename B::template construction_type<T>;
+                              })
+                    return std::is_default_constructible_v<
+                        typename B::template construction_type<T>>;
+                else
+                    return std::is_default_constructible_v<T>;
+            }() &&
+            detail::default_ctor_admitted<Resolution, ^^T, L>()};
+        constexpr auto ctors{
+            detail::ctor_group<Resolution, ^^T, L, policy_of(^^T)>()};
         template for (constexpr auto ctor : std::define_static_array(ctors)) {
             welder::assert_callable_bindable<B, ctor, L, Resolution>();
         }
         constexpr bool aggregate{
             detail::aggregate_initializable<T, L, Resolution>()};
+        // The fail-safe against SILENT uninstantiability: if the policy filtering
+        // left T with no constructor at all, but this same resolution would have
+        // admitted some under `automatic`, the emptiness came from a default (an
+        // opt_in type whose constructors nobody marked) rather than a decision —
+        // hard error. Explicit emptiness passes: mark::exclude-ing the
+        // constructors zeroes the automatic baseline too (factory-only intent),
+        // and a type automatic would also leave bare (private/deleted ctors, an
+        // abstract base) was never instantiable to begin with.
+        static_assert(
+            has_default || aggregate || ctors.size() != 0 ||
+                detail::ctor_group<Resolution, ^^T, L,
+                                   policy_kind::automatic>()
+                        .size() == 0,
+            "welder: policy filtering left this type with NO constructor — it "
+            "would be silently uninstantiable from the target language. Mark a "
+            "constructor [[=welder::mark::include]] (opt_in binds only marked "
+            "members, constructors included), or mark them all "
+            "[[=welder::mark::exclude]] to make a factory-only surface explicit. "
+            "The type is the T of this bind_type<B, T, Style> instantiation.");
         B::template add_constructors<T, ctors, has_default, aggregate>(cls);
 
         // Data members + methods + operators (T's own, plus flattened bases).

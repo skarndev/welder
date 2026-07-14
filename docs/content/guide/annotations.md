@@ -105,12 +105,16 @@ also counts as the member's opt-in, so no separate `include` is needed.
 
     Every **overload** of a name carries its own marks: exclude one and its
     siblings still bind (welder hands each rod the surviving overload set whole,
-    so this holds on the Lua rods' one-value-per-name tables too). The same goes
-    for individual **constructors** — with one asymmetry: a constructor honors
-    its explicit marks but not `policy::opt_in`'s default-out, since the policy
-    governs which members are *exposed* and a type's constructibility is
-    orthogonal (an opt_in type with no marked constructor would otherwise become
-    uninstantiable).
+    so this holds on the Lua rods' one-value-per-name tables too). Individual
+    **constructors** resolve the same way — under `policy::opt_in`, only
+    marked-`include` constructors bind. Two fail-safes back that up: the
+    **default constructor** stays outside opt_in's default-out (an implicit one
+    has no declaration to mark — though explicit marks on a *declared*
+    `T() = default;` are honored, so you *can* suppress it); and policy filtering
+    that would leave a type with **no constructor at all** is a hard compile
+    error rather than a silently uninstantiable class — unless the emptiness is
+    explicit (`mark::exclude` on every constructor declares a factory-only
+    surface, and compiles).
 
 ## The resolution rule
 

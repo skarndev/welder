@@ -408,31 +408,36 @@ consteval auto manual_function_group() {
     }
 }
 
-/** The participating constructors of @a Type: every bindable-shape constructor
-    (see is_bindable_constructor) the resolution admits, in declaration order.
+/** The participating constructors of @a Type under policy @a Pol: every
+    bindable-shape constructor (see is_bindable_constructor) the resolution
+    admits, in declaration order.
 
-    The default constructor is decided separately by the carriage (it may be
-    implicit, hence not a member), as is the synthesized aggregate constructor.
+    Constructors resolve **symmetrically** with every other member — the type's
+    policy and the constructor's own marks decide, per constructor (`opt_in`
+    binds only marked-`include` constructors). The carriage guards the silent
+    consequence: filtering that leaves a type with *no* constructor at all is a
+    hard error unless the emptiness is explicit (see bind_type's
+    no-constructor-left static_assert), which is why @a Pol is a parameter — the
+    guard probes the same resolution under `policy_kind::automatic` as its
+    baseline.
 
-    Constructors resolve under `policy_kind::automatic` regardless of the type's
-    own policy: `opt_in` governs which *members are exposed*, and a type's
-    constructibility is orthogonal to that — an opt_in type with no marked
-    constructor would otherwise silently become uninstantiable. Explicit marks
-    (`mark::exclude` / `mark::only` on an individual constructor) still prune,
-    which is the per-constructor control the marks exist for.
+    The default constructor is decided separately (it may be implicit, hence not
+    a member — see @ref default_ctor_admitted), as is the synthesized aggregate
+    constructor.
     @tparam Resolution the carriage's resolution.
     @tparam Type       the class type reflection.
     @tparam L          the target language.
+    @tparam Pol        the policy to resolve under (the type's own, or
+                       `automatic` for the guard's baseline).
     @return the constructor reflections as a static array. */
-template <class Resolution, std::meta::info Type, lang L>
+template <class Resolution, std::meta::info Type, lang L, policy_kind Pol>
 consteval auto ctor_group() {
     constexpr auto ctx{std::meta::access_context::unchecked()};
-    constexpr policy_kind pol{policy_kind::automatic};
     constexpr std::size_t n{[] {
         std::size_t count{0};
         for (auto c : std::meta::members_of(Type, ctx))
             if (is_bindable_constructor(c) &&
-                Resolution::class_member_participates(c, L, pol))
+                Resolution::class_member_participates(c, L, Pol))
                 ++count;
         return count;
     }()};
@@ -441,10 +446,35 @@ consteval auto ctor_group() {
         std::size_t i{0};
         for (auto c : std::meta::members_of(Type, ctx))
             if (is_bindable_constructor(c) &&
-                Resolution::class_member_participates(c, L, pol))
+                Resolution::class_member_participates(c, L, Pol))
                 out[i++] = c;
     }
     return out;
+}
+
+/** Whether the resolution admits @a Type's DEFAULT constructor.
+
+    The default constructor may be *implicit* — no declaration, so no marks and
+    nothing for `opt_in` to filter: it is admitted whenever the type is
+    default-constructible (the carriage checks constructibility itself, against
+    the rod's construction type). A *declared* default constructor is consulted
+    under `policy_kind::automatic` — its explicit marks are honored (so
+    `[[=welder::mark::exclude]] T() = default;` suppresses default construction),
+    but `opt_in`'s default-out is not: you cannot `include` an implicit
+    constructor, so filtering the declared spelling by default would make
+    `T() = default;` (a C++ no-op) silently change the binding.
+    @tparam Resolution the carriage's resolution.
+    @tparam Type       the class type reflection.
+    @tparam L          the target language. */
+template <class Resolution, std::meta::info Type, lang L>
+consteval bool default_ctor_admitted() {
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    for (auto c : std::meta::members_of(Type, ctx))
+        if (std::meta::is_constructor(c) && std::meta::parameters_of(c).empty())
+            return std::meta::is_public(c) && !std::meta::is_deleted(c) &&
+                   Resolution::class_member_participates(c, L,
+                                                         policy_kind::automatic);
+    return true; // implicit (or absent): constructibility alone decides
 }
 
 // --- inheritance: native bases ----------------------------------------------
