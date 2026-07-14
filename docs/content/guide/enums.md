@@ -39,7 +39,7 @@ Direction {
 Excluding an enumerator does **not** renumber the rest — `West` is still `3`. The
 enumerator stays qualified under the enum name:
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```pycon
     >>> Direction.West.value     # an enum.IntEnum member
@@ -48,7 +48,7 @@ enumerator stays qualified under the enum name:
     False
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```lua
     print(Direction.West)        --> 3    (table maps name → value directly)
@@ -66,14 +66,14 @@ enum [[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Signal { Green, Yellow, Red };
 ```
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```pycon
     >>> Signal.Red, Red          # both work
     (<Signal.Red: 2>, <Signal.Red: 2>)
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```lua
     print(Signal.Red, Red)       --> 2  2
@@ -106,11 +106,15 @@ Compass {
 When you [bind a whole namespace](namespaces-modules.md), declaration order handles
 this for you — put the enums before the structs that use them.
 
-## Docs
+!!! note "Per-enumerator docs are omitted at runtime"
 
-The enum's `doc` becomes the Python docstring. welder doesn't currently surface
-per-enumerator docs at runtime (Lua has no docstring slot either). On the
-**C++** side the [Doxygen filter](cpp-docs.md) surfaces enumerator docs, and the
-[LuaCATS stub](../backends/lua.md#stubs-luacats) marks the table `---@enum`.
+    A `doc` on an individual **enumerator** does not reach the generated runtime
+    bindings: neither Python rod has a per-member docstring slot to fill
+    (pybind11/nanobind expose none for enum members), and Lua has no runtime
+    docstring at all. The text is not lost — the [Doxygen filter](cpp-docs.md)
+    surfaces enumerator docs in the C++ reference, and the
+    [LuaCATS stub](../backends/lua.md#stubs-luacats) documents the bound table
+    (marked `---@enum`). How docs flow in general is covered later, in
+    [Docstrings](docstrings.md).
 
 Next: [Inheritance](inheritance.md).

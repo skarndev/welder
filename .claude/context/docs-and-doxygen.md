@@ -258,9 +258,10 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
   extras like `generate`/`construction_type` are excluded) → unique short name
   (len ≥ 4, and never the `_DENY` words —
   `detail`, `impl`, pybind11's `export_values`, … — which read as the *user's*
-  code when bare). Normalization strips `[[=…]]` wrappers, template args and call
-  parens (`weld_type<T>(m)` → `weld_type`); existing `<a>`/`<pre>` regions are
-  left untouched. **Include paths** link to the header's file page:
+  code when bare). Normalization strips `[[=…]]` wrappers, template args, call
+  parens (`weld_type<T>(m)` → `weld_type`) and a space-delimited trailing
+  initializer (`trust_bindable<T> = true` → `trust_bindable`); existing
+  `<a>`/`<pre>` regions are left untouched. **Include paths** link to the header's file page:
   `<welder/vocabulary.hpp>` (optionally with `#include`) and bare `.hpp` paths
   (`lang.hpp`, `rods/python/doc_style.hpp`) resolve against the tag file's file
   compounds keyed by path-under-`src/` with an implicit `welder/` prefix — so

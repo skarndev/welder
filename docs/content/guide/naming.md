@@ -157,6 +157,8 @@ it bypasses the name style entirely — welder does not touch the string.
 A style or `weld_as` that renames a **type** is honoured everywhere it appears —
 its declaration, and every reference to it: field/parameter/return types, base-class
 lists, and inside container types (`Rect[]`, `table<string, Rect>`). This holds for
-the runtime bindings and for the generated LuaCATS (`---@meta`) stub alike; in the
-stub, references are emitted with the raw C++ name and reconciled with their
-declarations in a final pass, so declaration order never matters.
+the runtime bindings and for the generated [LuaCATS (`---@meta`) stub](stubs.md)
+alike; in the stub, references are emitted with the raw C++ name and reconciled with
+their declarations in a final pass, so declaration order never matters.
+
+Next: [The bindability gate](bindability.md).

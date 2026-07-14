@@ -12,7 +12,10 @@ the annotation vocabulary, and each binding feature with runnable examples.
 -   **[Enums](enums.md)** — scoped/unscoped enums and per-enumerator marks.
 -   **[Inheritance](inheritance.md)** — welded bases vs. flattened mixins.
 -   **[Namespaces & modules](namespaces-modules.md)** — bind a whole namespace or module in one line.
+-   **[Return policies & lifetimes](return-policies.md)** — who owns a returned object, and what keeps it alive.
 -   **[Docstrings](docstrings.md)** — `doc` / `returns` / `tparam` flowing to `__doc__` and the C++ docs.
+-   **[Stubs](stubs.md)** — the generated `.pyi` and LuaCATS files your editors and type checkers read.
+-   **[Naming conventions](naming.md)** — pluggable name styles (PEP 8, snake_case, …) and `weld_as`.
 -   **[The bindability gate](bindability.md)** — why an unrepresentable type is a hard error.
 -   **[Trust & type casters](trust-casters.md)** — escape hatches for types welder can't see.
 -   **[Generating C++ docs](cpp-docs.md)** — the Doxygen INPUT_FILTER that reads the same annotations.
@@ -53,9 +56,10 @@ consuming TU brings the vocabulary in with a single include:
 
 !!! note "Order matters"
 
-    The vocabulary must arrive **first** — `#include <welder/vocabulary.hpp>` —
-    *then* the rod header. The rod header (which pulls in `<meta>` and pybind11)
-    deliberately does not redeclare the vocabulary.
+    The vocabulary must be in scope **before** any `[[=welder::…]]` annotation you
+    write, so `#include <welder/vocabulary.hpp>` leads the TU (an annotated header
+    of yours should include it itself, for the same reason). The rod header then
+    brings in everything else — `<meta>`, welder's driver, and its framework.
 
 !!! info "Header-only, for now"
 

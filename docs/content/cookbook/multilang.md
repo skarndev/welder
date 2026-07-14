@@ -80,7 +80,7 @@ Each side is one `WELDER_MODULE` line — the optional third argument is the exa
 `welder::welder<…>` to drive the weld with, which is how a name style threads
 through the one-line module form:
 
-=== "Python (nanobind)"
+=== ":simple-python: Python (nanobind)"
 
     ```cpp
     WELDER_MODULE(journal, nanobind,
@@ -88,7 +88,7 @@ through the one-line module form:
                                  welder::rods::python::pep8>) {}
     ```
 
-=== "Lua (sol2)"
+=== ":simple-lua: Lua (sol2)"
 
     ```cpp
     WELDER_MODULE(journal, sol2,
@@ -96,7 +96,7 @@ through the one-line module form:
                                  welder::naming::snake_case>) {}
     ```
 
-=== "Lua (LuaBridge3)"
+=== ":simple-lua: Lua (LuaBridge3)"
 
     ```cpp
     // same language, same style, different framework — only the selector differs
@@ -105,7 +105,7 @@ through the one-line module form:
                                  welder::naming::snake_case>) {}
     ```
 
-=== "LuaCATS stub generator"
+=== ":simple-lua: LuaCATS stub generator"
 
     ```cpp
     int main(int argc, char** argv) {

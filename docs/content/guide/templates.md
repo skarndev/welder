@@ -25,7 +25,7 @@ Two consequences follow directly:
   skipped. Instantiations you want exposed are welded explicitly, one `weld_type`
   each.
 
-## A worked example
+## Annotate once, weld each instantiation
 
 Annotate the template once; weld as many instantiations as you need:
 

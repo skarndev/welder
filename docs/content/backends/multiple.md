@@ -1,4 +1,4 @@
-# Shipping multiple rods
+# Shipping to multiple languages
 
 welder's whole premise is that the annotations are written **once** and each rod
 is just a different *compile* of the same types. So shipping one library to several
@@ -52,7 +52,7 @@ Rect {
 Each rod TU is three lines — include the header, include the rod's module.hpp, stamp the
 entry macro:
 
-=== "shapes_py.cpp"
+=== ":simple-python: shapes_py.cpp"
 
     ```cpp
     #include "shapes/shapes.hpp"
@@ -62,7 +62,7 @@ entry macro:
     WELDER_MODULE(shapes, pybind11) {}   // emits PyInit_shapes
     ```
 
-=== "shapes_lua.cpp"
+=== ":simple-lua: shapes_lua.cpp"
 
     ```cpp
     #include "shapes/shapes.hpp"
@@ -77,7 +77,7 @@ entry macro:
     // (pick one Lua rod per module name — both emit the same luaopen_shapes symbol).
     ```
 
-=== "shapes_stub.cpp"
+=== ":simple-lua: shapes_stub.cpp"
 
     ```cpp
     #include "shapes/shapes.hpp"

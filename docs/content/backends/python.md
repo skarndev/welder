@@ -15,7 +15,7 @@ Python-specific detail.
 
 The `weld_type` shape is identical; the module macro and rod type differ:
 
-=== "pybind11"
+=== ":simple-python: pybind11"
 
     ```cpp
     #include <pybind11/pybind11.h>
@@ -27,7 +27,7 @@ The `weld_type` shape is identical; the module macro and rod type differ:
     }
     ```
 
-=== "nanobind"
+=== ":simple-python: nanobind"
 
     ```cpp
     #include <nanobind/nanobind.h>
@@ -48,7 +48,7 @@ Or, rod-agnostically, [`WELDER_MODULE(shapes, pybind11)`](../guide/namespaces-mo
     pybind11 and nanobind **both** emit `PyInit_<name>`, so they cannot coexist in
     the same extension — pick one. (A Python rod *can* share a translation unit
     with a Lua rod, whose symbol is `luaopen_<name>`; see
-    [Shipping multiple rods](multiple.md).)
+    [Shipping to multiple languages](multiple.md).)
 
 ## Feature comparison
 
@@ -138,7 +138,7 @@ deliberately-excluded operators.
 ## `.pyi` stubs
 
 Your `doc` text and signatures flow into generated
-[`.pyi` stubs](../guide/docstrings.md#stubs) so editors and type-checkers see the
+[`.pyi` stubs](../guide/stubs.md) so editors and type-checkers see the
 bound API — but the two rods source them differently:
 
 - **pybind11** → [pybind11-stubgen](https://github.com/pybind/pybind11-stubgen),
@@ -151,7 +151,7 @@ Both are mypy-checked in welder's own tests.
 
 ## Building an extension
 
-=== "pybind11"
+=== ":simple-python: pybind11"
 
     welder's examples use CMake-native `Python_add_library` + `pybind11::headers`
     rather than `pybind11_add_module`, because pybind11's CMake helper is
@@ -171,7 +171,7 @@ Both are mypy-checked in welder's own tests.
     (`welder::pybind11` is a small INTERFACE target: welder headers + `pybind11::headers`
     + `Python::Module`. Gated by `WELDER_BUILD_PYBIND11`.)
 
-=== "nanobind"
+=== ":simple-python: nanobind"
 
     nanobind ships its runtime as source compiled *into* each extension, so an
     extension **must** be created with nanobind's own `nanobind_add_module()` — not

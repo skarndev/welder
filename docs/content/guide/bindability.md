@@ -62,13 +62,14 @@ registering a class for it? That's the rod's `has_native_caster<T>` (the
 | **pybind11** | `!_needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? |
 | **nanobind** | `!nb::detail::is_base_caster_v<make_caster<T>>` — same question, nanobind's spelling |
 | **sol2** (Lua) | `sol::lua_type_of<T> != userdata` — does Lua have a native representation? |
+| **LuaBridge3** (Lua) | `!luabridge::detail::IsUserdata<T>` — same question, LuaBridge3's spelling |
 
 Each is deliberately **conservative** — a compile-time read of T's caster type. It
 reports whether T *needs* registration, never whether one will actually exist. So a
 hand-registered but non-welded type still reads "needs registration" and is
 rejected. (That's what the [trust escape hatches](trust-casters.md) are for.)
 
-!!! info "\"Native\" is relative to your includes"
+!!! info "“Native” is relative to your includes"
 
     `std::complex`, `std::function`, `std::chrono`, `std::filesystem::path` are
     native to pybind11 **only with their converter header** included
@@ -81,12 +82,6 @@ rejected. (That's what the [trust escape hatches](trust-casters.md) are for.)
 The recursion knows the STL containers. A **non-STL wrapper with its own caster**
 is treated as an opaque bindable leaf — its elements aren't recursed. That's a
 deliberate boundary, not a bug.
-
-## Testing it
-
-Negative-compile cases live in `tests/python/pybind11/cpp/neg/` as `WILL_FAIL` CTests
-(`negcompile.*`): they assert that using an unrepresentable type *fails to
-compile*. The positive counterparts live alongside the feature tests.
 
 When the gate is too strict — because a type is registered somewhere welder can't
 see — reach for [trust & type casters](trust-casters.md).

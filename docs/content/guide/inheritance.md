@@ -44,7 +44,7 @@ weld::weld_type<Shape>(m);
 weld::weld_type<Circle>(m);
 ```
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```pycon
     >>> issubclass(Circle, Shape)
@@ -52,7 +52,7 @@ weld::weld_type<Circle>(m);
     >>> c = Circle(); c.name = "unit"; c.radius = 1.0
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```lua
     local c = Circle(); c.name = "unit"; c.radius = 1.0
@@ -90,15 +90,18 @@ How much of the C++ inheritance graph survives depends on the target framework:
 | Rod | Multiple welded bases | Virtual diamond |
 |---|---|---|
 | **pybind11** | ✅ | ✅ |
-| **sol2** (Lua) | ✅ | ✅ |
 | **nanobind** | ❌ single base only | ❌ |
+| **sol2** (Lua) | ✅ | ✅ |
+| **LuaBridge3** (Lua) | ✅ | ❌ |
 
-- A **virtual** diamond works on the rods that support multiple bases.
 - A **non-virtual** diamond with a shared *welded* base is a genuine C++ ambiguity
   — welder does not work around it (nor should it; it's ambiguous in C++ too).
 - On **nanobind**, `nb::class_<T, Base>` takes a single base, so a multi-base type
   won't bind there. See the
   [Python rods comparison](../backends/python.md#feature-comparison).
+- On **LuaBridge3**, base casts are plain pointer arithmetic, which a **virtual**
+  base breaks — non-virtual multiple inheritance works, a virtual diamond does
+  not. See [how it differs from sol2](../backends/luabridge.md#how-it-differs-from-sol2).
 
 ## Overriding virtual methods from Python
 

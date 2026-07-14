@@ -23,8 +23,9 @@ Resolution is deliberately conservative, in this order:
    (``pep8``, ``google_style``, ``cleandoc``) — skipped when ambiguous (``rod``).
 
 Normalization strips the annotation wrapper (``[[=…]]``), template argument lists
-(``rod<>``, ``welder<Rod, Style, Carriage>``) and trailing call parentheses
-(``doc("text")``), so the common ways the guide spells an entity all resolve.
+(``rod<>``, ``welder<Rod, Style, Carriage>``), trailing call parentheses
+(``doc("text")``) and a trailing initializer (``trust_bindable<T> = true``), so
+the common ways the guide spells an entity all resolve.
 
 Include-path spans link to the header's file page: ``<welder/vocabulary.hpp>``
 (with or without a leading ``#include``) and bare ``.hpp`` paths (``lang.hpp``,
@@ -64,6 +65,8 @@ _MEMBER_KINDS = {"function", "variable", "typedef", "enumeration", "define"}
 _DENY = {"detail", "impl", "export_values", "name", "value", "type", "module", "main"}
 
 _QUALIFIED = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*")
+# A space-delimited trailing initializer/assignment (`trust_bindable<T> = true`).
+_TRAILING_INIT = re.compile(r"\s=\s.*$", re.S)
 _CODE_SPAN = re.compile(r"<code>([^<>]+)</code>")
 # Regions that must stay untouched: existing links and fenced/mermaid blocks.
 _SKIP_REGION = re.compile(r"<a\b.*?</a>|<pre\b.*?</pre>", re.S)
@@ -163,6 +166,7 @@ def _normalize(span_text: str) -> str | None:
     if t.startswith("[[") and t.endswith("]]"):
         t = t[2:-2].strip()
     t = t.removeprefix("=").lstrip()
+    t = _TRAILING_INIT.sub("", t)
     t = _strip_trailing_parens(t)
     t = _strip_angle_groups(t)
     t = _strip_trailing_parens(t)  # weld_type<T>(m): parens follow the template args

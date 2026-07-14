@@ -54,7 +54,7 @@ have identical shapes; only the module handle type and the emitted surface diffe
 
 You are not locked in: because each language has its own entry symbol, one shared
 object can expose *several* rods at once. See
-[Shipping multiple rods](multiple.md).
+[Shipping to multiple languages](multiple.md).
 
 <div class="grid cards" markdown>
 
@@ -64,7 +64,7 @@ object can expose *several* rods at once. See
     tables, and the LuaCATS stub.
 -   **[Lua (LuaBridge3)](luabridge.md)** — the second Lua rod: same welded C++, a
     dependency-free header, newer Lua support, and how it differs from sol2.
--   **[Shipping multiple rods](multiple.md)** — CMake for building the same
-    module against more than one rod.
+-   **[Shipping to multiple languages](multiple.md)** — CMake for building the
+    same module against more than one rod.
 
 </div>

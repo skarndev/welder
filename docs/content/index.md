@@ -145,7 +145,7 @@ does not undermine your C++ documentation, nor does it require you to repeat you
 annotated definition feeds the Python stub and the Lua stub (and, via the Doxygen filter, the C++
 reference), each through its own entry point and style transformers:
 
-=== "C++ (geom.hpp + entry points)"
+=== ":simple-cplusplus: C++ (geom.hpp + entry points)"
 
     ```cpp
     // geom.hpp — the one annotated definition (idiomatic C++ house style)
@@ -206,7 +206,7 @@ reference), each through its own entry point and style transformers:
     }
     ```
 
-=== "Python (geom.pyi)"
+=== ":simple-python: Python (geom.pyi)"
 
     ```python
     # X -> x, Y -> y, LengthSquared -> length_squared  (via pep8)
@@ -241,7 +241,7 @@ reference), each through its own entry point and style transformers:
             """
     ```
 
-=== "Lua (geom.lua)"
+=== ":simple-lua: Lua (geom.lua)"
 
     ```lua
     ---@meta

@@ -35,7 +35,7 @@ double distance(const Point& a, const Point& b) { /* … */ }
 }  // namespace geometry
 ```
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```cpp
     PYBIND11_MODULE(geometry, m) {
@@ -43,7 +43,7 @@ double distance(const Point& a, const Point& b) { /* … */ }
     }
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```cpp
     extern "C" int luaopen_geometry(lua_State* L) {
@@ -60,9 +60,14 @@ A namespace-scope variable binds as a module attribute:
 
 - **const / constexpr** → a *value snapshot*;
 - otherwise → a **live get/set** over the C++ global: a read returns the current
-  value and a write flows back to the global. The **Python** rods implement it with
-  a `ModuleType` `__class__` swap; the **sol2** rod with a metatable proxy
-  (`__index`/`__newindex`) on the module table.
+  value and a write flows back to the global. Every runtime rod gives you the same
+  behavior, each through its framework's own mechanism:
+
+    | Rod | Live variables via |
+    |---|---|
+    | pybind11 / nanobind | a `ModuleType` `__class__` swap (module-level property) |
+    | sol2 | a metatable proxy (`__index`/`__newindex`) on the module table |
+    | LuaBridge3 | the registrar's `addProperty` (a getter/setter pair) |
 
 ### Nested namespaces
 
@@ -170,11 +175,12 @@ PYBIND11_MODULE(thirdparty, m) {
 
     The flip side of the greedy oracle: it can't know *which* namespaces you tack.
     A signature naming a registrable type you never actually weld binds fine but
-    raises the framework's unregistered-type error at **call time**. And — a
-    framework property, not welder's — pybind11 renders docstrings at `def` time,
-    so a signature referencing a type declared *later* in the namespace spells the
-    raw C++ name in docstrings/`.pyi` stubs; declare types before the signatures
-    that use them (C++ mostly forces this anyway).
+    raises the framework's unregistered-type error at **call time**. One
+    pybind11-specific wrinkle on top (a framework property, not welder's):
+    pybind11 renders docstrings at `def` time, so a signature referencing a type
+    declared *later* in the namespace spells the raw C++ name in
+    docstrings/`.pyi` stubs — declare types before the signatures that use them
+    (C++ mostly forces this anyway).
 
 Both carriages ship as `welder::stitch_welding_carriage` (the default) and
 `welder::tack_welding_carriage`; a custom traversal is a
@@ -203,7 +209,7 @@ The `rod` selector is the **rod name** (`pybind11`, `nanobind`, `sol2`,
 `luabridge`), not the language. Everything above `WELDER_MODULE` — the namespace and its annotations
 — is identical; only the includes and the selector change:
 
-=== "Python (pybind11)"
+=== ":simple-python: Python (pybind11)"
 
     ```cpp title="shapes.cpp"
     #include <welder/vocabulary.hpp>
@@ -256,7 +262,7 @@ The `rod` selector is the **rod name** (`pybind11`, `nanobind`, `sol2`,
     '1.0'
     ```
 
-=== "Lua (sol2)"
+=== ":simple-lua: Lua (sol2)"
 
     ```cpp title="shapes_lua.cpp"
     #include <welder/vocabulary.hpp>
@@ -303,4 +309,4 @@ WELDER_MODULE(shapes, pybind11,
     `luaopen_shapes`), so one shared object can carry both. That's the basis for
     [shipping the same module across rods](../backends/multiple.md).
 
-Next: [Docstrings](docstrings.md).
+Next: [Return policies & lifetimes](return-policies.md).

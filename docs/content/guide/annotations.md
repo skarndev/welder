@@ -14,12 +14,12 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `mark::only(lang…)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Always called with ≥ 1 language. |
 | `mark::trust_bindable` / `…(lang…)` | Vouch that a member's type / callable signature is representable outside welder's view. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. |
-| `doc("text")` | Docstring for a class / namespace / function / parameter. |
+| `doc("text")` | Docstring for a class / namespace / function / parameter / data member. |
 | `returns("text")` | Documents a function's return value. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). |
 | `weld_as([lang…,] "name")` | Force this entity's target name **verbatim**, bypassing the [name style](naming.md). The name is last; any languages it applies to come first (none = all). |
-| `return_policy([lang…,] rv::kind)` | How a callable's returned object is owned/converted. Kind last, optional leading `lang` markers scope it (none = all). Honored by the Python rods; ignored by the Lua rods (ownership is structural). |
-| `keep_alive(nurse, patient)` | Tie one call entity's lifetime to another's (`patient` kept alive until `nurse` is collected). A Python-binding concept; the Lua rods ignore it. |
+| `return_policy([lang…,] rv::kind)` | How a callable's returned object is owned/converted — see [Return policies & lifetimes](return-policies.md). |
+| `keep_alive(nurse, patient)` | Tie one call participant's lifetime to another's — see [Return policies & lifetimes](return-policies.md#keep_alive). |
 
 !!! example "In the cookbook"
 
@@ -40,7 +40,7 @@ Widget { /* … */ };
 ```
 
 A `lang` is stored as a bit in an `unsigned` mask, and the value space is **open**:
-`welder::lang::py` / `lua` name the shipped languages, while
+`welder::lang::py` / `welder::lang::lua` name the shipped languages, while
 `welder::user_lang<Slot>` mints an identity for a language welder doesn't ship —
 usable everywhere a `lang` is (see
 [Binding a new language](extending.md#binding-a-new-language)). `weld` is
@@ -156,66 +156,54 @@ nothing — and is diagnosed at compile time).
     welder spells it `policy::automatic`. Under `automatic`, an `include` mark is
     redundant (a diagnostic for that is a TODO).
 
-## `return_policy` — how a returned object is owned
+## `doc`, `returns` and `tparam` — documentation
 
-By default a rod lets its backend pick how a call's return value crosses into the
-target language. `return_policy` overrides that, in welder's backend-neutral
-spelling of the return-value policy — the same set pybind11 (`return_value_policy`)
-and nanobind (`rv_policy`) expose:
+Documentation is part of the vocabulary too. `doc("text")` is the summary
+docstring — on a class, namespace, function, function parameter, or data member.
+`returns("text")` documents a function's return value (a return value is not a
+reflectable entity, so its doc rides on the function as a distinct annotation).
+`tparam("T", "text")` documents a template parameter:
+
+```cpp
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("Scale a length by a factor."),
+  =welder::returns("the scaled length")
+]]
+double scale(
+    [[=welder::doc("the length to scale")]] double length,
+    [[=welder::doc("the multiplier")]] double factor);
+```
+
+Where the text lands — the Python `__doc__` under a pluggable style, the
+generated [stubs](stubs.md), the C++ reference — is the subject of
+[Docstrings](docstrings.md).
+
+## `return_policy` and `keep_alive` — ownership & lifetimes
+
+When a bound call returns an object, `return_policy` picks who owns it —
+welder's backend-neutral spelling of pybind11's `return_value_policy` /
+nanobind's `rv_policy` — and `keep_alive(nurse, patient)` ties one call
+participant's lifetime to another's:
 
 ```cpp
 struct [[=welder::weld(welder::lang::py)]] Owner {
-    // A live, non-owning view; writing through it writes the C++ object, and the
-    // owner is kept alive while the view lives.
-    [[=welder::return_policy(welder::rv::reference_internal)]]
+    [[=welder::return_policy(welder::rv::reference_internal)]]  // a live, non-owning view
     Inner& view() { return inner_; }
 
-    // An independent copy — the caller's edits don't touch the owner.
-    [[=welder::return_policy(welder::rv::copy)]]
-    Inner& snapshot() { return inner_; }
-};
-```
-
-The kinds live in `welder::rv::` — `automatic` (the rod default), `automatic_reference`,
-`take_ownership`, `copy`, `move`, `reference`, `reference_internal`, and `none`
-(nanobind-only; diagnosed on pybind11). Like `weld_as`, the kind is last and any
-leading `lang` markers scope it — so a call can take one policy in Python and
-another (or none) elsewhere:
-
-```cpp
-[[=welder::return_policy(welder::lang::py, welder::rv::take_ownership)]]
-Thing* make();
-```
-
-!!! info "The Lua rods decide ownership structurally"
-
-    The garbage-collected Lua runtimes (sol2, LuaBridge3) have no return-value-policy
-    knob: ownership is decided by the C++ **return type** — a value becomes a
-    VM-owned copy/move, a pointer or reference a non-owning view. So the Lua rods
-    **ignore** `return_policy` at runtime, exactly as they ignore [`doc`](docstrings.md).
-    What no rod ignores is a *contradiction*: a reference-category policy
-    (`reference` / `reference_internal`) on a by-value return would reference a
-    temporary, so it is a hard **compile** error in every language.
-
-## `keep_alive` — lifetime dependencies
-
-`keep_alive(nurse, patient)` keeps one call entity alive at least as long as
-another, using pybind11/nanobind's index convention — `0` is the return value, `1`
-the first argument (a method's implicit `this`), `2` the second, and so on:
-
-```cpp
-struct [[=welder::weld(welder::lang::py)]] Registry {
-    // Keep the appended item (arg 2) alive as long as the registry (arg 1 = this).
-    [[=welder::keep_alive(1, 2)]]
+    [[=welder::keep_alive(1, 2)]]   // keep the item (arg 2) alive with `this` (arg 1)
     void track(Item& i);
 };
 ```
 
-It is repeatable (declare several dependencies) and, like `return_policy`, a
-Python-binding concept — the Lua rods have no equivalent and ignore it.
+welder forwards the chosen kind to the backend verbatim — the frameworks'
+documented semantics are unchanged — and adds compile-time sanity validation on
+top (a reference-category policy on a by-value return is a hard error in every
+language). The full story — the `welder::rv::` kinds, per-language scoping, how
+the Lua rods decide ownership structurally instead, and `keep_alive`'s index
+convention — lives on [Return policies & lifetimes](return-policies.md).
 
-The `doc` / `returns` / `tparam` annotations are covered in
-[Docstrings](docstrings.md); the two `trust_bindable` forms in
-[Trust & type casters](trust-casters.md); and `weld_as` — the verbatim per-entity
-rename — in [Naming conventions](naming.md), alongside the pluggable name styles that
-reshape identifiers into a target language's convention.
+The two `trust_bindable` escape hatches are covered in
+[Trust & type casters](trust-casters.md), and `weld_as` — the verbatim per-entity
+rename — in [Naming conventions](naming.md), alongside the pluggable name styles
+that reshape identifiers into a target language's convention.

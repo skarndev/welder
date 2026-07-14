@@ -120,7 +120,9 @@ nav:
       - Enums: guide/enums.md
       - Inheritance: guide/inheritance.md
       - Namespaces & modules: guide/namespaces-modules.md
+      - Return policies & lifetimes: guide/return-policies.md
       - Docstrings: guide/docstrings.md
+      - Stubs: guide/stubs.md
       - Naming conventions: guide/naming.md
       - The bindability gate: guide/bindability.md
       - Trust & type casters: guide/trust-casters.md

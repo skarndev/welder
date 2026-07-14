@@ -140,19 +140,20 @@ Note C++ `operator^` is bitwise-xor → `__bxor` (**not** `__pow`/power).
 - **Namespace variables: snapshot or live.** A `const`/`constexpr` variable binds as
   a value snapshot at load time; a mutable one binds as a **live get/set** over the
   C++ global (a metatable proxy on the module table), so a Lua read sees the current
-  value and a Lua write flows back to C++ — matching the Python backends.
+  value and a Lua write flows back to C++ — matching the Python rods.
 - **Overloaded methods, functions and operators** are grouped into a single
   `sol::overload(…)` (sol2 stores one value per name / metamethod slot), so every
   overload of a name dispatches at call time — `c:sum(a)` and `c:sum(a, b)` both work.
   A same-named method in a derived class still hides the base's, matching C++.
-- **Multiple and virtual base classes** are supported (as with pybind11; nanobind is
-  single-inheritance only), so a multi-base diamond binds here.
+- **Multiple and virtual base classes** are supported, so a multi-base diamond
+  binds here — sol2 is the most permissive rod on inheritance; see the
+  [per-rod support table](../guide/inheritance.md#multiple-bases-and-diamonds).
 
 ## Stubs (LuaCATS)
 
 Because Lua drops docstrings at runtime, welder can emit a **LuaCATS
 (`---@meta`) definition file** — the Lua analogue of the Python
-[`.pyi` stubs](../guide/docstrings.md#stubs) — so the [Lua language
+[`.pyi` stubs](../guide/stubs.md) — so the [Lua language
 server](https://luals.github.io/) gives you completion, type hints and the
 docstrings in your editor. Unlike the Python stubs (scraped from the *loaded*
 module), a Lua stub is **reflection-emitted at build time** by the

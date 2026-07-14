@@ -73,7 +73,7 @@ fallback caster. Now `has_native_caster<T>` reports true, the gate passes
 **automatically**, and the caster even names the type in generated stubs. No weld, no
 trust. The mechanism is standard for each framework:
 
-=== "pybind11"
+=== ":simple-python: pybind11"
 
     A `type_caster<T>` built with `PYBIND11_TYPE_CASTER` (does not derive from
     `type_caster_base`), so `_needs_registration<T>` is *false* and `const_name`
@@ -93,18 +93,26 @@ trust. The mechanism is standard for each framework:
     }  // namespace pybind11::detail
     ```
 
-=== "nanobind"
+=== ":simple-python: nanobind"
 
     The same idea with `NB_TYPE_CASTER` in `nanobind::detail` — a caster that isn't
     a base caster flips `is_base_caster_v<make_caster<T>>` to false, so the gate
     clears `T` without a registered class.
 
-=== "Lua (sol2)"
+=== ":simple-lua: Lua (sol2)"
 
     Lua's leaf question is different: the gate clears `T` when
     `sol::lua_type_of<T>` is a native Lua type rather than `userdata`. A type that
     sol2 already knows how to push/get natively (or one you teach it via a
     `sol_lua_push`/`sol_lua_get` customization) passes without a usertype.
+
+=== ":simple-lua: Lua (LuaBridge3)"
+
+    The same question in LuaBridge3's spelling: the gate clears `T` when
+    LuaBridge3 does not classify it as userdata
+    (`luabridge::detail::IsUserdata`). A type you teach LuaBridge3 to convert
+    natively — a `luabridge::Stack<T>` specialization — passes without a
+    registered class.
 
 !!! warning "The caster must be visible before the bind"
 

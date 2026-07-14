@@ -1,8 +1,10 @@
 # Binding a type
 
 Every rod goes through the same entry point — `welder::welder<Rod>::weld_type<T>(m)`,
-where `Rod` is `welder::rods::pybind11::rod<>`, `welder::rods::nanobind::rod<>`, or
-`welder::rods::sol2::rod` — which reflects `T` and emits its whole surface. This
+where `Rod` is any of the [shipped rods](../backends/index.md#the-rods-welder-ships)
+(`welder::rods::pybind11::rod<>`, `welder::rods::nanobind::rod<>`,
+`welder::rods::sol2::rod`, `welder::rods::luabridge::rod`) — which reflects `T` and
+emits its whole surface. This
 page covers what "whole surface" means for a class: data members, constructors,
 methods, and operators. **The annotations and the resolution are identical across
 rods;** only the emitted target-language surface differs. Each member obeys the
@@ -31,7 +33,7 @@ Point {
 };
 ```
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```pycon
     >>> p = Point(); p.x = 3.0; p.y = 4.0
@@ -39,7 +41,7 @@ Point {
     (3.0, 4.0)
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```lua
     local p = Point(); p.x = 3.0; p.y = 4.0
@@ -72,14 +74,14 @@ Rect {                 // an aggregate: no user ctors, no bases
 };
 ```
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```pycon
     >>> Rect(2.0, 3.0).w      # synthesized field constructor
     2.0
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```lua
     print(Rect(2.0, 3.0).w)   --> 2.0   (synthesized field constructor)
@@ -131,7 +133,7 @@ Rect {
 };
 ```
 
-=== "Python"
+=== ":simple-python: Python"
 
     ```pycon
     >>> Rect(2.0, 3.0).area()
@@ -140,7 +142,7 @@ Rect {
     25.0
     ```
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     ```lua
     print(Rect(2.0, 3.0):area())     --> 6.0   (method call uses `:`)
@@ -152,7 +154,7 @@ Rect {
 A **member** operator binds under the target language's special method /
 metamethod, told apart unary vs. binary by arity. The mapping differs per language:
 
-=== "Python"
+=== ":simple-python: Python"
 
     | C++ | Python | C++ | Python |
     |---|---|---|---|
@@ -165,7 +167,7 @@ metamethod, told apart unary vs. binary by arity. The mapping differs per langua
     See the [Python rods page](../backends/python.md#operators-become-dunders)
     for the full table.
 
-=== "Lua"
+=== ":simple-lua: Lua"
 
     | C++ | Lua | C++ | Lua |
     |---|---|---|---|

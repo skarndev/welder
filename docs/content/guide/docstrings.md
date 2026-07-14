@@ -3,9 +3,9 @@
 Documentation is part of the vocabulary. You write it **once**, on the C++
 declaration, and it reaches every audience welder can carry it to: the target
 language's runtime docstring (Python `__doc__`, via the binding rod), the C++
-API reference (via the [Doxygen filter](cpp-docs.md)), and generated stubs
-([`.pyi`](#stubs) for Python, [LuaCATS `---@meta`](../backends/lua.md#stubs-luacats)
-for Lua — the latter is where Lua's docs live, since Lua has no runtime slot).
+API reference (via the [Doxygen filter](cpp-docs.md)), and the generated
+[stubs](stubs.md) (`.pyi` for Python, LuaCATS `---@meta` for Lua — the latter is
+where Lua's docs live, since Lua has no runtime slot).
 
 | Annotation | Applies to | Becomes |
 |---|---|---|
@@ -229,7 +229,10 @@ Box { T value; };
   attribute has no `__doc__`. (Class *data members* do carry docs, via properties —
   see [Data members](#data-members) above; and the Doxygen filter surfaces variable
   docs on the C++ side.)
-- **Per-enumerator docs** aren't supported by pybind11's `.value()`.
+- **Per-enumerator docs** are omitted at runtime by every rod — neither Python
+  binding framework exposes a per-member docstring slot for enum members, and Lua
+  has no runtime docstring at all. They still reach the
+  [C++ reference](cpp-docs.md).
 
 !!! note "Docs are stored inline"
 
@@ -239,14 +242,9 @@ Box { T value; };
 
 ## Stubs
 
-welder docstrings flow into generated `.pyi` stubs via
-[pybind11-stubgen](https://github.com/pybind/pybind11-stubgen), wired through the
-CMake helper `welder_pybind11_generate_stubs()`. So your `doc` text also lands in
-the types your Python users' editors and type-checkers see.
+Everything above also lands in the generated **stubs** — the `.pyi` file your
+Python users' editors and type checkers read, and the LuaCATS (`---@meta`) file
+that is the docs' only home on Lua. Stubs get their own page:
+[Stubs](stubs.md).
 
-Lua has no runtime docstring slot, so there the docs live only in a stub: welder
-emits a **LuaCATS (`---@meta`) definition file** — reflection-generated at build
-time — carrying the same `doc`/`returns`/parameter text. See [Stubs
-(LuaCATS)](../backends/lua.md#stubs-luacats) in the Lua rod guide.
-
-Next: [The bindability gate](bindability.md).
+Next: [Stubs](stubs.md).
