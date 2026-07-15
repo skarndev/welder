@@ -100,5 +100,9 @@ header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
   Workaround (isolated): bind_traits `detail::field_access<Mem>` wraps the
   UNCHECKED `o.[:Mem:]` access in get/set functions; the rods' add_field uses a
   property path for protected data only. Fold back to `&[:Mem:]` when fixed.
-  Worth an upstream report (the dependent-PMD check contradicts the
-  non-dependent behavior and P2996).
+  **Status: already fixed on trunk** (gcc 17.0.0 20260715 snapshot compiles the
+  dependent-PMD splice, verified on godbolt 2026-07-15) — 16.1 still affected,
+  so the action is a `releases/gcc-16` backport request, not a new report; the
+  workaround stays until a fixed 16.x ships. The `extract<F C::*>` and direct
+  spliced-call rejections were NOT covered by that trunk run — re-check on
+  trunk before reporting them separately.
