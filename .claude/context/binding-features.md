@@ -68,9 +68,11 @@ Access admission is a layer BEFORE `member_bound`: bind_traits
 PRIVATE hard-out before any hook (design invariant, no resolution can readmit);
 protected via the resolution's OPTIONAL
 `protected_participates(mem, L, bound_into)` hook (requires-detected; a
-leftover 2-arg hook hard-errors via the
-`protected_participates_gained_a_bound_into_parameter…` diag anchor rather
-than being silently ignored), falling back to the declaring class's
+leftover 2-arg hook hard-errors via a THROWN C++26 constexpr exception —
+`detail::diag::stale_hook_signature`, whose prose message lands verbatim in
+gcc's `uncaught exception` diagnostic; probed better than the older
+undefined-fn anchor style, which the two reflect.hpp anchors still use —
+rather than being silently ignored), falling back to the declaring class's
 `policy::weld_protected` annotation (`reflect.hpp` `protected_welded` — masked
 like exclude/include, bare = all langs, repeats union, read through template
 instantiations from the template; parent_of(mem) = the instantiation, NOT the
