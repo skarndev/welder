@@ -20,7 +20,7 @@
 
 // Tack welding, minus what the library's conventions mark private. Overriding a
 // predicate = the override decides, delegating to the greedy base for the rest.
-struct skip_private : welder::carriages::greedy_resolution {
+struct skip_private : welder::carriages::greedy_resolution<> {
     /** The library's privacy convention: `_name`, `detail`, `impl`. */
     static consteval bool hidden(std::meta::info entity) {
         if (!std::meta::has_identifier(entity))
@@ -33,14 +33,14 @@ struct skip_private : welder::carriages::greedy_resolution {
     static consteval bool member_participates(std::meta::info mem, welder::lang L,
                                               welder::policy_kind pol) {
         return !hidden(mem) &&
-               welder::carriages::greedy_resolution::member_participates(mem, L, pol);
+               welder::carriages::greedy_resolution<>::member_participates(mem, L, pol);
     }
 
     /** Nested namespaces: prune `detail` & friends wholesale (no recursion). */
     static consteval bool namespace_participates(std::meta::info ns, welder::lang L,
                                                  welder::policy_kind pol) {
         return !hidden(ns) &&
-               welder::carriages::greedy_resolution::namespace_participates(ns, L,
+               welder::carriages::greedy_resolution<>::namespace_participates(ns, L,
                                                                             pol);
     }
 
@@ -65,7 +65,7 @@ struct skip_private : welder::carriages::greedy_resolution {
             return false;
         if (std::meta::is_function(mem) && takes_c_string(mem))
             return false;
-        return welder::carriages::greedy_resolution::class_member_participates(
+        return welder::carriages::greedy_resolution<>::class_member_participates(
             mem, L, pol);
     }
 
@@ -76,7 +76,7 @@ struct skip_private : welder::carriages::greedy_resolution {
     static consteval bool counts_as_registered(std::meta::info type,
                                                welder::lang L) {
         return !hidden(type) &&
-               welder::carriages::greedy_resolution::counts_as_registered(type, L);
+               welder::carriages::greedy_resolution<>::counts_as_registered(type, L);
     }
 };
 

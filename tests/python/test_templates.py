@@ -73,3 +73,13 @@ def test_alias_weld_opts_in_an_unwelded_template(tpl: ModuleType) -> None:
     assert p.unwrap() == 0
     p.payload = 9
     assert p.unwrap() == 9
+
+
+def test_weld_protected_reaches_alias_welded_instantiations(tpl: ModuleType) -> None:
+    # Vault<T> carries policy::weld_protected on the TEMPLATE; the annotation is
+    # read through the instantiation, so IntVault binds its protected members.
+    v = tpl.IntVault()
+    v.stash(5)  # protected method
+    assert v.peek() == 5
+    assert v.locked == 5  # protected data
+    assert not hasattr(v, "combination")  # private: never bound

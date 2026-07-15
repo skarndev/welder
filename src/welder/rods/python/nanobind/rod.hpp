@@ -398,7 +398,28 @@ struct rod {
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
         constexpr const char* doc{::welder::doc_of<Mem>()};
-        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+        if constexpr (!std::meta::is_public(Mem)) {
+            // A protected member (admitted under policy::weld_protected) binds
+            // as a property over welder::detail::field_access — gcc-16 rejects
+            // the dependent `&[:Mem:]` for protected data (see field_access).
+            // Same semantics as def_rw: reference_internal getter.
+            using fa = ::welder::detail::field_access<Mem>;
+            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+                if constexpr (doc)
+                    cls.def_prop_ro(name, &fa::get,
+                                    nb::rv_policy::reference_internal, doc);
+                else
+                    cls.def_prop_ro(name, &fa::get,
+                                    nb::rv_policy::reference_internal);
+            } else {
+                if constexpr (doc)
+                    cls.def_prop_rw(name, &fa::get, &fa::set,
+                                    nb::rv_policy::reference_internal, doc);
+                else
+                    cls.def_prop_rw(name, &fa::get, &fa::set,
+                                    nb::rv_policy::reference_internal);
+            }
+        } else if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
             // const member: read-only (def_rw's setter would not compile).
             if constexpr (doc)
                 cls.def_ro(name, &[:Mem:], doc);

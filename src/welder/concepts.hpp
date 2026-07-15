@@ -268,6 +268,17 @@ concept rod =
         // T's native-base reflections (a std::array<std::meta::info, N>), spliced into
         // the class handle by make_class
     @endcode
+
+    **Optional hook** (detected via `requires`, so the concept does not demand it):
+    @code
+    static consteval bool protected_participates(std::meta::info mem, lang L);
+        // arbitrates a PROTECTED class member's access admission. Absent, the
+        // carriage falls back to the declaring class's policy::weld_protected
+        // annotation. It is consulted only for protected members: public members
+        // are always admitted and PRIVATE members never are — the carriage
+        // hard-wires both before the hook (see detail::member_access_admitted),
+        // so no resolution can expose a private member.
+    @endcode
     A concept cannot quantify over every `T`, so — exactly as @ref welder::caster_oracle probes
     `has_native_caster` — this probes `native_bases` with the single placeholder
     @ref welder::detail::any_type and checks only its *shape* (that the hook exists and

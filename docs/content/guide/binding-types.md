@@ -23,7 +23,10 @@ C++ is the same; pick your tab.
 
 ## Data members
 
-Public data members bind as read/write attributes.
+Public data members bind as read/write attributes. (Protected members can join
+them — see
+[`policy::weld_protected`](annotations.md#policyweld_protected-expose-the-protected-surface);
+private members never bind.)
 
 ```cpp
 struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]

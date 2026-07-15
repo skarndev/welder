@@ -117,6 +117,19 @@ add_test(NAME compile.trampoline_slots
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_trampoline_slots --config $<CONFIG>)
 
+# Protected-member access admission (compile-only): the core semantics behind
+# policy::weld_protected — the protected_welded reader (bare/scoped/union masks,
+# read through a template instantiation), member_access_admitted (annotation
+# fallback vs the resolution's protected_participates hook, PRIVATE hard-out
+# even under an admit-everything hook) and the private-rejecting shape
+# predicates. static_asserts; same compile-to-pass shape as above.
+add_library(welder_protected_access OBJECT EXCLUDE_FROM_ALL core/protected_access.cpp)
+target_compile_features(welder_protected_access PRIVATE cxx_std_26)
+target_link_libraries(welder_protected_access PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.protected_access
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_protected_access --config $<CONFIG>)
+
 # Alias-welding semantics (compile-only): the reflect-layer rules for welding a
 # class-template instantiation through a namespace-scope alias
 # (names_template_specialization, alias_welded_for precedence, admissible marks).

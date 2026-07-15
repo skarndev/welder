@@ -8,6 +8,7 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `weld(lang…)` | Languages this type is exposed to. **Required to bind.** |
 | `policy::automatic` | *(default)* Greedy: reflect every member unless excluded. |
 | `policy::opt_in` | Conservative: bind only members marked `include`. |
+| `policy::weld_protected` / `…(lang…)` | Admit the type's **protected** members into resolution (combinable with `automatic`/`opt_in`). Private members never bind. |
 | `mark::exclude` | Exclude member from **all** welded languages. |
 | `mark::exclude(lang…)` | Exclude member from the listed languages only. |
 | `mark::include` / `mark::include(lang…)` | Opt a member in (meaningful under `opt_in`). |
@@ -77,6 +78,69 @@ The policy on a type decides the default for its members:
         int b;                              // NOT bound (nothing opts it in)
     };
     ```
+
+## `policy::weld_protected` — expose the protected surface
+
+By default only **public** members bind. An extensible base — think a framework
+widget class full of `protected` NVI hooks and state its subclasses build on —
+often *is* its protected surface, so `policy::weld_protected` admits the type's
+protected members into resolution. It is a **separate annotation, not a third
+policy kind**: it combines freely with `automatic`/`opt_in`, and an admitted
+protected member then resolves exactly like a public one (policy, marks,
+overload grouping, the bindability gate). Bare it covers all languages; called
+with languages it is scoped, like the marks:
+
+```cpp
+struct
+[[=welder::weld(welder::lang::py), =welder::policy::weld_protected]]
+Widget {
+    int frame() const { return trim() + width; }   // public, calls the hooks
+
+protected:
+    virtual int trim() const { return 10; }        // bound — and, with a
+                                                   // trampoline, overridable
+    int width{4};                                  // bound, read/write
+    [[=welder::mark::exclude]] int scratch{0};     // marks still prune
+
+private:
+    int serial{123};                               // NEVER bound (see below)
+};
+```
+
+No publicist wrapper, no generated shim: welder binds through spliced
+pointers-to-member, which C++26 reflection exempts from access checking once
+the members were enumerated (the access decision happens at query time, via
+`std::meta::access_context`).
+
+It composes with the rest of the machinery:
+
+- **Trampolines.** A protected virtual was *already* an overridable trampoline
+  slot; with `weld_protected` it also binds as a callable method, so a Python
+  subclass can call, override, and fall back to it — the full NVI story.
+- **Templates.** Put it on the class template; like every annotation it is read
+  through each instantiation, so an
+  [alias-welded instantiation](templates.md) binds its protected members too.
+- **Third-party libraries** can't carry the annotation. The tack-welding
+  resolution has a knob instead —
+  `welder::carriages::greedy_resolution<true>` admits protected members for the
+  whole pass — and a [custom resolution](extending.md#custom-traversal-resolutions-and-carriages) can
+  arbitrate per member via the optional `protected_participates` hook.
+
+!!! warning "Private is not a policy"
+
+    `weld_protected` never reaches **private** members, and neither can a
+    custom resolution: welder hard-wires private out before any hook runs.
+    Exposing a class's private implementation is a design violation, not an
+    option.
+
+!!! note "Protected constructors stay unbound (for now)"
+
+    There is no pointer-to-member for a constructor, so `weld_protected` does
+    not admit protected **constructors**. A type whose *default* constructor is
+    protected still constructs from Python when it registers a
+    [trampoline](inheritance.md#overriding-virtual-methods-from-python) (the
+    trampoline subclass may call it); non-default protected constructors are on
+    the roadmap via generated trampoline forwarding constructors.
 
 ## `mark` — per-member overrides
 

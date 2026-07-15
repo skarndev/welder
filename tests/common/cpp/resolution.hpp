@@ -124,8 +124,96 @@ private:
     void helper() {}
 
 protected:
-    // protected data -> not bound
+    // protected data -> not bound (no policy::weld_protected on this type)
     int guarded{0};
+};
+
+// --- policy::weld_protected: admit protected members -------------------------
+// Combinable with automatic/opt_in (a separate annotation, not a policy kind):
+// it makes protected members VISIBLE to the resolution; policy + marks then
+// resolve them exactly like public ones. Private members stay out regardless.
+
+struct
+[[
+  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::policy::weld_protected
+]]
+Shielded {
+    // the public surface, calling through the protected one
+    int total() const {
+        return base() + boost;
+    }
+
+protected:
+    // protected method -> bound
+    int base() const {
+        return 40;
+    }
+
+    // protected overloads -> one bound group
+    int scale(int f) const {
+        return boost * f;
+    }
+    double scale(double f) const {
+        return boost * f;
+    }
+
+    // protected static method -> bound
+    static int origin() {
+        return 7;
+    }
+
+    // protected data -> bound, read/write
+    int boost{2};
+
+    // marks still resolve on protected members: excluded -> not bound
+    [[=welder::mark::exclude]]
+    int tuning{0};
+
+private:
+    // private stays out — weld_protected never reaches it
+    int core{99};
+
+    void internal() {}
+};
+
+// language-scoped: protected members bind for py only; lua sees the public
+// surface alone
+struct
+[[
+  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::policy::weld_protected(welder::lang::py)
+]]
+ShieldedPy {
+    int visible{1};
+
+protected:
+    int guarded{5};
+
+    int peek() const {
+        return guarded;
+    }
+};
+
+// weld_protected composes with opt_in: protected members become visible, and
+// then need the same explicit include as public ones
+struct
+[[
+  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::policy::opt_in,
+  =welder::policy::weld_protected
+]]
+OptInShielded {
+    [[=welder::mark::include]]
+    int chosen{3};
+
+protected:
+    // opted in -> bound
+    [[=welder::mark::include]]
+    int picked{4};
+
+    // visible to the resolution but not opted in -> not bound
+    int unpicked{5};
 };
 
 } // namespace resolution

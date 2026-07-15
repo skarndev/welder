@@ -83,3 +83,22 @@ header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
   type names.
 - Doc/annotation text must be stored *inline* (`detail::fixed_string`) — a `const char*` to
   a literal isn't a permitted annotation constant on gcc-16.
+- **Access control × splices (probed 2026-07-15):** P2996 checks access at
+  *query* time (`access_context`), not at splices — so with
+  `members_of(T, unchecked())`, `&[:r:]` on a **protected** member legally
+  forms the PMF/PMD (this is what `policy::weld_protected` binds through — no
+  publicist). gcc-16 is inconsistent about it, though:
+
+  | form | non-dependent | template-dependent |
+  |---|---|---|
+  | `&[:r:]` member function | OK | OK |
+  | `&[:r:]` data member | OK | **checked** ("protected within this context") |
+  | `o.[:r:]` member access | OK | OK |
+  | `o.[:r:](…)` direct call | **checked** | **checked** |
+  | `extract<F C::*>(r)` | **checked** | **checked** |
+
+  Workaround (isolated): bind_traits `detail::field_access<Mem>` wraps the
+  UNCHECKED `o.[:Mem:]` access in get/set functions; the rods' add_field uses a
+  property path for protected data only. Fold back to `&[:Mem:]` when fixed.
+  Worth an upstream report (the dependent-PMD check contradicts the
+  non-dependent behavior and P2996).

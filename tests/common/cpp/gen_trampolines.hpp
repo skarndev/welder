@@ -91,6 +91,30 @@ Golem {
     virtual std::string secret() const { return "clay"; }
 };
 
+// policy::weld_protected on a TRAMPOLINED type: the protected NVI hook was
+// always a trampoline slot (overridable from Python); with weld_protected it now
+// also BINDS — a Python subclass can call, override, and read the protected
+// state, and a C++ caller (garrison) dispatches into the Python override.
+// Golem::secret above is the negative control: protected on a trampolined type
+// WITHOUT weld_protected stays a slot but never a method.
+struct
+[[=welder::weld(welder::lang::py)]]
+[[=welder::policy::weld_protected]]
+Keep {
+    virtual ~Keep() = default;
+
+    // The public NVI caller: observing it from Python proves the C++ call
+    // dispatches into a Python override of the protected virtual.
+    int garrison() const { return defenders() + 100; }
+
+  protected:
+    [[=welder::doc("How many defenders man the walls.")]]
+    virtual int defenders() const { return 3; }
+
+    // Protected data on a trampolined type: bound read/write.
+    int reserves{5};
+};
+
 // A COVARIANT override: Mint::root narrows Herb::root's return — the same vtable
 // slot, so Mint's generated trampoline must carry exactly ONE root() override,
 // spelled with the most-derived (Mint*) return type. Non-owning pointer, hence the

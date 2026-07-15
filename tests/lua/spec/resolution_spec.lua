@@ -38,4 +38,31 @@ describe("resolution", function()
     h.assert_absent(ac, "hidden")
     h.assert_absent(ac, "guarded")
   end)
+
+  it("weld_protected admits protected members", function()
+    local s = m.Shielded.new()
+    assert.are.equal(40, s:base())        -- protected method
+    assert.are.equal(42, s:total())
+    assert.are.equal(7, m.Shielded.origin()) -- protected static
+    assert.are.equal(6, s:scale(3))       -- protected overload group
+    s.boost = 10                          -- protected data, read/write
+    assert.are.equal(50, s:total())
+    h.assert_absent(s, "tuning")          -- exclude still wins
+    h.assert_absent(s, "core")            -- private: never bound
+    h.assert_absent(s, "internal")
+  end)
+
+  it("weld_protected(py) does not reach lua", function()
+    local s = m.ShieldedPy.new()
+    s.visible = 3; assert.are.equal(3, s.visible)
+    h.assert_absent(s, "guarded")  -- protected admitted for py only
+    h.assert_absent(s, "peek")
+  end)
+
+  it("weld_protected composes with opt_in", function()
+    local o = m.OptInShielded.new()
+    o.chosen = 1; assert.are.equal(1, o.chosen)
+    o.picked = 2; assert.are.equal(2, o.picked)  -- protected + include
+    h.assert_absent(o, "unpicked")               -- visible but not opted in
+  end)
 end)

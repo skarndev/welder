@@ -300,8 +300,11 @@ emits automatically.
 
 A **protected** virtual — the classic NVI/template-method hook — is a real
 trampoline slot: a Python subclass overrides it as a plain attribute (no binding is
-involved in the lookup), and C++ calls dispatch into the override, while the method
-itself is never *bound* (protected members stay uncallable from Python). A
+involved in the lookup), and C++ calls dispatch into the override. By default the
+method itself is never *bound* (protected members stay uncallable from Python);
+give the type
+[`policy::weld_protected`](annotations.md#policyweld_protected-expose-the-protected-surface)
+and the hook binds too, so a subclass can also *call* it — the full NVI story. A
 **private** virtual is not a slot: the trampoline's base-class fallback could not
 name it. Privatizing an inherited virtual in a derived class likewise withdraws the
 slot from the derived type's trampoline.

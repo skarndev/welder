@@ -117,6 +117,34 @@ struct policy_spec {
     policy_kind kind = policy_kind::automatic; /**< The chosen policy. */
 };
 
+/** The stored form of a `policy::weld_protected` annotation: the languages a
+    type's *protected* members are admitted for.
+
+    A distinct spec type — not a @ref policy_kind — so it combines freely with
+    `policy::automatic` / `policy::opt_in`: it widens *which access levels* are
+    visible to the resolution, while the policy kind decides how greedily the
+    visible members bind. Usable bare (all languages) or called with languages
+    to scope it, like exclude_spec:
+    @code
+    [[=welder::policy::weld_protected]]                    // all languages
+    [[=welder::policy::weld_protected(welder::lang::py)]]  // py only
+    @endcode
+    Repeated annotations union their languages. Private members are *never*
+    admitted — that boundary is welder's design, not a policy.
+*/
+struct weld_protected_spec {
+    unsigned mask = 0; /**< The languages to admit protected members for; `0` == all. */
+
+    /** Scope the admission to specific languages.
+        @tparam Ls the language enum types (deduced).
+        @param ls  the languages to admit protected members for.
+        @return a scoped weld_protected_spec. */
+    template <class... Ls>
+    consteval weld_protected_spec operator()(Ls... ls) const {
+        return weld_protected_spec{lang_mask(ls...)};
+    }
+};
+
 // --- mark: member-level include/exclude -------------------------------------
 
 /** The stored form of an `exclude` mark: the languages a member is hidden from.
@@ -376,6 +404,16 @@ consteval detail::weld_spec weld(Ls... ls) {
 namespace policy {
 inline constexpr detail::policy_spec automatic{policy_kind::automatic}; /**< @see policy_kind::automatic */
 inline constexpr detail::policy_spec opt_in{policy_kind::opt_in};       /**< @see policy_kind::opt_in */
+
+/** Admit the type's **protected** members into resolution — bare (all languages)
+    or called with languages to scope it. Combinable with `automatic` / `opt_in`
+    (it is a separate annotation, not a third policy kind): `weld_protected`
+    decides that protected members are *visible* to the resolution; the policy
+    kind and the member marks then resolve them exactly like public ones.
+    Constructors are exempt for now (a protected constructor stays unbound —
+    construction goes through a trampoline where one exists); private members are
+    never admitted. @see detail::weld_protected_spec */
+inline constexpr detail::weld_protected_spec weld_protected{};
 } // namespace policy
 
 // --- mark: member-level include/exclude / trust_bindable --------------------

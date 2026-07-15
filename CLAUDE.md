@@ -85,6 +85,7 @@ PYBIND11_MODULE(mymod, m) {
 | `weld(lang...)` | Languages this type is exposed to. Required to bind. |
 | `policy::automatic` | (default) Greedy: reflect every member unless excluded. |
 | `policy::opt_in` | Conservative: bind only members marked `include`. |
+| `policy::weld_protected` / `policy::weld_protected(lang...)` | Admit the type's **protected** members into resolution (they then resolve like public ones — policy kind, marks, groups, gate). A separate annotation, combinable with `automatic`/`opt_in`; repeats union; read through template instantiations. **Private is never admitted** (hard-wired before any hook). Protected **constructors** stay unbound (no ctor PM; deferred — a protected *default* ctor still constructs via a trampoline). Third-party/tack route: `greedy_resolution<true>` (whole-pass knob) or a custom resolution's optional `protected_participates(mem, L)` hook. |
 | `mark::exclude` / `mark::exclude(lang...)` | Exclude member from all / the listed languages. |
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
 | `mark::only(lang...)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Must be called with ≥ 1 lang (bare form diagnosed); `exclude` still beats it; repeats union. |
@@ -100,7 +101,11 @@ PYBIND11_MODULE(mymod, m) {
 `policy::auto` from the original sketch is spelled `policy::automatic` (`auto` is
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for
 `L` → false; else an `only` mark → true iff it names `L` (either policy); else
-`automatic` → true; else (`opt_in`) → true iff explicitly included for `L`. Marks
+`automatic` → true; else (`opt_in`) → true iff explicitly included for `L`.
+**Access admission precedes it** (bind_traits `member_access_admitted`): public
+always; protected iff the resolution's optional `protected_participates(mem, L)`
+hook says so (default = the declaring class's `weld_protected` annotation); private
+never, under any resolution. Marks
 resolve **per overload, constructors included** (the carriage computes each name's
 participating overload group from the resolution and hands it to the rod whole).
 Constructors resolve symmetrically (opt_in binds only marked-include ctors), with

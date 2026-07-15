@@ -51,6 +51,23 @@ MEMBER_CASES = [
     pytest.param("resolution", "Access", "hidden", False, id="access/private-data-not-bound"),
     pytest.param("resolution", "Access", "guarded", False, id="access/protected-data-not-bound"),
     pytest.param("resolution", "Access", "helper", False, id="access/private-method-not-bound"),
+    # --- policy::weld_protected: protected members are admitted ---------------
+    pytest.param("resolution", "Shielded", "total", True, id="weld_protected/public-method-bound"),
+    pytest.param("resolution", "Shielded", "base", True, id="weld_protected/protected-method-bound"),
+    pytest.param("resolution", "Shielded", "scale", True, id="weld_protected/protected-overloads-bound"),
+    pytest.param("resolution", "Shielded", "origin", True, id="weld_protected/protected-static-bound"),
+    pytest.param("resolution", "Shielded", "boost", True, id="weld_protected/protected-data-bound"),
+    pytest.param("resolution", "Shielded", "tuning", False, id="weld_protected/exclude-still-wins"),
+    pytest.param("resolution", "Shielded", "core", False, id="weld_protected/private-data-never-bound"),
+    pytest.param("resolution", "Shielded", "internal", False, id="weld_protected/private-method-never-bound"),
+    # language-scoped weld_protected(py): protected binds here (the lua spec
+    # asserts the negative on its side)
+    pytest.param("resolution", "ShieldedPy", "guarded", True, id="weld_protected/lang-scoped-py-bound"),
+    pytest.param("resolution", "ShieldedPy", "peek", True, id="weld_protected/lang-scoped-py-method-bound"),
+    # weld_protected composes with opt_in: visible, but still needs the include
+    pytest.param("resolution", "OptInShielded", "chosen", True, id="weld_protected/opt_in-public-include-bound"),
+    pytest.param("resolution", "OptInShielded", "picked", True, id="weld_protected/opt_in-protected-include-bound"),
+    pytest.param("resolution", "OptInShielded", "unpicked", False, id="weld_protected/opt_in-protected-unmarked-not-bound"),
 ]
 
 
@@ -78,3 +95,17 @@ def test_readwrite_roundtrip(res: ModuleType, field: str, value: object) -> None
     instance = res.Values()
     setattr(instance, field, value)
     assert getattr(instance, field) == value
+
+
+# --- policy::weld_protected: the admitted members actually work ---------------
+
+
+def test_protected_members_behave(res: ModuleType) -> None:
+    s = res.Shielded()
+    assert s.base() == 40
+    assert s.total() == 42
+    assert s.origin() == 7
+    assert s.scale(3) == 6  # int overload
+    assert s.scale(2.5) == 5.0  # double overload
+    s.boost = 10  # protected data is read/write
+    assert s.total() == 50

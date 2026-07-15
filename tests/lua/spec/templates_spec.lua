@@ -41,4 +41,14 @@ describe("templates", function()
     p.payload = 9
     assert.are.equal(9, p:unwrap())
   end)
+
+  it("weld_protected reaches alias-welded instantiations", function()
+    -- policy::weld_protected sits on the Vault TEMPLATE, read through the
+    -- instantiation like every annotation.
+    local v = m.IntVault.new()
+    v:stash(5)                           -- protected method
+    assert.are.equal(5, v:peek())
+    assert.are.equal(5, v.locked)        -- protected data
+    h.assert_absent(v, "combination")    -- private: never bound
+  end)
 end)

@@ -76,9 +76,9 @@ consteval bool alias_welded_for(std::meta::info mem, lang L) {
 consteval bool alias_marks_admissible(std::meta::info mem) {
     for (auto a : std::meta::annotations_of(mem)) {
         auto t{std::meta::type_of(a)};
-        if (t == ^^detail::policy_spec || t == ^^detail::exclude_spec ||
-            t == ^^detail::include_spec || t == ^^detail::only_spec ||
-            t == ^^detail::trust_bindable_spec ||
+        if (t == ^^detail::policy_spec || t == ^^detail::weld_protected_spec ||
+            t == ^^detail::exclude_spec || t == ^^detail::include_spec ||
+            t == ^^detail::only_spec || t == ^^detail::trust_bindable_spec ||
             t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec)
             return false;
         if (std::meta::has_template_arguments(t)) {
@@ -100,6 +100,33 @@ consteval policy_kind policy_of(std::meta::info type) {
     auto anns{std::meta::annotations_of_with_type(type, ^^detail::policy_spec)};
     return anns.empty() ? policy_kind::automatic
                         : std::meta::extract<detail::policy_spec>(anns[0]).kind;
+}
+
+/** Does @a type admit its *protected* members for language @a L — i.e. does it
+    carry a `policy::weld_protected` annotation covering @a L?
+
+    Read off the member's *declaring* class (so a flattened non-welded base
+    admits its own protected members, consistent with how its marks and policy
+    resolve), and — like every annotation — read through a class-template
+    instantiation from the template's declaration. Repeated annotations union.
+    This is only the *default* arbitration: a resolution with a
+    `protected_participates` hook replaces it (see the carriage's
+    `member_access_admitted`). Private members are never admitted, under any
+    resolution.
+
+    @param type a reflection of the declaring class.
+    @param L    the target language.
+    @return `true` iff a `weld_protected` annotation applies to @a L (mask `0`
+            covers all languages).
+*/
+consteval bool protected_welded(std::meta::info type, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(
+             type, ^^detail::weld_protected_spec)) {
+        auto s{std::meta::extract<detail::weld_protected_spec>(a)};
+        if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
+            return true;
+    }
+    return false;
 }
 
 /** Does @a member carry an `exclude` mark covering language @a L?

@@ -65,6 +65,24 @@ using TaggedInt = Tagged<int>;
 using IntPack
     [[=welder::weld(welder::lang::py, welder::lang::lua)]] = vendor_tpl::Pack<int>;
 
+// policy::weld_protected on the TEMPLATE, read through the instantiation like
+// every annotation: the alias-welded Vault<int> binds its protected members.
+template <class T>
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::policy::weld_protected]]
+Vault {
+    T peek() const { return locked; }
+
+protected:
+    T locked{};
+    void stash(T v) { locked = v; }
+
+private:
+    T combination{}; // never bound, weld_protected or not
+};
+using IntVault = Vault<int>;
+
 } // namespace templates_ns
 
 #ifdef WELDER_TEST_MODULE_T

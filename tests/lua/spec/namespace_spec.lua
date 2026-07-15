@@ -105,4 +105,15 @@ describe("tack (unmarked library)", function()
     assert.are.equal(3, c.right.size)
     assert.are.equal(5, f.gadget_id(f.nested.Gadget.new()))
   end)
+
+  it("the WeldProtected knob admits an unmarked library's protected members", function()
+    -- foreign_protected is tacked with greedy_resolution<true> — the blanket
+    -- opt-in for a library that cannot carry policy::weld_protected.
+    local p = h.mod.foreign_protected.Panel.new()
+    assert.are.equal(10, p:trim())        -- protected method, bound by the knob
+    assert.are.equal(4, p.width)          -- protected data, bound read/write
+    p.width = 6
+    assert.are.equal(16, p:frame())
+    h.assert_absent(p, "serial")          -- private: out under every knob/resolution
+  end)
 end)

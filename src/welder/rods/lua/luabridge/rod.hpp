@@ -398,15 +398,27 @@ struct rod {
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& h) {
         using T = _class_type<decltype(h)>;
-        using Field = typename [:std::meta::type_of(Mem):];
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
-        constexpr Field T::* mp{&[:Mem:]};
         auto cls{_open_class<T>(h.mod, h.name.c_str())};
-        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
-            cls.addProperty(name, mp);      // read-only (const member)
-        else
-            cls.addProperty(name, mp, mp);  // read/write
+        if constexpr (!std::meta::is_public(Mem)) {
+            // A protected member (admitted under policy::weld_protected) binds
+            // as a getter/setter property over welder::detail::field_access —
+            // gcc-16 rejects the dependent `&[:Mem:]` for protected data (see
+            // field_access).
+            using fa = ::welder::detail::field_access<Mem>;
+            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+                cls.addProperty(name, &fa::get);
+            else
+                cls.addProperty(name, &fa::get, &fa::set);
+        } else {
+            using Field = typename [:std::meta::type_of(Mem):];
+            constexpr Field T::* mp{&[:Mem:]};
+            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+                cls.addProperty(name, mp);      // read-only (const member)
+            else
+                cls.addProperty(name, mp, mp);  // read/write
+        }
     }
 
     /** Bind method overload group @a Fns as one method (`obj:name(…)`) via a single

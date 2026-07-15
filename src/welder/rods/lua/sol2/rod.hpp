@@ -492,10 +492,21 @@ struct rod {
     static void add_field(auto& ut) {
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
-        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+        if constexpr (!std::meta::is_public(Mem)) {
+            // A protected member (admitted under policy::weld_protected) binds
+            // as a sol::property over welder::detail::field_access — gcc-16
+            // rejects the dependent `&[:Mem:]` for protected data (see
+            // field_access).
+            using fa = ::welder::detail::field_access<Mem>;
+            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+                ut[name] = ::sol::readonly_property(&fa::get);
+            else
+                ut[name] = ::sol::property(&fa::get, &fa::set);
+        } else if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
             ut[name] = ::sol::readonly(&[:Mem:]);
-        else
+        } else {
             ut[name] = &[:Mem:];
+        }
     }
 
     /** Bind method overload group @a Fns as one method (`obj:name(…)`) — a single

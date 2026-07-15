@@ -392,7 +392,31 @@ struct rod {
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
         constexpr const char* doc{::welder::doc_of<Mem>()};
-        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+        if constexpr (!std::meta::is_public(Mem)) {
+            // A protected member (admitted under policy::weld_protected) binds
+            // as a property over welder::detail::field_access — gcc-16 rejects
+            // the dependent `&[:Mem:]` for protected data (see field_access).
+            // Same semantics as def_readwrite: reference_internal getter.
+            using fa = ::welder::detail::field_access<Mem>;
+            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+                if constexpr (doc)
+                    cls.def_property_readonly(
+                        name, &fa::get, py::return_value_policy::reference_internal,
+                        doc);
+                else
+                    cls.def_property_readonly(
+                        name, &fa::get,
+                        py::return_value_policy::reference_internal);
+            } else {
+                if constexpr (doc)
+                    cls.def_property(name, &fa::get, &fa::set,
+                                     py::return_value_policy::reference_internal,
+                                     doc);
+                else
+                    cls.def_property(name, &fa::get, &fa::set,
+                                     py::return_value_policy::reference_internal);
+            }
+        } else if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
             // const member: read-only (def_readwrite's setter would not compile).
             if constexpr (doc)
                 cls.def_readonly(name, &[:Mem:], doc);

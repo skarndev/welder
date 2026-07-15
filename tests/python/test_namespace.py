@@ -178,3 +178,15 @@ def test_tack_accepts_own_types_in_signatures(foreign: ModuleType) -> None:
     c = foreign.fuse(a, b)  # free function returning the FORWARD-declared Coupler
     assert (c.left.size, c.right.size) == (3, 3)
     assert foreign.gadget_id(foreign.nested.Gadget()) == 5  # nested-namespace type
+
+
+def test_tack_weld_protected_knob(mod: ModuleType) -> None:
+    # foreign_protected is tacked with greedy_resolution<true> — the blanket
+    # protected opt-in for a library that cannot carry policy::weld_protected.
+    # (The plain tack of `foreign` keeps the public-only default.)
+    p = mod.foreign_protected.Panel()
+    assert p.trim() == 10  # protected method, bound by the knob
+    assert p.width == 4  # protected data, bound read/write
+    p.width = 6
+    assert p.frame() == 16
+    assert not hasattr(p, "serial")  # private: out under every knob/resolution

@@ -259,7 +259,13 @@ Two resolutions ship, with their carriage aliases:
 | Resolution | Carriage alias | Behavior |
 |---|---|---|
 | `welder::carriages::marker_resolution` | `welder::stitch_welding_carriage` (default) | Bind only where `weld` / `policy` / marks direct |
-| `welder::carriages::greedy_resolution` | `welder::tack_welding_carriage` | Bind an unmarked library greedily (marks still prune) |
+| `welder::carriages::greedy_resolution<>` | `welder::tack_welding_carriage` | Bind an unmarked library greedily (marks still prune) |
+
+`greedy_resolution` takes one knob: `greedy_resolution<true>` also admits every
+type's **protected** members — the whole-pass blanket for a third-party library
+that cannot carry the
+[`policy::weld_protected`](annotations.md#policyweld_protected-expose-the-protected-surface)
+annotation. Private members stay out regardless; that boundary is not a knob.
 
 !!! example "In the cookbook"
 
@@ -276,18 +282,24 @@ computes each name's overload group, so signature-level rules prune exactly one
 sibling — `namespace_participates`, and `counts_as_registered` — the bindability
 gate's *registration oracle*: which class/enum types may appear in bound
 signatures because welding under this resolution registers them) plus the
-`native_bases<T, L>` hook. Since the shipped resolutions are ordinary structs, delegation is plain
+`native_bases<T, L>` hook. One hook is *optional*:
+`protected_participates(mem, L)` arbitrates a **protected** member's access
+admission per member (absent, the declaring class's `policy::weld_protected`
+annotation decides). It is consulted for protected members only — public
+members are always admitted, and **private** members never are: the carriage
+hard-wires both before the hook, so no resolution can expose a private member.
+Since the shipped resolutions are ordinary structs, delegation is plain
 inheritance. For example, tack-welding a third-party library while skipping
 its underscore-prefixed internals:
 
 ```cpp
-struct skip_internal : welder::carriages::greedy_resolution {
+struct skip_internal : welder::carriages::greedy_resolution<> {
     static consteval bool member_participates(std::meta::info mem, welder::lang L,
                                               welder::policy_kind pol) {
         if (std::meta::has_identifier(mem) &&
             std::meta::identifier_of(mem).starts_with("_"))
             return false;
-        return welder::carriages::greedy_resolution::member_participates(mem, L, pol);
+        return welder::carriages::greedy_resolution<>::member_participates(mem, L, pol);
     }
 };
 

@@ -133,6 +133,26 @@ def test_generated_trampoline_protected_nvi_hook(gt: ModuleType) -> None:
     assert Occult().ritual() == "rite=vril"
 
 
+def test_weld_protected_on_a_trampolined_type(gt: ModuleType) -> None:
+    # Keep carries policy::weld_protected: its protected NVI hook is a trampoline
+    # slot (that was already true — see Golem above, the negative control) AND now
+    # binds as a callable method, and its protected data binds read/write.
+    k = gt.Keep()
+    assert k.defenders() == 3  # protected virtual, callable
+    assert k.garrison() == 103
+    assert k.reserves == 5  # protected data, bound
+    k.reserves = 9
+    assert k.reserves == 9
+
+    class Fortress(gt.Keep):
+        def defenders(self) -> int:
+            return 12
+
+    f = Fortress()
+    assert f.defenders() == 12
+    assert f.garrison() == 112  # C++ NVI caller -> Python override
+
+
 def test_generated_trampoline_covariant_single_slot(gt: ModuleType) -> None:
     # Mint::root covariantly narrows Herb::root — one vtable slot, so the generated
     # trampoline carries exactly one root() override (spelled Mint*); two would not

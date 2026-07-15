@@ -62,6 +62,55 @@ but all shipped rods return void. Carriage bind_function/bind_variable forward
 `chaining.hpp` (+ per-backend `WELDER_TEST_CHAIN_*` seams) + test_chaining.py /
 chaining_spec.lua.
 
+## Protected members — `policy::weld_protected`
+Access admission is a layer BEFORE `member_bound`: bind_traits
+`member_access_admitted<Resolution>(mem, L)` — public always in; PRIVATE
+hard-out before any hook (design invariant, no resolution can readmit);
+protected via the resolution's OPTIONAL `protected_participates(mem, L)` hook
+(requires-detected, concept unchanged), falling back to the declaring class's
+`policy::weld_protected` annotation (`reflect.hpp` `protected_welded` — masked
+like exclude/include, bare = all langs, repeats union, read through template
+instantiations from the template; parent_of(mem) = the instantiation, NOT the
+alias). Shape predicates `is_method_candidate`/`is_operator_candidate` now
+reject only private (`!is_private`); the admission is applied at the 3
+carriage bind_members sites AND in bind_traits `{method,operator}_overload_set`
+(else a protected overload leaks into a public sibling's group).
+`marker_resolution` spells the annotation hook explicitly;
+`greedy_resolution` is now `template <bool WeldProtected = false>` — the
+whole-pass knob for unannotatable third-party libs
+(`basic_carriage<greedy_resolution<true>>`; `tack_welding_carriage` =
+`greedy_resolution<>`, public-only default; knob ORs with the annotation).
+CONSTRUCTORS deliberately exempt (is_bindable_constructor/default_ctor_admitted
+keep is_public): no PM for a ctor; a protected DEFAULT ctor still works through
+a trampoline's construction_type; non-default protected ctors = future
+trampoline-rod forwarding ctors. Trampoline interplay: protected virtuals were
+already slots; with weld_protected they ALSO bind, so Python can call+override
+(pybind get_override shadowing works — the bound method and the override share
+the name).
+
+**Emission (the gcc-16 field workaround):** methods/operators/statics bind via
+the usual `&[:Fn:]` (fine for protected). Protected DATA members can't — gcc-16
+wrongly access-checks a *dependent* `&[:Mem:]` on protected data (non-dependent
+passes, dependent PMF passes, `extract<F C::*>` also checked; see the
+toolchain context). Workaround isolated in bind_traits
+`detail::field_access<Mem>` (get/set over the UNCHECKED member-access splice
+`c.[:Mem:]`); each rod's add_field takes a property path for `!is_public(Mem)`
+only — pybind `def_property(_readonly)` / nanobind `def_prop_r{o,w}` (both
+reference_internal, matching def_readwrite) / sol2 `sol::property` /
+LuaBridge3 `addProperty(get[, set])`. Fold back to `&[:Mem:]` when gcc fixes
+the check.
+
+Tests: resolution.hpp `Shielded` (methods/overloads/static/data/exclude/private)
++ `ShieldedPy` (lang-scoped: py yes, lua no) + `OptInShielded` (include still
+required) ↔ test_resolution.py / resolution_spec.lua; templates.hpp `Vault`/
+`IntVault` (annotation through the alias route) ↔ test_templates.py /
+templates_spec.lua; gen_trampolines.hpp `Keep` (bound+overridable protected NVI
+hook, protected data; `Golem::secret` = the unbound negative control) ↔
+test_gen_trampolines.py; namespace.hpp `foreign_protected::Panel` tacked with
+`greedy_resolution<true>` ↔ test_namespace.py / namespace_spec.lua; compile
+lock tests/core/protected_access.cpp (reader masks, hook-vs-fallback, private
+hard-out even under an admit-everything hook, dealias-required-for-alias note).
+
 ## Overloaded operators → Python special methods
 A *member* operator binds under its dunder (`operator+` → `__add__`, `operator==`
 → `__eq__`, `operator[]` → `__getitem__`, `operator()` → `__call__`, …), unary vs

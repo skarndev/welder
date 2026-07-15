@@ -146,6 +146,15 @@ struct marker_resolution {
                                                     policy_kind pol) {
         return member_bound(mem, L, pol);
     }
+    /** A **protected** member is admitted iff its declaring class says so — a
+        `policy::weld_protected` annotation covering @a L (also the carriage's
+        default when a resolution declares no hook; spelled out here as the
+        documented contract). Public members are always admitted and private
+        members never are — both decided *before* this hook (see
+        `detail::member_access_admitted`), so it arbitrates protected only. */
+    static consteval bool protected_participates(std::meta::info mem, lang L) {
+        return welder::protected_welded(std::meta::parent_of(mem), L);
+    }
     /** A nested namespace participates (recurse + submodule). */
     static consteval bool namespace_participates(std::meta::info ns, lang L,
                                                  policy_kind pol) {
@@ -171,7 +180,19 @@ struct marker_resolution {
     entity is a hard error (hatch it with `mark::trust_bindable` / the
     `trust_bindable<T>` variable template, or point the tack at a narrower namespace).
     Any `mark::exclude` that happens to be present is still honored (via
-    `member_bound`), so a partially-annotated header can still prune. */
+    `member_bound`), so a partially-annotated header can still prune.
+
+    @tparam WeldProtected admit every type's **protected** members (default
+            `false`: public only, like the stitch default). The knob exists
+            because a third-party library cannot carry a
+            `[[=welder::policy::weld_protected]]` annotation — this is the tack
+            analogue, blanket for the whole pass:
+            `welder::carriages::basic_carriage<welder::carriages::greedy_resolution<true>>`.
+            An annotation that *is* present (a partially-annotated header) is
+            honored either way; for surgical per-member control, override
+            `protected_participates` in a bespoke resolution. Private members
+            stay out regardless — that boundary is not a knob. */
+template <bool WeldProtected = false>
 struct greedy_resolution {
     static consteval bool participates(std::meta::info, lang) { return true; }
     static consteval bool is_native_base(std::meta::info, lang) { return false; }
@@ -194,6 +215,14 @@ struct greedy_resolution {
     static consteval bool class_member_participates(std::meta::info mem, lang L,
                                                     policy_kind pol) {
         return member_bound(mem, L, pol);
+    }
+    /** Protected members: the @a WeldProtected knob (the whole-pass blanket for
+        an unannotatable third-party library), or — knob off — the annotation,
+        exactly like stitch. Arbitrates protected only: public/private are
+        decided before the hook (see `detail::member_access_admitted`). */
+    static consteval bool protected_participates(std::meta::info mem, lang L) {
+        return WeldProtected ||
+               welder::protected_welded(std::meta::parent_of(mem), L);
     }
     static consteval bool namespace_participates(std::meta::info ns, lang L,
                                                  policy_kind pol) {
@@ -252,8 +281,10 @@ struct greedy_resolution {
 template <resolution Resolution>
 struct basic_carriage {
   private:
-    /** Flatten the eligible public data members, methods and operators of @a Src onto
-        the class handle @a cls (a handle for a type deriving from @a Src).
+    /** Flatten the eligible data members, methods and operators of @a Src onto
+        the class handle @a cls (a handle for a type deriving from @a Src) —
+        public ones, plus protected ones whose access is admitted (see
+        `detail::member_access_admitted`; private never binds).
 
         A base that @a Resolution treats as native is skipped here (it binds as a base
         of the class handle); the rest are recursed *first* so that, on a name clash,
@@ -281,7 +312,7 @@ struct basic_carriage {
 
         template for (constexpr auto mem : std::define_static_array(
                           std::meta::nonstatic_data_members_of(Src, ctx))) {
-            if constexpr (std::meta::is_public(mem) &&
+            if constexpr (detail::member_access_admitted<Resolution>(mem, L) &&
                           Resolution::class_member_participates(mem, L, pol)) {
                 welder::assert_member_bindable<B, mem, L, Resolution>();
                 B::template add_field<mem, Style>(cls);
@@ -297,6 +328,7 @@ struct basic_carriage {
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
             if constexpr (detail::is_method_candidate(fn) &&
+                          detail::member_access_admitted<Resolution>(fn, L) &&
                           Resolution::class_member_participates(fn, L, pol)) {
                 if constexpr (detail::is_overload_leader<
                                   detail::method_overload_set<Resolution>>(fn, L)) {
@@ -312,6 +344,7 @@ struct basic_carriage {
                         B::template add_method<grp, Style>(cls);
                 }
             } else if constexpr (detail::is_operator_candidate(fn) &&
+                                 detail::member_access_admitted<Resolution>(fn, L) &&
                                  Resolution::class_member_participates(fn, L, pol) &&
                                  B::special_method_name(fn) != nullptr) {
                 // A member operator group binds under the backend's special-method
@@ -411,8 +444,10 @@ struct basic_carriage {
         - the default constructor (if any), each public non-copy/move constructor, and
           — for a baseless aggregate whose fields all bind — a synthesized field
           constructor;
-        - public data members / methods / operators that resolve as bound, plus the
-          eligible members of every flattened (non-native) public base.
+        - data members / methods / operators that resolve as bound (public, plus
+          protected where `detail::member_access_admitted` admits them — see
+          `policy::weld_protected`; private never), plus the eligible members of
+          every flattened (non-native) public base.
 
         @tparam B    the rod.
         @tparam T    the type to bind.
@@ -758,9 +793,13 @@ using stitch_welding_carriage = carriages::basic_carriage<carriages::marker_reso
 /** The **tack-welding** carriage: binds an *unmarked* library greedily — every
     reflectable type / function / global, namespaces recursed, bases flattened —
     ignoring the `weld` markers, while still enforcing the bindability gate. For
-    consuming a third-party library that carries no welder annotations. @see
+    consuming a third-party library that carries no welder annotations. Public
+    members only, like the stitch default; to tack a library's **protected**
+    members too (it cannot carry the `policy::weld_protected` annotation), use
+    `carriages::basic_carriage<carriages::greedy_resolution<true>>`. @see
     welder::carriages::greedy_resolution for the exact rules and caveats. */
-using tack_welding_carriage = carriages::basic_carriage<carriages::greedy_resolution>;
+using tack_welding_carriage =
+    carriages::basic_carriage<carriages::greedy_resolution<>>;
 
 /** The default carriage — an alias for @ref welder::stitch_welding_carriage. */
 using carriage = stitch_welding_carriage;

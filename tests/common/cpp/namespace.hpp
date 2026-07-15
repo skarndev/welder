@@ -271,6 +271,29 @@ int gadget_id(const nested::Gadget& g) {
 
 } // namespace foreign
 
+// A third-party library with a PROTECTED surface (think an extensible framework
+// base) — still zero welder markers, so the annotation route is closed. The
+// greedy resolution's WeldProtected knob is the blanket opt-in for the pass; the
+// plain tack of `foreign` above keeps its public-only default.
+namespace foreign_protected {
+
+struct Panel {
+    int frame() const {
+        return trim() + width;
+    }
+
+  protected:
+    int trim() const {
+        return 10;
+    }
+    int width{4};
+
+  private:
+    int serial{123}; // out under EVERY knob/resolution
+};
+
+} // namespace foreign_protected
+
 // The semi-manual route: bind a hand-picked function/variable directly onto a
 // module, without welding the whole enclosing namespace. Mirrors what namespace
 // binding does per member, but one entity at a time.
@@ -295,4 +318,14 @@ inline void register_foreign(WELDER_TEST_MODULE_T& m) {
                                   ::welder::tack_welding_carriage>;
     auto foreign_mod{WELDER_TEST_SUBMODULE(m, "foreign")};
     tack::weld_namespace<^^foreign>(foreign_mod);
+
+    // The protected-admitting tack: greedy_resolution's WeldProtected knob, the
+    // blanket for a library that cannot carry policy::weld_protected. Private
+    // stays out regardless — that boundary is not a knob.
+    using tack_protected = ::welder::welder<
+        WELDER_TEST_WELDER::rod_type, WELDER_TEST_WELDER::name_style,
+        ::welder::carriages::basic_carriage<
+            ::welder::carriages::greedy_resolution<true>>>;
+    auto fp_mod{WELDER_TEST_SUBMODULE(m, "foreign_protected")};
+    tack_protected::weld_namespace<^^foreign_protected>(fp_mod);
 }

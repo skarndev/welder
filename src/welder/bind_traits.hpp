@@ -120,35 +120,118 @@ consteval bool is_bindable_constructor(std::meta::info c) {
            !std::meta::parameters_of(c).empty();
 }
 
-/** The *shape* of a bindable method: a plain public member function.
+/** The *shape* of a bindable method: a plain non-private member function.
 
     Shape only — whether it *participates* is the resolution's decision (its
     `class_member_participates` hook; `member_bound` under the shipped
-    resolutions), composed by the carriage. Special members, destructors and
-    operators are skipped (operators are classified separately).
+    resolutions), and whether its access level is admitted is
+    @ref member_access_admitted's (public always, protected under
+    `policy::weld_protected` / the resolution's `protected_participates` hook);
+    both are composed by the carriage. **Private** members are rejected here,
+    in the shape — exposing a private member is a violation of welder's design,
+    so no resolution can readmit one. Special members, destructors and operators
+    are skipped (operators are classified separately).
     @param f a reflection of the member function.
-    @return `true` iff @a f is a public, non-deleted, non-special member function.
+    @return `true` iff @a f is a non-private, non-deleted, non-special member
+            function.
 */
 consteval bool is_method_candidate(std::meta::info f) {
     return std::meta::is_function(f) && !std::meta::is_constructor(f) &&
            !std::meta::is_special_member_function(f) &&
            !std::meta::is_destructor(f) && !std::meta::is_operator_function(f) &&
-           std::meta::is_public(f) && !std::meta::is_deleted(f);
+           !std::meta::is_private(f) && !std::meta::is_deleted(f);
 }
 
 /** The *shape* of a bindable member operator.
 
     Shape only, like @ref is_method_candidate — participation is the resolution's
-    call. Whether it maps to something in the target language — and under what
-    name — is a backend decision (see `rod::special_method_name`).
+    call, access admission @ref member_access_admitted's, and private is
+    rejected here for the same design reason. Whether it maps to something in
+    the target language — and under what name — is a backend decision (see
+    `rod::special_method_name`).
     @param f a reflection of the operator function.
-    @return `true` iff @a f is a public, non-deleted, non-special member operator.
+    @return `true` iff @a f is a non-private, non-deleted, non-special member
+            operator.
 */
 consteval bool is_operator_candidate(std::meta::info f) {
     return std::meta::is_function(f) && std::meta::is_operator_function(f) &&
-           !std::meta::is_special_member_function(f) && std::meta::is_public(f) &&
-           !std::meta::is_deleted(f);
+           !std::meta::is_special_member_function(f) &&
+           !std::meta::is_private(f) && !std::meta::is_deleted(f);
 }
+
+/** Is @a mem's *access level* admitted for binding under @a Resolution?
+
+    The access counterpart of `class_member_participates`: public members are
+    always admitted; **private** members never are (hard-wired here, before the
+    resolution is consulted — exposing a private member is a violation of
+    welder's design, not a policy a resolution may choose); **protected**
+    members are arbitrated by the resolution's optional
+    `protected_participates(mem, L)` hook, falling back — when the resolution
+    declares none — to the declaring class's `policy::weld_protected`
+    annotation (@ref welder::protected_welded). The fallback keeps the
+    annotation honored under any bespoke resolution unless it deliberately
+    takes the decision over; the tack-welding `greedy_resolution` exposes it as
+    a template knob for libraries that cannot be annotated.
+
+    A protected member admitted here still resolves through the normal
+    machinery (policy kind, marks, overload grouping, the bindability gate) —
+    admission only makes it *visible*. Emission needs no publicist and no
+    generated wrapper: access control applies to *names*, and welder binds
+    through spliced pointers-to-member (`&[:mem:]`), which P2996 exempts from
+    access checking once the reflection was obtained (welder queries with
+    `access_context::unchecked()` throughout).
+
+    @tparam Resolution the carriage's resolution.
+    @param mem a reflection of the class member.
+    @param L   the target language.
+    @return `true` iff @a mem's access level admits it for @a L.
+*/
+template <class Resolution>
+consteval bool member_access_admitted(std::meta::info mem, lang L) {
+    if (std::meta::is_public(mem))
+        return true;
+    if (!std::meta::is_protected(mem))
+        return false; // private (or inaccessible): out by design, always
+    if constexpr (requires { Resolution::protected_participates(mem, L); })
+        return Resolution::protected_participates(mem, L);
+    else
+        return ::welder::protected_welded(std::meta::parent_of(mem), L);
+}
+
+/** Splice-based accessors for data member @a Mem — the pointer-to-member-free
+    route the rods bind a **protected** field through.
+
+    [gcc-16 workaround, isolated here] gcc-16 access-checks a *dependent*
+    `&[:Mem:]` on a protected data member ("protected within this context"),
+    although the identical splice passes in a non-dependent context and the
+    dependent `&[:Fn:]` on a protected member *function* passes too — under
+    P2996 none of them should be checked (access applies to *names*; a splice
+    is not a name, and the access decision was already taken by the
+    `access_context` at query time). `std::meta::extract<F C::*>(Mem)` trips
+    the same check. The member-*access* splice `obj.[:Mem:]` does not, so a
+    protected field binds as a property over these two accessors instead of a
+    `def_readwrite`-style pointer-to-member. Both spellings are standard; fold
+    back to `&[:Mem:]` when gcc's check is fixed.
+
+    The class type is @a Mem's *declaring* class, so a flattened base's field
+    reads through the base reference (exactly as a base pointer-to-member
+    would).
+    @tparam Mem a reflection of the (non-static) data member. */
+template <std::meta::info Mem>
+struct field_access {
+    /** The declaring class. */
+    using class_type = typename [:std::meta::parent_of(Mem):];
+    /** The field's declared type (const included). */
+    using field_type = typename [:std::meta::type_of(Mem):];
+
+    /** Read the field (a reference, so backends can apply their
+        reference-internal return semantics, matching the pointer-to-member
+        path). @param c the object. @return the field. */
+    static const field_type& get(const class_type& c) { return c.[:Mem:]; }
+    /** Write the field (instantiated only for mutable fields).
+        @param c the object. @param v the new value. */
+    static void set(class_type& c, const field_type& v) { c.[:Mem:] = v; }
+};
 
 /** Whether a member operator is unary (0 parameters) vs binary (1 parameter).
 
@@ -317,7 +400,8 @@ consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn,
     const bool is_static{std::meta::is_static_member(fn)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
-        if (is_method_candidate(m) && Resolution::class_member_participates(m, L, pol) &&
+        if (is_method_candidate(m) && member_access_admitted<Resolution>(m, L) &&
+            Resolution::class_member_participates(m, L, pol) &&
             std::meta::is_static_member(m) == is_static &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
@@ -338,7 +422,8 @@ consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
     const policy_kind pol{::welder::policy_of(cls)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
-        if (is_operator_candidate(m) && Resolution::class_member_participates(m, L, pol) &&
+        if (is_operator_candidate(m) && member_access_admitted<Resolution>(m, L) &&
+            Resolution::class_member_participates(m, L, pol) &&
             std::meta::operator_of(m) == std::meta::operator_of(fn) &&
             is_unary_operator(m) == is_unary_operator(fn))
             out.push_back(m);

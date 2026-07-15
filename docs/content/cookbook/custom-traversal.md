@@ -16,7 +16,7 @@ customizing one is plain inheritance
 Greedy, minus the library's own privacy convention:
 
 ```cpp
-struct skip_private : welder::carriages::greedy_resolution {
+struct skip_private : welder::carriages::greedy_resolution<> {
     static consteval bool hidden(std::meta::info entity) {
         if (!std::meta::has_identifier(entity))
             return false;
@@ -28,14 +28,14 @@ struct skip_private : welder::carriages::greedy_resolution {
     static consteval bool member_participates(std::meta::info mem, welder::lang L,
                                               welder::policy_kind pol) {
         return !hidden(mem) &&
-               welder::carriages::greedy_resolution::member_participates(mem, L, pol);
+               welder::carriages::greedy_resolution<>::member_participates(mem, L, pol);
     }
 
     // nested namespaces: prune `detail` & friends wholesale — never recursed
     static consteval bool namespace_participates(std::meta::info ns, welder::lang L,
                                                  welder::policy_kind pol) {
         return !hidden(ns) &&
-               welder::carriages::greedy_resolution::namespace_participates(ns, L, pol);
+               welder::carriages::greedy_resolution<>::namespace_participates(ns, L, pol);
     }
 
     // class members — fields, methods, operators, constructors — resolve here,
@@ -53,13 +53,13 @@ struct skip_private : welder::carriages::greedy_resolution {
                                                     welder::policy_kind pol) {
         if (hidden(mem) || (std::meta::is_function(mem) && takes_c_string(mem)))
             return false;
-        return welder::carriages::greedy_resolution::class_member_participates(mem, L, pol);
+        return welder::carriages::greedy_resolution<>::class_member_participates(mem, L, pol);
     }
 
     // keep the bindability gate's registration oracle consistent (see below)
     static consteval bool counts_as_registered(std::meta::info type, welder::lang L) {
         return !hidden(type) &&
-               welder::carriages::greedy_resolution::counts_as_registered(type, L);
+               welder::carriages::greedy_resolution<>::counts_as_registered(type, L);
     }
 };
 ```
