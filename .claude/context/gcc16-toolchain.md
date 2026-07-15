@@ -100,9 +100,12 @@ header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
   Workaround (isolated): bind_traits `detail::field_access<Mem>` wraps the
   UNCHECKED `o.[:Mem:]` access in get/set functions; the rods' add_field uses a
   property path for protected data only. Fold back to `&[:Mem:]` when fixed.
-  **Status: already fixed on trunk** (gcc 17.0.0 20260715 snapshot compiles the
-  dependent-PMD splice, verified on godbolt 2026-07-15) — 16.1 still affected,
-  so the action is a `releases/gcc-16` backport request, not a new report; the
-  workaround stays until a fixed 16.x ships. The `extract<F C::*>` and direct
-  spliced-call rejections were NOT covered by that trunk run — re-check on
-  trunk before reporting them separately.
+  **Status (trunk matrix completed on godbolt, gcc 17.0 20260715):** the
+  dependent-PMD splice AND the direct spliced call are fixed on trunk — 16.1
+  still affected, so those need a `releases/gcc-16` backport request, and the
+  field_access workaround stays until a fixed 16.x ships. The one survivor on
+  trunk: `extract<T C::*>` of a protected DATA member is still rejected (the
+  member-function extract passes — same asymmetry). That is the reportable
+  bug; report drafted for the user 2026-07-15 (splice-vs-extract equal-value
+  inconsistency as the core argument). welder doesn't use extract for members,
+  so no additional workaround needed.
