@@ -185,8 +185,12 @@ field docs, method `doc`/`returns`, and parameter docs all read back off
 
 A member function template is skipped by the member walk, silently — at the
 reflection level it is a *template*, not a function, and welder cannot invent the
-type arguments a binding would need. This is the same "annotate the template, bind
-instantiations" model in miniature, with two practical consequences:
+type arguments a binding would need. Marks on it are inert, and welder cannot
+diagnose them either: C++26 reflection refuses `annotations_of` on an
+*uninstantiated* template (the same restriction behind this whole page), so the
+mark is unreadable until an instantiation exists. This is the "annotate the
+template, bind instantiations" model in miniature, with two practical
+consequences:
 
 **Chaining is the route.** There is no `weld_type`-style entry for a member
 template, but `weld_type` returns the rod's native class handle precisely so you

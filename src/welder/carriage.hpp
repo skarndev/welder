@@ -328,6 +328,13 @@ struct basic_carriage {
                     B::template add_operator<grp>(cls);
                 }
             }
+            // A member function TEMPLATE falls through every branch: not a
+            // bindable entity (welder cannot invent its template arguments) —
+            // bind an instantiation by chaining it onto the class handle
+            // weld_type returns. A participation mark on one is inert, and NOT
+            // diagnosable: P2996 refuses annotations_of on an uninstantiated
+            // template (the mark is readable only through an instantiation), so
+            // welder cannot even see it here to fail fast.
         }
     }
 

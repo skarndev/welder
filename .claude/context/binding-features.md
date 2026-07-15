@@ -270,7 +270,10 @@ tests/core/naming.cpp name_of_or asserts.
 
 **Member function templates:** skipped silently by the member walk
 (`is_function`==false; is_method_candidate never matches) — marks on them are
-silently inert too (no diagnostic yet; potential hardening). No weld entry
+silently inert too, and NOT diagnosable: annotations_of on an uninstantiated
+template throws (P2996 restriction; tried 2026-07-15 — a binding_marked
+static_assert in bind_members blew up on UNMARKED member templates because the
+query itself throws; reverted). No weld entry
 exists; the route is CHAINING on weld_type's returned handle
 (`cls.def("mix", &T::mix<double>)`), and on the Python rods the chained
 instantiation JOINS the welder-bound non-template overload group (pybind/nanobind
