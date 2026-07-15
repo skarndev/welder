@@ -4,7 +4,8 @@ import boxes
 
 
 def main() -> None:
-    # Two instantiations of one annotated template, bound under explicit names.
+    # Route 1: alias-declared instantiations, bound by the namespace sweep under
+    # their aliases' names — no name strings anywhere.
     a = boxes.IntBox("apples", 3)
     b = boxes.IntBox("pears", 5)
     assert a.value == 3
@@ -13,9 +14,17 @@ def main() -> None:
     t = boxes.TextBox("motto", "weld it")
     assert t.value == "weld it"
 
-    # The primary template's annotations reached every instantiation.
+    # The bare template itself never binds — only its aliased instantiations do.
+    assert not hasattr(boxes, "Box")
+
+    # Route 2: a directly-welded instantiation under an explicit verbatim name.
+    r = boxes.RealBox("pi", 3.14)
+    assert r.value == 3.14
+
+    # The primary template's annotations reached every instantiation, on both routes.
     assert "labelled box" in boxes.IntBox.__doc__
     assert "labelled box" in boxes.TextBox.__doc__
+    assert "labelled box" in boxes.RealBox.__doc__
 
     # A function-template instantiation, bound via substitute().
     boxes.swap_int_boxes(a, b)
