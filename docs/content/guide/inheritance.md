@@ -278,7 +278,8 @@ struct [[=welder::rods::python::trampoline]] PyRobot : Robot {
 
 The extra parentheses around the first argument keep its commas out of the
 preprocessor's argument splitting; a name/type pair matching no virtual is a
-compile error naming `virtual_slot`'s diagnostic function. *Generated* trampolines
+compile error carrying `welder::diag::no_matching_virtual_slot` and its
+explanation. *Generated* trampolines
 (below) use this form for every override, so there overloads need nothing at all.
 
 On the Python side both C++ overloads dispatch into the **one** Python method of

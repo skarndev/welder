@@ -33,8 +33,8 @@ signature is named.
 **Member resolution marks:** `exclude`/`include` plus `mark::only(lang...)` — the
 closed-world mark: the COMPLETE set of languages the member binds for; under
 `opt_in` it doubles as the opt-in; `exclude` still beats it; repeats union; bare
-form diagnosed at resolution (reflect.hpp `member_bound`, anchor fn
-`bare_mark_only_is_meaningless_…`). Cases: `resolution.hpp` `only_py` /
+form diagnosed at resolution (reflect.hpp `member_bound`, throws
+`diag::bare_mark_only`). Cases: `resolution.hpp` `only_py` /
 `only_then_excl` / `only_lua` + test_resolution.py / resolution_spec.lua.
 
 **Marks resolve PER OVERLOAD (ctors included), via the resolution.** Class members
@@ -68,10 +68,7 @@ Access admission is a layer BEFORE `member_bound`: bind_traits
 PRIVATE hard-out before any hook (design invariant, no resolution can readmit);
 protected via the resolution's OPTIONAL
 `protected_participates(mem, L, bound_into)` hook (requires-detected; a
-leftover 2-arg hook hard-errors via a THROWN C++26 constexpr exception —
-`detail::diag::stale_hook_signature`, whose prose message lands verbatim in
-gcc's `uncaught exception` diagnostic; probed better than the older
-undefined-fn anchor style, which the two reflect.hpp anchors still use —
+leftover 2-arg hook hard-errors via a thrown `diag::stale_hook_signature`
 rather than being silently ignored), falling back to the declaring class's
 `policy::weld_protected` annotation (`reflect.hpp` `protected_welded` — masked
 like exclude/include, bare = all langs, repeats union, read through template
@@ -453,8 +450,7 @@ the group).
 - **Readers/validation** (`reflect.hpp`): `return_policy_of(fn, L) -> rv_kind`
   (plain `annotations_of_with_type` idiom — the spec is non-templated; first mask
   covering `L` wins, else `automatic`); `validate_return_policy<Fn, L>()` — a
-  consteval that hard-errors (diagnostic anchor
-  `return_policy_binds_a_reference_to_a_returned_temporary`) when a
+  consteval that hard-errors (throws `diag::dangling_return_policy`) when a
   reference-category kind meets a non-pointer/non-reference `return_type_of(Fn)`.
   `keep_alive_pairs<Fn>()` (`bind_traits.hpp` detail, has `<array>`) materializes the
   `(nurse, patient)` pairs as a splice-ready static array.

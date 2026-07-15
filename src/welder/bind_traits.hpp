@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <vector>
 
+#include <welder/diag.hpp>    // the consteval diagnostics (stale_hook_signature)
 #include <welder/reflect.hpp> // resolution: welded_for / member_bound / public_bases
 
 /** @file
@@ -160,18 +161,6 @@ consteval bool is_operator_candidate(std::meta::info f) {
            !std::meta::is_private(f) && !std::meta::is_deleted(f);
 }
 
-namespace diag {
-/** Thrown (during constant evaluation — a C++26 constexpr exception) when a
-    resolution still declares a hook under a superseded signature. Escaping the
-    consteval evaluation, it renders the binding ill-formed with the carried
-    message in the compiler's `uncaught exception` diagnostic — a two-argument
-    `protected_participates` would otherwise be silently ignored (the
-    detection is a `requires` probe). */
-struct stale_hook_signature {
-    std::string_view what; /**< What changed and how to migrate. */
-};
-} // namespace diag
-
 /** Is @a mem's *access level* admitted for binding under @a Resolution?
 
     The access counterpart of `class_member_participates`: public members are
@@ -224,11 +213,7 @@ consteval bool member_access_admitted(std::meta::info mem, lang L,
                              Resolution::protected_participates(mem, L);
                          }) {
         // A pre-bound_into hook: hard-error rather than silently ignore it.
-        throw diag::stale_hook_signature{
-            "welder: this resolution's protected_participates hook gained a "
-            "trailing `std::meta::info bound_into` parameter (the entity whose "
-            "binding receives the member); update its signature to "
-            "(mem, lang, bound_into)"};
+        throw ::welder::diag::stale_hook_signature{};
     } else {
         return ::welder::protected_welded(std::meta::parent_of(mem), L);
     }

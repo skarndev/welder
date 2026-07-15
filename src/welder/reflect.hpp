@@ -1,6 +1,8 @@
 #pragma once
 #include <meta>
 
+#include <welder/diag.hpp>
+
 /** @file
     Language-agnostic resolution: given a reflected type/member and a target
     language, decide what participates in binding. Backends consume these
@@ -202,15 +204,6 @@ consteval rv_kind return_policy_of(std::meta::info fn, lang L) {
     return rv_kind::automatic;
 }
 
-namespace detail {
-/** Diagnostic anchor, never defined: a `return_policy` requesting a
-    reference-category policy (`reference` / `reference_internal`) on a callable
-    that returns *by value* would bind a reference to a temporary. Naming this in
-    constant evaluation is the compile error that says so — drop the policy, or
-    return a pointer/reference. */
-void return_policy_binds_a_reference_to_a_returned_temporary();
-} // namespace detail
-
 /** Reject a `return_policy` on @a Fn (for language @a L) that contradicts @a Fn's
     return type.
 
@@ -222,7 +215,9 @@ void return_policy_binds_a_reference_to_a_returned_temporary();
     honor passes; only the dangling case is diagnosed.
 
     @tparam Fn a reflection of the callable being bound.
-    @tparam L  the target language. */
+    @tparam L  the target language.
+    @throws diag::dangling_return_policy (a constant-evaluation error) on the
+            contradiction. */
 template <std::meta::info Fn, lang L>
 consteval void validate_return_policy() {
     constexpr rv_kind k{return_policy_of(Fn, L)};
@@ -231,17 +226,9 @@ consteval void validate_return_policy() {
         if constexpr (!(std::meta::is_pointer_type(rt) ||
                         std::meta::is_lvalue_reference_type(rt) ||
                         std::meta::is_rvalue_reference_type(rt)))
-            detail::return_policy_binds_a_reference_to_a_returned_temporary();
+            throw diag::dangling_return_policy{};
     }
 }
-
-namespace detail {
-/** Diagnostic anchor, never defined: a bare `[[=welder::mark::only]]` is
-    meaningless ("only, for every language" restricts nothing) — naming this in
-    constant evaluation is the compile error that says so. Call the mark with
-    the languages: `mark::only(welder::lang::py)`. */
-void bare_mark_only_is_meaningless_call_it_with_languages();
-} // namespace detail
 
 /** The core decision a backend asks for each member: does @a member bind for
     language @a L under policy @a pol?
@@ -252,6 +239,8 @@ void bare_mark_only_is_meaningless_call_it_with_languages();
     @return excluded ⇒ `false`; else an `only` mark ⇒ `true` iff it names @a L
             (under either policy — `only` is also the opt-in); else `automatic`
             ⇒ `true`; else (`opt_in`) ⇒ `true` iff explicitly included.
+    @throws diag::bare_mark_only (a constant-evaluation error) on an uncalled
+            `[[=welder::mark::only]]` — it must name the languages.
 */
 consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
     if (excluded_for(member, L))
@@ -262,7 +251,7 @@ consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
         for (auto a : onlys) {
             auto s{std::meta::extract<detail::only_spec>(a)};
             if (s.mask == 0)
-                detail::bare_mark_only_is_meaningless_call_it_with_languages();
+                throw diag::bare_mark_only{};
             mask |= s.mask;
         }
         return (mask & lang_bit(L)) != 0;

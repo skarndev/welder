@@ -1,4 +1,5 @@
 #pragma once
+#include <welder/diag.hpp>
 #include <welder/lang.hpp>
 
 /** @file
@@ -27,14 +28,6 @@ using size_type = decltype(sizeof(0));
 static_assert(sizeof(unsigned) >= 4,
               "welder's language mask needs a >= 32-bit unsigned");
 
-namespace detail {
-/** Diagnostic anchor, never defined: naming it in constant evaluation makes a
-    `lang` value past the mask width fail with this function's name in the
-    error, instead of an opaque shift overflow. Use @ref welder::user_lang to
-    mint an in-range user language. */
-void lang_is_not_a_mask_bit_index_use_user_lang();
-} // namespace detail
-
 /** The single-language bit for @a l within a language mask.
 
     Languages are tracked as bits in a mask so a spec can name an arbitrary
@@ -42,10 +35,12 @@ void lang_is_not_a_mask_bit_index_use_user_lang();
     user languages with @ref welder::user_lang, which cannot go out of range).
     @param l the language.
     @return `1u << index-of(l)`.
+    @throws diag::lang_out_of_mask_range (a constant-evaluation error) for a
+            value past the mask width — instead of an opaque shift overflow.
 */
 consteval unsigned lang_bit(lang l) {
     if (static_cast<unsigned>(l) >= 8 * sizeof(unsigned))
-        detail::lang_is_not_a_mask_bit_index_use_user_lang();
+        throw diag::lang_out_of_mask_range{};
     return 1u << static_cast<unsigned>(l);
 }
 

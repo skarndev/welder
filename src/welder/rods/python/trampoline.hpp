@@ -4,6 +4,7 @@
 #include <string_view>
 #include <vector>
 
+#include <welder/diag.hpp>       // the consteval diagnostics (no_matching_virtual_slot)
 #include <welder/vocabulary.hpp> // the annotation vocabulary (for structural specs)
 
 /** @file
@@ -303,25 +304,21 @@ consteval std::vector<std::meta::info> overridable_virtuals(std::meta::info type
 
     (The extra parentheses keep any commas inside the expression out of the
     preprocessor's argument splitting.) Searches @ref overridable_virtuals, so
-    inherited slots are found too. A name/type pair matching no slot is a
-    constant-evaluation error naming this function.
+    inherited slots are found too.
     @param type    a reflection of the welded type.
     @param name    the virtual's identifier.
     @param fn_type a reflection of the overload's full function type, trailing
                    qualifiers included (e.g. `^^int(int) const`).
-    @return the matching slot's reflection. */
+    @return the matching slot's reflection.
+    @throws diag::no_matching_virtual_slot (a constant-evaluation error) when
+            no slot matches the name/type pair. */
 consteval std::meta::info virtual_slot(std::meta::info type, std::string_view name,
                                        std::meta::info fn_type) {
     for (auto s : overridable_virtuals(type))
         if (std::meta::identifier_of(s) == name &&
             std::meta::type_of(s) == std::meta::dealias(fn_type))
             return s;
-    // Not constexpr: reaching this call is a constant-evaluation error whose
-    // diagnostic names it — the consteval analogue of a static_assert message.
-    extern void
-        welder_no_overridable_virtual_matches_the_given_name_and_function_type();
-    welder_no_overridable_virtual_matches_the_given_name_and_function_type();
-    return std::meta::info{};
+    throw ::welder::diag::no_matching_virtual_slot{};
 }
 
 /** The number of overridable virtual member functions of @a type, inherited ones
