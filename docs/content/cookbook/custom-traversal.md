@@ -24,18 +24,23 @@ struct skip_private : welder::carriages::greedy_resolution<> {
         return name.starts_with('_') || name == "detail" || name == "impl";
     }
 
-    // namespace-scope classes / functions / variables
+    // namespace-scope classes / functions / variables (bound_into = the swept
+    // namespace — forwarded; a rule that doesn't need the context ignores it)
     static consteval bool member_participates(std::meta::info mem, welder::lang L,
-                                              welder::policy_kind pol) {
+                                              welder::policy_kind pol,
+                                              std::meta::info bound_into) {
         return !hidden(mem) &&
-               welder::carriages::greedy_resolution<>::member_participates(mem, L, pol);
+               welder::carriages::greedy_resolution<>::member_participates(
+                   mem, L, pol, bound_into);
     }
 
     // nested namespaces: prune `detail` & friends wholesale — never recursed
     static consteval bool namespace_participates(std::meta::info ns, welder::lang L,
-                                                 welder::policy_kind pol) {
+                                                 welder::policy_kind pol,
+                                                 std::meta::info bound_into) {
         return !hidden(ns) &&
-               welder::carriages::greedy_resolution<>::namespace_participates(ns, L, pol);
+               welder::carriages::greedy_resolution<>::namespace_participates(
+                   ns, L, pol, bound_into);
     }
 
     // class members — fields, methods, operators, constructors — resolve here,
@@ -50,10 +55,12 @@ struct skip_private : welder::carriages::greedy_resolution<> {
         return false;
     }
     static consteval bool class_member_participates(std::meta::info mem, welder::lang L,
-                                                    welder::policy_kind pol) {
+                                                    welder::policy_kind pol,
+                                                    std::meta::info bound_into) {
         if (hidden(mem) || (std::meta::is_function(mem) && takes_c_string(mem)))
             return false;
-        return welder::carriages::greedy_resolution<>::class_member_participates(mem, L, pol);
+        return welder::carriages::greedy_resolution<>::class_member_participates(
+            mem, L, pol, bound_into);
     }
 
     // keep the bindability gate's registration oracle consistent (see below)
@@ -88,7 +95,13 @@ C-string legacy API") prune exactly one overload of `label` while its modern
 sibling binds, identically on every rod. (The same mechanism is what makes
 [`mark::exclude` on an individual overload or constructor](../guide/annotations.md)
 work under ordinary stitch welding — the marks *are* the stock resolution's
-per-member rule.)
+per-member rule.) Each per-member predicate also receives the **bound-into
+entity** (`std::meta::info`, trailing) — for class members the welded type,
+held fixed while a non-welded base's members are flattened in — so a rule can
+scope itself to a flattening target, e.g. admit a mixin's
+[protected members](../guide/annotations.md#policyweld_protected-expose-the-protected-surface)
+only into one specific derived binding via the optional
+`protected_participates(mem, L, bound_into)` hook.
 
 **Override the oracle too.** The gate's registration oracle
 (`counts_as_registered`) is part of the resolution: the greedy default vouches

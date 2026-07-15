@@ -151,13 +151,21 @@ custom rules, and mixed welded/unwelded sets under tack all resolve consistently
 **Access admission** is a layer of its own, before `member_bound` (bind_traits
 `member_access_admitted<Resolution>`): public always in, PRIVATE hard-out before any
 hook (no resolution can readmit it), protected via the resolution's OPTIONAL
-`protected_participates(mem, L)` hook (requires-detected — the `resolution` concept
-does not demand it), defaulting to the declaring class's `policy::weld_protected`
-annotation. `greedy_resolution` is `template <bool WeldProtected = false>` — the
-whole-pass protected knob for unannotatable third-party libraries
-(`tack_welding_carriage` = `greedy_resolution<>`). Details + the gcc-16
-protected-data-splice workaround (`detail::field_access`): binding-features.md
-"Protected members" + gcc16-toolchain.md.
+`protected_participates(mem, L, bound_into)` hook (requires-detected — the
+`resolution` concept does not demand it; a leftover 2-arg hook hard-errors),
+defaulting to the declaring class's `policy::weld_protected` annotation.
+**Every per-member resolution predicate takes a trailing `std::meta::info
+bound_into`** — the entity whose binding receives the member (class members:
+the welded type, a `BoundInto` NTTP held fixed through bind_members'
+flattening recursion, ≠ `parent_of(mem)` for a flattened base's member;
+namespace hooks: the swept/parent namespace; is_native_base: the walked type) —
+bespoke-rule context, ignored by the shipped resolutions; `participates` +
+`counts_as_registered` have none. `greedy_resolution` is
+`template <bool WeldProtected = false>` — the whole-pass protected knob for
+unannotatable third-party libraries (`tack_welding_carriage` =
+`greedy_resolution<>`). Details + the gcc-16 protected-data-splice workaround
+(`detail::field_access`): binding-features.md "Protected members" +
+gcc16-toolchain.md.
 
 **Two seams, both defaulted.** (1) The **name override**: weld_type / weld_function /
 weld_variable / weld_namespace_as_submodule all take an optional trailing `const char*

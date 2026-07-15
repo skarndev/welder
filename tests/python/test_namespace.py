@@ -190,3 +190,19 @@ def test_tack_weld_protected_knob(mod: ModuleType) -> None:
     p.width = 6
     assert p.frame() == 16
     assert not hasattr(p, "serial")  # private: out under every knob/resolution
+
+
+def test_resolution_hook_receives_bound_into(mod: ModuleType) -> None:
+    # foreign_mixed is tacked with a resolution whose protected_participates
+    # hook admits only when bound_into == Display. Meter DECLARES the protected
+    # reading(); Display merely inherits it (Meter is unmarked, so it flattens).
+    # The member appearing on Display but not on Meter proves the carriage
+    # hands the hook the WELDED type (the flattening target), not the member's
+    # declaring class.
+    fm = mod.foreign_mixed
+    d = fm.Display()
+    assert d.reading() == 55  # flattened protected member, admitted into Display
+    assert d.model() == 1  # public members flatten as usual
+    m = fm.Meter()
+    assert m.model() == 1
+    assert not hasattr(m, "reading")  # same member, refused on Meter's own binding

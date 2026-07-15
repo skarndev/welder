@@ -64,10 +64,13 @@ chaining_spec.lua.
 
 ## Protected members — `policy::weld_protected`
 Access admission is a layer BEFORE `member_bound`: bind_traits
-`member_access_admitted<Resolution>(mem, L)` — public always in; PRIVATE
-hard-out before any hook (design invariant, no resolution can readmit);
-protected via the resolution's OPTIONAL `protected_participates(mem, L)` hook
-(requires-detected, concept unchanged), falling back to the declaring class's
+`member_access_admitted<Resolution>(mem, L, bound_into)` — public always in;
+PRIVATE hard-out before any hook (design invariant, no resolution can readmit);
+protected via the resolution's OPTIONAL
+`protected_participates(mem, L, bound_into)` hook (requires-detected; a
+leftover 2-arg hook hard-errors via the
+`protected_participates_gained_a_bound_into_parameter…` diag anchor rather
+than being silently ignored), falling back to the declaring class's
 `policy::weld_protected` annotation (`reflect.hpp` `protected_welded` — masked
 like exclude/include, bare = all langs, repeats union, read through template
 instantiations from the template; parent_of(mem) = the instantiation, NOT the
@@ -100,6 +103,19 @@ reference_internal, matching def_readwrite) / sol2 `sol::property` /
 LuaBridge3 `addProperty(get[, set])`. Fold back to `&[:Mem:]` when gcc fixes
 the check.
 
+**bound_into (resolution-hook context):** every per-member resolution hook
+takes a trailing `std::meta::info bound_into` — the entity whose binding
+RECEIVES the member: the welded type for class members (bind_members gained a
+`BoundInto` NTTP held fixed through the flattening recursion, so it ≠
+`parent_of(mem)` exactly for a flattened base's member), the swept namespace
+for member/alias hooks, the parent namespace for namespace_participates, the
+walked type for is_native_base, ^^E for enumerators, Type for ctor machinery.
+`participates` + `counts_as_registered` deliberately have none (manual entry
+points / pure registration predicate). The overload-set selector signature is
+now `(info, lang, info)` (overload_group gained a BoundInto NTTP). Shipped
+resolutions ignore it (unnamed param); it exists for bespoke hooks ("admit this
+mixin's protected members only into Derived").
+
 Tests: resolution.hpp `Shielded` (methods/overloads/static/data/exclude/private)
 + `ShieldedPy` (lang-scoped: py yes, lua no) + `OptInShielded` (include still
 required) ↔ test_resolution.py / resolution_spec.lua; templates.hpp `Vault`/
@@ -107,9 +123,15 @@ required) ↔ test_resolution.py / resolution_spec.lua; templates.hpp `Vault`/
 templates_spec.lua; gen_trampolines.hpp `Keep` (bound+overridable protected NVI
 hook, protected data; `Golem::secret` = the unbound negative control) ↔
 test_gen_trampolines.py; namespace.hpp `foreign_protected::Panel` tacked with
-`greedy_resolution<true>` ↔ test_namespace.py / namespace_spec.lua; compile
-lock tests/core/protected_access.cpp (reader masks, hook-vs-fallback, private
-hard-out even under an admit-everything hook, dealias-required-for-alias note).
+`greedy_resolution<true>` + `foreign_mixed::Meter/Display` tacked with a
+bound_into-keyed hook (the flattened protected member appears on Display, not
+on Meter — locks the BoundInto threading) ↔ test_namespace.py /
+namespace_spec.lua; compile lock tests/core/protected_access.cpp (reader masks,
+hook-vs-fallback, bound_into-keyed hook, private hard-out even under an
+admit-everything hook, dealias-required-for-alias note). NB
+detail::aggregate_fields gained the n!=0 fill guard (std::array<info,0>::
+operator[] is not consteval — a FIELDLESS class hard-errored the Lua rods'
+ctor machinery; Meter was the first such class in the suite).
 
 ## Overloaded operators → Python special methods
 A *member* operator binds under its dunder (`operator+` → `__add__`, `operator==`

@@ -159,6 +159,16 @@ consteval bool is_operator_candidate(std::meta::info f) {
            !std::meta::is_private(f) && !std::meta::is_deleted(f);
 }
 
+namespace diag {
+/** Diagnostic anchor, never defined: the optional resolution hook
+    `protected_participates` gained a trailing `std::meta::info bound_into`
+    parameter (the entity whose binding receives the member). A two-argument
+    hook would otherwise be silently ignored (the detection is a `requires`
+    probe), so naming this in constant evaluation is the compile error that
+    says to migrate the signature. */
+void protected_participates_gained_a_bound_into_parameter_update_its_signature();
+} // namespace diag
+
 /** Is @a mem's *access level* admitted for binding under @a Resolution?
 
     The access counterpart of `class_member_participates`: public members are
@@ -166,12 +176,21 @@ consteval bool is_operator_candidate(std::meta::info f) {
     resolution is consulted — exposing a private member is a violation of
     welder's design, not a policy a resolution may choose); **protected**
     members are arbitrated by the resolution's optional
-    `protected_participates(mem, L)` hook, falling back — when the resolution
-    declares none — to the declaring class's `policy::weld_protected`
-    annotation (@ref welder::protected_welded). The fallback keeps the
-    annotation honored under any bespoke resolution unless it deliberately
-    takes the decision over; the tack-welding `greedy_resolution` exposes it as
-    a template knob for libraries that cannot be annotated.
+    `protected_participates(mem, L, bound_into)` hook, falling back — when the
+    resolution declares none — to the declaring class's
+    `policy::weld_protected` annotation (@ref welder::protected_welded). The
+    fallback keeps the annotation honored under any bespoke resolution unless
+    it deliberately takes the decision over; the tack-welding
+    `greedy_resolution` exposes it as a template knob for libraries that
+    cannot be annotated.
+
+    @a bound_into is the entity whose binding *receives* the member — the
+    welded (most-derived) type, held fixed through the base-flattening
+    recursion, or the enum for an enumerator. It equals
+    `parent_of(mem)` except when a non-welded base's member is flattened onto
+    a derived binding — exactly the case a bespoke hook may want to key on
+    ("admit this mixin's protected members, but only into `Derived`"). The
+    shipped resolutions ignore it (the declaring-class annotation rule).
 
     A protected member admitted here still resolves through the normal
     machinery (policy kind, marks, overload grouping, the bindability gate) —
@@ -182,20 +201,31 @@ consteval bool is_operator_candidate(std::meta::info f) {
     `access_context::unchecked()` throughout).
 
     @tparam Resolution the carriage's resolution.
-    @param mem a reflection of the class member.
-    @param L   the target language.
+    @param mem        a reflection of the class member.
+    @param L          the target language.
+    @param bound_into the entity whose binding receives the member.
     @return `true` iff @a mem's access level admits it for @a L.
 */
 template <class Resolution>
-consteval bool member_access_admitted(std::meta::info mem, lang L) {
+consteval bool member_access_admitted(std::meta::info mem, lang L,
+                                      std::meta::info bound_into) {
     if (std::meta::is_public(mem))
         return true;
     if (!std::meta::is_protected(mem))
         return false; // private (or inaccessible): out by design, always
-    if constexpr (requires { Resolution::protected_participates(mem, L); })
-        return Resolution::protected_participates(mem, L);
-    else
+    if constexpr (requires {
+                      Resolution::protected_participates(mem, L, bound_into);
+                  }) {
+        return Resolution::protected_participates(mem, L, bound_into);
+    } else if constexpr (requires {
+                             Resolution::protected_participates(mem, L);
+                         }) {
+        // A pre-bound_into hook: hard-error rather than silently ignore it.
+        diag::protected_participates_gained_a_bound_into_parameter_update_its_signature();
+        return false;
+    } else {
         return ::welder::protected_welded(std::meta::parent_of(mem), L);
+    }
 }
 
 /** Splice-based accessors for data member @a Mem — the pointer-to-member-free
@@ -262,9 +292,14 @@ consteval auto aggregate_fields() {
     constexpr auto ctx{std::meta::access_context::unchecked()};
     constexpr std::size_t n{std::meta::nonstatic_data_members_of(^^T, ctx).size()};
     std::array<std::meta::info, n> fs{};
-    std::size_t i{0};
-    for (auto m : std::meta::nonstatic_data_members_of(^^T, ctx))
-        fs[i++] = m;
+    // Guard the fill: std::array<T, 0>::operator[] is not usable (its size-0
+    // trap overload is not consteval, so merely instantiating it with the
+    // consteval-only std::meta::info is an error for a fieldless type).
+    if constexpr (n != 0) {
+        std::size_t i{0};
+        for (auto m : std::meta::nonstatic_data_members_of(^^T, ctx))
+            fs[i++] = m;
+    }
     return fs;
 }
 
@@ -292,7 +327,7 @@ consteval bool aggregate_initializable() {
         return false;
     const policy_kind pol{policy_of(^^T)};
     for (auto m : fields)
-        if (!Resolution::class_member_participates(m, L, pol))
+        if (!Resolution::class_member_participates(m, L, pol, ^^T))
             return false;
     return true;
 }
@@ -390,18 +425,21 @@ consteval bool namespace_has_bindable(std::meta::info ns, lang L) {
     @tparam Resolution the carriage's resolution.
     @param fn a reflection of one participating method (see is_method_candidate).
     @param L  the target language.
+    @param bound_into the entity whose binding receives the group (the welded
+           type — not necessarily `parent_of(fn)` when flattening a base).
     @return the overload set (always contains @a fn). */
 template <class Resolution>
-consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn,
-                                                           lang L) {
+consteval std::vector<std::meta::info> method_overload_set(
+    std::meta::info fn, lang L, std::meta::info bound_into) {
     const std::meta::info cls{std::meta::parent_of(fn)};
     const policy_kind pol{::welder::policy_of(cls)};
     const auto name{std::meta::identifier_of(fn)};
     const bool is_static{std::meta::is_static_member(fn)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
-        if (is_method_candidate(m) && member_access_admitted<Resolution>(m, L) &&
-            Resolution::class_member_participates(m, L, pol) &&
+        if (is_method_candidate(m) &&
+            member_access_admitted<Resolution>(m, L, bound_into) &&
+            Resolution::class_member_participates(m, L, pol, bound_into) &&
             std::meta::is_static_member(m) == is_static &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
@@ -414,16 +452,18 @@ consteval std::vector<std::meta::info> method_overload_set(std::meta::info fn,
     @tparam Resolution the carriage's resolution.
     @param fn a reflection of one participating operator (see is_operator_candidate).
     @param L  the target language.
+    @param bound_into the entity whose binding receives the group.
     @return the overload set (always contains @a fn). */
 template <class Resolution>
-consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
-                                                             lang L) {
+consteval std::vector<std::meta::info> operator_overload_set(
+    std::meta::info fn, lang L, std::meta::info bound_into) {
     const std::meta::info cls{std::meta::parent_of(fn)};
     const policy_kind pol{::welder::policy_of(cls)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
-        if (is_operator_candidate(m) && member_access_admitted<Resolution>(m, L) &&
-            Resolution::class_member_participates(m, L, pol) &&
+        if (is_operator_candidate(m) &&
+            member_access_admitted<Resolution>(m, L, bound_into) &&
+            Resolution::class_member_participates(m, L, pol, bound_into) &&
             std::meta::operator_of(m) == std::meta::operator_of(fn) &&
             is_unary_operator(m) == is_unary_operator(fn))
             out.push_back(m);
@@ -436,37 +476,44 @@ consteval std::vector<std::meta::info> operator_overload_set(std::meta::info fn,
     @tparam Resolution the carriage's resolution.
     @param fn a reflection of one participating namespace-scope function.
     @param L  the target language.
+    @param bound_into the namespace being swept (== `parent_of(fn)`; passed for
+           hook-signature uniformity).
     @return the overload set (always contains @a fn). */
 template <class Resolution>
-consteval std::vector<std::meta::info> function_overload_set(std::meta::info fn,
-                                                             lang L) {
+consteval std::vector<std::meta::info> function_overload_set(
+    std::meta::info fn, lang L, std::meta::info bound_into) {
     const std::meta::info ns{std::meta::parent_of(fn)};
     const policy_kind pol{::welder::policy_of(ns)};
     const auto name{std::meta::identifier_of(fn)};
     std::vector<std::meta::info> out{};
     for (auto m : std::meta::members_of(ns, std::meta::access_context::unchecked()))
-        if (std::meta::is_function(m) && Resolution::member_participates(m, L, pol) &&
+        if (std::meta::is_function(m) &&
+            Resolution::member_participates(m, L, pol, bound_into) &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
     return out;
 }
 
-/** The signature of an overload-set selector specialization. */
-using overload_selector = std::vector<std::meta::info> (*)(std::meta::info, lang);
+/** The signature of an overload-set selector specialization: the representative
+    overload, the language, and the entity the group binds into. */
+using overload_selector =
+    std::vector<std::meta::info> (*)(std::meta::info, lang, std::meta::info);
 
 /** @a Select's overload set for @a Fn as a fixed-size, splice-ready static array.
-    @tparam Select the selector specialization (e.g. `method_overload_set<R>`).
-    @tparam Fn     the representative overload.
-    @tparam L      the target language.
+    @tparam Select    the selector specialization (e.g. `method_overload_set<R>`).
+    @tparam Fn        the representative overload.
+    @tparam L         the target language.
+    @tparam BoundInto the entity whose binding receives the group.
     @return an array of the group's member reflections, in declaration order. */
-template <overload_selector Select, std::meta::info Fn, lang L>
+template <overload_selector Select, std::meta::info Fn, lang L,
+          std::meta::info BoundInto>
 consteval auto overload_group() {
-    constexpr std::size_t n{Select(Fn, L).size()};
+    constexpr std::size_t n{Select(Fn, L, BoundInto).size()};
     std::array<std::meta::info, n> out{};
     // Guard the fill: std::array<T, 0>::operator[] is not usable (n is >= 1 for a
     // group leader, but the guard keeps this well-formed regardless).
     if constexpr (n != 0) {
-        auto v{Select(Fn, L)};
+        auto v{Select(Fn, L, BoundInto)};
         for (std::size_t i{0}; i < n; ++i)
             out[i] = v[i];
     }
@@ -477,10 +524,12 @@ consteval auto overload_group() {
     set — the single visit on which the carriage emits the whole group.
     @tparam Select the selector specialization.
     @param fn the candidate overload.
-    @param L  the target language. */
+    @param L  the target language.
+    @param bound_into the entity whose binding receives the group. */
 template <overload_selector Select>
-consteval bool is_overload_leader(std::meta::info fn, lang L) {
-    auto v{Select(fn, L)};
+consteval bool is_overload_leader(std::meta::info fn, lang L,
+                                  std::meta::info bound_into) {
+    auto v{Select(fn, L, bound_into)};
     return !v.empty() && v.front() == fn;
 }
 
@@ -504,7 +553,8 @@ consteval auto manual_function_group() {
         return std::array<std::meta::info, 1>{Fn};
     } else {
         constexpr std::size_t n{[] {
-            auto v{function_overload_set<Resolution>(Fn, L)};
+            auto v{function_overload_set<Resolution>(Fn, L,
+                                                     std::meta::parent_of(Fn))};
             std::size_t extra{1};
             for (auto m : v)
                 if (m == Fn)
@@ -514,7 +564,8 @@ consteval auto manual_function_group() {
         std::array<std::meta::info, n> out{};
         out[0] = Fn;
         std::size_t i{1};
-        for (auto m : function_overload_set<Resolution>(Fn, L))
+        for (auto m :
+             function_overload_set<Resolution>(Fn, L, std::meta::parent_of(Fn)))
             if (m != Fn)
                 out[i++] = m;
         return out;
@@ -550,7 +601,7 @@ consteval auto ctor_group() {
         std::size_t count{0};
         for (auto c : std::meta::members_of(Type, ctx))
             if (is_bindable_constructor(c) &&
-                Resolution::class_member_participates(c, L, Pol))
+                Resolution::class_member_participates(c, L, Pol, Type))
                 ++count;
         return count;
     }()};
@@ -559,7 +610,7 @@ consteval auto ctor_group() {
         std::size_t i{0};
         for (auto c : std::meta::members_of(Type, ctx))
             if (is_bindable_constructor(c) &&
-                Resolution::class_member_participates(c, L, Pol))
+                Resolution::class_member_participates(c, L, Pol, Type))
                 out[i++] = c;
     }
     return out;
@@ -585,8 +636,8 @@ consteval bool default_ctor_admitted() {
     for (auto c : std::meta::members_of(Type, ctx))
         if (std::meta::is_constructor(c) && std::meta::parameters_of(c).empty())
             return std::meta::is_public(c) && !std::meta::is_deleted(c) &&
-                   Resolution::class_member_participates(c, L,
-                                                         policy_kind::automatic);
+                   Resolution::class_member_participates(
+                       c, L, policy_kind::automatic, Type);
     return true; // implicit (or absent): constructibility alone decides
 }
 

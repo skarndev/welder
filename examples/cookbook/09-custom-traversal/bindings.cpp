@@ -29,19 +29,23 @@ struct skip_private : welder::carriages::greedy_resolution<> {
         return name.starts_with('_') || name == "detail" || name == "impl";
     }
 
-    /** Namespace-scope classes / functions / variables: skip the hidden ones. */
+    /** Namespace-scope classes / functions / variables: skip the hidden ones.
+        (`bound_into` — the swept namespace — is forwarded, unused here.) */
     static consteval bool member_participates(std::meta::info mem, welder::lang L,
-                                              welder::policy_kind pol) {
+                                              welder::policy_kind pol,
+                                              std::meta::info bound_into) {
         return !hidden(mem) &&
-               welder::carriages::greedy_resolution<>::member_participates(mem, L, pol);
+               welder::carriages::greedy_resolution<>::member_participates(
+                   mem, L, pol, bound_into);
     }
 
     /** Nested namespaces: prune `detail` & friends wholesale (no recursion). */
     static consteval bool namespace_participates(std::meta::info ns, welder::lang L,
-                                                 welder::policy_kind pol) {
+                                                 welder::policy_kind pol,
+                                                 std::meta::info bound_into) {
         return !hidden(ns) &&
-               welder::carriages::greedy_resolution<>::namespace_participates(ns, L,
-                                                                            pol);
+               welder::carriages::greedy_resolution<>::namespace_participates(
+                   ns, L, pol, bound_into);
     }
 
     /** The legacy C-string API surface, detected from the SIGNATURE. */
@@ -60,13 +64,14 @@ struct skip_private : welder::carriages::greedy_resolution<> {
         The underscore rule applies inside classes too. */
     static consteval bool class_member_participates(std::meta::info mem,
                                                     welder::lang L,
-                                                    welder::policy_kind pol) {
+                                                    welder::policy_kind pol,
+                                                    std::meta::info bound_into) {
         if (hidden(mem))
             return false;
         if (std::meta::is_function(mem) && takes_c_string(mem))
             return false;
         return welder::carriages::greedy_resolution<>::class_member_participates(
-            mem, L, pol);
+            mem, L, pol, bound_into);
     }
 
     /** Keep the bindability gate's registration oracle consistent with the skip

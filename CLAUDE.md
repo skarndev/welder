@@ -103,9 +103,12 @@ reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded 
 `L` → false; else an `only` mark → true iff it names `L` (either policy); else
 `automatic` → true; else (`opt_in`) → true iff explicitly included for `L`.
 **Access admission precedes it** (bind_traits `member_access_admitted`): public
-always; protected iff the resolution's optional `protected_participates(mem, L)`
-hook says so (default = the declaring class's `weld_protected` annotation); private
-never, under any resolution. Marks
+always; protected iff the resolution's optional
+`protected_participates(mem, L, bound_into)` hook says so (default = the declaring
+class's `weld_protected` annotation); private never, under any resolution. Every
+per-member resolution hook takes a trailing `bound_into` reflection — the entity
+whose binding receives the member (for class members the welded type, held fixed
+through base flattening, ≠ `parent_of(mem)` for a flattened base's member). Marks
 resolve **per overload, constructors included** (the carriage computes each name's
 participating overload group from the resolution and hands it to the rod whole).
 Constructors resolve symmetrically (opt_in binds only marked-include ctors), with

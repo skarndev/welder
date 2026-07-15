@@ -8,10 +8,15 @@
 //   - protected_welded: bare = all languages; scoped masks; repeats union;
 //     read through a class-template instantiation from the template;
 //   - member_access_admitted: public always in; PROTECTED arbitrated by the
-//     resolution's optional protected_participates hook, falling back to the
-//     annotation; PRIVATE hard-out before the hook — even a hook answering
-//     `true` for everything cannot readmit a private member. Exposing private
-//     is a violation of welder's design, not a policy a resolution may choose.
+//     resolution's optional protected_participates(mem, L, bound_into) hook,
+//     falling back to the annotation; the hook can key on bound_into (the
+//     entity whose binding receives the member — the flattening target);
+//     PRIVATE hard-out before the hook — even a hook answering `true` for
+//     everything cannot readmit a private member. Exposing private is a
+//     violation of welder's design, not a policy a resolution may choose.
+//     (The carriage-side threading of bound_into — ^^T held through the
+//     base-flattening recursion — is locked at runtime by the foreign_mixed
+//     tack case in namespace.hpp ↔ test_namespace.py / namespace_spec.lua.)
 #include <welder/vocabulary.hpp>
 #include <welder/bind_traits.hpp>
 
@@ -96,10 +101,11 @@ consteval std::meta::info member_named(std::meta::info cls, std::string_view n) 
 // a hookless resolution: falls back to the annotation
 struct hookless {};
 
-// the shipped default, spelled out
+// the shipped default, spelled out (bound_into forwarded, unused)
 struct annotation_driven {
     static consteval bool protected_participates(std::meta::info mem,
-                                                 welder::lang L) {
+                                                 welder::lang L,
+                                                 std::meta::info) {
         return welder::protected_welded(std::meta::parent_of(mem), L);
     }
 };
@@ -107,15 +113,27 @@ struct annotation_driven {
 // a blanket hook, like greedy_resolution<true> — and the probe that private
 // stays out even under it
 struct admit_everything {
-    static consteval bool protected_participates(std::meta::info, welder::lang) {
+    static consteval bool protected_participates(std::meta::info, welder::lang,
+                                                 std::meta::info) {
         return true;
     }
 };
 
 // a closing hook: a resolution may also *refuse* protected wholesale
 struct admit_nothing {
-    static consteval bool protected_participates(std::meta::info, welder::lang) {
+    static consteval bool protected_participates(std::meta::info, welder::lang,
+                                                 std::meta::info) {
         return false;
+    }
+};
+
+// a bound_into-keyed hook: admit a (possibly unannotated) declaring class's
+// protected members only when they land on ONE specific binding — the
+// flattening-target scoping the trailing parameter exists for
+struct admit_into_bare_only {
+    static consteval bool protected_participates(std::meta::info, welder::lang,
+                                                 std::meta::info bound_into) {
+        return bound_into == ^^Bare;
     }
 };
 
@@ -123,26 +141,45 @@ namespace d = welder::detail;
 constexpr auto py{welder::lang::py};
 constexpr auto lua{welder::lang::lua};
 
+// bound_into for direct (non-flattened) members is the declaring class itself;
+// the shorthand keeps the asserts readable
+consteval bool admitted_hookless(std::meta::info cls, std::string_view n,
+                                 welder::lang L) {
+    return d::member_access_admitted<hookless>(member_named(cls, n), L, cls);
+}
+
 // public: always admitted, under any resolution
-static_assert(d::member_access_admitted<hookless>(member_named(^^Open, "pub"), py));
-static_assert(d::member_access_admitted<admit_nothing>(member_named(^^Open, "pub"), py));
+static_assert(admitted_hookless(^^Open, "pub", py));
+static_assert(d::member_access_admitted<admit_nothing>(member_named(^^Open, "pub"),
+                                                       py, ^^Open));
 
 // protected, hookless resolution: the annotation decides
-static_assert(!d::member_access_admitted<hookless>(member_named(^^Open, "prot"), py));
-static_assert(!d::member_access_admitted<hookless>(member_named(^^Open, "prot_fn"), py));
-static_assert(d::member_access_admitted<hookless>(member_named(^^Bare, "prot"), py));
-static_assert(d::member_access_admitted<hookless>(member_named(^^Scoped, "prot"), py));
-static_assert(!d::member_access_admitted<hookless>(member_named(^^Scoped, "prot"), lua));
-static_assert(d::member_access_admitted<hookless>(member_named(^^IntTpl, "prot"), py));
+static_assert(!admitted_hookless(^^Open, "prot", py));
+static_assert(!admitted_hookless(^^Open, "prot_fn", py));
+static_assert(admitted_hookless(^^Bare, "prot", py));
+static_assert(admitted_hookless(^^Scoped, "prot", py));
+static_assert(!admitted_hookless(^^Scoped, "prot", lua));
+static_assert(admitted_hookless(^^IntTpl, "prot", py));
 
 // protected, with a hook: the hook REPLACES the annotation default
-static_assert(d::member_access_admitted<annotation_driven>(member_named(^^Bare, "prot"), py));
-static_assert(d::member_access_admitted<admit_everything>(member_named(^^Open, "prot"), py));
-static_assert(!d::member_access_admitted<admit_nothing>(member_named(^^Bare, "prot"), py));
+static_assert(d::member_access_admitted<annotation_driven>(
+    member_named(^^Bare, "prot"), py, ^^Bare));
+static_assert(d::member_access_admitted<admit_everything>(
+    member_named(^^Open, "prot"), py, ^^Open));
+static_assert(!d::member_access_admitted<admit_nothing>(
+    member_named(^^Bare, "prot"), py, ^^Bare));
+
+// the hook can key on bound_into: the SAME member is admitted into one binding
+// and refused from another (the flattening-target distinction)
+static_assert(d::member_access_admitted<admit_into_bare_only>(
+    member_named(^^Open, "prot"), py, ^^Bare));
+static_assert(!d::member_access_admitted<admit_into_bare_only>(
+    member_named(^^Open, "prot"), py, ^^Open));
 
 // PRIVATE: hard-out before the hook — admit_everything cannot readmit it
-static_assert(!d::member_access_admitted<hookless>(member_named(^^Open, "priv"), py));
-static_assert(!d::member_access_admitted<admit_everything>(member_named(^^Open, "priv"), py));
+static_assert(!admitted_hookless(^^Open, "priv", py));
+static_assert(!d::member_access_admitted<admit_everything>(
+    member_named(^^Open, "priv"), py, ^^Open));
 
 // --- the shape predicates: private rejected in the shape ----------------------
 

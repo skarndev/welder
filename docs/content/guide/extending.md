@@ -282,12 +282,28 @@ computes each name's overload group, so signature-level rules prune exactly one
 sibling — `namespace_participates`, and `counts_as_registered` — the bindability
 gate's *registration oracle*: which class/enum types may appear in bound
 signatures because welding under this resolution registers them) plus the
-`native_bases<T, L>` hook. One hook is *optional*:
-`protected_participates(mem, L)` arbitrates a **protected** member's access
-admission per member (absent, the declaring class's `policy::weld_protected`
-annotation decides). It is consulted for protected members only — public
-members are always admitted, and **private** members never are: the carriage
-hard-wires both before the hook, so no resolution can expose a private member.
+`native_bases<T, L>` hook.
+
+Every per-member predicate takes a trailing `std::meta::info bound_into` — the
+entity whose binding *receives* the decision's subject: the welded type for
+class members, the swept namespace for namespace members, the parent namespace
+for a nested namespace, the type whose direct base list is being walked for
+`is_native_base`. For class members it is held fixed through the
+base-flattening recursion, so it differs from `parent_of(mem)` exactly when a
+non-welded base's member is flattened onto a derived binding — the context a
+bespoke rule needs to say "this mixin's members, but only into `Derived`". The
+shipped resolutions ignore it. (`participates` and `counts_as_registered` have
+no such parameter: the former is reached only from the manual
+`weld_type`/`weld_function`/`weld_variable` entry points, where no reflected
+context exists; the latter is a pure registration predicate.)
+
+One hook is *optional*: `protected_participates(mem, L, bound_into)` arbitrates
+a **protected** member's access admission per member (absent, the declaring
+class's `policy::weld_protected` annotation decides). It is consulted for
+protected members only — public members are always admitted, and **private**
+members never are: the carriage hard-wires both before the hook, so no
+resolution can expose a private member.
+
 Since the shipped resolutions are ordinary structs, delegation is plain
 inheritance. For example, tack-welding a third-party library while skipping
 its underscore-prefixed internals:
@@ -295,11 +311,13 @@ its underscore-prefixed internals:
 ```cpp
 struct skip_internal : welder::carriages::greedy_resolution<> {
     static consteval bool member_participates(std::meta::info mem, welder::lang L,
-                                              welder::policy_kind pol) {
+                                              welder::policy_kind pol,
+                                              std::meta::info bound_into) {
         if (std::meta::has_identifier(mem) &&
             std::meta::identifier_of(mem).starts_with("_"))
             return false;
-        return welder::carriages::greedy_resolution<>::member_participates(mem, L, pol);
+        return welder::carriages::greedy_resolution<>::member_participates(
+            mem, L, pol, bound_into);
     }
 };
 

@@ -116,4 +116,18 @@ describe("tack (unmarked library)", function()
     assert.are.equal(16, p:frame())
     h.assert_absent(p, "serial")          -- private: out under every knob/resolution
   end)
+
+  it("the resolution hook receives the bound-into entity", function()
+    -- foreign_mixed's resolution admits protected members only when
+    -- bound_into == Display: Meter DECLARES reading(), Display inherits it
+    -- (flattened). Present on Display, absent on Meter = the carriage hands
+    -- the hook the welded type, not the declaring class.
+    local fm = h.mod.foreign_mixed
+    local d = fm.Display.new()
+    assert.are.equal(55, d:reading())
+    assert.are.equal(1, d:model())
+    local mtr = fm.Meter.new()
+    assert.are.equal(1, mtr:model())
+    h.assert_absent(mtr, "reading")
+  end)
 end)

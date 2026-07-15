@@ -63,7 +63,7 @@ consteval bool sole_alias_of_target(lang L, policy_kind pol) {
         if (std::meta::identifier_of(m) == std::meta::identifier_of(Alias))
             continue;
         if (std::meta::dealias(m) == std::meta::dealias(Alias) &&
-            Resolution::alias_participates(m, L, pol))
+            Resolution::alias_participates(m, L, pol, Ns))
             return false;
     }
     return true;
@@ -115,8 +115,11 @@ struct marker_resolution {
     static consteval bool participates(std::meta::info entity, lang L) {
         return welder::welded_for(entity, L);
     }
-    /** A base is a separately-registered native base iff the user welded it. */
-    static consteval bool is_native_base(std::meta::info base, lang L) {
+    /** A base is a separately-registered native base iff the user welded it.
+        The trailing reflection is the type whose direct base list is being
+        walked (context for bespoke rules; unused here). */
+    static consteval bool is_native_base(std::meta::info base, lang L,
+                                         std::meta::info /*bound_into*/) {
         return welder::welded_for(base, L);
     }
     /** @a T's native (welded) base list, for the class handle. */
@@ -124,9 +127,12 @@ struct marker_resolution {
     static consteval auto native_bases() {
         return detail::native_base_types<T, L>();
     }
-    /** A namespace member (class/enum/function/variable) participates. */
+    /** A namespace member (class/enum/function/variable) participates. The
+        trailing reflection is the namespace being swept (== `parent_of(mem)`;
+        context for bespoke rules; unused here). */
     static consteval bool member_participates(std::meta::info mem, lang L,
-                                              policy_kind pol) {
+                                              policy_kind pol,
+                                              std::meta::info /*bound_into*/) {
         return welder::welded_for(mem, L) && member_bound(mem, L, pol);
     }
     /** A namespace-scope alias to a class-template specialization participates:
@@ -134,16 +140,21 @@ struct marker_resolution {
         through the instantiation), with the usual scope-policy/marks resolution
         against the instantiation. @see welder::alias_welded_for */
     static consteval bool alias_participates(std::meta::info mem, lang L,
-                                             policy_kind pol) {
+                                             policy_kind pol,
+                                             std::meta::info /*bound_into*/) {
         return welder::alias_welded_for(mem, L) &&
                member_bound(std::meta::dealias(mem), L, pol);
     }
     /** A *class* member (field / method / operator / constructor — and, loosely,
         an enumerator) participates: its scope's policy + its own marks decide.
         Resolved per overload, so a mark on one overload (or one constructor)
-        excludes just that one. */
+        excludes just that one. The trailing reflection is the entity whose
+        binding receives the member — the welded type, held fixed through the
+        base-flattening recursion (== `parent_of(mem)` except for a flattened
+        base's member); context for bespoke rules, unused here. */
     static consteval bool class_member_participates(std::meta::info mem, lang L,
-                                                    policy_kind pol) {
+                                                    policy_kind pol,
+                                                    std::meta::info /*bound_into*/) {
         return member_bound(mem, L, pol);
     }
     /** A **protected** member is admitted iff its declaring class says so — a
@@ -151,13 +162,20 @@ struct marker_resolution {
         default when a resolution declares no hook; spelled out here as the
         documented contract). Public members are always admitted and private
         members never are — both decided *before* this hook (see
-        `detail::member_access_admitted`), so it arbitrates protected only. */
-    static consteval bool protected_participates(std::meta::info mem, lang L) {
+        `detail::member_access_admitted`), so it arbitrates protected only.
+        The trailing reflection is the entity whose binding receives the
+        member — a bespoke hook can key on it ("admit this mixin's protected
+        members, but only into Derived"); the shipped rule reads the declaring
+        class. */
+    static consteval bool protected_participates(std::meta::info mem, lang L,
+                                                 std::meta::info /*bound_into*/) {
         return welder::protected_welded(std::meta::parent_of(mem), L);
     }
-    /** A nested namespace participates (recurse + submodule). */
+    /** A nested namespace participates (recurse + submodule). The trailing
+        reflection is the parent namespace (== `parent_of(ns)`; unused here). */
     static consteval bool namespace_participates(std::meta::info ns, lang L,
-                                                 policy_kind pol) {
+                                                 policy_kind pol,
+                                                 std::meta::info /*bound_into*/) {
         return member_bound(ns, L, pol) && detail::namespace_has_bound(ns, L);
     }
     /** The gate's registration oracle: welded ⇒ registered (the conservative
@@ -195,37 +213,46 @@ struct marker_resolution {
 template <bool WeldProtected = false>
 struct greedy_resolution {
     static consteval bool participates(std::meta::info, lang) { return true; }
-    static consteval bool is_native_base(std::meta::info, lang) { return false; }
+    static consteval bool is_native_base(std::meta::info, lang,
+                                         std::meta::info /*bound_into*/) {
+        return false;
+    }
     template <std::meta::info, lang>
     static consteval auto native_bases() {
         return std::array<std::meta::info, 0>{};
     }
     static consteval bool member_participates(std::meta::info mem, lang L,
-                                              policy_kind pol) {
+                                              policy_kind pol,
+                                              std::meta::info /*bound_into*/) {
         return member_bound(mem, L, pol);
     }
     /** Greedy: an alias-declared specialization binds like any other type — no
         `weld` needed on alias or template; marks (via the instantiation) still prune. */
     static consteval bool alias_participates(std::meta::info mem, lang L,
-                                             policy_kind pol) {
+                                             policy_kind pol,
+                                             std::meta::info /*bound_into*/) {
         return member_bound(std::meta::dealias(mem), L, pol);
     }
     /** Same as stitch: greedy ignores the `weld` marker, not the marks — a mark on
         an individual overload/constructor still prunes it. */
     static consteval bool class_member_participates(std::meta::info mem, lang L,
-                                                    policy_kind pol) {
+                                                    policy_kind pol,
+                                                    std::meta::info /*bound_into*/) {
         return member_bound(mem, L, pol);
     }
     /** Protected members: the @a WeldProtected knob (the whole-pass blanket for
         an unannotatable third-party library), or — knob off — the annotation,
         exactly like stitch. Arbitrates protected only: public/private are
-        decided before the hook (see `detail::member_access_admitted`). */
-    static consteval bool protected_participates(std::meta::info mem, lang L) {
+        decided before the hook (see `detail::member_access_admitted`, which
+        also documents the trailing bound-into reflection). */
+    static consteval bool protected_participates(std::meta::info mem, lang L,
+                                                 std::meta::info /*bound_into*/) {
         return WeldProtected ||
                welder::protected_welded(std::meta::parent_of(mem), L);
     }
     static consteval bool namespace_participates(std::meta::info ns, lang L,
-                                                 policy_kind pol) {
+                                                 policy_kind pol,
+                                                 std::meta::info /*bound_into*/) {
         return member_bound(ns, L, pol) && detail::namespace_has_bindable(ns, L);
     }
     /** The gate's registration oracle: a type the greedy pass itself registers —
@@ -291,29 +318,35 @@ struct basic_carriage {
         the member declared closer to the derived type wins. Constructors are never
         flattened (the derived type provides its own).
 
-        @tparam B     the rod.
+        @tparam B         the rod.
+        @tparam BoundInto the welded type whose class handle receives the members —
+                          held fixed through the flattening recursion, and handed to
+                          the resolution hooks as their bound-into context.
         @tparam Src   a reflection of the (base or derived) type whose members to flatten.
         @tparam Style the name style each member's name flows through.
         @tparam Cls   the rod's class-handle type (deduced).
         @param cls the class handle to register onto.
     */
-    template <rod B, std::meta::info Src, class Style, class Cls>
+    template <rod B, std::meta::info BoundInto, std::meta::info Src, class Style,
+              class Cls>
     static void bind_members(Cls& cls) {
         constexpr lang L{B::language};
         constexpr auto ctx{std::meta::access_context::unchecked()};
 
         template for (constexpr auto base :
                       std::define_static_array(welder::public_bases(Src))) {
-            if constexpr (!Resolution::is_native_base(base, L))
-                bind_members<B, base, Style>(cls);
+            if constexpr (!Resolution::is_native_base(base, L, Src))
+                bind_members<B, BoundInto, base, Style>(cls);
         }
 
         constexpr policy_kind pol{policy_of(Src)};
 
         template for (constexpr auto mem : std::define_static_array(
                           std::meta::nonstatic_data_members_of(Src, ctx))) {
-            if constexpr (detail::member_access_admitted<Resolution>(mem, L) &&
-                          Resolution::class_member_participates(mem, L, pol)) {
+            if constexpr (detail::member_access_admitted<Resolution>(mem, L,
+                                                                     BoundInto) &&
+                          Resolution::class_member_participates(mem, L, pol,
+                                                                BoundInto)) {
                 welder::assert_member_bindable<B, mem, L, Resolution>();
                 B::template add_field<mem, Style>(cls);
             }
@@ -328,12 +361,16 @@ struct basic_carriage {
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
             if constexpr (detail::is_method_candidate(fn) &&
-                          detail::member_access_admitted<Resolution>(fn, L) &&
-                          Resolution::class_member_participates(fn, L, pol)) {
+                          detail::member_access_admitted<Resolution>(fn, L,
+                                                                     BoundInto) &&
+                          Resolution::class_member_participates(fn, L, pol,
+                                                                BoundInto)) {
                 if constexpr (detail::is_overload_leader<
-                                  detail::method_overload_set<Resolution>>(fn, L)) {
+                                  detail::method_overload_set<Resolution>>(
+                                  fn, L, BoundInto)) {
                     constexpr auto grp{detail::overload_group<
-                        detail::method_overload_set<Resolution>, fn, L>()};
+                        detail::method_overload_set<Resolution>, fn, L,
+                        BoundInto>()};
                     template for (constexpr auto member :
                                   std::define_static_array(grp)) {
                         welder::assert_callable_bindable<B, member, L, Resolution>();
@@ -344,16 +381,20 @@ struct basic_carriage {
                         B::template add_method<grp, Style>(cls);
                 }
             } else if constexpr (detail::is_operator_candidate(fn) &&
-                                 detail::member_access_admitted<Resolution>(fn, L) &&
-                                 Resolution::class_member_participates(fn, L, pol) &&
+                                 detail::member_access_admitted<Resolution>(
+                                     fn, L, BoundInto) &&
+                                 Resolution::class_member_participates(fn, L, pol,
+                                                                       BoundInto) &&
                                  B::special_method_name(fn) != nullptr) {
                 // A member operator group binds under the backend's special-method
                 // name (operator+ -> __add__, ...); unary/binary forms are distinct
                 // groups (distinct arity), so they never collide.
                 if constexpr (detail::is_overload_leader<
-                                  detail::operator_overload_set<Resolution>>(fn, L)) {
+                                  detail::operator_overload_set<Resolution>>(
+                                  fn, L, BoundInto)) {
                     constexpr auto grp{detail::overload_group<
-                        detail::operator_overload_set<Resolution>, fn, L>()};
+                        detail::operator_overload_set<Resolution>, fn, L,
+                        BoundInto>()};
                     template for (constexpr auto member :
                                   std::define_static_array(grp)) {
                         welder::assert_callable_bindable<B, member, L, Resolution>();
@@ -398,7 +439,7 @@ struct basic_carriage {
         constexpr policy_kind pol{policy_of(^^E)};
         template for (constexpr auto en :
                       std::define_static_array(std::meta::enumerators_of(^^E))) {
-            if constexpr (Resolution::class_member_participates(en, L, pol))
+            if constexpr (Resolution::class_member_participates(en, L, pol, ^^E))
                 B::template add_enumerator<en, Style>(e);
         }
         B::template finish_enum<E>(e);
@@ -542,7 +583,7 @@ struct basic_carriage {
         B::template add_constructors<T, ctors, has_default, aggregate>(cls);
 
         // Data members + methods + operators (T's own, plus flattened bases).
-        bind_members<B, ^^T, Style>(cls);
+        bind_members<B, ^^T, ^^T, Style>(cls);
 
         return cls;
     }
@@ -666,7 +707,7 @@ struct basic_carriage {
                         "welder: only weld / weld_as may be attached to a "
                         "namespace-scope alias; every other mark belongs on the "
                         "class template, where it applies to all instantiations");
-                    if constexpr (Resolution::alias_participates(mem, L, pol)) {
+                    if constexpr (Resolution::alias_participates(mem, L, pol, Ns)) {
                         static_assert(
                             detail::sole_alias_of_target<Resolution, Ns, mem>(L,
                                                                               pol),
@@ -692,20 +733,21 @@ struct basic_carriage {
                 }
             } else if constexpr (std::meta::is_type(mem) &&
                                  std::meta::is_class_type(mem)) {
-                if constexpr (Resolution::member_participates(mem, L, pol))
+                if constexpr (Resolution::member_participates(mem, L, pol, Ns))
                     bind_type<B, typename [:mem:], Style>(m, nullptr);
             } else if constexpr (std::meta::is_type(mem) && std::meta::is_enum_type(mem)) {
-                if constexpr (Resolution::member_participates(mem, L, pol))
+                if constexpr (Resolution::member_participates(mem, L, pol, Ns))
                     bind_enum<B, typename [:mem:], Style>(m, nullptr);
             } else if constexpr (std::meta::is_function(mem)) {
                 // Free functions bind as whole overload groups, emitted at the
                 // group's first participating overload (see bind_members).
-                if constexpr (Resolution::member_participates(mem, L, pol)) {
+                if constexpr (Resolution::member_participates(mem, L, pol, Ns)) {
                     if constexpr (detail::is_overload_leader<
                                       detail::function_overload_set<Resolution>>(
-                                      mem, L)) {
+                                      mem, L, Ns)) {
                         constexpr auto grp{detail::overload_group<
-                            detail::function_overload_set<Resolution>, mem, L>()};
+                            detail::function_overload_set<Resolution>, mem, L,
+                            Ns>()};
                         template for (constexpr auto member :
                                       std::define_static_array(grp)) {
                             welder::assert_callable_bindable<B, member, L,
@@ -715,7 +757,7 @@ struct basic_carriage {
                     }
                 }
             } else if constexpr (std::meta::is_variable(mem)) {
-                if constexpr (Resolution::member_participates(mem, L, pol)) {
+                if constexpr (Resolution::member_participates(mem, L, pol, Ns)) {
                     welder::assert_member_bindable<B, mem, L, Resolution>();
                     B::template add_variable<mem, Style>(m, session);
                 }
@@ -723,7 +765,7 @@ struct basic_carriage {
                 // A nested namespace resolves like a leaf under the parent policy (but
                 // is never welded): it becomes a submodule when it holds participating
                 // content (then resolved under its *own* policy).
-                if constexpr (Resolution::namespace_participates(mem, L, pol)) {
+                if constexpr (Resolution::namespace_participates(mem, L, pol, Ns)) {
                     auto sub{B::add_submodule(
                         m, welder::name_of<mem, L, Style, ent_kind::submodule>())};
                     bind_namespace<B, mem, Style>(sub);

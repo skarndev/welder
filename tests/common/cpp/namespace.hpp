@@ -294,6 +294,30 @@ struct Panel {
 
 } // namespace foreign_protected
 
+// The bound_into distinction: Meter declares a protected member; Display
+// merely inherits it (Meter is unmarked, so its members FLATTEN onto Display's
+// binding). A resolution hook keyed on bound_into admits the member into
+// Display's binding while refusing it on Meter's own — the same declaring
+// class, two different flattening targets (see register_foreign). Kept in its
+// own namespace so foreign_protected's blanket knob doesn't mask the
+// distinction.
+namespace foreign_mixed {
+
+struct Meter {
+    int model() const {
+        return 1;
+    }
+
+  protected:
+    int reading() const {
+        return 55;
+    }
+};
+
+struct Display : Meter {};
+
+} // namespace foreign_mixed
+
 // The semi-manual route: bind a hand-picked function/variable directly onto a
 // module, without welding the whole enclosing namespace. Mirrors what namespace
 // binding does per member, but one entity at a time.
@@ -308,6 +332,15 @@ inline void register_freestanding(WELDER_TEST_MODULE_T& m) {
     WELDER_TEST_WELDER::weld_function<^^freestanding::renamable>(manual_mod, "renamed_fn");
     WELDER_TEST_WELDER::weld_variable<^^freestanding::RENAMABLE>(manual_mod, "RENAMED_CONST");
 }
+
+// A bound_into-keyed resolution for the foreign_mixed tack below: protected
+// members are admitted only into Display's binding.
+struct display_only_resolution : ::welder::carriages::greedy_resolution<> {
+    static consteval bool protected_participates(std::meta::info, ::welder::lang,
+                                                 std::meta::info bound_into) {
+        return bound_into == ^^foreign_mixed::Display;
+    }
+};
 
 // Tack welding: bind the unmarked `foreign` library greedily. The tack welder is the
 // same rod + style as WELDER_TEST_WELDER, only with the tack-welding carriage swapped
@@ -328,4 +361,15 @@ inline void register_foreign(WELDER_TEST_MODULE_T& m) {
             ::welder::carriages::greedy_resolution<true>>>;
     auto fp_mod{WELDER_TEST_SUBMODULE(m, "foreign_protected")};
     tack_protected::weld_namespace<^^foreign_protected>(fp_mod);
+
+    // The bound_into-keyed tack: the hook admits protected members only when
+    // they land on Display's binding. Meter::reading is admitted where it
+    // FLATTENS onto Display (bound_into == ^^Display though parent_of(mem) ==
+    // ^^Meter — the carriage threads the welded type, not the declaring class)
+    // and refused on Meter's own binding.
+    using tack_mixed = ::welder::welder<
+        WELDER_TEST_WELDER::rod_type, WELDER_TEST_WELDER::name_style,
+        ::welder::carriages::basic_carriage<display_only_resolution>>;
+    auto fm_mod{WELDER_TEST_SUBMODULE(m, "foreign_mixed")};
+    tack_mixed::weld_namespace<^^foreign_mixed>(fm_mod);
 }

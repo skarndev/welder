@@ -235,30 +235,45 @@ concept rod =
     `greedy_resolution` (ignore the markers, bind an unmarked library greedily —
     `welder::tack_welding_carriage`) — and a user may inject a bespoke one.
 
-    **Predicates** (each `static consteval`, mirroring the carriage's call sites):
+    **Predicates** (each `static consteval`, mirroring the carriage's call sites).
+    Every per-member predicate takes a trailing `std::meta::info bound_into` — the
+    entity whose binding *receives* the decision's subject — as bespoke-rule
+    context: the welded type for class members (held fixed through the
+    base-flattening recursion, so it differs from `parent_of(mem)` exactly when a
+    non-welded base's member is flattened onto a derived binding), the swept
+    namespace for namespace members, the parent namespace for a nested namespace,
+    the type whose direct base list is being walked for `is_native_base`. The
+    shipped resolutions ignore it.
     @code
     static consteval bool participates(std::meta::info entity, lang L);
-        // a leaf type / function / variable participates for language L
-    static consteval bool is_native_base(std::meta::info base, lang L);
+        // a leaf type / function / variable participates for language L. No
+        // bound_into: reached only from the manual weld_type/weld_function/
+        // weld_variable entry points, where no reflected context exists.
+    static consteval bool is_native_base(std::meta::info base, lang L,
+                                         std::meta::info bound_into);
         // base binds separately (as a base of the class handle) vs. being flattened in
-    static consteval bool member_participates(std::meta::info mem, lang L, policy_kind pol);
+    static consteval bool member_participates(std::meta::info mem, lang L, policy_kind pol,
+                                              std::meta::info bound_into);
         // a namespace member participates under its enclosing scope's policy
-    static consteval bool class_member_participates(std::meta::info mem, lang L, policy_kind pol);
+    static consteval bool class_member_participates(std::meta::info mem, lang L, policy_kind pol,
+                                                    std::meta::info bound_into);
         // a CLASS member — field / method / operator / constructor (and, loosely,
         // an enumerator) — participates. Resolved per overload/constructor, so a
         // mark (or a bespoke signature-level rule) prunes exactly one; the
         // carriage computes each overload GROUP from this predicate, so what a
         // rod registers is exactly what the resolution admits. Shipped
         // resolutions: member_bound (scope policy + the member's own marks).
-    static consteval bool namespace_participates(std::meta::info ns, lang L, policy_kind pol);
+    static consteval bool namespace_participates(std::meta::info ns, lang L, policy_kind pol,
+                                                 std::meta::info bound_into);
         // a nested namespace becomes a (recursed) submodule
     static consteval bool counts_as_registered(std::meta::info type, lang L);
         // the bindability gate's registration oracle: does welding under this
         // resolution provide a registration for this class/enum type? A pure
         // predicate of the declaration (never a visited-set), so welding in
-        // multiple passes and forward references stay order-independent.
-        // marker_resolution: welded_for; greedy_resolution: any complete
-        // registrable type. welder::welded_registration is the reusable default.
+        // multiple passes and forward references stay order-independent — and
+        // hence no bound_into. marker_resolution: welded_for; greedy_resolution:
+        // any complete registrable type. welder::welded_registration is the
+        // reusable default.
     @endcode
 
     Plus one reflection-templated hook — it takes the derived type and a `lang` as
@@ -271,13 +286,17 @@ concept rod =
 
     **Optional hook** (detected via `requires`, so the concept does not demand it):
     @code
-    static consteval bool protected_participates(std::meta::info mem, lang L);
+    static consteval bool protected_participates(std::meta::info mem, lang L,
+                                                 std::meta::info bound_into);
         // arbitrates a PROTECTED class member's access admission. Absent, the
         // carriage falls back to the declaring class's policy::weld_protected
         // annotation. It is consulted only for protected members: public members
         // are always admitted and PRIVATE members never are — the carriage
         // hard-wires both before the hook (see detail::member_access_admitted),
-        // so no resolution can expose a private member.
+        // so no resolution can expose a private member. bound_into lets a hook
+        // scope the admission to a flattening target ("this mixin's protected
+        // members, but only into Derived"). A leftover two-argument hook is a
+        // hard error (a migration diagnostic), not silently ignored.
     @endcode
     A concept cannot quantify over every `T`, so — exactly as @ref welder::caster_oracle probes
     `has_native_caster` — this probes `native_bases` with the single placeholder
@@ -289,12 +308,12 @@ concept rod =
 */
 template <class R>
 concept resolution =
-    requires(std::meta::info e, lang L, policy_kind pol) {
+    requires(std::meta::info e, lang L, policy_kind pol, std::meta::info into) {
         { R::participates(e, L) } -> std::convertible_to<bool>;
-        { R::is_native_base(e, L) } -> std::convertible_to<bool>;
-        { R::member_participates(e, L, pol) } -> std::convertible_to<bool>;
-        { R::class_member_participates(e, L, pol) } -> std::convertible_to<bool>;
-        { R::namespace_participates(e, L, pol) } -> std::convertible_to<bool>;
+        { R::is_native_base(e, L, into) } -> std::convertible_to<bool>;
+        { R::member_participates(e, L, pol, into) } -> std::convertible_to<bool>;
+        { R::class_member_participates(e, L, pol, into) } -> std::convertible_to<bool>;
+        { R::namespace_participates(e, L, pol, into) } -> std::convertible_to<bool>;
         { R::counts_as_registered(e, L) } -> std::convertible_to<bool>;
     } &&
     requires {
