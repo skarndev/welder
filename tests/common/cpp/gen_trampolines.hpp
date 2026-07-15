@@ -58,6 +58,61 @@ Figure {
     double scaled(double factor) const { return surface() * factor; }
 };
 
+// The signature shapes the types above do not exercise, all generated with zero
+// hand-written code: virtuals WITH parameters (the a0/a1 splice-forwarding path), a
+// non-const noexcept virtual, an OVERLOADED virtual pair (the generator must emit
+// one slot-reflection override per overload — `^^Golem::rune` would be ill-formed),
+// and a protected NVI hook (unbound, but a real trampoline slot). Each has a C++
+// caller so the specs observe C++ -> Python dispatch.
+struct
+[[=welder::weld(welder::lang::py)]]
+Golem {
+    virtual ~Golem() = default;
+
+    virtual std::string chant(const std::string& word, int times) const {
+        std::string out{};
+        for (int i{0}; i < times; ++i)
+            out += word;
+        return out;
+    }
+
+    virtual int power(int boost) noexcept { return energy += boost; }
+
+    virtual std::string rune(int code) const { return "int:" + std::to_string(code); }
+    virtual std::string rune(const std::string& glyph) const { return "str:" + glyph; }
+
+    std::string awaken(int times) const { return chant("om ", times); }
+    std::string inscribe() const { return rune(7) + "|" + rune(std::string{"ok"}); }
+    std::string ritual() const { return "rite=" + secret(); }
+
+    int energy{0};
+
+  protected:
+    virtual std::string secret() const { return "clay"; }
+};
+
+// A COVARIANT override: Mint::root narrows Herb::root's return — the same vtable
+// slot, so Mint's generated trampoline must carry exactly ONE root() override,
+// spelled with the most-derived (Mint*) return type. Non-owning pointer, hence the
+// reference return policy.
+struct
+[[=welder::weld(welder::lang::py)]]
+Herb {
+    virtual ~Herb() = default;
+
+    [[=welder::return_policy(welder::rv::reference)]]
+    virtual Herb* root() const { return nullptr; }
+
+    bool rootless() const { return root() == nullptr; }
+};
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Mint : Herb {
+    [[=welder::return_policy(welder::rv::reference)]]
+    Mint* root() const override { return nullptr; }
+};
+
 } // namespace gen_trampolines
 
 // The register hook needs the backend seam macros; the trampoline *generator* TU

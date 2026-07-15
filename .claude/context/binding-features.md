@@ -123,10 +123,21 @@ reflection; the declarations stay hand-written.
 base chain, not just `members_of` (own members) — a virtual a welded type merely
 *inherits* is still an overridable slot, so a derived welded type's trampoline must
 cover the inherited virtuals too (a Python subclass can override them, and dispatch
-runs through the derived type's own trampoline, not the base's). Slots dedup by name +
-`type_of`, keeping the most-derived declaration; that decl's `bind_flat` mark governs.
-Regression: `Bird : Animal` in `overridable.hpp` (inherits speak/legs, adds fly) with
-`test_derived_class_overrides_{inherited,own}_virtual`.
+runs through the derived type's own trampoline, not the base's). Slots dedup by
+**vtable identity** (`detail::same_slot`: name + parameter types + cv/ref quals —
+NOT full `type_of`: return type excluded so a **covariant** override is ONE slot
+kept with the narrowed most-derived signature, and `noexcept` excluded so a
+strengthening override folds), keeping the most-derived declaration; that decl's
+`bind_flat`/access governs. The walk uses `access_context::unchecked()` (like the
+rest of the core): **protected** virtuals (NVI hooks) ARE slots — overridable via
+plain attribute lookup though never *bound* (the carriage's `is_public` filter is
+about binding, not overriding); **private** declarations are filtered out on output
+(base fallback couldn't name them), and a private redeclaration *withdraws* an
+inherited slot (it claims the slot in dedup, then filters). Regression:
+`Bird : Animal` in `overridable.hpp` (inherits speak/legs, adds fly) with
+`test_derived_class_overrides_{inherited,own}_virtual`; slot semantics locked
+compile-only in `tests/core/trampoline_slots.cpp` (covariant/overload/access/
+noexcept/C-variadic render).
 
 **Discovery (two forms; explicit wins):** virtuals are auto-detected
 (`virtual_slot_count` > 0, destructor and per-method `bind_flat` excluded). The
@@ -162,8 +173,19 @@ signature incl. cv/ref, so overloads/covariant returns don't false-match); else
 `[[=welder::rods::python::bind_flat]]` (type-level = whole type flat; per-method =
 that virtual stays a plain bound method, out of slot count + coverage).
 
-**Dispatch:** `WELDER_PY_OVERRIDE(fn, args…)` → each backend's
-`override_dispatch<^^welder_py_base::fn>` (name/return-type/pure-ness from reflection).
+**Dispatch:** `WELDER_PY_OVERRIDE(fn, args…)` → `WELDER_PY_OVERRIDE_AS(^^welder_py_base::fn, fn, args…)`
+→ each backend's `override_dispatch<(SLOT)>` (name/return-type/pure-ness from the slot
+reflection). The `_AS` form exists because `^^Base::fn` is **ill-formed for an
+overloaded virtual** (no overload-set reflection in P2996; gcc-16: "cannot take the
+reflection of an overload set") — for overloads, hand-written trampolines pass an
+explicit slot via `welder::rods::python::virtual_slot(^^T, "fn", ^^ret(args) quals)`
+(searches `overridable_virtuals`, so inherited slots too; no match = const-eval error
+naming a diagnostic function; extra parens keep commas out of macro splitting), while
+the textual `fn` arg only spells the qualified base fallback (overload resolution
+picks the overload from the forwarded args). Generated trampolines emit `_AS` with
+`overridable_virtuals(^^T)[k]` for every override, so overloads Just Work there.
+Runtime semantics: both backends look the Python override up **by name**, so all C++
+overloads of a name dispatch into the ONE Python method.
 pybind11's `get_override(const T*, name)` keys the Python-object lookup off `typeid(T)`
 — the *static* pointer type — so the macro casts `*this` to `welder_py_base` (the
 **registered** welded type, `class_<T, Trampoline, …>`), **not** the virtual's declaring
@@ -175,8 +197,10 @@ qualified** `welder_py_base::fn(args)` lambda — NOT `self.[:Fn:]()`, which spl
 a *virtual* call and infinitely recurses. `WELDER_PY_TRAMPOLINE(Base)` injects the
 `welder_py_base` alias + inherited ctors, plus (nanobind only) a
 `nb::detail::trampoline<slot_count>` storage member; pybind11 uses `get_override` +
-`detail::cast_safe`, no storage. Reference/pointer returns are `static_assert`-rejected
-(lifetime). Macros are neutrally named so one trampoline source compiles under either
+`detail::cast_safe`, no storage. **Reference** returns are `static_assert`-rejected
+(lifetime); **pointer** returns work (Python override returns an instance or None →
+T*/nullptr — the covariant tests use this with `return_policy(rv::reference)`).
+Macros are neutrally named so one trampoline source compiles under either
 Python rod.
 
 **Generating trampolines (`welder::rods::trampolines::rod`).** The hand-written
@@ -185,7 +209,7 @@ analogue of the LuaCATS stub rod, over the same driver. Files:
 `src/welder/rods/python/trampolines/{document,rod,module}.hpp`; CMake helper
 `cmake/WelderTrampolines.cmake` (`welder_generate_trampolines()`); target
 `welder::trampolines`. Only `make_class<T>` emits (a `struct … : T { WELDER_PY_TRAMPOLINE;
-one WELDER_PY_OVERRIDE per overridable virtual };` + a `trampoline_for<T>` spec), skipping
+one WELDER_PY_OVERRIDE_AS per overridable virtual };` + a `trampoline_for<T>` spec), skipping
 a whole-type `bind_flat` and types with no overridable virtuals; every other rod hook is a
 no-op and `has_native_caster` is permissive (it reproduces only virtual *signatures*). Each
 override **splices** the base virtual's reflected return/param types

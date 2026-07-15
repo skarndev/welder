@@ -107,7 +107,8 @@ inline constexpr const char* generated_namespace{
 
 /** Render the trampoline `struct` for welded virtual type @a type — one override per
     overridable virtual, each splicing the base's own reflected return/parameter types
-    and forwarding to Python via `WELDER_PY_OVERRIDE`.
+    and forwarding to Python via `WELDER_PY_OVERRIDE_AS` (the slot-reflection form, so
+    overloaded virtuals dispatch correctly).
 
     @param type a reflection of the welded virtual type.
     @return the `struct <ident> : <Base> { … };` text (no surrounding namespace). */
@@ -147,8 +148,12 @@ consteval std::string render_trampoline(std::meta::info type) {
             args += "a" + js;
             ++j;
         }
-        s += ")" + qualifier_tokens(slot) + " override { WELDER_PY_OVERRIDE(" + name +
-             (args.empty() ? "" : ", " + args) + "); }\n";
+        // The slot-taking macro form: dispatch keys on the slot's reflection (never
+        // `^^Base::name`, which is ill-formed for an overloaded virtual), while the
+        // textual name spells the qualified base fallback, where overload resolution
+        // picks the right overload from the forwarded parameters.
+        s += ")" + qualifier_tokens(slot) + " override { WELDER_PY_OVERRIDE_AS((" +
+             idx + "), " + name + (args.empty() ? "" : ", " + args) + "); }\n";
         ++k;
     }
     s += "};\n";

@@ -104,6 +104,19 @@ add_test(NAME compile.template_annotations
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_template_annotations --config $<CONFIG>)
 
+# Trampoline slot semantics (compile-only): what counts as an overridable virtual
+# slot (covariant returns dedup to one slot, overloads are per-overload slots
+# selectable via virtual_slot, protected NVI hooks in / private out, noexcept
+# strengthening folds) and what the generator renders for the irreproducible
+# shapes (C-variadic → static_assert). Rod-agnostic reflection + text, no Python
+# backend needed; same compile-to-pass shape as above.
+add_library(welder_trampoline_slots OBJECT EXCLUDE_FROM_ALL core/trampoline_slots.cpp)
+target_compile_features(welder_trampoline_slots PRIVATE cxx_std_26)
+target_link_libraries(welder_trampoline_slots PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.trampoline_slots
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_trampoline_slots --config $<CONFIG>)
+
 # Docstring dedent semantics (compile-only): welder::cleandoc (doc.hpp) mirrors
 # Python inspect.cleandoc / PEP 257 so multiline docs can be indented to match the
 # source without the indentation leaking into __doc__. static_asserts lock the

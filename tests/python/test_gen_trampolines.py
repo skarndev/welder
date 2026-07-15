@@ -79,3 +79,75 @@ def test_generated_bind_flat_virtual_not_routed(gt: ModuleType) -> None:
     # realm() is virtual but bind_flat, so the generator emits no override for it: it
     # stays a plain callable returning the C++ value.
     assert gt.Beast().realm() == "Animalia"
+
+
+def test_generated_trampoline_forwards_parameters(gt: ModuleType) -> None:
+    # The generated override splices each parameter type and forwards a0, a1, ... —
+    # the path no nullary virtual exercises.
+    assert gt.Golem().awaken(3) == "om om om "
+
+    class Chatty(gt.Golem):
+        def chant(self, word: str, times: int) -> str:
+            return f"{word.strip()}x{times}"
+
+    assert Chatty().awaken(3) == "omx3"  # C++ -> Python with both arguments
+
+
+def test_generated_trampoline_nonconst_noexcept(gt: ModuleType) -> None:
+    g = gt.Golem()
+    assert g.power(5) == 5
+    assert g.power(5) == 10  # non-const: mutates C++ state
+
+    class Reactor(gt.Golem):
+        def power(self, boost: int) -> int:
+            return boost * 10
+
+    assert Reactor().power(5) == 50
+
+
+def test_generated_trampoline_overloaded_virtual(gt: ModuleType) -> None:
+    # The generator emits one slot-reflection override per overload (a textual
+    # `^^Golem::rune` would be ill-formed — an overload set).
+    g = gt.Golem()
+    assert g.rune(7) == "int:7"
+    assert g.rune("ok") == "str:ok"
+    assert g.inscribe() == "int:7|str:ok"
+
+    class Carver(gt.Golem):
+        def rune(self, mark: object) -> str:
+            return f"py:{mark}"
+
+    # Both C++ overloads dispatch into the ONE Python method.
+    assert Carver().inscribe() == "py:7|py:ok"
+
+
+def test_generated_trampoline_protected_nvi_hook(gt: ModuleType) -> None:
+    g = gt.Golem()
+    assert g.ritual() == "rite=clay"
+    assert not hasattr(g, "secret")  # protected: never bound...
+
+    class Occult(gt.Golem):
+        def secret(self) -> str:  # ...but generated into the trampoline
+            return "vril"
+
+    assert Occult().ritual() == "rite=vril"
+
+
+def test_generated_trampoline_covariant_single_slot(gt: ModuleType) -> None:
+    # Mint::root covariantly narrows Herb::root — one vtable slot, so the generated
+    # trampoline carries exactly one root() override (spelled Mint*); two would not
+    # compile (same-name functions differing only in return type).
+    assert gt.Herb().rootless() is True
+    assert gt.Mint().rootless() is True
+
+    class Potted(gt.Mint):
+        def __init__(self, root: object = None) -> None:
+            super().__init__()
+            self._root = root
+
+        def root(self) -> object:
+            return self._root
+
+    stock = gt.Mint()
+    assert Potted(stock).rootless() is False  # Python instance -> C++ Mint*
+    assert Potted().rootless() is True        # None -> nullptr

@@ -141,6 +141,98 @@ def test_derived_class_overrides_own_virtual(ov: ModuleType) -> None:
     assert p.describe() == "... on 2 legs"  # inherited speak default + overridden legs
 
 
+# --- parameterful virtuals (the argument-forwarding path) --------------------
+def test_parameters_are_forwarded_into_the_override(ov: ModuleType) -> None:
+    # C++ default first: march() calls obey("step ", steps) polymorphically.
+    assert ov.Robot().march(3) == "step step step "
+
+    class Soldier(ov.Robot):
+        def obey(self, order: str, times: int) -> str:
+            return f"{order.strip()}x{times}"
+
+    # Both arguments must arrive intact in the Python override, from C++.
+    assert Soldier().march(3) == "stepx3"
+    # ...and through a direct Python call of the bound virtual.
+    assert Soldier().obey("run ", 2) == "runx2"
+
+
+def test_nonconst_noexcept_virtual_is_overridable(ov: ModuleType) -> None:
+    r = ov.Robot()
+    assert r.recharge(5) == 5
+    assert r.recharge(5) == 10  # non-const: mutates C++ state
+
+    class Turbo(ov.Robot):
+        def recharge(self, amount: int) -> int:
+            return amount * 10
+
+    assert Turbo().recharge(5) == 50
+
+
+# --- an OVERLOADED virtual ----------------------------------------------------
+def test_overloaded_virtual_dispatches_both_overloads(ov: ModuleType) -> None:
+    r = ov.Robot()
+    # Both C++ overloads are bound and callable...
+    assert r.send(7) == "int:7"
+    assert r.send("hi") == "str:hi"
+    # ...and the C++ caller exercises both through the vtable.
+    assert r.transmit() == "int:7|str:hi"
+
+    class Radio(ov.Robot):
+        # One Python method serves BOTH C++ overloads (get_override is by name).
+        def send(self, payload: object) -> str:
+            return f"py:{payload}"
+
+    assert Radio().transmit() == "py:7|py:hi"
+
+
+def test_overload_partial_python_override_covers_both(ov: ModuleType) -> None:
+    # The single Python method replaces the whole overload set for C++ dispatch;
+    # distinguishing overloads is the override's own business.
+    class Typed(ov.Robot):
+        def send(self, payload: object) -> str:
+            if isinstance(payload, int):
+                return f"code={payload}"
+            return f"text={payload}"
+
+    assert Typed().transmit() == "code=7|text=hi"
+
+
+# --- a protected NVI hook -----------------------------------------------------
+def test_protected_virtual_is_overridable_but_not_bound(ov: ModuleType) -> None:
+    r = ov.Robot()
+    assert r.handshake() == "proto=asimov"
+    # Protected: welder never binds it as a callable method...
+    assert not hasattr(r, "protocol")
+
+    class Custom(ov.Robot):
+        # ...but the trampoline routes it, and get_override finds the plain Python
+        # attribute — no binding involved.
+        def protocol(self) -> str:
+            return "custom"
+
+    assert Custom().handshake() == "proto=custom"
+
+
+# --- a covariant override (one vtable slot) ------------------------------------
+def test_covariant_override_routes_through_single_slot(ov: ModuleType) -> None:
+    assert ov.Plant().orphan() is True
+    assert ov.Tree().orphan() is True  # the covariant C++ default
+
+    class Sapling(ov.Tree):
+        def __init__(self, parent: object = None) -> None:
+            super().__init__()
+            self._parent = parent
+
+        def parent(self) -> object:
+            return self._parent
+
+    root = ov.Tree()
+    # The Python override's return crosses back into C++ as a Tree* (non-null)...
+    assert Sapling(root).orphan() is False
+    # ...and None crosses as nullptr.
+    assert Sapling().orphan() is True
+
+
 # --- a per-method bind_flat virtual -----------------------------------------
 def test_bind_flat_virtual_is_bound_but_not_overridable(ov: ModuleType) -> None:
     # kingdom() is virtual but marked [[=welder::rods::python::bind_flat]]: it is

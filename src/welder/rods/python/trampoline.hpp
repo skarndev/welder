@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <meta>
+#include <string_view>
 #include <vector>
 
 #include <welder/vocabulary.hpp> // the annotation vocabulary (for structural specs)
@@ -178,32 +179,66 @@ consteval bool is_overridable_virtual(std::meta::info member) {
 
 namespace detail {
 
+/** Do @a a and @a b declare the *same vtable slot*?
+
+    Slot identity is the name plus everything overriding keys off: the parameter
+    types and the cv / ref qualifiers. The **return type** is deliberately excluded —
+    a covariant override (`Derived* clone()` over `Base* clone()`) redeclares the
+    same slot with a narrower return, and comparing full `type_of` would count it as
+    a second slot. `noexcept` is excluded for the same reason: an override may
+    *strengthen* the exception specification, and two overloads cannot differ by
+    `noexcept` alone, so it can never distinguish genuine slots. */
+consteval bool same_slot(std::meta::info a, std::meta::info b) {
+    if (std::meta::identifier_of(a) != std::meta::identifier_of(b))
+        return false;
+    if (std::meta::is_const(a) != std::meta::is_const(b) ||
+        std::meta::is_volatile(a) != std::meta::is_volatile(b) ||
+        std::meta::is_lvalue_reference_qualified(a) !=
+            std::meta::is_lvalue_reference_qualified(b) ||
+        std::meta::is_rvalue_reference_qualified(a) !=
+            std::meta::is_rvalue_reference_qualified(b))
+        return false;
+    auto pa{std::meta::parameters_of(a)};
+    auto pb{std::meta::parameters_of(b)};
+    if (pa.size() != pb.size())
+        return false;
+    for (std::size_t i{0}; i < pa.size(); ++i)
+        if (std::meta::type_of(pa[i]) != std::meta::type_of(pb[i]))
+            return false;
+    return true;
+}
+
 /** Accumulate the *most-derived* declaration of every virtual member function
-    reachable in @a type's complete object into @a slots, deduplicating by name plus
-    `type_of` (the full signature).
+    reachable in @a type's complete object into @a slots, deduplicating by vtable
+    slot (@ref same_slot — name + parameters + cv/ref, so a covariant override is
+    one slot, not two).
 
     `members_of` lists a class's *own* members only, so a virtual a subclass merely
     inherits is invisible there — the reason a whole-hierarchy walk is needed. @a
     type's own members are visited before its bases, so the first declaration recorded
-    for a given (name, signature) is the most-derived one; a base's re-declaration of an
-    already-seen slot is skipped. @ref bind_flat is *not* consulted here — the filter is
-    applied by @ref overridable_virtuals on the kept most-derived declaration, so a
-    subclass can un-flatten a virtual its base marked `bind_flat` (and vice versa).
+    for a given slot is the most-derived one; a base's re-declaration of an
+    already-seen slot is skipped. Members are enumerated with
+    `access_context::unchecked()` (like the rest of welder's core): a **protected**
+    virtual — the NVI/template-method hook — is a real overridable slot even though
+    it is never *bound* (Python overrides it via attribute lookup, which needs no
+    binding). Neither @ref bind_flat nor access is *filtered* here — a **private**
+    declaration still claims its slot in the dedup, and the filters are applied by
+    @ref overridable_virtuals on the kept most-derived declaration. So a subclass
+    can un-flatten a virtual its base marked `bind_flat` (and vice versa), and
+    privatizing an inherited virtual withdraws the slot rather than resurrecting
+    the base's public declaration.
     @param type  a reflection of the class type.
     @param slots the accumulator of most-derived virtual declarations. */
 consteval void collect_virtuals(std::meta::info type,
                                 std::vector<std::meta::info>& slots) {
     for (auto m :
-         std::meta::members_of(type, std::meta::access_context::current())) {
+         std::meta::members_of(type, std::meta::access_context::unchecked())) {
         if (!std::meta::is_function(m) || !std::meta::is_virtual(m) ||
             std::meta::is_destructor(m) || !std::meta::has_identifier(m))
             continue;
-        auto name{std::meta::identifier_of(m)};
-        auto sig{std::meta::type_of(m)};
         bool seen{false};
         for (auto s : slots)
-            if (std::meta::identifier_of(s) == name &&
-                std::meta::type_of(s) == sig) {
+            if (same_slot(s, m)) {
                 seen = true;
                 break;
             }
@@ -211,7 +246,7 @@ consteval void collect_virtuals(std::meta::info type,
             slots.push_back(m);
     }
     for (auto b :
-         std::meta::bases_of(type, std::meta::access_context::current()))
+         std::meta::bases_of(type, std::meta::access_context::unchecked()))
         collect_virtuals(std::meta::dealias(std::meta::type_of(b)), slots);
 }
 
@@ -223,9 +258,14 @@ consteval void collect_virtuals(std::meta::info type,
     Unlike a bare `members_of` scan this sees a virtual @a type only *inherits* (never
     re-declares), which a trampoline must still cover: a Python subclass of @a type can
     override it, and dispatch runs through @a type's own trampoline, not the base's. A
-    slot is identified by name + full signature; when a class overrides an inherited
-    virtual, only the most-derived declaration is kept, and its @ref bind_flat mark
-    (not the base's) decides whether the slot is exposed.
+    slot is its vtable identity — name + parameter types + cv/ref qualifiers, so a
+    **covariant** override is the same slot, kept with its narrowed return type; when a
+    class overrides an inherited virtual, only the most-derived declaration is kept,
+    and its @ref bind_flat mark (not the base's) decides whether the slot is exposed.
+    **Protected** virtuals (the NVI hook pattern) are slots like any other — a Python
+    subclass overrides them by plain attribute lookup, no binding involved. **Private**
+    declarations are excluded: the trampoline's base-class fallback could not name
+    them; a subclass privatizing an inherited virtual thereby withdraws the slot.
     @param type a reflection of the class type.
     @return the most-derived declaration of each exposed overridable virtual. */
 consteval std::vector<std::meta::info> overridable_virtuals(std::meta::info type) {
@@ -233,9 +273,48 @@ consteval std::vector<std::meta::info> overridable_virtuals(std::meta::info type
     detail::collect_virtuals(type, all);
     std::vector<std::meta::info> out{};
     for (auto s : all)
-        if (!bound_flat(s))
+        if (!bound_flat(s) && !std::meta::is_private(s))
             out.push_back(s);
     return out;
+}
+
+/** The overridable virtual slot of @a type named @a name whose function type is
+    @a fn_type — the hand-written disambiguator for an **overloaded** virtual.
+
+    `^^Base::fn` is ill-formed when `fn` names an overload set (P2996 has no
+    overload-set reflection), so `WELDER_PY_OVERRIDE(fn)` cannot be used inside the
+    override of an overloaded virtual. This finder selects one overload by its exact
+    function type, for the slot-taking macro form:
+
+    @code
+    std::string send(int code) const override {
+        WELDER_PY_OVERRIDE_AS(
+            (welder::rods::python::virtual_slot(^^Robot, "send", ^^std::string(int) const)),
+            send, code);
+    }
+    @endcode
+
+    (The extra parentheses keep any commas inside the expression out of the
+    preprocessor's argument splitting.) Searches @ref overridable_virtuals, so
+    inherited slots are found too. A name/type pair matching no slot is a
+    constant-evaluation error naming this function.
+    @param type    a reflection of the welded type.
+    @param name    the virtual's identifier.
+    @param fn_type a reflection of the overload's full function type, trailing
+                   qualifiers included (e.g. `^^int(int) const`).
+    @return the matching slot's reflection. */
+consteval std::meta::info virtual_slot(std::meta::info type, std::string_view name,
+                                       std::meta::info fn_type) {
+    for (auto s : overridable_virtuals(type))
+        if (std::meta::identifier_of(s) == name &&
+            std::meta::type_of(s) == std::meta::dealias(fn_type))
+            return s;
+    // Not constexpr: reaching this call is a constant-evaluation error whose
+    // diagnostic names it — the consteval analogue of a static_assert message.
+    extern void
+        welder_no_overridable_virtual_matches_the_given_name_and_function_type();
+    welder_no_overridable_virtual_matches_the_given_name_and_function_type();
+    return std::meta::info{};
 }
 
 /** The number of overridable virtual member functions of @a type, inherited ones
@@ -294,8 +373,9 @@ consteval std::meta::info construction_type_of() {
     That distinguishes a real override from an unrelated same-named overload or a
     const/ref-qualifier mismatch, which name-plus-arity alone would not.
 
-    @note A *covariant* override (narrower return type) has a different function type
-    and so is not recognized here; such a type must opt out with @ref bind_flat.
+    @note The slot @a vfn is the *most-derived* declaration (@ref
+    overridable_virtuals), so for a covariant chain the trampoline redeclares the
+    narrowed signature — which is what a hand-written override must spell anyway.
     @param tramp a reflection of the trampoline subclass.
     @param vfn   a reflection of a base virtual member function.
     @return `true` iff @a tramp redeclares @a vfn with a matching signature. */
@@ -303,7 +383,7 @@ consteval bool declares_override(std::meta::info tramp, std::meta::info vfn) {
     auto name{std::meta::identifier_of(vfn)};
     auto sig{std::meta::type_of(vfn)};
     for (auto m :
-         std::meta::members_of(tramp, std::meta::access_context::current())) {
+         std::meta::members_of(tramp, std::meta::access_context::unchecked())) {
         if (std::meta::is_function(m) && !std::meta::is_special_member_function(m) &&
             std::meta::identifier_of(m) == name && std::meta::type_of(m) == sig) {
             return true;

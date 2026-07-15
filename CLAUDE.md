@@ -47,8 +47,9 @@ carrying the docstrings Lua has no runtime slot for); **`welder::rods::trampolin
 reflects the welded *virtual* Python types and emits a **`.hpp` of ready-to-compile,
 backend-neutral pybind11/nanobind trampoline subclasses** — so a Python subclass can
 override their virtuals without the trampolines being hand-written (each override splices
-the base virtual's reflected types, so signatures match by construction; a C-variadic
-virtual with no `bind_flat` is a hard error). Further languages are designed-for but not
+the base virtual's reflected types, so signatures match by construction — overloaded
+virtuals dispatch per-slot, covariant overrides fold to one slot, protected NVI hooks
+are covered; a C-variadic virtual with no `bind_flat` is a hard error). Further languages are designed-for but not
 yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
 section): a *standalone* super-project of 9 CTest-asserted recipes that obtains welder
 via FetchContent — CI builds it against the checkout, so it doubles as the consumer-

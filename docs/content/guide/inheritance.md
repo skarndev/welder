@@ -239,9 +239,72 @@ construction.
     under `welder::rods::python` and is backend-neutral: the *same* trampoline source
     compiles under either rod — only the `#include` of the backend's `trampoline.hpp`
     differs (nanobind keeps a small per-instance storage member; pybind11 needs none).
-    A virtual returning a reference or pointer cannot be trampolined (neither backend
-    can keep the referent alive across the boundary) — return by value or use
-    `bind_flat`.
+    A virtual returning a **reference** cannot be trampolined (neither backend can
+    keep the referent alive across the boundary) — return by value, a pointer, or use
+    `bind_flat`. A pointer return works and crosses back from Python as an instance
+    or `None` (annotate the [return policy](return-policies.md) if it is non-owning).
+
+### Overloaded virtuals
+
+An **overloaded** virtual needs one more spelling. `WELDER_PY_OVERRIDE(send)` reads
+the method's reflection from its name — but `^^Robot::send` is ill-formed when
+`send` names an overload set (C++26 reflection has no overload-set reflection). Use
+the general form, `WELDER_PY_OVERRIDE_AS`, and select the overload by its function
+type with `welder::rods::python::virtual_slot`:
+
+```cpp
+struct [[=welder::weld(welder::lang::py)]] Robot {
+    virtual ~Robot() = default;
+    virtual std::string send(int code) const;                 // two overloads
+    virtual std::string send(const std::string& text) const;
+    std::string transmit() const { return send(7) + send("hi"); }
+};
+
+struct [[=welder::rods::python::trampoline]] PyRobot : Robot {
+    WELDER_PY_TRAMPOLINE(Robot);
+    std::string send(int code) const override {
+        WELDER_PY_OVERRIDE_AS((welder::rods::python::virtual_slot(
+                                  ^^Robot, "send", ^^std::string(int) const)),
+                              send, code);
+    }
+    std::string send(const std::string& text) const override {
+        WELDER_PY_OVERRIDE_AS(
+            (welder::rods::python::virtual_slot(
+                ^^Robot, "send", ^^std::string(const std::string&) const)),
+            send, text);
+    }
+};
+```
+
+The extra parentheses around the first argument keep its commas out of the
+preprocessor's argument splitting; a name/type pair matching no virtual is a
+compile error naming `virtual_slot`'s diagnostic function. *Generated* trampolines
+(below) use this form for every override, so there overloads need nothing at all.
+
+On the Python side both C++ overloads dispatch into the **one** Python method of
+that name (both backends look the override up by name) — distinguishing the
+argument shapes is the override's own business:
+
+```python
+class Radio(mymod.Robot):
+    def send(self, payload):            # serves send(int) AND send(str)
+        return f"py:{payload}"
+```
+
+### Covariant returns, protected and private virtuals
+
+A **covariant** override (`Tree* parent()` narrowing `Plant* parent()`) is the same
+vtable slot: welder counts it once, and the trampoline redeclares it with the
+**most-derived** (narrowed) return type — which is what a generated trampoline
+emits automatically.
+
+A **protected** virtual — the classic NVI/template-method hook — is a real
+trampoline slot: a Python subclass overrides it as a plain attribute (no binding is
+involved in the lookup), and C++ calls dispatch into the override, while the method
+itself is never *bound* (protected members stay uncallable from Python). A
+**private** virtual is not a slot: the trampoline's base-class fallback could not
+name it. Privatizing an inherited virtual in a derived class likewise withdraws the
+slot from the derived type's trampoline.
 
 ### Generating trampolines automatically
 
@@ -263,7 +326,10 @@ inherited virtuals covered, `bind_flat` honoured. The binding TU includes the ac
 backend's `trampoline.hpp`, then the generated header, then binds as usual; the
 generated header is **backend-neutral**, so one header serves pybind11 and nanobind.
 Each override *splices* the base virtual's own reflected return/parameter types, so the
-signature matches by construction no matter how hairy the type.
+signature matches by construction no matter how hairy the type — parameterful,
+`noexcept`, non-`const`, **overloaded** (each overload dispatches on its own slot
+reflection), **covariant** (one override, the narrowed return) and **protected NVI**
+virtuals all come out correct with zero hand-written code.
 
 The one shape reflection cannot reproduce is a **C-style variadic** virtual
 (`f(int, ...)`): C++26 reflection exposes no ellipsis query. Such a virtual makes the

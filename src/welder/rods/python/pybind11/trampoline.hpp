@@ -99,16 +99,33 @@ decltype(auto) override_dispatch(const Self& self, BaseCall&& base_call,
     using welder_py_base = BASE;                                              \
     using welder_py_base::welder_py_base
 
-/** Body of a single virtual override in a `WELDER_PY_TRAMPOLINE` class.
+/** Body of a single virtual override in a `WELDER_PY_TRAMPOLINE` class, keyed on an
+    explicit slot reflection.
 
-    Use as the whole override body: `int legs() const override { WELDER_PY_OVERRIDE(legs); }`.
-    Forwards to the Python override of @a FUNC if present, else to `BASE::FUNC`. Extra
-    arguments are the method's parameters, forwarded to both paths. Neutral name:
-    each Python rod defines it against its own dispatch. */
-#define WELDER_PY_OVERRIDE(FUNC, ...)                                          \
-    return ::welder::rods::pybind11::override_dispatch<^^welder_py_base::FUNC>( \
+    The general form behind @ref WELDER_PY_OVERRIDE, for the case the plain macro
+    cannot spell: an **overloaded** virtual, where `^^welder_py_base::FUNC` would name
+    an overload set (ill-formed — P2996 has no overload-set reflection). @a SLOT is a
+    reflection of the *one* base virtual this override implements — select it with
+    @ref welder::rods::python::virtual_slot — and drives the dispatch (name, return
+    type, pureness); the textual @a FUNC only spells the qualified base-class
+    fallback call, where ordinary overload resolution picks the right overload from
+    the forwarded parameters. Parenthesize @a SLOT if the expression contains commas.
+    welder's *generated* trampolines use this form for every override. */
+#define WELDER_PY_OVERRIDE_AS(SLOT, FUNC, ...)                                 \
+    return ::welder::rods::pybind11::override_dispatch<(SLOT)>(                \
         static_cast<const welder_py_base&>(*this),                           \
         [&](auto&&... _welder_a) -> decltype(auto) {                         \
             return welder_py_base::FUNC(                                      \
                 static_cast<decltype(_welder_a)&&>(_welder_a)...);           \
         } __VA_OPT__(, ) __VA_ARGS__)
+
+/** Body of a single virtual override in a `WELDER_PY_TRAMPOLINE` class.
+
+    Use as the whole override body: `int legs() const override { WELDER_PY_OVERRIDE(legs); }`.
+    Forwards to the Python override of @a FUNC if present, else to `BASE::FUNC`. Extra
+    arguments are the method's parameters, forwarded to both paths. @a FUNC must name a
+    *single* virtual — for an overloaded one use @ref WELDER_PY_OVERRIDE_AS with a
+    @ref welder::rods::python::virtual_slot selection. Neutral name: each Python rod
+    defines it against its own dispatch. */
+#define WELDER_PY_OVERRIDE(FUNC, ...)                                          \
+    WELDER_PY_OVERRIDE_AS(^^welder_py_base::FUNC, FUNC __VA_OPT__(, ) __VA_ARGS__)
