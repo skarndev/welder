@@ -19,7 +19,7 @@ the annotation vocabulary, and each binding feature with runnable examples.
 -   **[The bindability gate](bindability.md)** — why an unrepresentable type is a hard error.
 -   **[Trust & type casters](trust-casters.md)** — escape hatches for types welder can't see.
 -   **[Generating C++ docs](cpp-docs.md)** — the Doxygen INPUT_FILTER that reads the same annotations.
--   **[Extending welder](extending.md)** — write your own rod, resolution, or entry point.
+-   **[Extending welder](extending.md)** — write your own rod, doc style, resolution, or entry point.
 -   **[Troubleshooting & FAQ](faq.md)** — the common errors and their fixes.
 
 </div>

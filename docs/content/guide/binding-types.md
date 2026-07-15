@@ -215,7 +215,7 @@ cls.def("scaled", [](const Rectangle& r, double k) // …and you weld on by hand
 
 `weld_function` likewise returns the bound function object where the framework
 has one (the Python rods, sol2), and
-[`weld_namespace_as_submodule`](namespaces-modules.md) returns the new
+[`weld_namespace_as_submodule`](namespaces-modules.md#binding-a-namespace-as-a-submodule) returns the new
 submodule handle — every entry point hands back its framework object so
 welder-generated and hand-written bindings mix freely.
 

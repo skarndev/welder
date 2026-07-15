@@ -122,7 +122,9 @@ Scale a length by a factor.
 welder has no target-language type text to place after numpydoc's `name : type`
 colon, so it emits the bare `name` form (which numpydoc accepts). The choice is
 per-`welder::welder` instantiation, so different modules — or even different
-submodules — can carry different styles.
+submodules — can carry different styles. And the set isn't closed: a style is a
+one-function contract, so a house dialect of your own is a few lines — see
+[Writing a doc style](extending.md#writing-a-doc-style).
 
 !!! note "Styles are `constexpr`"
 

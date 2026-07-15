@@ -1,10 +1,11 @@
 # Extending welder
 
-welder's core is deliberately open at three seams, all joined by static
+welder's core is deliberately open at four seams, all joined by static
 polymorphism and concept-checked at compile time:
 
 - a **rod** — a new binding backend (a new framework, or a whole new target
   language);
+- a **doc style** — a new docstring dialect for the documentation a rod emits;
 - a **resolution** — a new *which-participates* policy, injected into the
   traversal carriage;
 - the **entry point itself** — `welder::welder` can be subclassed to compose
@@ -189,6 +190,63 @@ using r_rod    = rods_r::rod<welder::user_lang<1>>;
 These semantics are locked by the compile-time test
 [`tests/core/user_lang.cpp`](https://github.com/skarndev/welder/blob/main/tests/core/user_lang.cpp).
 
+## Writing a doc style
+
+A **doc style** decides how a function's documentation pieces — the summary, the
+per-parameter docs, the `returns` text — fold into one docstring. The three
+[shipped Python styles](docstrings.md#choosing-a-docstring-style) (Google,
+NumPy, Sphinx) are ordinary implementations of the same one-function contract,
+the `welder::doc_style` concept:
+
+```cpp
+template <class S>
+concept doc_style = requires(const welder::detail::function_doc& d) {
+    { S::format(d) } -> std::same_as<std::string>;
+};
+```
+
+`format()` receives the raw pieces as a `welder::detail::function_doc` — a
+`summary` (`const char*`), the `params` (a span of `{name, text}` pairs in
+declaration order) and the `returns` text. **Any piece may be null/empty** (a
+function with only a `returns` is valid); return an empty string for a wholly
+undocumented function and the rod skips emitting a docstring. The text arrives
+already [dedented](docstrings.md#multiline-docstrings), so a style only lays
+out sections. A minimal house style:
+
+```cpp
+struct terse_style {
+    static constexpr std::string format(const welder::detail::function_doc& d) {
+        std::string out{d.summary ? d.summary : ""};
+        for (const auto& p : d.params)
+            if (p.text) {
+                if (!out.empty()) out += '\n';
+                out += "  ";
+                out += p.name ? p.name : "?";
+                out += " — ";
+                out += p.text;
+            }
+        if (d.returns) {
+            out += "\n  -> ";
+            out += d.returns;
+        }
+        return out;
+    }
+};
+static_assert(welder::doc_style<terse_style>);
+```
+
+Keep `format()` `constexpr`, like the shipped styles: the concept doesn't require
+it, but it makes the style unit-testable by `static_assert` and usable in any
+compile-time context.
+
+Plug it in where a rod exposes its `DocStyle` template parameter — today the two
+Python rods (`welder::rods::pybind11::rod<terse_style>`,
+`welder::rods::nanobind::rod<terse_style>`; the Lua rods have no runtime
+docstring to style). A [rod of your own](#writing-a-rod) applies a style the
+same way the shipped ones do: one `welder::function_docstring<Fn, Style>()` call
+per bound function. The analogous seam for *names* — the `naming::name_style`
+concept — is covered in [Naming conventions](naming.md).
+
 ## Custom traversal: resolutions and carriages
 
 The traversal driver — the **carriage** — is itself a policy template,
@@ -262,10 +320,10 @@ struct my_welder : welder::welder<welder::rods::pybind11::rod<>,
 
 ## Stability
 
-These seams — the `welder::rod` and `welder::resolution` concepts,
-`welder::carriages::basic_carriage`, the open language value space
-(`welder::user_lang`), and subclassing `welder::welder` — are welder's
-*supported* extension surface: out-of-tree code should need nothing from
+These seams — the `welder::rod`, `welder::resolution`, `welder::doc_style` and
+`welder::naming::name_style` concepts, `welder::carriages::basic_carriage`, the
+open language value space (`welder::user_lang`), and subclassing
+`welder::welder` — are welder's *supported* extension surface: out-of-tree code should need nothing from
 `welder::detail`. Pre-1.0 the hook signatures may still evolve (see the
 status note in the [README](https://github.com/skarndev/welder#readme));
 changes will be called out per release.
