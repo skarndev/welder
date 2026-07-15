@@ -37,7 +37,7 @@ local r = s.Rect(3.0, 4.0); print(r:area())   -- 12.0
 
 **Conan is NOT required to consume welder** — plain CMake (FetchContent /
 `find_package`) is the primary path; Conan is one option among them and is what CI
-uses to provision the *backends* for welder's own examples/tests. Three consumer
+uses to provision the *backends* for welder's own examples/tests. Four consumer
 routes, all landing on the same `welder::headers` target:
 
 - **FetchContent / add_subdirectory** (lightest, no install): `FetchContent_Declare` +
@@ -51,6 +51,12 @@ routes, all landing on the same `welder::headers` target:
   (`-DWELDER_BUILD_EXAMPLES=OFF -DWELDER_BUILD_TESTS=OFF -DWELDER_BUILD_PYBIND11=OFF …`
   — nothing of welder's own compiles, and backends aren't installed anyway),
   `cmake --install --prefix …`, then `find_package(welder)` + link `welder::headers`.
+- **CPM.cmake** (`CPMAddPackage("gh:skarndev/welder#main")`): CPM wraps FetchContent,
+  so it rides the same subproject collapse — verified end-to-end (2026-07-15) with a
+  scratch consumer fetching main from GitHub; no CMake changes were needed. Once
+  releases are tagged, `@0.1.0` pins one — CPM maps `@version` to the **`v<version>`
+  git tag** and cross-checks it against welder's `project()` version (parsed from
+  `version.hpp`, so it matches by construction). Tag releases `v*` for this to work.
 - **Conan** (optional): see the recipe bullet below.
 
 - **CMake install/export** (`src/CMakeLists.txt`, guarded by `WELDER_INSTALL`, default

@@ -203,6 +203,16 @@ FetchContent_Declare(welder
 FetchContent_MakeAvailable(welder)                     # defines welder::headers
 ```
 
+**CMake — [CPM.cmake]** (CPM wraps FetchContent, so this is the same subproject
+collapse with caching/version conveniences on top):
+
+```cmake
+CPMAddPackage("gh:skarndev/welder#main")               # defines welder::headers
+```
+
+Once tagged releases exist, `CPMAddPackage("gh:skarndev/welder@0.1.0")` pins one
+(CPM resolves the version to the `v0.1.0` tag).
+
 **CMake — install + `find_package`** (nothing of welder's own compiles, so disable the
 dev-time build and install just the header tree):
 
@@ -276,3 +286,4 @@ Doxygen-generated C++ reference, rebuilt and published on every push. Highlights
 [sol2]: https://github.com/ThePhD/sol2
 [LuaBridge3]: https://github.com/kunitoki/LuaBridge3
 [LuaCATS]: https://luals.github.io/wiki/annotations/
+[CPM.cmake]: https://github.com/cpm-cmake/CPM.cmake

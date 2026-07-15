@@ -51,6 +51,25 @@ imposing them:
     target_compile_options(my_bindings PRIVATE -freflection)  # … + gcc-16's reflection flag
     ```
 
+=== "CPM.cmake"
+
+    [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) wraps FetchContent, so this
+    is the same subproject collapse with caching and version pinning on top:
+
+    ```cmake
+    include(cmake/CPM.cmake)   # the get_cpm.cmake bootstrap, or a vendored copy
+
+    CPMAddPackage("gh:skarndev/welder#main")
+
+    target_link_libraries(my_bindings PRIVATE welder::headers)
+    target_compile_features(my_bindings PRIVATE cxx_std_26)   # welder needs C++26 …
+    target_compile_options(my_bindings PRIVATE -freflection)  # … + gcc-16's reflection flag
+    ```
+
+    Once tagged releases exist, `CPMAddPackage("gh:skarndev/welder@0.1.0")` pins one
+    (CPM resolves the version to the `v0.1.0` tag, and checks it against the version
+    welder's `project()` reports).
+
 === "Installed + `find_package`"
 
     Configure with the dev-time build off (nothing of welder's own compiles), install
