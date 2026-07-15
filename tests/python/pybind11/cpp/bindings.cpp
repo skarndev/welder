@@ -50,6 +50,12 @@
 #define WELDER_TEST_CHAIN_CLASS_EXTRA(cls) \
     (cls).def("doubled", [](const chaining::Gadget& g) { return g.n * 2; })
 #define WELDER_TEST_CHAIN_FN_ALIAS(sub, fn) (sub).attr("twice_alias") = (fn)
+// Member/free function-template instantiations appended under the SAME names as
+// welder-bound non-template overload groups — pybind11 merges them into one
+// overloaded function (exact matches win across all overloads, so order is moot).
+#define WELDER_TEST_CHAIN_TPL_OVERLOAD(sub, cls)          \
+    (cls).def("mix", &chaining::Mixer::mix<double>);      \
+    (sub).def("blend", &chaining_tpl_fns::blend<double>)
 
 // Case groups. These must come after the vocabulary + backend above: they use
 // both and deliberately do not re-include them. The backend-neutral groups live

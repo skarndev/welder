@@ -268,6 +268,20 @@ template instantiations bind the same way:
 coverage: cookbook recipe 06 (examples/cookbook/06-templates); compile lock:
 tests/core/naming.cpp name_of_or asserts.
 
+**Member function templates:** skipped silently by the member walk
+(`is_function`==false; is_method_candidate never matches) — marks on them are
+silently inert too (no diagnostic yet; potential hardening). No weld entry
+exists; the route is CHAINING on weld_type's returned handle
+(`cls.def("mix", &T::mix<double>)`), and on the Python rods the chained
+instantiation JOINS the welder-bound non-template overload group (pybind/nanobind
+merge same-named defs; exact-match-first so order can't shadow) — Lua frameworks
+REPLACE same-key registrations, so the pattern is Python-only. When the template
+shares its name with non-template overloads, `^^name` is an overload set →
+substitute() cannot form instantiations either (the weld_function route is closed;
+plain `&T::f<double>` disambiguates fine). Locked by chaining.hpp Mixer +
+chaining_tpl_fns::blend ↔ test_chaining.py (WELDER_TEST_CHAIN_TPL_OVERLOAD seam,
+Python bindings only); guide: templates.md "Member function templates".
+
 **Alias-welded instantiations (the sweep route).** `members_of(ns)` never
 enumerates a specialization, so a namespace-scope `using IntBox = Box<int>;` is
 how one enters `weld_namespace` — the alias is both the C++ spelling and the

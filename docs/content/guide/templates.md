@@ -181,6 +181,45 @@ field docs, method `doc`/`returns`, and parameter docs all read back off
     variable-template instantiation carries its `doc`. These semantics are locked
     in by compile-time `static_assert`s in `tests/core/template_annotations.cpp`.
 
+## Member function templates
+
+A member function template is skipped by the member walk, silently — at the
+reflection level it is a *template*, not a function, and welder cannot invent the
+type arguments a binding would need. This is the same "annotate the template, bind
+instantiations" model in miniature, with two practical consequences:
+
+**Chaining is the route.** There is no `weld_type`-style entry for a member
+template, but `weld_type` returns the rod's native class handle precisely so you
+can add what welder shouldn't guess:
+
+```cpp
+struct [[=welder::weld(welder::lang::py)]] Mixer {
+    std::string mix(int x) const;                 // welder binds these two
+    std::string mix(const std::string& s) const;  // as one overload group
+    template <class T> std::string mix(T v) const; // welder skips this
+};
+
+auto cls{weld::weld_type<Mixer>(m)};
+cls.def("mix", &Mixer::mix<double>);   // pybind11: joins the overload set
+```
+
+On the Python rods the chained instantiation **joins the welder-bound overload
+set** — pybind11 and nanobind merge same-named defs into one overloaded function,
+and exact matches win across all overloads, so registration order doesn't shadow
+anything. (Chain under the name welder actually bound — a
+[name style](naming.md) or `weld_as` rename applies.) The Lua frameworks instead
+*replace* same-key registrations, so this pattern is Python-only; on sol2 /
+LuaBridge3 register the full overload set by hand in one go.
+
+**Mixed names close the `substitute` door.** The
+`weld_function<std::meta::substitute(^^fn, {^^int})>` route (below) requires
+`^^fn` to denote the template *uniquely*. If non-template overloads share the
+name, `^^fn` names an overload set — ill-formed, there is no overload-set
+reflection — so neither the template nor its instantiations can be spelled
+through reflection at all. Plain C++ has no such trouble: `&Mixer::mix<double>`
+disambiguates by the explicit template arguments, which is exactly what the
+chaining route uses.
+
 ## `tparam` — documenting template parameters
 
 A template parameter is not a reflectable entity, so its doc rides on the
