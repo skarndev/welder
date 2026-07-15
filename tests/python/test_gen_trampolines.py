@@ -151,3 +151,20 @@ def test_generated_trampoline_covariant_single_slot(gt: ModuleType) -> None:
     stock = gt.Mint()
     assert Potted(stock).rootless() is False  # Python instance -> C++ Mint*
     assert Potted().rootless() is True        # None -> nullptr
+
+
+def test_generated_trampoline_for_template_instantiation(gt: ModuleType) -> None:
+    # Cauldron<int> is welded through its namespace-scope alias IntCauldron — the
+    # only way an instantiation enters the sweep, and the C++ spelling the generated
+    # trampoline derives from (`Cauldron<int>` itself has no identifier).
+    c = gt.IntCauldron()
+    assert c.brew() == 0
+    assert c.pour() == "brew=0"
+
+    class Potion(gt.IntCauldron):
+        def brew(self) -> int:
+            return 7
+
+    # The C++ pour() dispatches into the Python override through the generated
+    # trampoline registered for the instantiation.
+    assert Potion().pour() == "brew=7"

@@ -118,6 +118,17 @@ namespace [[=welder::doc("Unit constants.")]] units {
 constexpr double tau = 6.283185307179586;
 } // namespace units
 
+// A class-template instantiation, welded through its namespace-scope alias — the
+// alias is both the C++ spelling and the stub's class name (stubdemo.Pair).
+template <class T>
+struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A homogeneous pair.")]]
+Duo {
+    [[=welder::doc("First of the pair.")]] T first{};
+    [[=welder::doc("Second of the pair.")]] T second{};
+};
+
+using Pair = Duo<double>;
+
 } // namespace stubdemo
 
 WELDER_LUACATS_MAIN(stubdemo)

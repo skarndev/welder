@@ -36,6 +36,64 @@
 
 namespace welder::inline v0 {
 
+namespace detail {
+
+/** Is @a Alias the *only* participating alias in @a Ns welding its specialization?
+
+    Two aliases naming the same instantiation would register it twice (a framework
+    error at import time); the carriage diagnoses it at compile time instead. A
+    non-participating duplicate (excluded, or not welded under this resolution) is
+    fine — it simply doesn't bind.
+    @tparam Resolution the carriage's resolution policy.
+    @tparam Ns    the namespace being swept.
+    @tparam Alias the alias under consideration.
+    @param L   the target language.
+    @param pol the namespace's policy.
+    @return `true` iff no *other* participating alias dealiases to the same type. */
+template <class Resolution, std::meta::info Ns, std::meta::info Alias>
+consteval bool sole_alias_of_target(lang L, policy_kind pol) {
+    for (auto m :
+         std::meta::members_of(Ns, std::meta::access_context::unchecked())) {
+        if (!welder::names_template_specialization(m))
+            continue;
+        // Self-identity by NAME, not by `==`: gcc-16 compares two alias
+        // reflections of the same underlying type as equal, which would make the
+        // duplicate invisible. Two aliases cannot share an identifier in one
+        // namespace, so the identifier is the reliable identity here.
+        if (std::meta::identifier_of(m) == std::meta::identifier_of(Alias))
+            continue;
+        if (std::meta::dealias(m) == std::meta::dealias(Alias) &&
+            Resolution::alias_participates(m, L, pol))
+            return false;
+    }
+    return true;
+}
+
+/** The bound name of the specialization welded through @a Alias.
+
+    Resolution order: a `weld_as` on the alias (most specific, verbatim) → a
+    `weld_as` on the class template, read through the instantiation (verbatim; note
+    it names every instantiation alike, so pairing it with several aliases of one
+    template collides) → the alias's identifier, reshaped by @a Style. This is
+    @ref welder::name_of applied to the alias, with the template-level `weld_as`
+    fallback spliced in between its two steps.
+    @tparam Alias the alias through which the specialization is welded.
+    @tparam L     the target language.
+    @tparam Style the name style.
+    @return the bound name, in static storage. */
+template <std::meta::info Alias, lang L, class Style>
+consteval const char* alias_bound_name() {
+    if constexpr (welder::weld_as_of<Alias, L>() != nullptr)
+        return welder::weld_as_of<Alias, L>();
+    else if constexpr (welder::weld_as_of<std::meta::dealias(Alias), L>() !=
+                       nullptr)
+        return welder::weld_as_of<std::meta::dealias(Alias), L>();
+    else
+        return welder::name_of<Alias, L, Style, ent_kind::class_>();
+}
+
+} // namespace detail
+
 namespace carriages {
 
 // --- resolution policies ----------------------------------------------------
@@ -70,6 +128,15 @@ struct marker_resolution {
     static consteval bool member_participates(std::meta::info mem, lang L,
                                               policy_kind pol) {
         return welder::welded_for(mem, L) && member_bound(mem, L, pol);
+    }
+    /** A namespace-scope alias to a class-template specialization participates:
+        welded via the alias's own `weld` (precedence) or the template's (read
+        through the instantiation), with the usual scope-policy/marks resolution
+        against the instantiation. @see welder::alias_welded_for */
+    static consteval bool alias_participates(std::meta::info mem, lang L,
+                                             policy_kind pol) {
+        return welder::alias_welded_for(mem, L) &&
+               member_bound(std::meta::dealias(mem), L, pol);
     }
     /** A *class* member (field / method / operator / constructor — and, loosely,
         an enumerator) participates: its scope's policy + its own marks decide.
@@ -115,6 +182,12 @@ struct greedy_resolution {
     static consteval bool member_participates(std::meta::info mem, lang L,
                                               policy_kind pol) {
         return member_bound(mem, L, pol);
+    }
+    /** Greedy: an alias-declared specialization binds like any other type — no
+        `weld` needed on alias or template; marks (via the instantiation) still prune. */
+    static consteval bool alias_participates(std::meta::info mem, lang L,
+                                             policy_kind pol) {
+        return member_bound(std::meta::dealias(mem), L, pol);
     }
     /** Same as stitch: greedy ignores the `weld` marker, not the marks — a mark on
         an individual overload/constructor still prunes it. */
@@ -292,6 +365,37 @@ struct basic_carriage {
         return e;
     }
 
+    /** Call the rod's class-creation primitive, preferring the extended
+        declaring-entity-aware form when the rod provides one.
+
+        @a Decl is the entity the type was *declared through* — `^^T`, or the
+        namespace-scope alias welding a class-template specialization. A helper
+        (not a lambda in `bind_type`): `std::meta::info` is consteval-only, so a
+        lambda referencing such a constexpr local escalates to consteval (P2564)
+        and cannot take the runtime module handle; template parameters do not.
+        @tparam B     the rod.
+        @tparam T     the type to bind.
+        @tparam Decl  the declaring entity handed to a spelling-aware rod.
+        @tparam Bases the native base reflections.
+        @param m        the module handle to register onto.
+        @param cls_name the resolved target-language name.
+        @param doc      the class docstring, or `nullptr`.
+        @return the rod's class handle. */
+    template <rod B, class T, std::meta::info Decl, auto Bases>
+    static auto make_class_of(typename B::module_type& m, const char* cls_name,
+                              const char* doc) {
+        if constexpr (requires {
+                          B::template make_class<T, Decl, Bases>(
+                              m, cls_name, doc,
+                              std::make_index_sequence<Bases.size()>{});
+                      })
+            return B::template make_class<T, Decl, Bases>(
+                m, cls_name, doc, std::make_index_sequence<Bases.size()>{});
+        else
+            return B::template make_class<T, Bases>(
+                m, cls_name, doc, std::make_index_sequence<Bases.size()>{});
+    }
+
     /** Reflect over @a T and register it via rod @a B onto module @a m.
 
         Emits:
@@ -303,17 +407,27 @@ struct basic_carriage {
         - public data members / methods / operators that resolve as bound, plus the
           eligible members of every flattened (non-native) public base.
 
-        @tparam B the rod.
-        @tparam T the type to bind.
+        @tparam B    the rod.
+        @tparam T    the type to bind.
+        @tparam Decl the declaring entity when it differs from `^^T` — the
+                     namespace-scope alias a class-template specialization was
+                     welded through (set by `bind_namespace`'s alias branch, which
+                     has already resolved participation); a null reflection for
+                     the direct route.
         @param m    the module handle to register onto.
         @param name the target name (used verbatim, beating any `weld_as`), or
                     `nullptr` to resolve @a T's `weld_as`/styled name.
         @return the rod's class handle, so callers can chain further registrations.
     */
-    template <rod B, class T, class Style = naming::none>
+    template <rod B, class T, class Style = naming::none,
+              std::meta::info Decl = std::meta::info{}>
     static auto bind_type(typename B::module_type& m, const char* name = nullptr) {
         constexpr lang L{B::language};
-        static_assert(Resolution::participates(^^T, L),
+        // Decl is the *declaring* entity when it differs from ^^T: the namespace-
+        // scope alias through which a class-template specialization was welded
+        // (bind_namespace's alias branch, which has already resolved participation
+        // — the alias's own `weld` counts there, so ^^T alone can't be re-checked).
+        static_assert(Decl != std::meta::info{} || Resolution::participates(^^T, L),
                       "welder: weld_type<T>: T is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
         constexpr auto ctx{std::meta::access_context::unchecked()};
@@ -322,10 +436,14 @@ struct basic_carriage {
             welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
 
         // Native bases → bases of the class handle; the user binds them first.
+        // A text-emitting rod that must *spell* the type in C++ (the trampoline
+        // generator) declares the extended, declaring-entity-aware make_class; it
+        // receives Decl — the alias, the one C++ name a specialization has — or
+        // ^^T itself for a directly-declared class. Detected via requires, so the
+        // runtime rods keep the plain form (they need only T + the bound name).
         constexpr auto bases{Resolution::template native_bases<^^T, L>()};
-        auto cls{B::template make_class<T, bases>(
-            m, cls_name, welder::doc_of<^^T>(),
-            std::make_index_sequence<bases.size()>{})};
+        auto cls{make_class_of<B, T, (Decl == std::meta::info{} ? ^^T : Decl),
+                               bases>(m, cls_name, welder::doc_of<^^T>())};
 
         // Constructors, handed to the rod as ONE participating set (several
         // frameworks want them all at once — sol2's sol::constructors, LuaBridge3's
@@ -494,7 +612,44 @@ struct basic_carriage {
 
         template for (constexpr auto mem :
                       std::define_static_array(std::meta::members_of(Ns, ctx))) {
-            if constexpr (std::meta::is_type(mem) && std::meta::is_class_type(mem)) {
+            // The alias branch must come first: type predicates (is_class_type)
+            // look through an alias, so the class branch below would swallow it.
+            if constexpr (std::meta::is_type_alias(mem)) {
+                if constexpr (welder::names_template_specialization(mem)) {
+                    // The one way an *instantiation* enters a sweep (members_of
+                    // enumerates the template, never its specializations): the
+                    // alias is both the C++ spelling and the target-language name.
+                    static_assert(
+                        welder::alias_marks_admissible(mem),
+                        "welder: only weld / weld_as may be attached to a "
+                        "namespace-scope alias; every other mark belongs on the "
+                        "class template, where it applies to all instantiations");
+                    if constexpr (Resolution::alias_participates(mem, L, pol)) {
+                        static_assert(
+                            detail::sole_alias_of_target<Resolution, Ns, mem>(L,
+                                                                              pol),
+                            "welder: two aliases in this namespace weld the SAME "
+                            "template specialization — each specialization may be "
+                            "welded under exactly one name");
+                        bind_type<B, typename [:mem:], Style, mem>(
+                            m, detail::alias_bound_name<mem, L, Style>());
+                    }
+                } else {
+                    // An alias to a plain (non-template) type: binding it would
+                    // register the type a second time under the alias name — a
+                    // welded target makes the alias a likely mistake, diagnosed
+                    // rather than silently skipped. (Rename with weld_as instead.)
+                    static_assert(
+                        !((std::meta::is_class_type(std::meta::dealias(mem)) ||
+                           std::meta::is_enum_type(std::meta::dealias(mem))) &&
+                          welder::alias_welded_for(mem, L)),
+                        "welder: a namespace-scope alias to a welded NON-template "
+                        "type would bind the type twice (it already binds under "
+                        "its own name); remove the alias's weld, or rename the "
+                        "type with [[=welder::weld_as(...)]]");
+                }
+            } else if constexpr (std::meta::is_type(mem) &&
+                                 std::meta::is_class_type(mem)) {
                 if constexpr (Resolution::member_participates(mem, L, pol))
                     bind_type<B, typename [:mem:], Style>(m, nullptr);
             } else if constexpr (std::meta::is_type(mem) && std::meta::is_enum_type(mem)) {

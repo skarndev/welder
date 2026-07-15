@@ -107,7 +107,13 @@ Constructors resolve symmetrically (opt_in binds only marked-include ctors), wit
 two fail-safes: the default ctor is exempt from opt_in's default-out (an implicit
 one has nothing to mark; explicit marks on a declared one ARE honored), and
 filtering that leaves a type with NO constructor is a hard error unless explicit
-(mark::exclude on every ctor = a deliberate factory-only surface). A `lang` is a bit in an `unsigned` mask; mask `0` on an
+(mark::exclude on every ctor = a deliberate factory-only surface). A class-template
+**instantiation** is welded through a **namespace-scope alias** (`using IntBox =
+Box<int>;`): the sweep enumerates the alias (never the specialization), which
+supplies both the C++ spelling (for text-emitting rods) and the target name; only
+`weld`/`weld_as` may sit on the alias (taking precedence over the template's — the
+alias `weld` is the third-party-template opt-in); duplicate aliases of one
+specialization and aliases to welded non-template types are hard errors. A `lang` is a bit in an `unsigned` mask; mask `0` on an
 exclude/include spec is the sentinel for "all languages". The lang value space
 is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
 user languages from 16–31 for out-of-tree rods (locked by

@@ -71,6 +71,7 @@
 #include "chaining.hpp"
 #include "overloads.hpp"
 #include "retpolicy.hpp"
+#include "templates.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -96,4 +97,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_chaining(m);    // <-> test_chaining.py (handles returned by weld_*)
     register_overloads(m);   // <-> test_overloads.py (per-overload / per-ctor marks)
     register_retpolicy(m);   // <-> test_retpolicy.py (return_policy + keep_alive)
+    register_templates(m);   // <-> test_templates.py (alias-welded template instantiations)
 }

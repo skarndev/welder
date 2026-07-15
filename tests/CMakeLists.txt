@@ -117,6 +117,17 @@ add_test(NAME compile.trampoline_slots
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_trampoline_slots --config $<CONFIG>)
 
+# Alias-welding semantics (compile-only): the reflect-layer rules for welding a
+# class-template instantiation through a namespace-scope alias
+# (names_template_specialization, alias_welded_for precedence, admissible marks).
+# static_asserts; same compile-to-pass shape as above.
+add_library(welder_weld_alias OBJECT EXCLUDE_FROM_ALL core/weld_alias.cpp)
+target_compile_features(welder_weld_alias PRIVATE cxx_std_26)
+target_link_libraries(welder_weld_alias PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.weld_alias
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_weld_alias --config $<CONFIG>)
+
 # Docstring dedent semantics (compile-only): welder::cleandoc (doc.hpp) mirrors
 # Python inspect.cleandoc / PEP 257 so multiline docs can be indented to match the
 # source without the indentation leaking into __doc__. static_asserts lock the

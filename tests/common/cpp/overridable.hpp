@@ -187,6 +187,27 @@ struct PyTree : Tree {
     Tree* parent() const override { WELDER_PY_OVERRIDE(parent); }  // the narrowed slot
 };
 
+// A HAND-WRITTEN trampoline for a class-template instantiation. The instantiation
+// is welded through its namespace-scope alias (the sweep never enumerates
+// Gauge<int> itself); the trampoline derives from the alias and registers via
+// trampoline_for<IntGauge> — which IS trampoline_for<Gauge<int>> (aliases are
+// transparent to type template parameters).
+template <class T>
+struct
+[[=welder::weld(welder::lang::py)]]
+Gauge {
+    virtual ~Gauge() = default;
+    virtual T read() const { return T{}; }
+    std::string report() const { return "value=" + std::to_string(read()); }
+};
+
+using IntGauge = Gauge<int>;
+
+struct PyIntGauge : IntGauge {
+    WELDER_PY_TRAMPOLINE(IntGauge);
+    int read() const override { WELDER_PY_OVERRIDE(read); }
+};
+
 } // namespace overridable
 
 // Animal uses the explicit registration form (trampoline_for); Shape uses the
@@ -201,6 +222,9 @@ template <> constexpr std::meta::info
     welder::rods::python::trampoline_for<overridable::Plant> = ^^overridable::PyPlant;
 template <> constexpr std::meta::info
     welder::rods::python::trampoline_for<overridable::Tree> = ^^overridable::PyTree;
+template <> constexpr std::meta::info
+    welder::rods::python::trampoline_for<overridable::IntGauge> =
+        ^^overridable::PyIntGauge;
 
 inline void register_overridable(WELDER_TEST_MODULE_T& m) {
     auto sub{WELDER_TEST_SUBMODULE(m, "overridable")};

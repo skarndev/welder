@@ -17,6 +17,9 @@ Binding types one at a time is fine, but welder can also bind a **whole namespac
 contents in **declaration order**:
 
 - classes (via `weld_type<T>`),
+- class-template **instantiations declared through a namespace-scope alias**
+  (`using IntBox = Box<int>;` — the alias is the target-language name; see
+  [Binding templates](templates.md#welding-through-an-alias-the-namespace-sweep)),
 - free functions (overloads included),
 - namespace-scope variables.
 

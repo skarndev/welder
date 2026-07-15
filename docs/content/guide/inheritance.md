@@ -331,6 +331,15 @@ signature matches by construction no matter how hairy the type — parameterful,
 reflection), **covariant** (one override, the narrowed return) and **protected NVI**
 virtuals all come out correct with zero hand-written code.
 
+A **class-template instantiation** is covered too, through its
+[namespace-scope alias](templates.md#welding-through-an-alias-the-namespace-sweep):
+the alias gives the generator the one thing a specialization lacks — a C++
+spelling — so `using IntRing = Ring<int>;` in the welded namespace yields a
+generated trampoline deriving from (and registering `trampoline_for` under)
+`IntRing`. Welding a bare specialization into the generator without an alias is a
+compile error pointing you at this route. (A *hand-written* trampoline for an
+instantiation needs no alias — `trampoline_for<Ring<int>>` works directly.)
+
 The one shape reflection cannot reproduce is a **C-style variadic** virtual
 (`f(int, ...)`): C++26 reflection exposes no ellipsis query. Such a virtual makes the
 generator emit a `static_assert` (a clear compile error) unless you mark it

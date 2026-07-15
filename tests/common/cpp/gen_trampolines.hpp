@@ -113,6 +113,22 @@ Mint : Herb {
     Mint* root() const override { return nullptr; }
 };
 
+// A CLASS-TEMPLATE instantiation, welded through a namespace-scope alias — the
+// only way an instantiation enters the sweep (members_of never enumerates one),
+// and the C++ spelling the generator needs (`Cauldron<int>` has no identifier;
+// `::gen_trampolines::IntCauldron` does). The generated trampoline derives from
+// and registers trampoline_for<> under the alias.
+template <class T>
+struct
+[[=welder::weld(welder::lang::py)]]
+Cauldron {
+    virtual ~Cauldron() = default;
+    virtual T brew() const { return T{}; }
+    std::string pour() const { return "brew=" + std::to_string(brew()); }
+};
+
+using IntCauldron = Cauldron<int>;
+
 } // namespace gen_trampolines
 
 // The register hook needs the backend seam macros; the trampoline *generator* TU

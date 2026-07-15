@@ -139,4 +139,25 @@ static_assert(wrt::is_c_variadic(wrp::overridable_virtuals(^^Printer)[0]));
 static_assert(contains(wrt::render_trampoline(^^Printer), "static_assert(false"));
 static_assert(contains(wrt::render_trampoline(^^Printer), "bind_flat"));
 
+// --- rendering a class-template instantiation via its alias --------------------
+
+// `Ring<int>` has no identifier; its namespace-scope alias is the C++ spelling the
+// generated text derives from — base clause, trampoline_for key, and the slot
+// re-derivations all name ::ts::IntRing.
+template <class T>
+struct Ring {
+    virtual ~Ring() = default;
+    virtual T next() { return T{}; }
+};
+using IntRing = Ring<int>;
+
+static_assert(wrp::virtual_slot_count(^^IntRing) == 1,
+              "the reflection layer accepts an alias (dealiased at entry)");
+static_assert(contains(wrt::render_trampoline(^^IntRing),
+                       "struct ts_IntRing_trampoline : ::ts::IntRing {"));
+static_assert(contains(wrt::render_trampoline(^^IntRing),
+                       "overridable_virtuals(^^::ts::IntRing)"));
+static_assert(contains(wrt::render_registration(^^IntRing),
+                       "trampoline_for<::ts::IntRing>"));
+
 } // namespace ts

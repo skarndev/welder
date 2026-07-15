@@ -226,7 +226,8 @@ so both extensions compile the *same* generated header — a cross-rod consisten
 ## Whole-namespace binding — `weld_namespace<^^ns>(m)`
 `weld` gates *leaf entities only* (class type / free function / namespace-scope
 variable; namespaces are never welded); the namespace `policy` (default automatic)
-+ member marks then resolve. Binds classes (`weld_type<T>`), free functions (overloads
++ member marks then resolve. Binds classes (`weld_type<T>`), **alias-declared
+template instantiations** (see the alias bullet below), free functions (overloads
 included), and namespace variables as module attributes — a **value snapshot if
 const/constexpr, else a live get/set property** over the C++ global (via a
 `ModuleType` `__class__` swap). A **nested namespace** resolves under the
@@ -266,6 +267,36 @@ template instantiations bind the same way:
 `weld_function<std::meta::substitute(^^ns::fn, {^^int})>(m, "name")`. Runtime
 coverage: cookbook recipe 06 (examples/cookbook/06-templates); compile lock:
 tests/core/naming.cpp name_of_or asserts.
+
+**Alias-welded instantiations (the sweep route).** `members_of(ns)` never
+enumerates a specialization, so a namespace-scope `using IntBox = Box<int>;` is
+how one enters `weld_namespace` — the alias is both the C++ spelling and the
+target name. Carriage: an alias branch FIRST in bind_namespace (gcc's
+`is_class_type(alias)`==true would let the class branch swallow it);
+`names_template_specialization` / `alias_welded_for` / `alias_marks_admissible`
+live in reflect.hpp. Rules: alias may carry ONLY weld/weld_as, each taking
+PRECEDENCE over the template's (alias weld REPLACES the lang set — the
+third-party-template opt-in; alias weld_as → template weld_as → styled alias
+identifier via detail::alias_bound_name); other marks → static_assert; two
+participating aliases of one specialization → static_assert
+(detail::sole_alias_of_target — compares by IDENTIFIER: gcc-16 collapses `==` on
+alias reflections of the same type); alias to a welded NON-template type →
+static_assert (would double-register; weld_as is the rename tool). bind_type
+gained `Decl` NTTP (default info{}) — skips the weld participates-assert when
+alias-driven, and `make_class_of` prefers a rod's extended
+`make_class<T, Decl, Bases>` via requires (a static HELPER, not a lambda:
+consteval-only info locals escalate lambdas under P2564). Spelling-aware rods
+implementing the extended form: trampolines (renders `: ::ns::IntBox` +
+`trampoline_for<::ns::IntBox>`; bare specialization → static_assert pointing at
+the alias route) and luacats (records qualified_name(Decl) for the rename table —
+qualified_name(^^Box<int>) collapses to the bare namespace and corrupted the
+module-root line). Direct `weld_type<Box<int>>(m, "name")` unchanged (type params
+dealias — the alias is unrecoverable there). Tests: tests/common/cpp/templates.hpp
+↔ test_templates.py + templates_spec.lua (all four runtime rods); trampolines:
+Cauldron/IntCauldron (generated) + Gauge/IntGauge (hand-written) in
+gen_trampolines.hpp / overridable.hpp; luacats golden (stubdemo.Pair); compile
+locks tests/core/weld_alias.cpp + trampoline_slots.cpp (alias render); neg:
+tests/python/pybind11/cpp/neg/alias_{forbidden_mark,plain_welded,duplicate}.cpp.
 
 ## Naming conventions & `weld_as`
 Two pieces, both rod-agnostic (they live in the core / driver, so every rod gets

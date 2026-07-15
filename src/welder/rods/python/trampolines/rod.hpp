@@ -110,6 +110,22 @@ struct rod {
         return {};
     }
 
+    /** The declaring-entity-aware form the carriage prefers (see `bind_type`): @a
+        Decl is the *spelling* of @a T — `^^T` for a directly-declared class, or the
+        namespace-scope **alias** through which a class-template specialization was
+        welded. The generated text derives everything from @a Decl (base clause,
+        `trampoline_for` key, slot re-derivations), which is what lets it name a
+        specialization at all: `Ring<int>` has no identifier, `::ns::IntRing` does.
+        `bind_flat` is read through the dealiased type (marks live on the template). */
+    template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
+    static class_handle make_class(module_type& m, const char* /*name*/,
+                                   const char* /*doc*/, std::index_sequence<I...>) {
+        if constexpr (!::welder::rods::python::overridable_virtuals(Decl).empty() &&
+                      !::welder::rods::python::bound_flat(std::meta::dealias(Decl)))
+            m.doc->template add<Decl>();
+        return {};
+    }
+
     template <class T, auto Ctors, bool HasDefault, bool Aggregate>
     static void add_constructors(class_handle&) {}
     template <std::meta::info, class = ::welder::naming::none>

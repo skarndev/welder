@@ -27,6 +27,70 @@ consteval bool welded_for(std::meta::info type, lang L) {
            (std::meta::extract<detail::weld_spec>(anns[0]).mask & lang_bit(L)) != 0;
 }
 
+/** Is @a mem a namespace-scope alias naming a class-template specialization —
+    the one way an *instantiation* can enter a namespace sweep?
+
+    `members_of(ns)` enumerates the class *template*, never its instantiations; a
+    namespace-scope `using IntRing = Ring<int>;` is therefore welder's vehicle for
+    welding one: the alias supplies both the target-language name (its identifier)
+    and — for text-emitting rods — the C++ spelling of the otherwise unnameable
+    specialization (`has_identifier` is `false` on `Ring<int>` itself).
+    @param mem a reflection of a namespace member.
+    @return `true` iff @a mem is a type alias whose target is a class-template
+            specialization. */
+consteval bool names_template_specialization(std::meta::info mem) {
+    return std::meta::is_type_alias(mem) &&
+           std::meta::is_class_type(std::meta::dealias(mem)) &&
+           std::meta::has_template_arguments(std::meta::dealias(mem));
+}
+
+/** Is the specialization named by alias @a mem welded for language @a L — reading
+    the alias's own `weld` first, the instantiation's (via its template) second?
+
+    A `weld` on the alias-declaration **takes precedence** over the template's: it
+    is the more specific declaration, and the opt-in for a third-party template you
+    cannot annotate (`using VBuf [[=welder::weld(welder::lang::py)]] =
+    vendor::Buf<int>;`). With no alias-level `weld`, the mark on the class template
+    is read through the instantiation as usual.
+    @param mem a reflection of the alias (see @ref names_template_specialization).
+    @param L   the target language.
+    @return `true` iff the aliased specialization is welded for @a L. */
+consteval bool alias_welded_for(std::meta::info mem, lang L) {
+    auto own{std::meta::annotations_of_with_type(mem, ^^detail::weld_spec)};
+    if (!own.empty())
+        return (std::meta::extract<detail::weld_spec>(own[0]).mask & lang_bit(L)) !=
+               0;
+    return welded_for(std::meta::dealias(mem), L);
+}
+
+/** May the annotations on alias-declaration @a mem appear there?
+
+    Only `weld` and `weld_as` are meaningful on a namespace-scope alias (they
+    override the template's); every other welder mark — `policy`, `exclude` /
+    `include` / `only`, `trust_bindable`, `doc` / `returns` / `tparam`,
+    `return_policy`, `keep_alive` — belongs on the class template itself, where it
+    applies to *all* instantiations, and is diagnosed here so it cannot be silently
+    ignored. Non-welder annotations are not welder's business and pass.
+    @param mem a reflection of the alias to check.
+    @return `true` iff @a mem carries no welder annotation besides `weld`/`weld_as`. */
+consteval bool alias_marks_admissible(std::meta::info mem) {
+    for (auto a : std::meta::annotations_of(mem)) {
+        auto t{std::meta::type_of(a)};
+        if (t == ^^detail::policy_spec || t == ^^detail::exclude_spec ||
+            t == ^^detail::include_spec || t == ^^detail::only_spec ||
+            t == ^^detail::trust_bindable_spec ||
+            t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec)
+            return false;
+        if (std::meta::has_template_arguments(t)) {
+            auto tmpl{std::meta::template_of(t)};
+            if (tmpl == ^^detail::doc_spec || tmpl == ^^detail::return_doc_spec ||
+                tmpl == ^^detail::tparam_spec)
+                return false;
+        }
+    }
+    return true;
+}
+
 /** The reflection policy declared on @a type, defaulting to `automatic`.
 
     @param type a reflection of the type to inspect.

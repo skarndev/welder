@@ -273,6 +273,9 @@ consteval void collect_virtuals(std::meta::info type,
     @param type a reflection of the class type.
     @return the most-derived declaration of each exposed overridable virtual. */
 consteval std::vector<std::meta::info> overridable_virtuals(std::meta::info type) {
+    // Accept an alias reflection too (the spelling a generated trampoline uses for
+    // a class-template specialization): the walk needs the underlying class.
+    type = std::meta::dealias(type);
     std::vector<std::meta::info> all{};
     detail::collect_virtuals(type, all);
     std::vector<std::meta::info> out{};

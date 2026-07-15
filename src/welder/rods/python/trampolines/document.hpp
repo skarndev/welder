@@ -183,6 +183,17 @@ struct document {
         rendered text is materialized to a `const char*` and appended at runtime. */
     template <std::meta::info Type>
     void add() {
+        // The generated text must SPELL the type in C++ (base clause, the
+        // trampoline_for key, the slot re-derivations) — impossible for a bare
+        // class-template specialization, which has no identifier and whose
+        // template-id cannot be respelled faithfully from reflection. The alias
+        // is that spelling: welding `using IntRing = Ring<int>;` in the swept
+        // namespace routes the carriage here with the alias as @a Type.
+        static_assert(std::meta::has_identifier(Type),
+                      "welder: cannot generate a trampoline for a class-template "
+                      "specialization spelled directly (it has no identifier); "
+                      "declare a namespace-scope alias — using IntRing = "
+                      "Ring<int>; — and weld that instead");
         structs += std::define_static_string(render_trampoline(Type));
         registrations += std::define_static_string(render_registration(Type));
     }

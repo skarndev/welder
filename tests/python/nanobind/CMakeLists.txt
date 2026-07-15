@@ -34,7 +34,8 @@ function(welder_add_nanobind_test_module tgt)
     ${WELDER_TEST_COMMON_CPP}/resolution.hpp ${WELDER_TEST_COMMON_CPP}/methods.hpp
     ${WELDER_TEST_COMMON_CPP}/inheritance.hpp ${WELDER_TEST_COMMON_CPP}/namespace.hpp
     ${WELDER_TEST_COMMON_CPP}/doc.hpp ${WELDER_TEST_COMMON_CPP}/operators.hpp
-    ${WELDER_TEST_COMMON_CPP}/enums.hpp ${WELDER_TEST_COMMON_CPP}/gen_trampolines.hpp)
+    ${WELDER_TEST_COMMON_CPP}/enums.hpp ${WELDER_TEST_COMMON_CPP}/gen_trampolines.hpp
+    ${WELDER_TEST_COMMON_CPP}/templates.hpp)
   target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   # The generated trampoline header (welder::rods::trampolines), shared with pybind11.
   target_include_directories(${tgt} PRIVATE ${WELDER_GEN_TRAMPOLINES_DIR})

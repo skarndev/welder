@@ -20,10 +20,54 @@ Two consequences follow directly:
 - **You hand welder instantiations.** `weld_type<Box<int>>(m, "BoxInt")` is
   legitimate: the `weld`, `policy`, marks and docs on the template resolve through
   the instantiation exactly as on a plain class.
-- **The namespace walker skips templates.** `weld_namespace` cannot enumerate what
-  does not exist — an uninstantiated template is not a bindable entity, so it stays
-  skipped. Instantiations you want exposed are welded explicitly, one `weld_type`
-  each.
+- **The namespace walker skips templates** — an uninstantiated template is not a
+  bindable entity. But an instantiation *can* ride the sweep: declare a
+  **namespace-scope alias** for it, and `weld_namespace` binds it under the
+  alias's name. That is the recommended route — see
+  [Welding through an alias](#welding-through-an-alias-the-namespace-sweep) below.
+
+## Welding through an alias (the namespace sweep)
+
+`members_of(ns)` enumerates the class *template*, never an instantiation — so a
+namespace-scope alias is the way one enters a `weld_namespace` sweep. The alias
+supplies everything a specialization otherwise lacks: a C++ **identifier** (which
+text-emitting rods like the [trampoline generator](inheritance.md#generating-trampolines-automatically)
+need to spell the type) and the default **target-language name** — no stringified
+name anywhere:
+
+```cpp
+namespace shapes {
+
+template <class T>
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]] Box {
+    T value{};
+};
+
+using IntBox = Box<int>;        // ← binds as `IntBox`, py and lua
+using WordBox = Box<std::string>; // a second instantiation, its own name
+
+} // namespace shapes
+
+// weld_namespace<^^shapes>(m) now binds IntBox and WordBox like any welded type.
+```
+
+The rules, all enforced at compile time:
+
+- **The template's `weld` stays effective** — it is read through the
+  instantiation, so annotating the template once covers every aliased
+  instantiation. Marks, `policy`, and docs resolve the same way.
+- **The alias may carry `weld` and `weld_as` — nothing else.** Both *take
+  precedence* over the template's when present. An alias-level `weld` is the
+  opt-in for a **third-party template you cannot annotate**
+  (`using VBuf [[=welder::weld(welder::lang::py)]] = vendor::Buf<int>;`) — note it
+  *replaces* the template's language set rather than adding to it. Any other
+  welder mark on an alias is a compile error pointing you at the template.
+- **One alias per specialization.** Two participating aliases naming the same
+  instantiation would register it twice; welder diagnoses the duplicate at
+  compile time.
+- **Plain-type aliases don't bind.** `using Alias = SomeWeldedClass;` would
+  register the class a second time, so a welded target makes the alias a hard
+  error — rename with `weld_as` instead.
 
 ## Annotate once, weld each instantiation
 
@@ -62,7 +106,7 @@ PYBIND11_MODULE(mymod, m) {
 42
 ```
 
-### The name is not optional
+### The name is not optional (on the direct route)
 
 For a plain class, `weld_type<T>(m)` defaults the target name to `T`'s C++
 identifier. A template specialization **has no identifier** — reflection's
@@ -72,12 +116,21 @@ the trailing name override: it is used **verbatim** (it bypasses the
 [name style](naming.md) and beats `weld_as`). Omitting it — with no `weld_as` to
 fall back on — fails at binding time with a message pointing you here.
 
+This is also why the direct route cannot see an alias: a type template parameter
+*dealiases* — by the time `weld_type<shapes::IntBox>` reaches welder, `IntBox` is
+`Box<int>` and the alias is gone. The [namespace sweep](#welding-through-an-alias-the-namespace-sweep)
+sees the alias *declaration* itself, which is what makes the automatic naming
+work there.
+
 !!! info "Why not `weld_as` on the template?"
 
     A `weld_as` on the primary template rides on *every* instantiation alike — it
     cannot tell `Box<int>` from `Box<double>`, so all instantiations would claim
-    the same target name. The per-call name override is the per-instantiation
-    tool.
+    the same target name. The per-instantiation tools are the alias's name (or a
+    `weld_as` *on the alias*) on the sweep route, and the per-call name override
+    on the direct route. (With a *single* aliased instantiation, a template-level
+    `weld_as` does apply — the alias simply inherits it when it has none of its
+    own.)
 
 ## Which declaration's annotations win
 

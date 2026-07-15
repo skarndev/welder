@@ -110,3 +110,13 @@ function stubdemo.describe(area) end
 ---@type number
 stubdemo.units.tau = nil
 
+--- A homogeneous pair.
+---@class stubdemo.Pair
+---@field first number First of the pair.
+---@field second number Second of the pair.
+stubdemo.Pair = {}
+
+---@return stubdemo.Pair
+---@overload fun(first: number, second: number): stubdemo.Pair
+function stubdemo.Pair.new() end
+

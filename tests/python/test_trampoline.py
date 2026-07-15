@@ -233,6 +233,22 @@ def test_covariant_override_routes_through_single_slot(ov: ModuleType) -> None:
     assert Sapling().orphan() is True
 
 
+# --- a template instantiation with a hand-written trampoline -------------------
+def test_hand_written_trampoline_for_template_instantiation(ov: ModuleType) -> None:
+    # Gauge<int> is welded through its alias IntGauge; the hand-written PyIntGauge
+    # derives from the alias, and trampoline_for<IntGauge> IS
+    # trampoline_for<Gauge<int>> (aliases are transparent to type parameters).
+    g = ov.IntGauge()
+    assert g.read() == 0
+    assert g.report() == "value=0"
+
+    class Barometer(ov.IntGauge):
+        def read(self) -> int:
+            return 42
+
+    assert Barometer().report() == "value=42"  # C++ -> Python via the trampoline
+
+
 # --- a per-method bind_flat virtual -----------------------------------------
 def test_bind_flat_virtual_is_bound_but_not_overridable(ov: ModuleType) -> None:
     # kingdom() is virtual but marked [[=welder::rods::python::bind_flat]]: it is

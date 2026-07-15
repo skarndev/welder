@@ -15,7 +15,8 @@ function(welder_add_pybind11_test_module tgt)
     ${WELDER_TEST_COMMON_CPP}/resolution.hpp ${WELDER_TEST_COMMON_CPP}/methods.hpp
     ${WELDER_TEST_COMMON_CPP}/inheritance.hpp ${WELDER_TEST_COMMON_CPP}/namespace.hpp
     ${WELDER_TEST_COMMON_CPP}/doc.hpp ${WELDER_TEST_COMMON_CPP}/operators.hpp
-    ${WELDER_TEST_COMMON_CPP}/enums.hpp ${WELDER_TEST_COMMON_CPP}/gen_trampolines.hpp)
+    ${WELDER_TEST_COMMON_CPP}/enums.hpp ${WELDER_TEST_COMMON_CPP}/gen_trampolines.hpp
+    ${WELDER_TEST_COMMON_CPP}/templates.hpp)
   target_include_directories(${tgt} PRIVATE ${WELDER_TEST_COMMON_CPP})
   # The generated trampoline header (welder::rods::trampolines) is emitted into the
   # parent tests/python build dir; depend on its generation and put it on the path.
@@ -44,7 +45,8 @@ welder_add_pybind11_test_module(welder_test_pybind11)
 foreach(neg operand_not_welded container_of_unwelded
             virtual_needs_trampoline trampoline_missing_override
             trampoline_ambiguous tack_incomplete_param optin_uninstantiable
-            return_policy_dangling)
+            return_policy_dangling alias_forbidden_mark alias_plain_welded
+            alias_duplicate)
   add_library(welder_neg_${neg} OBJECT EXCLUDE_FROM_ALL cpp/neg/${neg}.cpp)
   target_compile_features(welder_neg_${neg} PRIVATE cxx_std_26)
   target_link_libraries(welder_neg_${neg} PRIVATE welder::pybind11)

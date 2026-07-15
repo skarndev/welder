@@ -160,6 +160,18 @@ struct rod {
     template <class T, auto Bases, std::size_t... I>
     static class_writer make_class(module_type& m, const char* name,
                                    const char* doc, std::index_sequence<I...> seq) {
+        return make_class<T, ^^T, Bases>(m, name, doc, seq);
+    }
+
+    /** The declaring-entity-aware form the carriage prefers: @a Decl is `^^T`, or
+        the namespace-scope **alias** a class-template specialization was welded
+        through. The raw C++ name registered for reference reconciliation must be
+        derived from @a Decl — a specialization has no identifier, so
+        `qualified_name(^^T)` would collapse to the bare namespace and corrupt the
+        rename table (rewriting the module root). @see welder::rod */
+    template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
+    static class_writer make_class(module_type& m, const char* name,
+                                   const char* doc, std::index_sequence<I...> seq) {
         class_writer w{};
         w.doc = m.doc;
         w.qualified = m.prefix.empty() ? std::string{name}
@@ -168,8 +180,8 @@ struct rod {
         w.bases = _bases_string<Bases>(seq);
         // Register raw C++ name -> this styled/weld_as declaration, so references to
         // T elsewhere (fields, params, returns, bases, containers) are reconciled at
-        // render(). qualified_name(^^T) is exactly what the type map emits for them.
-        m.doc->record_type_name(std::define_static_string(qualified_name(^^T)),
+        // render(). qualified_name(Decl) is exactly what the type map emits for them.
+        m.doc->record_type_name(std::define_static_string(qualified_name(Decl)),
                                 w.qualified);
         return w;
     }
