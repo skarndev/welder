@@ -21,17 +21,21 @@
     So the trampoline is still hand-authored — but reflection automates everything
     *around* it, and this header holds the backend-neutral half:
 
-    - @ref virtual_slot_count / @ref has_virtual_methods — how many overridable slots
-      a type has (the `NB_TRAMPOLINE(Base, N)` count, never hand-maintained);
-    - @ref trampoline_for — the user's `T → trampoline` registration hook (a
-      specializable variable template, the type-level analogue of
-      `welder::trust_bindable`), read by each Python rod's class-creation primitive
-      to bind `class_<T, Trampoline>` instead of `class_<T>`;
-    - @ref bind_flat — the opt-out marker for a virtual type that is deliberately
-      bound non-overridably (C++-produced, never subclassed in Python);
-    - @ref trampoline_covers — the compile-time coverage check (every virtual of `T`
-      is overridden in the trampoline), so a forgotten override is a build error, not
-      a method that silently never reaches Python.
+    - @ref welder::rods::python::virtual_slot_count "virtual_slot_count" /
+      @ref welder::rods::python::has_virtual_methods "has_virtual_methods" — how many
+      overridable slots a type has (the `NB_TRAMPOLINE(Base, N)` count, never
+      hand-maintained);
+    - @ref welder::rods::python::trampoline_for "trampoline_for" — the user's
+      `T → trampoline` registration hook (a specializable variable template, the
+      type-level analogue of `welder::trust_bindable`), read by each Python rod's
+      class-creation primitive to bind `class_<T, Trampoline>` instead of `class_<T>`;
+    - @ref welder::rods::python::bind_flat "bind_flat" — the opt-out marker for a
+      virtual type that is deliberately bound non-overridably (C++-produced, never
+      subclassed in Python);
+    - @ref welder::rods::python::trampoline_covers "trampoline_covers" — the
+      compile-time coverage check (every virtual of `T` is overridden in the
+      trampoline), so a forgotten override is a build error, not a method that
+      silently never reaches Python.
 
     The per-override dispatch body and the authoring macros are backend-specific and
     live in each rod's own `trampoline.hpp` (`welder/rods/python/nanobind/…`,
