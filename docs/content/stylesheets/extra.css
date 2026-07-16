@@ -66,3 +66,19 @@
   height: 100%;
   max-width: none !important;
 }
+
+/* Fallback path: the host itself fullscreened (its closed-shadow SVG lays out
+   against the viewport at natural size). */
+.mermaid.welder-mermaid-host-max {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: safe center;
+  justify-content: safe center;
+  padding: 2.4rem;
+  margin: 0;
+  overflow: auto;
+  background: var(--md-default-bg-color);
+  cursor: zoom-out;
+}
