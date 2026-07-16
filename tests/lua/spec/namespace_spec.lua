@@ -93,6 +93,13 @@ describe("tack (unmarked library)", function()
     assert.are.equal(3, f.Widget.new():stats().uses)
   end)
 
+  it("never sweeps member aliases under tack", function()
+    -- every complete type passes the greedy gate, so a member alias has
+    -- nothing left to register.
+    local ok, v = pcall(function() return f.Widget.Twin end)
+    assert.is_true(not ok or v == nil)
+  end)
+
   it("binds an unmarked free function and constant", function()
     assert.are.equal(7, f.add(2, 5))
     assert.are.equal(7, f.VERSION)

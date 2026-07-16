@@ -45,6 +45,28 @@ consteval std::string int_string(std::size_t n) {
     return s;
 }
 
+/** Is @a ent spellable as a fully-qualified C++ name — itself and every
+    enclosing scope up to the global namespace nameable?
+
+    A type nested inside a class-template **specialization** is not: the
+    specialization segment has no identifier, so @ref cpp_qualified_name's
+    parent walk would silently truncate (`Silo<int>::Valve` → `"::Valve"`) and
+    the generated trampoline would be broken C++. The generator hard-errors on
+    such a type instead (see `document::add`); the alias-`Decl` routes stay
+    spellable, because an alias (namespace-scope or member) always has an
+    identifier and nameable parents.
+    @param ent a reflection of the entity to check.
+    @return `true` iff the whole qualification chain is nameable. */
+consteval bool cpp_spellable(std::meta::info ent) {
+    if (!std::meta::has_identifier(ent))
+        return false;
+    for (std::meta::info p{std::meta::parent_of(ent)};
+         p != std::meta::info{} && p != ^^::; p = std::meta::parent_of(p))
+        if (!std::meta::has_identifier(p))
+            return false;
+    return true;
+}
+
 /** The fully `::`-qualified name of a namespace-scope entity, leading `::` included
     (`geometry::Point` → `"::geometry::Point"`). Used both to name a trampoline's base
     and to splice the type in the generated file from any namespace. */
@@ -194,6 +216,18 @@ struct document {
                       "specialization spelled directly (it has no identifier); "
                       "declare a namespace-scope alias — using IntRing = "
                       "Ring<int>; — and weld that instead");
+        // The identifier check above covers the type itself; the chain check
+        // covers a nameable type nested inside an UNNAMEABLE scope — a virtual
+        // type declared inside a class-template specialization — whose
+        // qualified spelling would otherwise silently truncate to broken C++.
+        static_assert(
+            cpp_spellable(Type),
+            "welder: cannot generate a trampoline for a type nested inside a "
+            "class-template specialization (its enclosing scope cannot be "
+            "respelled from reflection). Hand-write the trampoline, spelling "
+            "the base through the welding alias (e.g. `struct PyValve : "
+            "IntSilo::Valve { … }` with a trampoline_for specialization), or "
+            "annotate the type [[=welder::rods::python::bind_flat]].");
         structs += std::define_static_string(render_trampoline(Type));
         registrations += std::define_static_string(render_registration(Type));
     }

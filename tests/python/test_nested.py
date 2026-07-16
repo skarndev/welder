@@ -105,6 +105,19 @@ def test_protected_nested_type_binds_under_weld_protected(nested: ModuleType) ->
     assert nested.Rig.Jig().slots == 7
 
 
+def test_exclude_plus_weld_is_the_manual_flat_escape(nested: ModuleType) -> None:
+    # Robot::Beacon is excluded from the sweep and carries its own weld; the
+    # explicit weld_type call registers it once, flat, under a chosen name.
+    assert not hasattr(nested.Robot, "Beacon")
+    assert nested.RobotBeacon().strength == 9
+
+
+def test_unregistrable_member_types_are_skipped_silently(nested: ModuleType) -> None:
+    # a forward-declared member type and a union: never swept, never an error
+    assert not hasattr(nested.Robot, "Probe")
+    assert not hasattr(nested.Robot, "Blob")
+
+
 # --- member type aliases ------------------------------------------------------------
 def test_member_alias_registers_an_unwelded_target(nested: ModuleType) -> None:
     # A member alias participates iff the target FAILS the bindability gate —

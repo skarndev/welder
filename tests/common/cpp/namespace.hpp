@@ -239,6 +239,11 @@ struct Widget {
         int uses{0};
     };
 
+    // A MEMBER TYPE ALIAS in an unmarked library never participates under tack:
+    // every complete type passes the greedy gate, so there is nothing left for
+    // an alias to register — Widget.Twin must NOT appear (locked by the specs).
+    using Twin = Widget;
+
     int size{3};
     int doubled() const {
         return size * 2;

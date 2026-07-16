@@ -69,6 +69,19 @@ describe("nested types", function()
     assert.are.equal(7, m.Rig.Jig.new().slots)
   end)
 
+  it("exclude + weld is the manual flat escape", function()
+    -- Robot::Beacon is excluded from the sweep and carries its own weld; the
+    -- explicit weld_type call registers it once, flat, under a chosen name.
+    assert.is_true(absent(m.Robot, "Beacon"))
+    assert.are.equal(9, m.RobotBeacon.new().strength)
+  end)
+
+  it("skips unregistrable member types silently", function()
+    -- a forward-declared member type and a union: never swept, never an error
+    assert.is_true(absent(m.Robot, "Probe"))
+    assert.is_true(absent(m.Robot, "Blob"))
+  end)
+
   it("registers unwelded targets through member aliases", function()
     -- a member alias participates iff the target fails the bindability gate;
     -- the registration is nested under the outer, named by the alias.

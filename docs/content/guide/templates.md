@@ -76,7 +76,11 @@ The rules, all enforced at compile time:
   register, but a signature naming one — or the instantiation itself — needs a
   [`trust_bindable` hatch](trust-casters.md): the gate's registration oracle is
   a pure predicate of the declaration and cannot see a weld that lives on a
-  namespace-scope alias.
+  namespace-scope alias. One more edge is diagnosed rather than supported: a
+  nested type with **virtual methods** inside a specialization cannot have its
+  trampoline *generated* (the enclosing template-id cannot be respelled from
+  reflection) — the generator hard-errors, pointing at a hand-written
+  trampoline spelled through the alias, or `bind_flat`.
 
 ## Annotate once, weld each instantiation
 

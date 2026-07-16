@@ -51,6 +51,15 @@ describe("templates", function()
     assert.are.equal(m.IntSilo.State.shut, s:flip(m.IntSilo.State.open))
   end)
 
+  it("clears the alias-opt-in blind spot with the trust hatch", function()
+    -- twin() names Pack<int> in its signature; the type-level
+    -- trust_bindable<Pack<int>> vouch clears the gate, and the returned
+    -- instance converts through the alias registration.
+    local p = m.IntPack.new()
+    p.payload = 4
+    assert.are.equal(4, p:twin():unwrap())
+  end)
+
   it("binds a nested type of an alias-opted-in template", function()
     -- The weld on the IntPack alias also brings the vendor template's nested
     -- type along — it resolves under the instantiation like any member.

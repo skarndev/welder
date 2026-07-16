@@ -249,7 +249,10 @@ counts (a) types a participating member alias of Scope registers
 oracle leaf is reached only after every other bindable() branch failed, which
 IS the sweep's arbiter) and (b) the nested chain re-run alias-aware (an alias
 target's own nested types recurse). Cross-class use of an alias-registered
-type stays trust_bindable territory. TRAMPOLINE-GENERATOR caveat: the
+type stays trust_bindable territory (locked by
+negcompile.member_alias_cross_class — Meter's scope is blind to Panel's
+alias). Tack never sweeps member aliases (foreign::Widget::Twin absent ↔ both
+namespace specs). TRAMPOLINE-GENERATOR caveat: the
 trampolines rod's permissive has_native_caster makes every alias target pass
 its gate, so the generator never sees member aliases — an alias target with
 virtuals needs a HAND-WRITTEN trampoline (spelled through the alias) or
@@ -271,15 +274,22 @@ weld through it, so signatures using them pass. For an ALIAS-OPT-IN template
 (weld only on the alias) the nested type still REGISTERS (member rules need no
 weld), but a signature naming it — or the instantiation itself — fails the
 stitch gate: the oracle is a pure predicate of the declaration and cannot see a
-namespace-scope alias's weld (pre-existing blind spot, trust_bindable
-territory). Text-rod spelling caveat: a nested VIRTUAL type of a specialization
-can't be respelled by the trampoline generator (`cpp_qualified_name` stops at
-the unnameable `Box<int>` segment) — untested/unsupported; hand-write through
-the alias if ever needed.
+namespace-scope alias's weld (blind spot, trust_bindable territory) — BOTH
+directions locked: negcompile.alias_optin_in_signature (the gate fires) and
+templates.hpp `Pack::twin` + the type-level `trust_bindable<Pack<int>>`
+specialization (the hatch clears it, and the returned instance converts
+through the alias registration; test_templates.py / templates_spec.lua). Text-rod spelling caveat: a nested VIRTUAL type of a
+specialization can't be respelled by the trampoline generator
+(`cpp_qualified_name` truncates at the unnameable `Box<int>` segment) — now
+DIAGNOSED, not silent: `cpp_spellable` (trampolines document.hpp) hard-errors
+in `document::add` pointing at a hand-written trampoline through the alias /
+bind_flat; locked by negcompile.nested_virtual_in_specialization.
 
 Tests: `tests/common/cpp/nested.hpp` ↔ test_nested.py / nested_spec.lua (all
 four runtime rods; Robot/Machine/Panel/Cabinet/Rig — marks, deep nesting,
-opt_in, weld_protected, private); alias-welded: templates.hpp `Silo`/`IntSilo`
+opt_in, weld_protected, private; Robot::Beacon = the exclude+weld manual-flat
+escape exercised at runtime via weld_type<Robot::Beacon>(sub, "RobotBeacon");
+Robot::Probe (fwd-decl) + Robot::Blob (union) lock the silent sweep skips); alias-welded: templates.hpp `Silo`/`IntSilo`
 (+ `vendor_tpl::Pack::Lid`, the opt-in registration-only case) ↔
 test_templates.py / templates_spec.lua; greedy: `foreign::Widget::Stat` in
 namespace.hpp ↔ both namespace specs; trampolines: `Tower::Bell` in

@@ -26,20 +26,30 @@ template <class T>
 struct Pack {
     // A nested type in the third-party template: it resolves under the
     // instantiation like any member (no weld anywhere on it), so the alias
-    // opt-in below also brings IntPack.Lid along. NB: signatures NAMING Lid
-    // (or Pack<T> itself) would not pass the stitch gate — the registration
-    // oracle is a pure predicate of the declaration and cannot see a weld that
-    // lives on a namespace-scope alias — so none do here; that is the
-    // documented trust_bindable territory for alias-opt-in types.
+    // opt-in below also brings IntPack.Lid along. NB: a signature NAMING Lid
+    // would not pass the stitch gate (the registration oracle cannot see a
+    // weld that lives on a namespace-scope alias), so none does here; Pack<T>
+    // itself appears in twin()'s signature below, cleared by the type-level
+    // trust specialization under the namespace — the documented remedy.
     struct Lid {
         int fits{1};
     };
 
     T payload{};
     T unwrap() const { return payload; }
+    Pack twin() const { return *this; } // names the instantiation itself — see
+                                        // the trust specialization below
 };
 
 } // namespace vendor_tpl
+
+// twin() puts Pack<int> in a bound SIGNATURE, and the gate's registration
+// oracle — a pure predicate of declarations — cannot see the weld on the
+// IntPack alias below (an alias is unrecoverable from the type it names). The
+// consumer's type-level vouch closes the documented blind spot; the negative
+// twin (the gate firing WITHOUT this) is negcompile.alias_optin_in_signature.
+template <>
+inline constexpr bool welder::trust_bindable<vendor_tpl::Pack<int>> = true;
 
 namespace templates_ns {
 

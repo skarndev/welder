@@ -94,6 +94,15 @@ def test_nested_types_of_an_alias_welded_instantiation(tpl: ModuleType) -> None:
     assert s.flip(tpl.IntSilo.State.open) == tpl.IntSilo.State.shut
 
 
+def test_trust_hatch_clears_the_alias_optin_blind_spot(tpl: ModuleType) -> None:
+    # twin() names Pack<int> in its signature; the gate cannot see the alias's
+    # weld, so the case carries a type-level trust_bindable<Pack<int>> vouch —
+    # and the returned instance converts through the alias registration.
+    p = tpl.IntPack()
+    p.payload = 4
+    assert p.twin().unwrap() == 4
+
+
 def test_nested_type_of_an_alias_opted_in_template(tpl: ModuleType) -> None:
     # The weld on the IntPack alias also brings the vendor template's nested
     # type along — it resolves under the instantiation like any member.

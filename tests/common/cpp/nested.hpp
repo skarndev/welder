@@ -64,6 +64,23 @@ Robot {
         int level{3};
     };
 
+    // excluded from the sweep AND welded: the manual flat-registration escape —
+    // register_nested() welds it by hand as `RobotBeacon` at module scope.
+    struct
+    [[=welder::weld(welder::lang::py, welder::lang::lua), =welder::mark::exclude]]
+    Beacon {
+        int strength{9};
+    };
+
+    // silently skipped by the sweep, without error: a forward-declared member
+    // type (nothing to register) and a union (not a bindable kind). Compiling
+    // this file IS the test; the specs assert their absence.
+    struct Probe;
+    union Blob {
+        int i;
+        float f;
+    };
+
     // members whose types are the nested types above: the bindability gate
     // passes because the nested-type sweep registers them with Robot itself.
     Sensor sensor{};
@@ -182,4 +199,10 @@ inline void register_nested(WELDER_TEST_MODULE_T& m) {
     // never sees them directly).
     auto sub{WELDER_TEST_SUBMODULE(m, "nested")};
     WELDER_TEST_WELDER::weld_namespace<^^nested>(sub);
+    // The manual flat-registration escape: Robot::Beacon is mark::exclude'd out
+    // of the sweep and carries its own weld, so the explicit call registers it
+    // once, at module scope, under a chosen name. (Without the exclude this
+    // would double-register — the sweep already binds participating nested
+    // types.)
+    WELDER_TEST_WELDER::weld_type<nested::Robot::Beacon>(sub, "RobotBeacon");
 }

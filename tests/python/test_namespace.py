@@ -165,6 +165,12 @@ def test_tack_binds_unmarked_nested_type(foreign: ModuleType) -> None:
     assert foreign.Widget().stats().uses == 3
 
 
+def test_tack_never_sweeps_member_aliases(foreign: ModuleType) -> None:
+    # Under greedy resolution every complete type passes the gate, so a member
+    # alias has nothing left to register — Widget.Twin must not appear.
+    assert not hasattr(foreign.Widget, "Twin")
+
+
 def test_tack_binds_unmarked_free_function(foreign: ModuleType) -> None:
     assert foreign.add(2, 5) == 7
 
