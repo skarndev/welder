@@ -89,3 +89,47 @@ def test_move_ctor_is_silently_skipped(cp: ModuleType) -> None:
     s = cp.Shifty()
     s.n = 6
     assert copy.copy(s).n == 6
+
+
+# --- polymorphic types: the copy protocol copies the C++ subobject ------------
+def test_virtual_type_carries_the_copy_protocol(cp: ModuleType) -> None:
+    b = cp.Brush()
+    b.width = 3
+    c = copy.copy(b)
+    assert c.width == 3
+    c.width = 9
+    assert b.width == 3
+
+
+def test_copying_a_python_subclass_slices(cp: ModuleType) -> None:
+    # Brush{self} copies the C++ base subobject only: the copy is base-typed,
+    # dispatches the base virtual (no Python override), and drops Python-side
+    # attributes — while the C++ state still carries over.
+    class Dotted(cp.Brush):  # type: ignore[misc, name-defined]
+        def stroke(self) -> str:
+            return "dotted"
+
+    d = Dotted()
+    d.width = 7
+    assert d.paint() == "paint:dotted"  # C++ dispatches into the override
+    c = copy.copy(d)
+    assert type(c) is cp.Brush
+    assert c.paint() == "paint:solid"
+    assert c.width == 7
+
+
+def test_abstract_type_binds_no_protocol(cp: ModuleType) -> None:
+    # Not copy-constructible (pure virtual), so no protocol — and no error.
+    assert not hasattr(cp.Stencil, "__copy__")
+    assert not hasattr(cp.Stencil, "__deepcopy__")
+
+
+# --- tack welding: admission never depended on marks ---------------------------
+def test_tack_welded_types_carry_the_copy_protocol(mod: ModuleType) -> None:
+    # The implicit copy constructor rides along under the greedy resolution
+    # exactly as under the marker one — copy-constructibility alone decides
+    # (foreign.Widget is tack-welded from an unmarked namespace; see
+    # namespace.hpp / test_namespace.py).
+    w = mod.foreign.Widget()
+    w.size = 5
+    assert copy.copy(w).size == 5

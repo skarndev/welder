@@ -12,8 +12,10 @@
 // never bind at all — an include/only mark on one is a hard error (locked by
 // negcompile.move_ctor_marked).
 //
-// #included by bindings.cpp *after* the welder vocabulary and the active Python
-// backend are in scope; this header deliberately does not include them itself.
+// #included by bindings.cpp *after* the welder vocabulary, the active Python
+// backend AND its <welder/rods/python/<backend>/trampoline.hpp> (for the
+// polymorphic cases' WELDER_PY_* macros) are in scope; this header deliberately
+// does not include them itself.
 #include <string>
 
 // The cases live in namespace `copying`, bound under a `copying` submodule via
@@ -97,6 +99,53 @@ Shifty {
     Shifty(Shifty&&) noexcept = default;
 
     int n{4};
+};
+
+// --- a polymorphic type: the copy protocol copies the C++ subobject ----------
+// The base binding carries __copy__/__deepcopy__ (Brush is concrete and
+// copy-constructible); copying an instance of a *Python subclass* SLICES —
+// Brush{self} copies the C++ base subobject only, so the result is base-typed,
+// with base virtual behavior and without the Python-side state. Python-only
+// (trampolines are a Python-family concept, like overridable.hpp).
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Brush {
+    virtual ~Brush() = default;
+    Brush() = default;
+    Brush(const Brush&) = default;
+
+    virtual std::string stroke() const {
+        return "solid";
+    }
+
+    // A C++ caller dispatching the virtual polymorphically: observing its result
+    // on a copy proves the copy is a plain C++ Brush, not the Python subclass.
+    std::string paint() const {
+        return "paint:" + stroke();
+    }
+
+    int width{1};
+};
+
+struct [[=welder::rods::python::trampoline]] PyBrush : Brush {
+    WELDER_PY_TRAMPOLINE(Brush);
+    std::string stroke() const override { WELDER_PY_OVERRIDE(stroke); }
+};
+
+// --- an abstract type is not copy-constructible -> no copy protocol ----------
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Stencil {
+    virtual ~Stencil() = default;
+
+    virtual int holes() const = 0; // pure -> Stencil itself never copies
+};
+
+struct [[=welder::rods::python::trampoline]] PyStencil : Stencil {
+    WELDER_PY_TRAMPOLINE(Stencil);
+    int holes() const override { WELDER_PY_OVERRIDE(holes); }
 };
 
 } // namespace copying
