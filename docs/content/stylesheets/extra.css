@@ -43,3 +43,26 @@
 .md-header__topic .md-ellipsis {
   font-weight: 700;
 }
+
+/* --- Mermaid diagrams: click to maximize (javascripts/mermaid-zoom.js) ------ */
+.mermaid {
+  cursor: zoom-in;
+}
+
+.welder-mermaid-max {
+  position: fixed;
+  inset: 0;
+  z-index: 9999; /* above Material's header/drawers */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.4rem;
+  background: var(--md-default-bg-color);
+  cursor: zoom-out;
+}
+
+.welder-mermaid-max svg {
+  width: 100%;
+  height: 100%;
+  max-width: none !important;
+}
