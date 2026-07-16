@@ -152,6 +152,13 @@ concept caster_oracle = requires {
     template <class T, auto Bases, std::size_t... I>
       static auto make_nested_class(module_type&, auto& outer_cls, const char* name,
                                     const char* doc, std::index_sequence<I...>);
+    // OPTIONAL, preferred over the plain form when declared: the
+    // declaring-entity-aware nested factory. Decl is ^^T, or the MEMBER ALIAS
+    // an (unnameable) template specialization was registered through — the one
+    // C++-spellable name such a target has, which a text-emitting rod needs.
+    template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
+      static auto make_nested_class(module_type&, auto& outer_cls, const char* name,
+                                    const char* doc, std::index_sequence<I...>);
     template <class E>
       static auto make_nested_enum(module_type&, auto& outer_cls, const char* name,
                                    const char* doc);

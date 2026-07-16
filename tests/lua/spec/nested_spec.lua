@@ -69,6 +69,35 @@ describe("nested types", function()
     assert.are.equal(7, m.Rig.Jig.new().slots)
   end)
 
+  it("registers unwelded targets through member aliases", function()
+    -- a member alias participates iff the target fails the bindability gate;
+    -- the registration is nested under the outer, named by the alias.
+    assert.are.equal(40, m.Console.Dial.new().reading)
+    assert.are.equal(0, m.Console.Ints.new():take())      -- a specialization
+    assert.are.equal(1, m.Console.Lvl.high)               -- a vendor enum
+    assert.are.equal(0.0, m.Console.Spool.new():take())   -- weld_as on the alias
+    assert.is_true(absent(m.Console, "Reel"))
+  end)
+
+  it("skips gate-passing member-alias targets", function()
+    assert.is_true(absent(m.Console, "Names"))  -- castable
+    assert.is_true(absent(m.Console, "Bot"))    -- welded: no double registration
+    assert.is_true(absent(m.Console, "Gauge"))  -- excluded alias
+  end)
+
+  it("renames an excluded nested type through a member alias", function()
+    assert.is_true(absent(m.Console, "Core"))
+    assert.are.equal(300, m.Console.Heart.new().temp)
+  end)
+
+  it("gates members through the scope-aware oracle", function()
+    local c = m.Console.new()
+    assert.are.equal(40, c.dial.reading)
+    assert.are.equal(40, c:read_dial().reading)
+    assert.are.equal(0, c:spin():take())
+    assert.are.equal(m.Console.Lvl.high, c:level())
+  end)
+
   it("never binds a private nested type", function()
     assert.are.equal(2, m.Cabinet.new().drawers)
     assert.is_true(absent(m.Cabinet, "Stash"))

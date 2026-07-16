@@ -217,9 +217,14 @@ headers instead of the struct: the Python dunder map into
   (requires-detected) nested-type placement — `make_nested_class<T, Bases>(m,
   outer_cls, name, doc, iseq)` / `make_nested_enum<E>(m, outer_cls, name, doc)`
   (register a class-scoped member type under its outer's binding; absent them the
-  carriage falls back to flat module-scope `make_class`/`make_enum`) and
-  `finish_nested_class<T>(m, outer, cls, name)` (post-interior placement for
-  re-open-by-path handle models — LuaBridge3 moves the class table here); and the GROUP hooks
+  carriage falls back to flat module-scope `make_class`/`make_enum`), the
+  spelling-aware extended form `make_nested_class<T, Decl, Bases>` (preferred when
+  declared; Decl = the MEMBER ALIAS an unnameable specialization was registered
+  through — luacats implements it for its rename keys, and the flat fallback
+  threads Decl into `make_class_of` so the trampolines rod's extended `make_class`
+  receives it), and `finish_nested_class<T>(m, outer, cls, name)` (post-interior
+  placement for re-open-by-path handle models — LuaBridge3 moves the class table
+  here); and the GROUP hooks
   `add_method<Fns, Style>` / `add_static_method<Fns, Style>` / `add_operator<Fns>`
   (`Fns` = a std::array<info, N> overload group sharing one target name, resolve it
   from Fns[0]; carriage-computed + gated), and `consteval special_method_name(op)`

@@ -109,8 +109,13 @@ and sol2; LuaBridge3 raw-moves the class table onto the outer; luacats emits the
 dotted name), recursively; the bindability gate's registration oracle mirrors
 the sweep exactly (a signature naming a non-participating nested type is a hard
 error). `mark::exclude` + an own `weld` on a nested type = the manual
-flat-registration escape. Details: `.claude/context/binding-features.md`
-"Nested types".
+flat-registration escape. **Member type ALIASES** participate iff the target
+FAILS the bindability gate (registering exactly what couldn't otherwise cross;
+castable/welded/registered targets skipped — so `value_type` conventions cost
+nothing and tack welds never sweep aliases); the class's own members gate
+through a scope-aware oracle that sees its alias registrations; exclude+alias =
+the class-scope rename escape. Details: `.claude/context/binding-features.md`
+"Nested types" / "Member type aliases".
 **Access admission precedes it** (bind_traits `member_access_admitted`): public
 always; protected iff the resolution's optional
 `protected_participates(mem, L, bound_into)` hook says so (default = the declaring

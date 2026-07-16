@@ -69,19 +69,23 @@ consteval bool sole_alias_of_target(lang L, policy_kind pol) {
     return true;
 }
 
-/** The bound name of the specialization welded through @a Alias.
+/** The bound name of the type welded through @a Alias (a namespace-scope alias
+    to a specialization, or a member alias inside a welded class).
 
     Resolution order: a `weld_as` on the alias (most specific, verbatim) → a
-    `weld_as` on the class template, read through the instantiation (verbatim; note
-    it names every instantiation alike, so pairing it with several aliases of one
-    template collides) → the alias's identifier, reshaped by @a Style. This is
-    @ref welder::name_of applied to the alias, with the template-level `weld_as`
-    fallback spliced in between its two steps.
-    @tparam Alias the alias through which the specialization is welded.
+    `weld_as` on the target type (read through an instantiation from its
+    template; note a template-level one names every instantiation alike, so
+    pairing it with several aliases of one template collides) → the alias's
+    identifier, reshaped by @a Style.  This is @ref welder::name_of applied to
+    the alias, with the target-level `weld_as` fallback spliced in between its
+    two steps.
+    @tparam Alias the alias through which the type is welded.
     @tparam L     the target language.
     @tparam Style the name style.
+    @tparam Kind  the entity kind the style hook receives (class_ or enum_).
     @return the bound name, in static storage. */
-template <std::meta::info Alias, lang L, class Style>
+template <std::meta::info Alias, lang L, class Style,
+          ent_kind Kind = ent_kind::class_>
 consteval const char* alias_bound_name() {
     if constexpr (welder::weld_as_of<Alias, L>() != nullptr)
         return welder::weld_as_of<Alias, L>();
@@ -89,7 +93,7 @@ consteval const char* alias_bound_name() {
                        nullptr)
         return welder::weld_as_of<std::meta::dealias(Alias), L>();
     else
-        return welder::name_of<Alias, L, Style, ent_kind::class_>();
+        return welder::name_of<Alias, L, Style, Kind>();
 }
 
 } // namespace detail
@@ -131,6 +135,103 @@ consteval bool nested_type_registered(std::meta::info type, lang L) {
            member_bound(type, L, policy_of(outer)) &&
            Resolution::counts_as_registered(outer, L);
 }
+
+/** Is @a Alias the *only* member alias of @a Outer whose participation would
+    register its target?
+
+    Two participating member aliases naming the same target would register it
+    twice (a framework load error), diagnosed at compile time — the class-scope
+    twin of @ref sole_alias_of_target. The gate side of participation needs no
+    re-check here: siblings share the target, so when the caller (an alias that
+    IS registering) consults this, a marks/access-participating sibling
+    registers too.
+    @tparam Resolution the carriage's resolution policy.
+    @tparam Outer the class being bound.
+    @tparam Alias the member alias under consideration.
+    @param L   the target language.
+    @param pol the outer's policy.
+    @return `true` iff no *other* participating member alias shares the target. */
+template <class Resolution, std::meta::info Outer, std::meta::info Alias>
+consteval bool sole_member_alias_of_target(lang L, policy_kind pol) {
+    for (auto m : std::meta::members_of(Outer,
+                                        std::meta::access_context::unchecked())) {
+        if (!std::meta::is_type_alias(m) || !std::meta::has_identifier(m))
+            continue;
+        // Self-identity by NAME (== collapses alias reflections on gcc-16; two
+        // member aliases cannot share an identifier in one class).
+        if (std::meta::identifier_of(m) == std::meta::identifier_of(Alias))
+            continue;
+        if (std::meta::dealias(m) == std::meta::dealias(Alias) &&
+            member_access_admitted<Resolution>(m, L, Outer) &&
+            Resolution::class_member_participates(m, L, pol, Outer))
+            return false;
+    }
+    return true;
+}
+
+/** Does a participating **member alias** of @a scope name @a type — i.e. would
+    the sweep of @a scope register @a type under that alias?
+
+    The alias side of the scope-aware oracle (see @ref scoped_registration).
+    Deliberately no bindability re-check on the target: the oracle is consulted
+    only where every other `bindable()` branch has already failed, which is
+    exactly the sweep's register-vs-skip arbiter — so "an admitted, participating
+    alias names it" is the whole remaining question.
+    @tparam Resolution the carriage's resolution policy.
+    @param scope the class whose member aliases to scan.
+    @param type  the candidate target type.
+    @param L     the target language.
+    @return `true` iff a participating member alias of @a scope names @a type. */
+template <class Resolution>
+consteval bool registered_by_member_alias(std::meta::info scope,
+                                          std::meta::info type, lang L) {
+    const policy_kind pol{policy_of(scope)};
+    for (auto m : std::meta::members_of(scope,
+                                        std::meta::access_context::unchecked())) {
+        if (!std::meta::is_type_alias(m) || !std::meta::has_identifier(m))
+            continue;
+        if (std::meta::dealias(m) != type)
+            continue;
+        if (member_access_admitted<Resolution>(m, L, scope) &&
+            Resolution::class_member_participates(m, L, pol, scope))
+            return true;
+    }
+    return false;
+}
+
+/** The **scope-aware registration oracle**: @a Resolution widened with the
+    member-alias registrations of one class.
+
+    A member alias's `weld`-free participation is invisible from the target type
+    (an alias is unrecoverable from the type it names), so the plain oracle
+    cannot vouch for the types a class's own aliases register. The carriage
+    therefore gates the class's members through this wrapper — @a Scope is the
+    welded type being bound — which additionally counts (a) types a
+    participating member alias of @a Scope registers, and (b) the nested-type
+    chain re-run alias-aware, so an alias target's own nested types recurse
+    through here too. Cross-class use of an alias-registered type stays
+    `trust_bindable` territory, consistent with the namespace-alias blind spot.
+
+    Inherits @a Resolution so every participation hook (including an optional
+    `protected_participates`) keeps working when this wrapper is threaded where
+    a resolution is expected; only the oracle is shadowed.
+    @tparam Resolution the carriage's resolution policy.
+    @tparam Scope      the welded class whose members are being gated. */
+template <class Resolution, std::meta::info Scope>
+struct scoped_registration : Resolution {
+    static consteval bool counts_as_registered(std::meta::info type, lang L) {
+        if (Resolution::counts_as_registered(type, L))
+            return true;
+        if (!(std::meta::is_class_type(type) || std::meta::is_enum_type(type)))
+            return false;
+        // The nested chain, alias-aware: a nested type of an alias-registered
+        // target resolves through this oracle again.
+        if (welder::is_nested_type(type) &&
+            nested_type_registered<scoped_registration>(type, L))
+            return true;
+        return registered_by_member_alias<Resolution>(Scope, type, L);
+    }
+};
 
 } // namespace detail
 
@@ -398,13 +499,18 @@ struct basic_carriage {
 
         constexpr policy_kind pol{policy_of(Src)};
 
+        // The gate for class members runs through the SCOPE-AWARE oracle: the
+        // bound-into type's own member aliases register types the plain oracle
+        // cannot see (an alias is unrecoverable from the type it names).
+        using Reg = detail::scoped_registration<Resolution, BoundInto>;
+
         template for (constexpr auto mem : std::define_static_array(
                           std::meta::nonstatic_data_members_of(Src, ctx))) {
             if constexpr (detail::member_access_admitted<Resolution>(mem, L,
                                                                      BoundInto) &&
                           Resolution::class_member_participates(mem, L, pol,
                                                                 BoundInto)) {
-                welder::assert_member_bindable<B, mem, L, Resolution>();
+                welder::assert_member_bindable<B, mem, L, Reg>();
                 B::template add_field<mem, Style>(cls);
             }
         }
@@ -430,7 +536,7 @@ struct basic_carriage {
                         BoundInto>()};
                     template for (constexpr auto member :
                                   std::define_static_array(grp)) {
-                        welder::assert_callable_bindable<B, member, L, Resolution>();
+                        welder::assert_callable_bindable<B, member, L, Reg>();
                     }
                     if constexpr (std::meta::is_static_member(fn))
                         B::template add_static_method<grp, Style>(cls);
@@ -454,7 +560,7 @@ struct basic_carriage {
                         BoundInto>()};
                     template for (constexpr auto member :
                                   std::define_static_array(grp)) {
-                        welder::assert_callable_bindable<B, member, L, Resolution>();
+                        welder::assert_callable_bindable<B, member, L, Reg>();
                     }
                     B::template add_operator<grp>(cls);
                 }
@@ -540,7 +646,10 @@ struct basic_carriage {
         constexpr auto ctors{
             detail::ctor_group<Resolution, ^^T, L, policy_of(^^T)>()};
         template for (constexpr auto ctor : std::define_static_array(ctors)) {
-            welder::assert_callable_bindable<B, ctor, L, Resolution>();
+            // Scope-aware gate: T's own member aliases may register a
+            // parameter's type (see bind_members' Reg).
+            welder::assert_callable_bindable<
+                B, ctor, L, detail::scoped_registration<Resolution, ^^T>>();
         }
         constexpr bool aggregate{
             detail::aggregate_initializable<T, L, Resolution>()};
@@ -617,6 +726,58 @@ struct basic_carriage {
                     else
                         bind_nested_type<B, typename [:mem:], Style>(m, cls);
                 }
+            } else if constexpr (std::meta::is_type_alias(mem) &&
+                                 std::meta::has_identifier(mem) &&
+                                 (std::meta::is_class_type(
+                                      std::meta::dealias(mem)) ||
+                                  std::meta::is_enum_type(
+                                      std::meta::dealias(mem))) &&
+                                 std::meta::is_complete_type(
+                                     std::meta::dealias(mem))) {
+                // A MEMBER TYPE ALIAS: participates by the member rules (the
+                // outer's policy + the alias's own marks), with the bindability
+                // gate as the register-or-skip arbiter — a target the gate
+                // already passes (natively castable, a bindable STL wrapper,
+                // welded, otherwise registered, or trusted) converts without
+                // this registration, so registering it again would be redundant
+                // or an outright duplicate. The rule registers exactly the
+                // types that otherwise could not cross the boundary — nested
+                // under the outer, named by the alias (its weld_as → the
+                // target's → the styled identifier). Under greedy resolution
+                // every complete type passes the gate, so member aliases never
+                // participate in a tack weld, by construction.
+                static_assert(
+                    welder::member_alias_marks_admissible(mem),
+                    "welder: only weld_as / exclude / include / only may be "
+                    "attached to a member type alias; policy and doc marks "
+                    "belong on the target type, and weld / trust_bindable have "
+                    "no meaning here (participation follows the outer's policy "
+                    "and the bindability gate)");
+                if constexpr (detail::member_access_admitted<Resolution>(
+                                  mem, L, Outer) &&
+                              Resolution::class_member_participates(mem, L, pol,
+                                                                    Outer) &&
+                              !welder::bindable<
+                                  B, typename [:std::meta::dealias(mem):], L,
+                                  Resolution>()) {
+                    static_assert(
+                        detail::sole_member_alias_of_target<Resolution, Outer,
+                                                            mem>(L, pol),
+                        "welder: two member aliases in this class weld the SAME "
+                        "target type — each target may be registered under "
+                        "exactly one name; mark::exclude one of them");
+                    if constexpr (std::meta::is_enum_type(
+                                      std::meta::dealias(mem)))
+                        bind_nested_enum<B, typename [:std::meta::dealias(mem):],
+                                         Style>(
+                            m, cls,
+                            detail::alias_bound_name<mem, L, Style,
+                                                     ent_kind::enum_>());
+                    else
+                        bind_nested_type<B, typename [:std::meta::dealias(mem):],
+                                         Style, mem>(
+                            m, cls, detail::alias_bound_name<mem, L, Style>());
+                }
             }
         }
     }
@@ -639,14 +800,26 @@ struct basic_carriage {
         @tparam B     the rod.
         @tparam T     the nested class type.
         @tparam Style the name style.
+        @tparam Decl  the declaring entity when it differs from `^^T` — the
+                      MEMBER ALIAS a type was welded through (the alias is the
+                      one spellable name an aliased specialization has, which
+                      the text-emitting rods need); a null reflection for the
+                      declared-nested route.
         @param m     the module handle (the flat-placement fallback scope).
-        @param outer the enclosing type's class handle. */
-    template <rod B, class T, class Style, class OuterCls>
-    static void bind_nested_type(typename B::module_type& m, OuterCls& outer) {
+        @param outer the enclosing type's class handle.
+        @param name  the bound name (an alias-resolved override), or `nullptr`
+                     to resolve @a T's `weld_as`/styled name. */
+    template <rod B, class T, class Style, std::meta::info Decl = std::meta::info{},
+              class OuterCls>
+    static void bind_nested_type(typename B::module_type& m, OuterCls& outer,
+                                 const char* name = nullptr) {
         constexpr lang L{B::language};
+        // name_of_or, not `name ? name : name_of<…>`: the consteval fallback
+        // must only be compiled when T is statically nameable — an alias-welded
+        // specialization has no identifier and always arrives with an override.
         const char* cls_name{
-            welder::name_of<^^T, L, Style, ent_kind::class_>()};
-        auto cls{make_nested_class_of<B, T,
+            welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
+        auto cls{make_nested_class_of<B, T, Decl,
                                       Resolution::template native_bases<^^T, L>()>(
             m, outer, cls_name, welder::doc_of<^^T>())};
         bind_class_interior<B, T, Style>(m, cls);
@@ -671,12 +844,15 @@ struct basic_carriage {
         @tparam E     the nested enum type.
         @tparam Style the name style.
         @param m     the module handle (the flat-placement fallback scope).
-        @param outer the enclosing type's class handle. */
+        @param outer the enclosing type's class handle.
+        @param name  the bound name (an alias-resolved override), or `nullptr`
+                     to resolve @a E's `weld_as`/styled name. */
     template <rod B, class E, class Style, class OuterCls>
-    static void bind_nested_enum(typename B::module_type& m, OuterCls& outer) {
+    static void bind_nested_enum(typename B::module_type& m, OuterCls& outer,
+                                 const char* name = nullptr) {
         constexpr lang L{B::language};
         const char* enum_name{
-            welder::name_of<^^E, L, Style, ent_kind::enum_>()};
+            welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
         auto e{make_nested_enum_of<B, E>(m, outer, enum_name,
                                          welder::doc_of<^^E>())};
         emit_enumerators<B, E, Style>(e);
@@ -687,27 +863,43 @@ struct basic_carriage {
         back to the module-scope factory (flat placement). A static helper, not
         a lambda in `bind_nested_type`, for the same P2564 reason as
         @ref make_class_of.
+
+        A spelling-aware rod may declare the extended, declaring-entity-aware
+        form `make_nested_class<T, Decl, Bases>` (preferred when @a Decl is set
+        — the member alias an unnameable specialization was welded through);
+        the flat fallback likewise threads @a Decl into `make_class_of`, so a
+        text-emitting rod's extended `make_class` receives it too.
         @tparam B     the rod.
         @tparam T     the nested class type.
+        @tparam Decl  the declaring member alias, or a null reflection.
         @tparam Bases the native base reflections.
         @param m        the module handle.
         @param outer    the enclosing type's class handle.
         @param cls_name the resolved target-language name.
         @param doc      the class docstring, or `nullptr`.
         @return the rod's class handle for @a T. */
-    template <rod B, class T, auto Bases, class OuterCls>
+    template <rod B, class T, std::meta::info Decl, auto Bases, class OuterCls>
     static auto make_nested_class_of(typename B::module_type& m, OuterCls& outer,
                                      const char* cls_name, const char* doc) {
+        constexpr std::meta::info decl{Decl == std::meta::info{} ? ^^T : Decl};
         if constexpr (requires {
-                          B::template make_nested_class<T, Bases>(
+                          B::template make_nested_class<T, decl, Bases>(
                               m, outer, cls_name, doc,
                               std::make_index_sequence<Bases.size()>{});
                       })
+            return B::template make_nested_class<T, decl, Bases>(
+                m, outer, cls_name, doc,
+                std::make_index_sequence<Bases.size()>{});
+        else if constexpr (requires {
+                               B::template make_nested_class<T, Bases>(
+                                   m, outer, cls_name, doc,
+                                   std::make_index_sequence<Bases.size()>{});
+                           })
             return B::template make_nested_class<T, Bases>(
                 m, outer, cls_name, doc,
                 std::make_index_sequence<Bases.size()>{});
         else
-            return make_class_of<B, T, ^^T, Bases>(m, cls_name, doc);
+            return make_class_of<B, T, decl, Bases>(m, cls_name, doc);
     }
 
     /** `make_nested_class_of`'s enum counterpart: the rod's `make_nested_enum`

@@ -212,6 +212,58 @@ with its own `weld` + `mark::exclude` = the manual flat-registration escape
 (`weld_type<Outer::Inner>(m, "name")` still works; without the exclude it would
 double-register).
 
+**Member type aliases (the class-scope alias route):** a member alias
+participates iff its target FAILS the bindability gate — registering exactly
+the types that otherwise couldn't cross the boundary, nested under the outer,
+named by the alias (alias `weld_as` → target's `weld_as` → styled identifier;
+`detail::alias_bound_name` grew an ent_kind param). Gate-passing targets
+(castable, bindable STL wrapper, welded, registered) are SKIPPED — so
+`value_type`/`iterator` conventions cost nothing, an alias to a welded or
+sibling-nested type never double-registers, and under greedy resolution
+(everything complete passes) member aliases never participate in a tack weld,
+by construction. The alias's exclude/include/only marks + the outer's policy
+apply (member rules); other marks are diagnosed (`member_alias_marks_admissible`,
+reflect.hpp). exclude on a DECLARED nested type + an alias = the class-scope
+RENAME escape (the exclude fails the gate, the alias re-registers). Duplicates
+within one class are diagnosed (`detail::sole_member_alias_of_target`);
+cross-class duplicates of one unwelded target are user-managed (import-time
+framework error). Carriage: an alias branch in `bind_nested_types`
+(participation → `!welder::bindable<B, Target, L, Resolution>()`, so
+participation is ROD-dependent — precedent: operator eligibility);
+`bind_nested_type`/`bind_nested_enum` gained a name override (via `name_of_or` —
+the consteval fallback must stay lazy for identifier-less specializations) and
+`bind_nested_type` a Decl NTTP threaded to the rods (luacats' extended
+`make_nested_class<T, Decl, Bases>` records rename keys as
+`has_identifier(^^T) ? qualified_name(^^T) : qualified_name(Decl)` — target key
+when nameable so REFERENCES remap, alias key for unnameable specializations;
+the trampolines rod's flat fallback receives the alias Decl and spells
+`::ns::Outer::AliasName`).
+
+**The SCOPE-AWARE oracle** (`detail::scoped_registration<Resolution, Scope>` :
+Resolution, carriage.hpp): an alias is unrecoverable from the type it names, so
+the plain oracle can't see alias registrations; the carriage gates a class's
+members (fields/methods/operators/ctors — bind_members' `Reg` + the
+bind_class_interior ctor asserts) through this wrapper, which additionally
+counts (a) types a participating member alias of Scope registers
+(`detail::registered_by_member_alias` — deliberately NO gate re-check: the
+oracle leaf is reached only after every other bindable() branch failed, which
+IS the sweep's arbiter) and (b) the nested chain re-run alias-aware (an alias
+target's own nested types recurse). Cross-class use of an alias-registered
+type stays trust_bindable territory. TRAMPOLINE-GENERATOR caveat: the
+trampolines rod's permissive has_native_caster makes every alias target pass
+its gate, so the generator never sees member aliases — an alias target with
+virtuals needs a HAND-WRITTEN trampoline (spelled through the alias) or
+bind_flat; the Python rods' make_class assert catches it at compile time.
+ENUM-ORACLE FIX that fell out: both Python rods' `_needs_registration` now
+force `is_enum_v` (pybind11-3/nanobind enum casters don't derive the base
+caster, so enums read "native" — the gate never actually required a welded
+enum on the Python rods; masked while every suite enum was independently
+welded). Member-alias tests: nested.hpp `Console` (+ `nested_vendor`) ↔
+test_nested.py / nested_spec.lua; core locks in tests/core/nested_types.cpp
+(`Desk`/`ntv` — scoped vs plain oracle, per-scope blindness, excluded-alias);
+neg member_alias_{duplicate,forbidden_mark}; luacats golden `Gauge.Face`
+(reference remap).
+
 **Alias-welded instantiations:** a specialization's nested types bind too —
 under the ALIAS's name (`IntSilo.Hatch`): the sweep reads them off the
 instantiation, and (weld-on-template) the gate's welded_for reads the template's

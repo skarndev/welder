@@ -105,10 +105,18 @@ struct rod {
         `PYBIND11_TYPE_CASTER` caster). One that derives from `type_caster_base`
         still needs @a T registered, so it correctly still reads `true`.
 
+        **Enums are forced into the needs-registration bucket**: pybind11 3's
+        dedicated enum caster does not derive `type_caster_base`, but it converts
+        only once the enum is registered (`py::native_enum` / legacy `py::enum_`)
+        — an unregistered enum raises at call time and renders raw C++ names in
+        docstrings/stubs. Forcing it keeps welder's gate honest (a welded enum's
+        registration is required) and matches every other rod.
+
         @tparam T the type whose caster to classify.
     */
     template <class T>
     static constexpr bool _needs_registration =
+        std::is_enum_v<std::remove_cvref_t<T>> ||
         std::is_base_of_v<py::detail::type_caster_base<py::detail::intrinsic_t<T>>,
                           py::detail::make_caster<T>>;
 

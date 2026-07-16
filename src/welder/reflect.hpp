@@ -93,6 +93,37 @@ consteval bool alias_marks_admissible(std::meta::info mem) {
     return true;
 }
 
+/** May the annotations on **member** type-alias @a mem appear there?
+
+    A member alias participates by the *member* rules (the outer's policy plus
+    the alias's own marks) with the bindability gate as the register-or-skip
+    arbiter — so `weld_as` and the participation marks (`exclude` / `include` /
+    `only`) are meaningful on it. Everything else is not: `weld` (participation
+    never reads it — nested registration follows the outer), `policy` /
+    `weld_protected` (they belong on the *target* type), `trust_bindable` /
+    `return_policy` / `keep_alive` / `doc` / `returns` / `tparam` (no surface
+    they could apply to). Those are diagnosed rather than silently ignored.
+    Non-welder annotations are not welder's business and pass.
+    @param mem a reflection of the member alias to check.
+    @return `true` iff @a mem carries only admissible welder annotations. */
+consteval bool member_alias_marks_admissible(std::meta::info mem) {
+    for (auto a : std::meta::annotations_of(mem)) {
+        auto t{std::meta::type_of(a)};
+        if (t == ^^detail::weld_spec || t == ^^detail::policy_spec ||
+            t == ^^detail::weld_protected_spec ||
+            t == ^^detail::trust_bindable_spec ||
+            t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec)
+            return false;
+        if (std::meta::has_template_arguments(t)) {
+            auto tmpl{std::meta::template_of(t)};
+            if (tmpl == ^^detail::doc_spec || tmpl == ^^detail::return_doc_spec ||
+                tmpl == ^^detail::tparam_spec)
+                return false;
+        }
+    }
+    return true;
+}
+
 /** The reflection policy declared on @a type, defaulting to `automatic`.
 
     @param type a reflection of the type to inspect.

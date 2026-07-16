@@ -20,6 +20,17 @@
 #include <welder/vocabulary.hpp>
 #include <welder/rods/lua/luacats/module.hpp>
 
+// A vendor-style type nobody can annotate: registered through Gauge's MEMBER
+// ALIAS below, so references to it (face_plate's return) must be reconciled to
+// the alias's dotted declaration name.
+namespace stub_vendor {
+
+struct Plate {
+    double thickness{1.0};
+};
+
+} // namespace stub_vendor
+
 namespace [[=welder::doc("A tiny geometry module for the LuaCATS stub test.")]]
 stubdemo {
 
@@ -114,10 +125,18 @@ Gauge {
     };
     enum class [[=welder::doc("Operating range.")]] Range { Low, High };
 
+    // A MEMBER ALIAS registering an unwelded vendor type nested here
+    // (stubdemo.Gauge.Face): references to stub_vendor::Plate — face_plate's
+    // return below — must render the alias's dotted name via the rename table.
+    using Face = stub_vendor::Plate;
+
     [[=welder::doc("The current needle.")]] Needle needle;
 
     [[=welder::doc("Select the range.")]]
     void set_range([[=welder::doc("the new range")]] Range r);
+
+    [[=welder::doc("The front plate.")]]
+    stub_vendor::Plate face_plate() const;
 };
 
 [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Sum a list of areas.")]]

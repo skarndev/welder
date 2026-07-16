@@ -108,6 +108,10 @@ function stubdemo.Gauge.new() end
 ---@param r stubdemo.Gauge.Range the new range
 function stubdemo.Gauge:set_range(r) end
 
+--- The front plate.
+---@return stubdemo.Gauge.Face
+function stubdemo.Gauge:face_plate() end
+
 --- The needle position.
 ---@class stubdemo.Gauge.Needle
 ---@field angle number Angle in degrees.
@@ -123,6 +127,14 @@ stubdemo.Gauge.Range = {
     Low = 0,
     High = 1,
 }
+
+---@class stubdemo.Gauge.Face
+---@field thickness number
+stubdemo.Gauge.Face = {}
+
+---@return stubdemo.Gauge.Face
+---@overload fun(thickness: number): stubdemo.Gauge.Face
+function stubdemo.Gauge.Face.new() end
 
 --- Sum a list of areas.
 ---@param areas number[] the shapes' areas

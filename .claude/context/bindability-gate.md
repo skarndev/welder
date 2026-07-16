@@ -41,7 +41,19 @@ sweep registers. `welded_for` still short-circuits first under stitch: a nested
 type carrying its own `weld` counts even when marked out of the sweep (the
 `mark::exclude` + `weld` combo = manual flat registration). A bespoke resolution
 that prunes types must mirror its pruning here, nested ones included. Locked by
-`compile.nested_types` + `negcompile.nested_excluded_in_signature`. The
+`compile.nested_types` + `negcompile.nested_excluded_in_signature`.
+**MEMBER-ALIAS registrations** ride a second layer: the carriage gates a class's
+own members through `detail::scoped_registration<Resolution, Scope>` (Scope =
+the bound-into type), which additionally counts types a participating member
+alias of Scope registers — the plain oracle can't (an alias is unrecoverable
+from the type it names), so cross-class/namespace-level use of an
+alias-registered type stays trust territory. Its alias leaf deliberately skips
+a gate re-check: `counts_as_registered` is reached only after every other
+`bindable()` branch failed, which is exactly the sweep's register-vs-skip
+arbiter for aliases. Also note both Python rods force `is_enum_v` into
+needs-registration (their frameworks' enum casters aren't the base caster, so
+enums would otherwise read "native" and the welded-enum requirement wouldn't
+actually gate). The
 oracle is deliberately a **pure predicate of the declaration, never a
 visited-set**: multi-pass welds (several `weld_*` calls, several tacked
 namespaces) and forward references stay order-independent. Consequences, both

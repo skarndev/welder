@@ -14,6 +14,27 @@
 //
 // #included by bindings.cpp after the welder vocabulary + the active backend.
 
+#include <string>
+#include <vector>
+
+// Vendor-style declarations nobody can annotate (unwelded, outside `nested`):
+// the member-alias cases below register them nested under a welded class.
+namespace nested_vendor {
+
+struct Dial {
+    int reading{40};
+};
+
+template <class T>
+struct Roll {
+    T top{};
+    T take() const { return top; }
+};
+
+enum class Level { low, high };
+
+} // namespace nested_vendor
+
 namespace nested {
 
 // automatic outer: every nested type participates unless marked out.
@@ -83,6 +104,46 @@ Panel {
         int gauge{12};
     };
     [[=welder::mark::include]] int width{10};
+};
+
+// MEMBER TYPE ALIASES participate iff the target FAILS the bindability gate —
+// registering exactly the types that otherwise couldn't cross the boundary —
+// nested under the outer, named by the alias. Gate-passing targets (natively
+// castable, welded, otherwise registered) are skipped: registering them again
+// would be redundant or an outright duplicate. Members whose signatures use the
+// alias-registered types pass the gate through the SCOPE-AWARE oracle (a class's
+// own member aliases are visible to it).
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Console {
+    using Dial = nested_vendor::Dial;      // unwelded vendor type  -> Console.Dial
+    using Ints = nested_vendor::Roll<int>; // unwelded specialization -> Console.Ints
+    using Lvl = nested_vendor::Level;      // unwelded vendor enum  -> Console.Lvl
+
+    // weld_as on the alias renames verbatim -> Console.Spool
+    using Reel [[=welder::weld_as("Spool")]] = nested_vendor::Roll<double>;
+
+    using Names = std::vector<std::string>; // castable -> skipped
+    using Bot = Robot;                      // welded   -> skipped (no double reg)
+
+    // excluded: never participates (and no duplicate-target clash with Dial).
+    using Gauge [[=welder::mark::exclude]] = nested_vendor::Dial;
+
+    // the class-scope RENAME escape: the exclude takes the declared nested type
+    // out of the sweep (so it fails the gate), and the alias re-registers it
+    // under its own name -> Console.Heart.
+    struct [[=welder::mark::exclude]] Core {
+        int temp{300};
+    };
+    using Heart = Core;
+
+    // signatures using the alias-registered types (the scope-aware oracle):
+    nested_vendor::Dial dial{};
+    nested_vendor::Roll<int> roll{};
+
+    nested_vendor::Dial read_dial() const { return dial; }
+    nested_vendor::Roll<int> spin() const { return roll; }
+    nested_vendor::Level level() const { return nested_vendor::Level::high; }
 };
 
 // a PROTECTED nested type binds when the outer admits protected members

@@ -78,6 +78,35 @@ struct Unwelded { // no weld: its nested types never count under stitch
 
 } // namespace nt
 
+// Vendor-style targets for the MEMBER-ALIAS cases (unwelded, elsewhere).
+namespace ntv {
+
+struct Widget {
+    int w{};
+};
+
+template <class T>
+struct Bag {
+    T item{};
+};
+
+} // namespace ntv
+
+namespace nt {
+
+struct [[=welder::weld(welder::lang::py)]] Desk {
+    using Gadget = ntv::Widget;              // participates (target fails the gate)
+    using Bags = ntv::Bag<int>;              // participates (specialization)
+    using Skip [[=welder::mark::exclude]] =
+        ntv::Bag<double>;                    // excluded: never participates
+    struct [[=welder::mark::exclude]] Drawer {
+        int d{};
+    };
+    using Tray = Drawer;                     // the exclude+alias rename escape
+};
+
+} // namespace nt
+
 namespace {
 
 using welder::lang;
@@ -141,5 +170,28 @@ static_assert(!tack::counts_as_registered(member_named(^^nt::Outer, "Prot"),
                                           lang::py)); // knob off, no annotation
 static_assert(tack_prot::counts_as_registered(member_named(^^nt::Outer, "Prot"),
                                               lang::py)); // whole-pass knob
+
+// --- the SCOPE-AWARE oracle over member aliases ---------------------------------
+// A member alias's participation is invisible from the target type, so the plain
+// oracle says no — while the scoped oracle (which the carriage threads through a
+// class's own gate checks) vouches for the types the class's aliases register.
+using desk_scope = welder::detail::scoped_registration<stitch, ^^nt::Desk>;
+
+static_assert(!stitch::counts_as_registered(^^ntv::Widget, lang::py));
+static_assert(desk_scope::counts_as_registered(^^ntv::Widget, lang::py));
+static_assert(desk_scope::counts_as_registered(^^ntv::Bag<int>, lang::py));
+static_assert(!desk_scope::counts_as_registered(^^ntv::Bag<double>,
+                                                lang::py)); // only an excluded alias
+// the exclude+alias rename escape: the alias re-admits the excluded nested type.
+static_assert(!stitch::counts_as_registered(^^nt::Desk::Drawer, lang::py));
+static_assert(desk_scope::counts_as_registered(^^nt::Desk::Drawer, lang::py));
+// scope is per class: another scope's oracle stays blind to Desk's aliases.
+using outer_scope = welder::detail::scoped_registration<stitch, ^^nt::Outer>;
+static_assert(!outer_scope::counts_as_registered(^^ntv::Widget, lang::py));
+
+// under greedy resolution every complete type passes the gate, so member aliases
+// never participate in a tack weld — the sweep-side arbiter, not the oracle, but
+// the oracle side stays consistent: greedy already counts the target itself.
+static_assert(tack::counts_as_registered(^^ntv::Widget, lang::py));
 
 } // namespace

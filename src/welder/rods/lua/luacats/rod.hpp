@@ -196,17 +196,38 @@ struct rod {
     static class_writer make_nested_class(module_type& m, class_writer& outer,
                                           const char* name, const char* doc,
                                           std::index_sequence<I...> seq) {
+        return make_nested_class<T, ^^T, Bases>(m, outer, name, doc, seq);
+    }
+
+    /** The declaring-entity-aware nested form the carriage prefers: @a Decl is
+        `^^T`, or the **member alias** an (otherwise unnameable) template
+        specialization was registered through. The raw name recorded for
+        reference reconciliation derives from @a Decl — `qualified_name(^^T)` on
+        a specialization would collapse to the bare enclosing scope and corrupt
+        the rename table, exactly as in the namespace-alias `make_class` form.
+        @see welder::rod */
+    template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
+    static class_writer make_nested_class(module_type& m, class_writer& outer,
+                                          const char* name, const char* doc,
+                                          std::index_sequence<I...> seq) {
         class_writer w{};
         w.doc = m.doc;
         w.sink = &outer.trailing;
         w.qualified = outer.qualified + "." + name;
         w.cls_doc = doc ? doc : "";
         w.bases = _bases_string<Bases>(seq);
-        // qualified_name walks class scopes too, so a nested type's raw name is
-        // already the dotted outer chain; the record is a no-op unless a style /
-        // weld_as renames a segment.
-        m.doc->record_type_name(std::define_static_string(qualified_name(^^T)),
-                                w.qualified);
+        // The rename key must be what the type map emits for REFERENCES to T:
+        // the target's own dotted name when it has one (a member-alias target
+        // declared elsewhere — `vendor.Plate` — so its references remap to this
+        // declaration), else the alias Decl's (an unnameable specialization,
+        // whose qualified_name(^^T) would collapse to the bare enclosing scope
+        // and corrupt the rename table). For a declared nested type the two
+        // coincide and the record is a no-op unless a style/weld_as renames.
+        m.doc->record_type_name(
+            std::define_static_string(std::meta::has_identifier(^^T)
+                                          ? qualified_name(^^T)
+                                          : qualified_name(Decl)),
+            w.qualified);
         return w;
     }
 

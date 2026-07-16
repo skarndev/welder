@@ -105,10 +105,17 @@ struct rod {
         out-of-band still reads `true`; that false positive is resolved by the
         deferred `trust_bindable` escape hatch.
 
+        **Enums are forced into the needs-registration bucket**: nanobind's
+        dedicated enum caster is not the base caster, but it converts only once
+        the enum is registered (`nb::enum_`) — an unregistered enum fails at call
+        time. Forcing it keeps welder's gate honest (a welded enum's registration
+        is required) and matches every other rod.
+
         @tparam T the type whose caster to classify.
     */
     template <class T>
     static constexpr bool _needs_registration =
+        std::is_enum_v<std::remove_cvref_t<T>> ||
         nb::detail::is_base_caster_v<nb::detail::make_caster<T>>;
 
     /** Map welder's neutral @ref welder::rv_kind to nanobind's `rv_policy`.

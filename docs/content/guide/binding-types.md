@@ -257,6 +257,68 @@ or forward-declared) is a hard compile error, not a runtime surprise.
     print(mod.Robot.quiet)          -- unscoped enum: mirrored onto the class
     ```
 
+### Member type aliases
+
+A **member type alias** can pull an *outside* type into the class's binding —
+the class-scope counterpart of
+[welding through a namespace alias](templates.md#welding-through-an-alias-the-namespace-sweep),
+and the natural home for a vendor type your class's interface uses:
+
+```cpp
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Console {
+    using Dial = vendor::Dial;          // unwelded vendor type  → Console.Dial
+    using Ints = vendor::Roll<int>;     // a specialization      → Console.Ints
+    using Names = std::vector<std::string>; // castable          → skipped
+    using Bot  = Robot;                 // already welded        → skipped
+
+    vendor::Dial dial{};                // fine: Console's own aliases are
+    vendor::Dial read_dial() const;     // visible to the bindability gate
+};
+```
+
+The rule: a member alias participates **iff its target fails the bindability
+gate** — registering exactly the types that otherwise couldn't cross the
+boundary. A target the gate already passes (natively castable, a bindable STL
+wrapper, welded, or otherwise registered) converts without help, so registering
+it again would be redundant or an outright duplicate — those aliases are
+skipped, which is why ordinary `value_type` / `iterator` conventions cost
+nothing. The alias's own `exclude` / `include` / `only` marks and the outer's
+policy apply as for any member; `weld_as` on the alias renames verbatim. Under
+[tack welding](namespaces-modules.md) every complete type passes the greedy
+gate, so member aliases never participate there — a tacked third-party header's
+alias conventions stay inert by construction.
+
+Combined with `mark::exclude` on a *declared* nested type, an alias is also the
+class-scope **rename escape**: the exclude takes the type out of the sweep, and
+the alias re-registers it under its own name:
+
+```cpp
+struct [[=welder::mark::exclude]] Core { /* … */ };
+using Heart = Core;                     // → Console.Heart
+```
+
+!!! info "Scope of the gate's alias knowledge"
+
+    An alias is unrecoverable from the type it names, so the gate learns about
+    alias registrations only for the **class being bound**: members of `Console`
+    may freely use `Console`'s alias-registered types, but *another* class (or a
+    free function) naming `vendor::Dial` in a signature still needs a
+    [`trust_bindable` hatch](trust-casters.md) — consistent with the
+    namespace-alias blind spot. Two classes aliasing the *same* unwelded target
+    would each register it (an import-time framework error); two aliases of one
+    target inside a single class are diagnosed at compile time.
+
+!!! warning "Alias targets with virtual methods (Python)"
+
+    The
+    [trampoline generator](inheritance.md#overriding-virtual-methods-from-python)
+    deliberately runs without a bindability oracle, so it never sees member
+    aliases — an alias-registered
+    target with overridable virtuals needs a **hand-written** trampoline
+    (spelled through the alias, e.g. `Outer::Buf`) or a `bind_flat` opt-out; the
+    Python rods' trampoline gate will tell you at compile time.
+
 !!! tip "Excluding + welding manually"
 
     To keep a nested type out of the outer's surface but still bind it (flat,

@@ -103,3 +103,46 @@ def test_private_nested_type_never_binds(nested: ModuleType) -> None:
 def test_protected_nested_type_binds_under_weld_protected(nested: ModuleType) -> None:
     assert nested.Rig().id == 1
     assert nested.Rig.Jig().slots == 7
+
+
+# --- member type aliases ------------------------------------------------------------
+def test_member_alias_registers_an_unwelded_target(nested: ModuleType) -> None:
+    # A member alias participates iff the target FAILS the bindability gate —
+    # exactly the types that otherwise couldn't cross the boundary — registered
+    # nested under the outer, named by the alias.
+    assert nested.Console.Dial.__qualname__ == "Console.Dial"
+    assert nested.Console.Dial().reading == 40
+    assert nested.Console.Ints().take() == 0  # an unnameable specialization
+    import enum
+
+    assert issubclass(nested.Console.Lvl, enum.IntEnum)  # a vendor enum
+
+
+def test_member_alias_weld_as(nested: ModuleType) -> None:
+    assert nested.Console.Spool().take() == pytest.approx(0.0)
+    assert not hasattr(nested.Console, "Reel")
+
+
+def test_gate_passing_targets_are_skipped(nested: ModuleType) -> None:
+    assert not hasattr(nested.Console, "Names")  # castable (vector<string>)
+    assert not hasattr(nested.Console, "Bot")    # welded (Robot) — no double reg
+    assert nested.Robot().get_mode() is not None  # Robot itself unharmed
+
+
+def test_excluded_member_alias_never_participates(nested: ModuleType) -> None:
+    assert not hasattr(nested.Console, "Gauge")
+
+
+def test_exclude_plus_alias_renames_a_declared_nested_type(nested: ModuleType) -> None:
+    assert not hasattr(nested.Console, "Core")  # excluded from the sweep
+    assert nested.Console.Heart().temp == 300   # re-registered under the alias
+
+
+def test_scope_aware_gate_admits_alias_registered_types(nested: ModuleType) -> None:
+    # Members whose signatures use the alias-registered vendor types bind: the
+    # class's own member aliases are visible to the registration oracle.
+    c = nested.Console()
+    assert c.dial.reading == 40
+    assert c.read_dial().reading == 40
+    assert c.spin().take() == 0
+    assert c.level() == nested.Console.Lvl.high
