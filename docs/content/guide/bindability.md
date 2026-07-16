@@ -39,7 +39,7 @@ flowchart TD
     W -- yes --> R["binds iff its value args do<br/>(recurse into them)"]
     W -- no --> C{"native / user-caster type?"}
     C -- yes --> OK[binds as-is]
-    C -- no --> N{"welded?"}
+    C -- no --> N{"registered?<br/>(welded — or a participating<br/>nested type of a registered outer)"}
     N -- yes --> OK
     N -- no --> ERR["hard compile error"]
     style OK stroke:#2e7d32,stroke-width:3px
@@ -48,7 +48,11 @@ flowchart TD
 
 So `std::vector<Unwelded>` is caught, not just a bare `Unwelded` — the recursion
 walks container / `optional` / `pair` / `tuple` / `variant` / smart-pointer value
-arguments.
+arguments. The "registered?" leaf mirrors welder's traversal exactly: a welded
+type counts, and so does a [nested type](binding-types.md#nested-types) that
+participates in its enclosing type's binding — while a nested type that does
+*not* participate (excluded, private, forward-declared) fails the gate wherever
+a signature names it.
 
 ## The one rod-specific leaf
 

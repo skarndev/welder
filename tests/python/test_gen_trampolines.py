@@ -188,3 +188,21 @@ def test_generated_trampoline_for_template_instantiation(gt: ModuleType) -> None
     # The C++ pour() dispatches into the Python override through the generated
     # trampoline registered for the instantiation.
     assert Potion().pour() == "brew=7"
+
+def test_generated_trampoline_for_nested_type(gt: ModuleType) -> None:
+    # Tower::Bell is a NESTED virtual type: swept as a member of the welded outer
+    # (no weld of its own), registered as Tower.Bell, and its generated trampoline
+    # derives from the class-qualified spelling ::gen_trampolines::Tower::Bell.
+    assert gt.Tower.Bell.__qualname__ == "Tower.Bell"
+    b = gt.Tower.Bell()
+    assert b.toll() == "dong"
+    assert b.peal(2) == "dongdong"
+    assert gt.Tower().bell.toll() == "dong"
+
+    class Chime(gt.Tower.Bell):
+        def toll(self) -> str:
+            return "ting"
+
+    # The C++ peal() dispatches into the Python override through the generated
+    # trampoline registered for the nested type.
+    assert Chime().peal(3) == "tingtingting"

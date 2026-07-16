@@ -137,6 +137,32 @@ Mint : Herb {
     Mint* root() const override { return nullptr; }
 };
 
+// A NESTED virtual type: Tower::Bell is swept as a member of the welded outer (a
+// nested type carries no weld of its own), so the generator emits its trampoline
+// through the flat make_class fallback — deriving from and registering
+// trampoline_for<> under the class-qualified spelling ::gen_trampolines::Tower::Bell
+// — while the runtime rods register the class as module.Tower.Bell and weave that
+// trampoline in. peal() is the C++ caller proving dispatch into a Python override.
+struct
+[[=welder::weld(welder::lang::py)]]
+Tower {
+    struct Bell {
+        virtual ~Bell() = default;
+
+        [[=welder::doc("The bell's toll.")]]
+        virtual std::string toll() const { return "dong"; }
+
+        std::string peal(int times) const {
+            std::string out{};
+            for (int i{0}; i < times; ++i)
+                out += toll();
+            return out;
+        }
+    };
+
+    Bell bell{};
+};
+
 // A CLASS-TEMPLATE instantiation, welded through a namespace-scope alias — the
 // only way an instantiation enters the sweep (members_of never enumerates one),
 // and the C++ spelling the generator needs (`Cauldron<int>` has no identifier;

@@ -277,12 +277,16 @@ annotation. Private members stay out regardless; that boundary is not a knob.
 A bespoke resolution is a stateless struct satisfying the `welder::resolution`
 concept — six `consteval` predicates (`participates`, `is_native_base`,
 `member_participates`, `class_member_participates` — the per-*class-member*
-verdict, resolved **per overload and per constructor**, from which the driver
+verdict, resolved **per overload and per constructor** (and consulted for
+[nested member types](binding-types.md#nested-types) too), from which the driver
 computes each name's overload group, so signature-level rules prune exactly one
 sibling — `namespace_participates`, and `counts_as_registered` — the bindability
 gate's *registration oracle*: which class/enum types may appear in bound
 signatures because welding under this resolution registers them) plus the
-`native_bases<T, L>` hook.
+`native_bases<T, L>` hook. A resolution that prunes *types* must mirror the
+pruning in `counts_as_registered` — nested types included (the shipped oracles
+extend the member rules to class-scoped types, recursing into the enclosing
+chain), or the gate will vouch for a registration the sweep never makes.
 
 Every per-member predicate takes a trailing `std::meta::info bound_into` — the
 entity whose binding *receives* the decision's subject: the welded type for

@@ -103,6 +103,23 @@ Polygon {
     [[=welder::doc("Named anchor points.")]] std::map<std::string, Box> anchors;
 };
 
+// Class-NESTED types: a member class and a member enum resolve under the outer
+// (no weld of their own — the outer's policy + their marks) and declare under
+// its dotted name (stubdemo.Gauge.Needle / stubdemo.Gauge.Range), matching the
+// sol2 runtime placement Outer.Inner; their blocks render after the outer's.
+struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A measuring gauge.")]]
+Gauge {
+    struct [[=welder::doc("The needle position.")]] Needle {
+        [[=welder::doc("Angle in degrees.")]] double angle{0.0};
+    };
+    enum class [[=welder::doc("Operating range.")]] Range { Low, High };
+
+    [[=welder::doc("The current needle.")]] Needle needle;
+
+    [[=welder::doc("Select the range.")]]
+    void set_range([[=welder::doc("the new range")]] Range r);
+};
+
 [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Sum a list of areas.")]]
 [[=welder::returns("the total area")]]
 double total_area([[=welder::doc("the shapes' areas")]] const std::vector<double>& areas);

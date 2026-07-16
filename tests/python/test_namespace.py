@@ -157,6 +157,14 @@ def test_tack_binds_unmarked_class(foreign: ModuleType) -> None:
     assert w.doubled() == 6  # a method, bound with no weld() on the class
 
 
+def test_tack_binds_unmarked_nested_type(foreign: ModuleType) -> None:
+    # A NESTED type in the unmarked library: the greedy pass sweeps member types
+    # like the stitch one, so Widget.Stat registers under Widget and stats()'
+    # signature passes the gate without a trust hatch.
+    assert foreign.Widget.Stat().uses == 0
+    assert foreign.Widget().stats().uses == 3
+
+
 def test_tack_binds_unmarked_free_function(foreign: ModuleType) -> None:
     assert foreign.add(2, 5) == 7
 

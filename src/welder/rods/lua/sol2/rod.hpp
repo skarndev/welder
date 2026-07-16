@@ -66,6 +66,7 @@
 */
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <meta>
 #include <type_traits>
 #include <utility>
@@ -151,13 +152,19 @@ struct rod {
         std::is_enum_v<std::remove_cvref_t<T>> ||
         ::sol::lua_type_of<std::remove_cvref_t<T>>::value == ::sol::type::userdata;
 
-    /** A welded enum's binding: the name→value table, the enclosing module, and
-        whether the enum is scoped (an unscoped enum also mirrors its names onto the
-        module, like C++). */
+    /** A welded enum's binding: the name→value table, how to mirror a name onto
+        the enclosing scope, and whether the enum is scoped (an unscoped enum also
+        mirrors its names onto the enclosing scope, like C++).
+
+        The mirror is a closure rather than a table because the enclosing scope
+        differs in kind: a module is a plain `sol::table`, but a *class-nested*
+        enum's scope is the outer's `sol::usertype` — whose static entries write
+        through sol2's usertype storage, not plain table sets. */
     template <class E>
     struct _enum_binding {
         ::sol::table values;      /**< The `E = { Name = value, … }` table. */
-        ::sol::table parent;      /**< The enclosing module table. */
+        std::function<void(const char*, lua_Integer)>
+            mirror;               /**< Write one name onto the enclosing scope. */
         bool scoped;              /**< `true` for `enum class`. */
     };
 
@@ -471,6 +478,26 @@ struct rod {
             m, name, std::make_index_sequence<bases.size()>{});
     }
 
+    /** Create the `sol::usertype<T>` for a **nested** member type, placed on the
+        enclosing type's usertype table (`module.Outer.Inner`) instead of the
+        module.
+
+        sol2 has no scoped registration, so the usertype is created through the
+        module table (which registers T's metatables in the Lua registry — the
+        conversion machinery is name-independent), moved onto @a outer as a
+        static entry, and the temporary module key cleared. The handle is a
+        direct reference, so later member registration is unaffected by the
+        move. @see welder::rod */
+    template <class T, auto Bases, std::size_t... I>
+    static auto make_nested_class(module_type& m, auto& outer, const char* name,
+                                  const char* doc, std::index_sequence<I...> seq) {
+        auto ut{make_class<T, Bases>(m, name, doc, seq)};
+        outer[name] = ut;          // Outer.Inner = the usertype (a lua reference
+                                   // value registers as a static entry)
+        m[name] = ::sol::lua_nil;  // drop the temporary module-scope key
+        return ut;
+    }
+
     /** Install @a T's whole constructor set — exactly what sol2 wants (one
         `sol::constructors<…>` assignment covering the call form `T(…)` and the
         idiomatic `T.new(…)`), built from the driver-passed pieces.
@@ -547,13 +574,36 @@ struct rod {
     static auto make_enum(module_type& m, const char* name, const char* /*doc*/) {
         ::sol::table values{::sol::state_view{m.lua_state()}.create_table()};
         m[name] = values;
-        return _enum_binding<E>{values, m, std::is_scoped_enum_v<E>};
+        return _enum_binding<E>{
+            values, [m](const char* n, lua_Integer v) mutable { m[n] = v; },
+            std::is_scoped_enum_v<E>};
+    }
+
+    /** Create the `Name = value` table for a **nested** member enum, placed on
+        the enclosing type's usertype (`module.Outer.Mode`). The handle's mirror
+        writes onto the OUTER, so an *unscoped* nested enum mirrors its names
+        onto the class (`Outer.quiet`), like C++'s `Outer::quiet`.
+        @see welder::rod */
+    template <class E>
+    static auto make_nested_enum(module_type& m, auto& outer, const char* name,
+                                 const char* /*doc*/) {
+        ::sol::table values{::sol::state_view{m.lua_state()}.create_table()};
+        outer[name] = values; // a reference value registers as a static entry
+        return _enum_binding<E>{
+            values,
+            // sol::var marks the plain integer as a STATIC variable — a bare
+            // value assignment would be wrapped as a bound function.
+            [outer](const char* n, lua_Integer v) mutable {
+                outer[n] = ::sol::var(v);
+            },
+            std::is_scoped_enum_v<E>};
     }
 
     /** Add enumerator @a Enum (as its underlying integer). An unscoped enum's
-        enumerator is also mirrored onto the enclosing module, unqualified — the
-        driver's `finish_enum` role, done incrementally here since the handle
-        carries the parent. @see welder::rod */
+        enumerator is also mirrored onto the enclosing scope (the module, or a
+        nested enum's outer class), unqualified — the driver's `finish_enum`
+        role, done incrementally here since the handle carries the mirror.
+        @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(auto& e) {
         constexpr const char* name{
@@ -561,7 +611,7 @@ struct rod {
         const lua_Integer value{static_cast<lua_Integer>(std::to_underlying([:Enum:]))};
         e.values[name] = value;
         if (!e.scoped)
-            e.parent[name] = value;
+            e.mirror(name, value);
     }
 
     /** No whole-enum finalizer needed (unscoped export is done per-enumerator).

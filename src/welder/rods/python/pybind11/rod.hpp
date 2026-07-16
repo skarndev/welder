@@ -265,23 +265,73 @@ struct rod {
         @tparam T     the class type.
         @tparam Bases the static array of native base type reflections.
         @tparam I     the base index pack.
-        @param m    the module handle.
-        @param name the Python class name.
-        @param doc  the class docstring, or `nullptr`.
+        @param scope the registration scope — the module, or (for a nested type)
+                     the enclosing class handle; pybind11 accepts any handle.
+        @param name  the Python class name.
+        @param doc   the class docstring, or `nullptr`.
     */
     template <class T, class Trampoline, auto Bases, std::size_t... I>
-    static auto _make_class(py::module_& m, const char* name, const char* doc,
+    static auto _make_class(py::handle scope, const char* name, const char* doc,
                             std::index_sequence<I...>) {
         if constexpr (std::is_void_v<Trampoline>) {
             if (doc)
-                return py::class_<T, typename [:Bases[I]:]...>(m, name, doc);
-            return py::class_<T, typename [:Bases[I]:]...>(m, name);
+                return py::class_<T, typename [:Bases[I]:]...>(scope, name, doc);
+            return py::class_<T, typename [:Bases[I]:]...>(scope, name);
         } else {
             // The trampoline is an extra `py::class_` template argument; Python
             // subclasses instantiate it, so their overrides capture C++ virtual calls.
             if (doc)
-                return py::class_<T, Trampoline, typename [:Bases[I]:]...>(m, name, doc);
-            return py::class_<T, Trampoline, typename [:Bases[I]:]...>(m, name);
+                return py::class_<T, Trampoline, typename [:Bases[I]:]...>(scope, name, doc);
+            return py::class_<T, Trampoline, typename [:Bases[I]:]...>(scope, name);
+        }
+    }
+
+    /** The trampoline-aware class factory over an arbitrary registration
+        @a scope — the shared body of `make_class` (scope = the module) and
+        `make_nested_class` (scope = the enclosing class handle).
+
+        A type carrying virtual methods is bound *overridable* — it must register
+        a trampoline (so Python subclasses can override those virtuals) or opt
+        out with `[[=welder::rods::python::bind_flat]]`. When a trampoline is
+        present, its coverage of @a T's virtuals is checked at compile time.
+        @see welder::rods::python::trampoline_for */
+    template <class T, auto Bases, std::size_t... I>
+    static auto _make_class_at(py::handle scope, const char* name,
+                               const char* doc, std::index_sequence<I...> seq) {
+        namespace py_ = ::welder::rods::python;
+        if constexpr (py_::has_virtual_methods(^^T)) {
+            // Resolve the trampoline: an explicit `trampoline_for<T>` wins; otherwise
+            // scan T's namespace for a `[[=trampoline]]`-annotated subclass.
+            constexpr auto scanned{py_::scanned_trampoline_of(^^T)};
+            static_assert(
+                py_::trampoline_for<T> != std::meta::info{} || !scanned.ambiguous,
+                "welder: more than one [[=welder::rods::python::trampoline]] class in "
+                "this namespace derives from T; disambiguate by specializing "
+                "welder::rods::python::trampoline_for<T>.");
+            constexpr std::meta::info tramp{py_::trampoline_for<T> != std::meta::info{}
+                                                ? py_::trampoline_for<T>
+                                                : scanned.type};
+            if constexpr (tramp != std::meta::info{}) {
+                using Trampoline = [:tramp:];
+                static_assert(
+                    py_::trampoline_covers(^^T, ^^Trampoline),
+                    "welder: the trampoline registered for this type does not "
+                    "override all of its virtual methods; every virtual needs an "
+                    "override forwarding to Python (see WELDER_PY_OVERRIDE).");
+                return _make_class<T, Trampoline, Bases>(scope, name, doc, seq);
+            } else {
+                static_assert(
+                    py_::bound_flat(^^T),
+                    "welder: this welded type has virtual methods but no trampoline "
+                    "is registered, so a Python subclass could not override them. "
+                    "Register one — a [[=welder::rods::python::trampoline]] subclass "
+                    "in T's namespace, or a welder::rods::python::trampoline_for<T> "
+                    "specialization — or annotate T with "
+                    "[[=welder::rods::python::bind_flat]] to bind it non-overridably.");
+                return _make_class<T, void, Bases>(scope, name, doc, seq);
+            }
+        } else {
+            return _make_class<T, void, Bases>(scope, name, doc, seq);
         }
     }
 
@@ -322,41 +372,18 @@ struct rod {
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type& m, const char* name, const char* doc,
                            std::index_sequence<I...> seq) {
-        namespace py_ = ::welder::rods::python;
-        if constexpr (py_::has_virtual_methods(^^T)) {
-            // Resolve the trampoline: an explicit `trampoline_for<T>` wins; otherwise
-            // scan T's namespace for a `[[=trampoline]]`-annotated subclass.
-            constexpr auto scanned{py_::scanned_trampoline_of(^^T)};
-            static_assert(
-                py_::trampoline_for<T> != std::meta::info{} || !scanned.ambiguous,
-                "welder: more than one [[=welder::rods::python::trampoline]] class in "
-                "this namespace derives from T; disambiguate by specializing "
-                "welder::rods::python::trampoline_for<T>.");
-            constexpr std::meta::info tramp{py_::trampoline_for<T> != std::meta::info{}
-                                                ? py_::trampoline_for<T>
-                                                : scanned.type};
-            if constexpr (tramp != std::meta::info{}) {
-                using Trampoline = [:tramp:];
-                static_assert(
-                    py_::trampoline_covers(^^T, ^^Trampoline),
-                    "welder: the trampoline registered for this type does not "
-                    "override all of its virtual methods; every virtual needs an "
-                    "override forwarding to Python (see WELDER_PY_OVERRIDE).");
-                return _make_class<T, Trampoline, Bases>(m, name, doc, seq);
-            } else {
-                static_assert(
-                    py_::bound_flat(^^T),
-                    "welder: this welded type has virtual methods but no trampoline "
-                    "is registered, so a Python subclass could not override them. "
-                    "Register one — a [[=welder::rods::python::trampoline]] subclass "
-                    "in T's namespace, or a welder::rods::python::trampoline_for<T> "
-                    "specialization — or annotate T with "
-                    "[[=welder::rods::python::bind_flat]] to bind it non-overridably.");
-                return _make_class<T, void, Bases>(m, name, doc, seq);
-            }
-        } else {
-            return _make_class<T, void, Bases>(m, name, doc, seq);
-        }
+        return _make_class_at<T, Bases>(m, name, doc, seq);
+    }
+
+    /** Create the `py::class_` for a **nested** member type @a T, registered
+        under its enclosing type's class handle rather than the module — Python
+        then sees it as `module.Outer.Inner` (and `__qualname__` nests), exactly
+        like a hand-written `py::class_<Outer::Inner>(outer_cls, "Inner")`. Same
+        trampoline weaving as `make_class`. @see welder::rod */
+    template <class T, auto Bases, std::size_t... I>
+    static auto make_nested_class(module_type&, auto& outer_cls, const char* name,
+                                  const char* doc, std::index_sequence<I...> seq) {
+        return _make_class_at<T, Bases>(outer_cls, name, doc, seq);
     }
 
     /** Bind @a T's whole constructor set (a chained-def framework just loops it):
@@ -484,7 +511,8 @@ struct rod {
         value, drive via `value()`/`export_values()`, and finalize at the end. */
     template <class E>
     struct enum_handle {
-        module_type scope;                        ///< the enclosing (sub)module
+        py::object scope; ///< the enclosing scope: a (sub)module, or — for a
+                          ///< nested enum — the enclosing class handle
         const char* name;                         ///< the enum's Python name
         std::unique_ptr<py::native_enum<E>> impl; ///< the (move-only) native enum
 
@@ -531,6 +559,19 @@ struct rod {
         // is the enum docstring, applied at finalize().
         return {m, name,
                 std::make_unique<py::native_enum<E>>(m, name, "enum.IntEnum",
+                                                     doc ? doc : "")};
+    }
+
+    /** Create the `enum_handle` for a **nested** member enum @a E, scoped to its
+        enclosing type's class handle — Python sees `module.Outer.Mode`, and an
+        *unscoped* nested enum's `export_values()` lands its enumerators on the
+        class (mirroring C++'s `Outer::red`). @see welder::rod */
+    template <class E>
+    static enum_handle<E> make_nested_enum(module_type&, auto& outer_cls,
+                                           const char* name, const char* doc) {
+        return {outer_cls, name,
+                std::make_unique<py::native_enum<E>>(outer_cls, name,
+                                                     "enum.IntEnum",
                                                      doc ? doc : "")};
     }
 

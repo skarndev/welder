@@ -30,7 +30,18 @@ direct `bindable`/`assert_*` call); the carriage passes its *Resolution* instead
 (the `resolution` concept now requires the `counts_as_registered(type, L)` hook):
 `marker_resolution` → `welded_for` (identical), `greedy_resolution` → any
 *complete*, non-excluded class/enum — a tack-welded library's own types pass in
-its signatures with no trust hatch (the same greedy pass registers them). The
+its signatures with no trust hatch (the same greedy pass registers them).
+**Class-NESTED types:** both shipped oracles extend the answer via
+`detail::nested_type_registered<Resolution>` (carriage.hpp) — a class-scoped
+type counts iff it resolves as a *member* of a counting outer (the outer's
+policy + the type's own marks, `member_access_admitted`, has_identifier +
+complete, recursing into the enclosing chain) — the EXACT mirror of the
+carriage's `bind_nested_types` sweep, so the gate promises precisely what the
+sweep registers. `welded_for` still short-circuits first under stitch: a nested
+type carrying its own `weld` counts even when marked out of the sweep (the
+`mark::exclude` + `weld` combo = manual flat registration). A bespoke resolution
+that prunes types must mirror its pruning here, nested ones included. Locked by
+`compile.nested_types` + `negcompile.nested_excluded_in_signature`. The
 oracle is deliberately a **pure predicate of the declaration, never a
 visited-set**: multi-pass welds (several `weld_*` calls, several tacked
 namespaces) and forward references stay order-independent. Consequences, both

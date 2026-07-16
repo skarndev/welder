@@ -51,6 +51,7 @@ inline ::sol::table welder_test_submodule(::sol::table& m, const char* name) {
 #include "namespace.hpp"
 #include "operators.hpp"
 #include "enums.hpp"
+#include "nested.hpp"
 #include "naming.hpp"
 #include "chaining.hpp"
 #include "overloads.hpp"
@@ -71,6 +72,7 @@ extern "C" int luaopen_welder_test_sol2(lua_State* L) {
     register_foreign(m);     // <-> namespace_spec.lua (tack-welding an unmarked namespace)
     register_operators(m);   // <-> operators.hpp
     register_enums(m);       // <-> enums.hpp
+    register_nested(m);     // <-> nested.hpp
     register_naming(m);      // <-> naming_spec.lua
     register_chaining(m);    // <-> chaining_spec.lua (handles returned by weld_*)
     register_overloads(m);   // <-> overloads_spec.lua (per-overload / per-ctor marks)

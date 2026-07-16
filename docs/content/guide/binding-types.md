@@ -201,6 +201,84 @@ Vec2 {
     `operator=` (a special member). **Free** (non-member) operators aren't bound
     yet.
 
+## Nested types
+
+A class or enum declared **inside** a welded type resolves like any other class
+member: the *outer's* policy plus the nested type's own
+[`exclude` / `include` / `only` marks](annotations.md#mark-per-member-overrides)
+decide participation. A nested type never carries (or needs) a `weld` of its own
+— nested types are interface helpers of their enclosing type, and the enclosing
+`weld` is the discovery marker. Nesting recurses (`Outer::Inner::Innermost`),
+private nested types never bind, and protected ones follow
+[`policy::weld_protected`](annotations.md).
+
+```cpp
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Robot {
+    struct Sensor { double range{1.5}; };          // binds as Robot.Sensor
+    enum class Mode { idle, active };              // binds as Robot.Mode
+    struct [[=welder::mark::exclude]] Impl { };    // bound nowhere
+
+    Sensor sensor{};                               // fine: Sensor is registered
+    void set_mode(Mode m);                         // fine: Mode is registered
+};
+```
+
+Because the nested types register with the outer, members whose signatures use
+them pass the [bindability gate](bindability.md) with no extra annotation — and a
+signature naming a nested type that does *not* participate (excluded, private,
+or forward-declared) is a hard compile error, not a runtime surprise.
+
+=== ":simple-python: Python"
+
+    The nested type is registered with the enclosing class as its scope, exactly
+    like a hand-written `py::class_<Robot::Sensor>(robot_cls, "Sensor")`:
+
+    ```python
+    s = mymod.Robot.Sensor()        # scoped: module.Outer.Inner
+    Robot.Sensor.__qualname__       # "Robot.Sensor" — stubs nest too
+    mymod.Robot.Mode.active         # a nested IntEnum
+    ```
+
+    An *unscoped* nested enum exports its values onto the **class**
+    (`Robot.quiet`), mirroring C++'s `Robot::quiet`.
+
+=== ":simple-lua: Lua"
+
+    Both Lua rods expose the same access chain — `mod.Robot.Sensor` (sol2 places
+    the usertype on the outer's table; LuaBridge3 moves the class table onto the
+    outer as a static entry). The generated
+    [LuaCATS stub](stubs.md) declares it under the dotted name
+    (`---@class mod.Robot.Sensor`):
+
+    ```lua
+    local s = mod.Robot.Sensor.new()
+    print(mod.Robot.Mode.active)    -- a nested value table
+    print(mod.Robot.quiet)          -- unscoped enum: mirrored onto the class
+    ```
+
+!!! tip "Excluding + welding manually"
+
+    To keep a nested type out of the outer's surface but still bind it (flat,
+    under a name of your choosing), combine `mark::exclude` with an explicit
+    `weld` and weld it manually — the exclude removes it from the sweep, the
+    `weld` keeps the gate satisfied for manual registration:
+
+    ```cpp
+    struct [[=welder::weld(welder::lang::py), =welder::mark::exclude]]
+    Cursor { /* … */ };  // nested inside Outer
+    // …
+    weld::weld_type<Outer::Cursor>(m, "OuterCursor");  // flat, renamed
+    ```
+
+!!! info "Flattened bases keep their nested types to themselves"
+
+    A nested type registers exactly once, with its **declaring** class. A
+    non-welded base's members are flattened into the derived binding, but its
+    nested types are not — two derived types flattening one mixin would register
+    the same type twice. A flattened signature naming one therefore fails the
+    gate until you weld the base (or trust/exclude the member).
+
 ## Chaining on the returned handle
 
 `weld_type` returns the rod's own class handle — pybind11's `py::class_<T>`,

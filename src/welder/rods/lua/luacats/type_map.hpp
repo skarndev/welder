@@ -61,9 +61,11 @@ inline std::string one_line(const char* text) {
 // --- the C++ -> LuaCATS type map --------------------------------------------
 
 /** The dotted LuaCATS name of a namespace-or-type reflection: its own identifier
-    prefixed by each enclosing named namespace, dot-joined (so
-    `geometry::Point` → `"geometry.Point"`). Class scopes and the global namespace
-    contribute nothing.
+    prefixed by each enclosing named namespace *and enclosing class* (a nested
+    type binds under its outer's table), dot-joined — so `geometry::Point` →
+    `"geometry.Point"` and `geometry::Robot::Sensor` → `"geometry.Robot.Sensor"`.
+    The global namespace (and an unnameable scope, e.g. a class-template
+    specialization) contributes nothing.
     @param ent a reflection of the namespace or type to name.
     @return the dotted LuaCATS name. */
 consteval std::string qualified_name(std::meta::info ent) {
@@ -71,7 +73,9 @@ consteval std::string qualified_name(std::meta::info ent) {
     if (std::meta::has_identifier(ent))
         parts.emplace_back(std::meta::identifier_of(ent));
     std::meta::info p{std::meta::parent_of(ent)};
-    while (p != ^^:: && std::meta::is_namespace(p)) {
+    while (p != ^^:: &&
+           (std::meta::is_namespace(p) ||
+            (std::meta::is_type(p) && std::meta::is_class_type(p)))) {
         if (std::meta::has_identifier(p))
             parts.emplace_back(std::meta::identifier_of(p));
         p = std::meta::parent_of(p);

@@ -186,6 +186,30 @@ struct rod {
         return w;
     }
 
+    /** Open a `---@class` block for a **nested** member type, declared under the
+        OUTER's dotted name (`mod.Outer.Inner` — matching where the sol2 runtime
+        places it) and flushed into the outer's `trailing` buffer, so its block
+        lands after the outer's own declaration (the stub assigns
+        `mod.Outer.Inner = {}` only once `mod.Outer = {}` exists).
+        @see welder::rod */
+    template <class T, auto Bases, std::size_t... I>
+    static class_writer make_nested_class(module_type& m, class_writer& outer,
+                                          const char* name, const char* doc,
+                                          std::index_sequence<I...> seq) {
+        class_writer w{};
+        w.doc = m.doc;
+        w.sink = &outer.trailing;
+        w.qualified = outer.qualified + "." + name;
+        w.cls_doc = doc ? doc : "";
+        w.bases = _bases_string<Bases>(seq);
+        // qualified_name walks class scopes too, so a nested type's raw name is
+        // already the dotted outer chain; the record is a no-op unless a style /
+        // weld_as renames a segment.
+        m.doc->record_type_name(std::define_static_string(qualified_name(^^T)),
+                                w.qualified);
+        return w;
+    }
+
     /** Emit the whole `.new(…)` constructor overload set (the driver-passed
         pieces: a no-argument overload when @a HasDefault, one per member of
         @a Ctors, and the aggregate field constructor when @a Aggregate); grouped
@@ -302,6 +326,22 @@ struct rod {
         w.enum_doc = doc ? doc : "";
         // Register raw -> styled so references to E (e.g. a field of enum type) are
         // reconciled at render(); see the same call in make_class.
+        m.doc->record_type_name(std::define_static_string(qualified_name(^^E)),
+                                w.qualified);
+        return w;
+    }
+
+    /** Open the enum table declaration for a **nested** member enum, declared
+        under the OUTER's dotted name and flushed into the outer's `trailing`
+        buffer (see @ref make_nested_class). @see welder::rod */
+    template <class E>
+    static enum_writer make_nested_enum(module_type& m, class_writer& outer,
+                                        const char* name, const char* doc) {
+        enum_writer w{};
+        w.doc = m.doc;
+        w.sink = &outer.trailing;
+        w.qualified = outer.qualified + "." + name;
+        w.enum_doc = doc ? doc : "";
         m.doc->record_type_name(std::define_static_string(qualified_name(^^E)),
                                 w.qualified);
         return w;

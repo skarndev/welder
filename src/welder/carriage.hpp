@@ -94,6 +94,46 @@ consteval const char* alias_bound_name() {
 
 } // namespace detail
 
+/** Is @a type declared at class scope — a *nested* (member) type?
+
+    @param type a reflection of a class/enum type.
+    @return `true` iff the immediately enclosing scope is a class. */
+consteval bool is_nested_type(std::meta::info type) {
+    const std::meta::info outer{std::meta::parent_of(type)};
+    return std::meta::is_type(outer) && std::meta::is_class_type(outer);
+}
+
+namespace detail {
+
+/** The GATE side of the nested-type sweep: does class-scoped @a type register
+    with its enclosing class's binding under @a Resolution?
+
+    Mirrors `basic_carriage::bind_nested_types`' selection exactly — a nested
+    type resolves like any other class member (the *outer's* policy plus the
+    type's own exclude/include/only marks, with the usual access admission),
+    never via its own `weld` — so the bindability gate promises a registration
+    precisely when the sweep provides one. The enclosing class must itself count
+    as registered (recursively, for deeper nesting). Unnameable (unnamed) and
+    incomplete member types never register, and a member type *alias* is not a
+    declaration the sweep visits — callers see `false` through the
+    identifier/completeness checks and the alias never reaching here dealiased
+    to a namespace-scope parent.
+
+    @tparam Resolution the resolution whose sweep is being promised for.
+    @param type a class-scoped class/enum type (see @ref welder::is_nested_type).
+    @param L    the target language.
+    @return `true` iff welding the enclosing class registers @a type. */
+template <class Resolution>
+consteval bool nested_type_registered(std::meta::info type, lang L) {
+    const std::meta::info outer{std::meta::parent_of(type)};
+    return std::meta::has_identifier(type) && std::meta::is_complete_type(type) &&
+           detail::member_access_admitted<Resolution>(type, L, outer) &&
+           member_bound(type, L, policy_of(outer)) &&
+           Resolution::counts_as_registered(outer, L);
+}
+
+} // namespace detail
+
 namespace carriages {
 
 // --- resolution policies ----------------------------------------------------
@@ -178,12 +218,21 @@ struct marker_resolution {
                                                  std::meta::info /*bound_into*/) {
         return member_bound(ns, L, pol) && detail::namespace_has_bound(ns, L);
     }
-    /** The gate's registration oracle: welded ⇒ registered (the conservative
-        default, = @ref welder::welded_registration). A pure predicate of the
-        declaration — never a visited-set — so welding in several passes and
-        forward references between welded types stay order-independent. */
+    /** The gate's registration oracle: welded ⇒ registered (the
+        @ref welder::welded_registration rule), plus the **nested-type** rule —
+        a class-scoped type registers with its enclosing class's binding, so it
+        counts iff it resolves as a member of a counting outer (see
+        `detail::nested_type_registered`, the exact mirror of the carriage's
+        nested-type sweep). A pure predicate of the declaration — never a
+        visited-set — so welding in several passes and forward references
+        between welded types stay order-independent. */
     static consteval bool counts_as_registered(std::meta::info type, lang L) {
-        return welder::welded_for(type, L);
+        if (welder::welded_for(type, L))
+            return true;
+        if ((std::meta::is_class_type(type) || std::meta::is_enum_type(type)) &&
+            welder::is_nested_type(type))
+            return detail::nested_type_registered<marker_resolution>(type, L);
+        return false;
     }
 };
 
@@ -272,12 +321,20 @@ struct greedy_resolution {
 
         A **forward-declared** (incomplete) type is deliberately rejected: the
         greedy walk cannot register what has no definition, so a signature naming
-        one keeps failing the gate at compile time. */
+        one keeps failing the gate at compile time.
+
+        A **class-scoped (nested)** type registers with its enclosing class's
+        binding — the greedy pass sweeps member types exactly like the stitch one
+        (the outer's policy + the type's own marks, access admitted), so it
+        counts via `detail::nested_type_registered`, recursing into the enclosing
+        class. */
     static consteval bool counts_as_registered(std::meta::info type, lang L) {
         if (!(std::meta::is_class_type(type) || std::meta::is_enum_type(type)))
             return false;
         if (!std::meta::is_complete_type(type))
             return false;
+        if (welder::is_nested_type(type))
+            return detail::nested_type_registered<greedy_resolution>(type, L);
         return member_bound(type, L, policy_kind::automatic);
     }
 };
@@ -412,121 +469,47 @@ struct basic_carriage {
         }
     }
 
-  public:
-    /** Reflect over enum @a E and register it via rod @a B onto module @a m.
-
-        Emits its docstring, then each enumerator that resolves as bound (an enumerator
-        honors the enum's policy and its own exclude/include marks, exactly like a data
-        member). `finish_enum` lets the backend apply a whole-enum finalizer — e.g.
-        exporting an unscoped enum's values into the enclosing scope, mirroring C++.
-
-        @tparam B the rod.
-        @tparam E the enum type.
-        @param m    the module handle to register onto.
-        @param name the target name (used verbatim, beating any `weld_as`), or
-                    `nullptr` to resolve @a E's `weld_as`/styled name.
-        @return the rod's enum handle.
-    */
-    template <rod B, class E, class Style = naming::none>
-    static auto bind_enum(typename B::module_type& m, const char* name = nullptr) {
+    /** The per-enumerator walk shared by `bind_enum` and `bind_nested_enum`:
+        each enumerator resolves like a data member (the enum's policy + its own
+        marks) and is emitted through the rod's `add_enumerator`.
+        @tparam B     the rod.
+        @tparam E     the enum type.
+        @tparam Style the name style.
+        @param e the rod's enum handle. */
+    template <rod B, class E, class Style, class EnumHandle>
+    static void emit_enumerators(EnumHandle& e) {
         constexpr lang L{B::language};
-        static_assert(Resolution::participates(^^E, L),
-                      "welder: weld_type<E>: enum E is not welded for this backend's "
-                      "language; annotate it with [[=welder::weld(...)]]");
-        const char* enum_name{
-            welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
-        auto e{B::template make_enum<E>(m, enum_name, welder::doc_of<^^E>())};
         constexpr policy_kind pol{policy_of(^^E)};
         template for (constexpr auto en :
                       std::define_static_array(std::meta::enumerators_of(^^E))) {
             if constexpr (Resolution::class_member_participates(en, L, pol, ^^E))
                 B::template add_enumerator<en, Style>(e);
         }
-        B::template finish_enum<E>(e);
-        return e;
     }
 
-    /** Call the rod's class-creation primitive, preferring the extended
-        declaring-entity-aware form when the rod provides one.
+    /** Everything a class binding contains beyond the class handle itself —
+        shared by `bind_type` (a module-scope class) and `bind_nested_type` (a
+        class-scoped one).
 
-        @a Decl is the entity the type was *declared through* — `^^T`, or the
-        namespace-scope alias welding a class-template specialization. A helper
-        (not a lambda in `bind_type`): `std::meta::info` is consteval-only, so a
-        lambda referencing such a constexpr local escalates to consteval (P2564)
-        and cannot take the runtime module handle; template parameters do not.
+        Order matters: **nested member types register first** — a rod places
+        them on the class handle just created, and pybind11 converts a later
+        constructor/method *default argument* at registration time, so a nested
+        enum a default argument names must already exist. Then the constructor
+        set (with the no-constructor-left fail-safe), then data members /
+        methods / operators (@ref bind_members).
+
         @tparam B     the rod.
-        @tparam T     the type to bind.
-        @tparam Decl  the declaring entity handed to a spelling-aware rod.
-        @tparam Bases the native base reflections.
-        @param m        the module handle to register onto.
-        @param cls_name the resolved target-language name.
-        @param doc      the class docstring, or `nullptr`.
-        @return the rod's class handle. */
-    template <rod B, class T, std::meta::info Decl, auto Bases>
-    static auto make_class_of(typename B::module_type& m, const char* cls_name,
-                              const char* doc) {
-        if constexpr (requires {
-                          B::template make_class<T, Decl, Bases>(
-                              m, cls_name, doc,
-                              std::make_index_sequence<Bases.size()>{});
-                      })
-            return B::template make_class<T, Decl, Bases>(
-                m, cls_name, doc, std::make_index_sequence<Bases.size()>{});
-        else
-            return B::template make_class<T, Bases>(
-                m, cls_name, doc, std::make_index_sequence<Bases.size()>{});
-    }
-
-    /** Reflect over @a T and register it via rod @a B onto module @a m.
-
-        Emits:
-        - native inheritance from @a T's native ancestors (per @a Resolution; each a
-          base of the class handle — bind those bases separately, before @a T);
-        - the default constructor (if any), each public non-copy/move constructor, and
-          — for a baseless aggregate whose fields all bind — a synthesized field
-          constructor;
-        - data members / methods / operators that resolve as bound (public, plus
-          protected where `detail::member_access_admitted` admits them — see
-          `policy::weld_protected`; private never), plus the eligible members of
-          every flattened (non-native) public base.
-
-        @tparam B    the rod.
-        @tparam T    the type to bind.
-        @tparam Decl the declaring entity when it differs from `^^T` — the
-                     namespace-scope alias a class-template specialization was
-                     welded through (set by `bind_namespace`'s alias branch, which
-                     has already resolved participation); a null reflection for
-                     the direct route.
-        @param m    the module handle to register onto.
-        @param name the target name (used verbatim, beating any `weld_as`), or
-                    `nullptr` to resolve @a T's `weld_as`/styled name.
-        @return the rod's class handle, so callers can chain further registrations.
-    */
-    template <rod B, class T, class Style = naming::none,
-              std::meta::info Decl = std::meta::info{}>
-    static auto bind_type(typename B::module_type& m, const char* name = nullptr) {
+        @tparam T     the type whose binding to fill.
+        @tparam Style the name style.
+        @param m   the module handle (rods without nested placement fall back to it).
+        @param cls the class handle `make_class`/`make_nested_class` created. */
+    template <rod B, class T, class Style, class Cls>
+    static void bind_class_interior(typename B::module_type& m, Cls& cls) {
         constexpr lang L{B::language};
-        // Decl is the *declaring* entity when it differs from ^^T: the namespace-
-        // scope alias through which a class-template specialization was welded
-        // (bind_namespace's alias branch, which has already resolved participation
-        // — the alias's own `weld` counts there, so ^^T alone can't be re-checked).
-        static_assert(Decl != std::meta::info{} || Resolution::participates(^^T, L),
-                      "welder: weld_type<T>: T is not welded for this backend's "
-                      "language; annotate it with [[=welder::weld(...)]]");
-        constexpr auto ctx{std::meta::access_context::unchecked()};
 
-        const char* cls_name{
-            welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
-
-        // Native bases → bases of the class handle; the user binds them first.
-        // A text-emitting rod that must *spell* the type in C++ (the trampoline
-        // generator) declares the extended, declaring-entity-aware make_class; it
-        // receives Decl — the alias, the one C++ name a specialization has — or
-        // ^^T itself for a directly-declared class. Detected via requires, so the
-        // runtime rods keep the plain form (they need only T + the bound name).
-        constexpr auto bases{Resolution::template native_bases<^^T, L>()};
-        auto cls{make_class_of<B, T, (Decl == std::meta::info{} ? ^^T : Decl),
-                               bases>(m, cls_name, welder::doc_of<^^T>())};
+        // Nested member types (classes + enums declared inside T) — recursive:
+        // each one's own interior runs this walk again.
+        bind_nested_types<B, ^^T, Style>(m, cls);
 
         // Constructors, handed to the rod as ONE participating set (several
         // frameworks want them all at once — sol2's sol::constructors, LuaBridge3's
@@ -584,6 +567,289 @@ struct basic_carriage {
 
         // Data members + methods + operators (T's own, plus flattened bases).
         bind_members<B, ^^T, ^^T, Style>(cls);
+    }
+
+    /** Register the participating **member types** of @a Outer onto its class
+        handle @a cls — the nested-class / nested-enum walk.
+
+        A nested type resolves like any other class member — the *outer's*
+        policy plus the type's own `exclude`/`include`/`only` marks
+        (`class_member_participates`), with the usual access admission — never
+        via its own `weld`: nested types are interface helpers of their
+        enclosing type, and the enclosing `weld` is the discovery marker.
+        Deliberately skipped:
+        - member type **aliases** (binding one would re-register its target;
+          the alias-welding route is namespace-scope only);
+        - **unions** (`is_class_type` excludes them), **unnamed** types (there
+          is nothing to name them by — bind the *member* of that type or
+          exclude it), and **incomplete** member types (nothing to register; a
+          use of one also fails the gate);
+        - a flattened base's nested types: a nested type registers exactly
+          once, with its DECLARING class — two derived types flattening one
+          mixin would otherwise register it twice (a framework load error). A
+          flattened signature naming one therefore fails the gate until the
+          declaring base is welded (or the member trusted/excluded).
+
+        @tparam B     the rod.
+        @tparam Outer the enclosing (welded) type being bound.
+        @tparam Style the name style.
+        @param m   the module handle (the flat-placement fallback scope).
+        @param cls the outer type's class handle. */
+    template <rod B, std::meta::info Outer, class Style, class Cls>
+    static void bind_nested_types(typename B::module_type& m, Cls& cls) {
+        constexpr lang L{B::language};
+        constexpr auto ctx{std::meta::access_context::unchecked()};
+        constexpr policy_kind pol{policy_of(Outer)};
+        template for (constexpr auto mem : std::define_static_array(
+                          std::meta::members_of(Outer, ctx))) {
+            if constexpr (std::meta::is_type(mem) &&
+                          !std::meta::is_type_alias(mem) &&
+                          (std::meta::is_class_type(mem) ||
+                           std::meta::is_enum_type(mem)) &&
+                          std::meta::has_identifier(mem) &&
+                          std::meta::is_complete_type(mem)) {
+                if constexpr (detail::member_access_admitted<Resolution>(
+                                  mem, L, Outer) &&
+                              Resolution::class_member_participates(mem, L, pol,
+                                                                    Outer)) {
+                    if constexpr (std::meta::is_enum_type(mem))
+                        bind_nested_enum<B, typename [:mem:], Style>(m, cls);
+                    else
+                        bind_nested_type<B, typename [:mem:], Style>(m, cls);
+                }
+            }
+        }
+    }
+
+    /** Register nested class @a T onto the class handle of its enclosing type —
+        `bind_type`'s class-scope sibling.
+
+        Same interior (constructors, fail-safes, members, its *own* nested
+        types — so nesting recurses), differing only in where the class handle
+        is created: a rod implementing the optional `make_nested_class` places
+        the new class under @a outer (the Python rods pass the enclosing class
+        as the registration scope, yielding `module.Outer.Inner`); one that
+        doesn't falls back to the module-scope `make_class` — a flat sibling
+        under its usual resolved name, so two outers' same-named nested types
+        then collide (rename with `weld_as`, or implement the hook).
+
+        No `participates` assert here: participation was the caller's member
+        resolution (a nested type needs no `weld`).
+
+        @tparam B     the rod.
+        @tparam T     the nested class type.
+        @tparam Style the name style.
+        @param m     the module handle (the flat-placement fallback scope).
+        @param outer the enclosing type's class handle. */
+    template <rod B, class T, class Style, class OuterCls>
+    static void bind_nested_type(typename B::module_type& m, OuterCls& outer) {
+        constexpr lang L{B::language};
+        const char* cls_name{
+            welder::name_of<^^T, L, Style, ent_kind::class_>()};
+        auto cls{make_nested_class_of<B, T,
+                                      Resolution::template native_bases<^^T, L>()>(
+            m, outer, cls_name, welder::doc_of<^^T>())};
+        bind_class_interior<B, T, Style>(m, cls);
+        // A second OPTIONAL rod hook, after the interior: a rod whose class
+        // handle re-opens the class by name/path (LuaBridge3) cannot move the
+        // class under the outer at creation time — every later add_* call would
+        // re-open a key that no longer exists — so it finalizes the placement
+        // here, once the interior (nested types included, so innermost first)
+        // is fully registered.
+        if constexpr (requires {
+                          B::template finish_nested_class<T>(m, outer, cls,
+                                                             cls_name);
+                      })
+            B::template finish_nested_class<T>(m, outer, cls, cls_name);
+    }
+
+    /** Register nested enum @a E onto the class handle of its enclosing type —
+        `bind_enum`'s class-scope sibling (see @ref bind_nested_type for the
+        shared rationale; the fallback for a rod without `make_nested_enum` is
+        the module-scope `make_enum`).
+        @tparam B     the rod.
+        @tparam E     the nested enum type.
+        @tparam Style the name style.
+        @param m     the module handle (the flat-placement fallback scope).
+        @param outer the enclosing type's class handle. */
+    template <rod B, class E, class Style, class OuterCls>
+    static void bind_nested_enum(typename B::module_type& m, OuterCls& outer) {
+        constexpr lang L{B::language};
+        const char* enum_name{
+            welder::name_of<^^E, L, Style, ent_kind::enum_>()};
+        auto e{make_nested_enum_of<B, E>(m, outer, enum_name,
+                                         welder::doc_of<^^E>())};
+        emit_enumerators<B, E, Style>(e);
+        B::template finish_enum<E>(e);
+    }
+
+    /** Call the rod's nested-class primitive when it declares one, else fall
+        back to the module-scope factory (flat placement). A static helper, not
+        a lambda in `bind_nested_type`, for the same P2564 reason as
+        @ref make_class_of.
+        @tparam B     the rod.
+        @tparam T     the nested class type.
+        @tparam Bases the native base reflections.
+        @param m        the module handle.
+        @param outer    the enclosing type's class handle.
+        @param cls_name the resolved target-language name.
+        @param doc      the class docstring, or `nullptr`.
+        @return the rod's class handle for @a T. */
+    template <rod B, class T, auto Bases, class OuterCls>
+    static auto make_nested_class_of(typename B::module_type& m, OuterCls& outer,
+                                     const char* cls_name, const char* doc) {
+        if constexpr (requires {
+                          B::template make_nested_class<T, Bases>(
+                              m, outer, cls_name, doc,
+                              std::make_index_sequence<Bases.size()>{});
+                      })
+            return B::template make_nested_class<T, Bases>(
+                m, outer, cls_name, doc,
+                std::make_index_sequence<Bases.size()>{});
+        else
+            return make_class_of<B, T, ^^T, Bases>(m, cls_name, doc);
+    }
+
+    /** `make_nested_class_of`'s enum counterpart: the rod's `make_nested_enum`
+        when present, else the module-scope `make_enum`.
+        @tparam B the rod.
+        @tparam E the nested enum type.
+        @param m     the module handle.
+        @param outer the enclosing type's class handle.
+        @param name  the resolved target-language name.
+        @param doc   the enum docstring, or `nullptr`.
+        @return the rod's enum handle for @a E. */
+    template <rod B, class E, class OuterCls>
+    static auto make_nested_enum_of(typename B::module_type& m, OuterCls& outer,
+                                    const char* name, const char* doc) {
+        if constexpr (requires {
+                          B::template make_nested_enum<E>(m, outer, name, doc);
+                      })
+            return B::template make_nested_enum<E>(m, outer, name, doc);
+        else
+            return B::template make_enum<E>(m, name, doc);
+    }
+
+  public:
+    /** Reflect over enum @a E and register it via rod @a B onto module @a m.
+
+        Emits its docstring, then each enumerator that resolves as bound (an enumerator
+        honors the enum's policy and its own exclude/include marks, exactly like a data
+        member). `finish_enum` lets the backend apply a whole-enum finalizer — e.g.
+        exporting an unscoped enum's values into the enclosing scope, mirroring C++.
+
+        @tparam B the rod.
+        @tparam E the enum type.
+        @param m    the module handle to register onto.
+        @param name the target name (used verbatim, beating any `weld_as`), or
+                    `nullptr` to resolve @a E's `weld_as`/styled name.
+        @return the rod's enum handle.
+    */
+    template <rod B, class E, class Style = naming::none>
+    static auto bind_enum(typename B::module_type& m, const char* name = nullptr) {
+        constexpr lang L{B::language};
+        static_assert(Resolution::participates(^^E, L),
+                      "welder: weld_type<E>: enum E is not welded for this backend's "
+                      "language; annotate it with [[=welder::weld(...)]]");
+        const char* enum_name{
+            welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
+        auto e{B::template make_enum<E>(m, enum_name, welder::doc_of<^^E>())};
+        emit_enumerators<B, E, Style>(e);
+        B::template finish_enum<E>(e);
+        return e;
+    }
+
+    /** Call the rod's class-creation primitive, preferring the extended
+        declaring-entity-aware form when the rod provides one.
+
+        @a Decl is the entity the type was *declared through* — `^^T`, or the
+        namespace-scope alias welding a class-template specialization. A helper
+        (not a lambda in `bind_type`): `std::meta::info` is consteval-only, so a
+        lambda referencing such a constexpr local escalates to consteval (P2564)
+        and cannot take the runtime module handle; template parameters do not.
+        @tparam B     the rod.
+        @tparam T     the type to bind.
+        @tparam Decl  the declaring entity handed to a spelling-aware rod.
+        @tparam Bases the native base reflections.
+        @param m        the module handle to register onto.
+        @param cls_name the resolved target-language name.
+        @param doc      the class docstring, or `nullptr`.
+        @return the rod's class handle. */
+    template <rod B, class T, std::meta::info Decl, auto Bases>
+    static auto make_class_of(typename B::module_type& m, const char* cls_name,
+                              const char* doc) {
+        if constexpr (requires {
+                          B::template make_class<T, Decl, Bases>(
+                              m, cls_name, doc,
+                              std::make_index_sequence<Bases.size()>{});
+                      })
+            return B::template make_class<T, Decl, Bases>(
+                m, cls_name, doc, std::make_index_sequence<Bases.size()>{});
+        else
+            return B::template make_class<T, Bases>(
+                m, cls_name, doc, std::make_index_sequence<Bases.size()>{});
+    }
+
+    /** Reflect over @a T and register it via rod @a B onto module @a m.
+
+        Emits:
+        - native inheritance from @a T's native ancestors (per @a Resolution; each a
+          base of the class handle — bind those bases separately, before @a T);
+        - @a T's own **nested member types** (classes + enums, recursively) that
+          resolve as bound — like any member, under @a T's policy + their own
+          marks, no `weld` of their own (@ref bind_nested_types); a rod with the
+          optional `make_nested_class`/`make_nested_enum` primitives places them
+          under @a T's binding (Python: `module.T.Inner`), others fall back to
+          flat module-scope placement;
+        - the default constructor (if any), each public non-copy/move constructor, and
+          — for a baseless aggregate whose fields all bind — a synthesized field
+          constructor;
+        - data members / methods / operators that resolve as bound (public, plus
+          protected where `detail::member_access_admitted` admits them — see
+          `policy::weld_protected`; private never), plus the eligible members of
+          every flattened (non-native) public base.
+
+        @tparam B    the rod.
+        @tparam T    the type to bind.
+        @tparam Decl the declaring entity when it differs from `^^T` — the
+                     namespace-scope alias a class-template specialization was
+                     welded through (set by `bind_namespace`'s alias branch, which
+                     has already resolved participation); a null reflection for
+                     the direct route.
+        @param m    the module handle to register onto.
+        @param name the target name (used verbatim, beating any `weld_as`), or
+                    `nullptr` to resolve @a T's `weld_as`/styled name.
+        @return the rod's class handle, so callers can chain further registrations.
+    */
+    template <rod B, class T, class Style = naming::none,
+              std::meta::info Decl = std::meta::info{}>
+    static auto bind_type(typename B::module_type& m, const char* name = nullptr) {
+        constexpr lang L{B::language};
+        // Decl is the *declaring* entity when it differs from ^^T: the namespace-
+        // scope alias through which a class-template specialization was welded
+        // (bind_namespace's alias branch, which has already resolved participation
+        // — the alias's own `weld` counts there, so ^^T alone can't be re-checked).
+        static_assert(Decl != std::meta::info{} || Resolution::participates(^^T, L),
+                      "welder: weld_type<T>: T is not welded for this backend's "
+                      "language; annotate it with [[=welder::weld(...)]]");
+        constexpr auto ctx{std::meta::access_context::unchecked()};
+
+        const char* cls_name{
+            welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
+
+        // Native bases → bases of the class handle; the user binds them first.
+        // A text-emitting rod that must *spell* the type in C++ (the trampoline
+        // generator) declares the extended, declaring-entity-aware make_class; it
+        // receives Decl — the alias, the one C++ name a specialization has — or
+        // ^^T itself for a directly-declared class. Detected via requires, so the
+        // runtime rods keep the plain form (they need only T + the bound name).
+        constexpr auto bases{Resolution::template native_bases<^^T, L>()};
+        auto cls{make_class_of<B, T, (Decl == std::meta::info{} ? ^^T : Decl),
+                               bases>(m, cls_name, welder::doc_of<^^T>())};
+
+        // Nested member types, constructors, data members / methods / operators
+        // (shared with bind_nested_type — nesting recurses through it).
+        bind_class_interior<B, T, Style>(m, cls);
 
         return cls;
     }

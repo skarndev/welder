@@ -170,11 +170,17 @@ struct rod {
 
     /** The enum handle threaded from `make_enum` to `add_enumerator`: the enclosing
         module, the enum's Lua name (a nested namespace of values) and whether it is
-        scoped (an unscoped enum also mirrors its names onto the module). */
+        scoped (an unscoped enum also mirrors its names onto the module).
+
+        For a **class-nested** enum, @ref outer_key names the enclosing class's
+        table on the module (`make_nested_enum` places the value table inside it),
+        and the unscoped mirror lands there instead of on the module. Empty for
+        the ordinary module-scope enum. */
     struct enum_handle {
         module_scope mod;
         std::string name;
         bool scoped;
+        std::string outer_key{};
     };
 
     /** The class / enum handles the per-class / per-enum hooks receive — exactly what
@@ -230,6 +236,23 @@ struct rod {
     template <class T>
     static auto _open_class(const module_scope& m, const char* name) {
         return _open_namespace(m).template beginClass<T>(name);
+    }
+
+    /** Push the module's namespace table onto the Lua stack (a raw walk from `_G`
+        through the path segments); the caller pops it.
+
+        Nested-type placement goes through the raw C API rather than the fluent
+        registrar: LuaBridge3 has no class-in-class notion, and its class tables
+        carry `__index`/`__newindex` guards that raw access legitimately bypasses —
+        a nested type becomes a *raw* static entry on the outer's table, and Lua
+        resolves a present raw key before any metamethod, so reads Just Work. */
+    static void _push_module_table(const module_scope& m) {
+        lua_pushglobaltable(m.L);
+        for (const auto& seg : m.path) {
+            lua_pushlstring(m.L, seg.data(), seg.size());
+            lua_rawget(m.L, -2);
+            lua_remove(m.L, -2);
+        }
     }
 
     /** The set of constructor argument lists to expose for @a T, built from the
@@ -369,6 +392,51 @@ struct rod {
                                       std::index_sequence<I...> /*seq*/) {
         _make_class<T, Bases>(m, name, std::make_index_sequence<Bases.size()>{});
         return class_handle<T>{m, std::string{name}};
+    }
+
+    /** Register a **nested** member type @a T under a temporary *dotted* module
+        key (`"Outer.Inner"`).
+
+        LuaBridge3's fluent registrar has no class-in-class notion, and this rod's
+        re-open-by-path handle model needs the class reachable by its key for every
+        later `add_*` call — so the class lives at module scope (under a dotted key
+        no sibling identifier can collide with, which also reads well in LuaBridge3
+        diagnostics) until the interior finishes, when @ref finish_nested_class
+        moves it onto the outer's table. @see welder::rod */
+    template <class T, auto Bases, std::size_t... I>
+    static class_handle<T> make_nested_class(module_type&, auto& outer,
+                                             const char* name, const char* /*doc*/,
+                                             std::index_sequence<I...> /*seq*/) {
+        std::string temp{outer.name + "." + name};
+        _make_class<T, Bases>(outer.mod, temp.c_str(),
+                              std::make_index_sequence<Bases.size()>{});
+        return class_handle<T>{outer.mod, std::move(temp)};
+    }
+
+    /** Move the fully-registered nested class table onto the outer's class table
+        (`module.Outer.Inner`) and drop the temporary dotted module key.
+
+        The carriage calls this after the nested class's whole interior — innermost
+        first, so a deeper nested type has already moved onto *this* class. Raw
+        table ops make the entry a raw static member of the outer's table, which
+        Lua resolves before LuaBridge3's `__index` guard. @see welder::rod */
+    template <class T>
+    static void finish_nested_class(module_type&, auto& outer, auto& cls,
+                                    const char* name) {
+        lua_State* L{cls.mod.L};
+        _push_module_table(cls.mod);                            // [mod]
+        lua_pushlstring(L, cls.name.data(), cls.name.size());
+        lua_rawget(L, -2);                                      // [mod, inner]
+        lua_pushlstring(L, outer.name.data(), outer.name.size());
+        lua_rawget(L, -3);                                      // [mod, inner, outerT]
+        lua_pushstring(L, name);
+        lua_pushvalue(L, -3);                                   // [.., outerT, name, inner]
+        lua_rawset(L, -3);                                      // outerT[name] = inner
+        lua_pop(L, 2);                                          // [mod]
+        lua_pushlstring(L, cls.name.data(), cls.name.size());
+        lua_pushnil(L);
+        lua_rawset(L, -3);                                      // mod["Outer.Inner"] = nil
+        lua_pop(L, 1);
     }
 
     /** Register @a T's whole constructor set — exactly what LuaBridge3 wants (one
@@ -513,18 +581,61 @@ struct rod {
         return enum_handle{m, std::string{name}, std::is_scoped_enum_v<E>};
     }
 
+    /** Create the `Name = value` table for a **nested** member enum directly
+        inside the enclosing class's table (`module.Outer.Mode`, a raw static
+        entry — plain values need no re-open model, so no later move either).
+        The handle records the outer's key: `add_enumerator` writes through it,
+        and an *unscoped* nested enum mirrors its names onto the class
+        (`Outer.quiet`), like C++'s `Outer::quiet`. @see welder::rod */
+    template <class E>
+    static enum_handle make_nested_enum(module_type&, auto& outer,
+                                        const char* name, const char* /*doc*/) {
+        lua_State* L{outer.mod.L};
+        _push_module_table(outer.mod);                          // [mod]
+        lua_pushlstring(L, outer.name.data(), outer.name.size());
+        lua_rawget(L, -2);                                      // [mod, outerT]
+        lua_pushstring(L, name);
+        lua_newtable(L);                                        // [.., name, values]
+        lua_rawset(L, -3);                                      // outerT[name] = {}
+        lua_pop(L, 2);
+        return enum_handle{outer.mod, std::string{name}, std::is_scoped_enum_v<E>,
+                           outer.name};
+    }
+
     /** Add enumerator @a Enum (as its underlying integer) to the enum's table. An
-        unscoped enum's enumerator is also mirrored onto the enclosing module,
-        unqualified — the driver's `finish_enum` role, done incrementally here since
-        the handle carries the module. @see welder::rod */
+        unscoped enum's enumerator is also mirrored onto the enclosing scope —
+        the module, or (for a class-nested enum, whose handle carries the outer's
+        key) the enclosing class's table — the driver's `finish_enum` role, done
+        incrementally here since the handle carries the scope. @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(enum_handle& e) {
         constexpr const char* name{
             ::welder::name_of<Enum, language, Style, ::welder::ent_kind::enumerator>()};
         const lua_Integer value{static_cast<lua_Integer>(std::to_underlying([:Enum:]))};
-        _open_namespace(e.mod).beginNamespace(e.name.c_str()).addVariable(name, value);
-        if (!e.scoped)
-            _open_namespace(e.mod).addVariable(name, value);
+        if (e.outer_key.empty()) {
+            _open_namespace(e.mod).beginNamespace(e.name.c_str()).addVariable(name, value);
+            if (!e.scoped)
+                _open_namespace(e.mod).addVariable(name, value);
+        } else {
+            // Class-nested: write through the outer's table with raw ops (the
+            // value table is a raw static entry created by make_nested_enum).
+            lua_State* L{e.mod.L};
+            _push_module_table(e.mod);                              // [mod]
+            lua_pushlstring(L, e.outer_key.data(), e.outer_key.size());
+            lua_rawget(L, -2);                                      // [mod, outerT]
+            lua_pushlstring(L, e.name.data(), e.name.size());
+            lua_rawget(L, -2);                                      // [mod, outerT, values]
+            lua_pushstring(L, name);
+            lua_pushinteger(L, value);
+            lua_rawset(L, -3);                                      // values[name] = v
+            lua_pop(L, 1);                                          // [mod, outerT]
+            if (!e.scoped) {
+                lua_pushstring(L, name);
+                lua_pushinteger(L, value);
+                lua_rawset(L, -3);                                  // outerT[name] = v
+            }
+            lua_pop(L, 2);
+        }
     }
 
     /** No whole-enum finalizer needed (unscoped export is done per-enumerator).

@@ -95,6 +95,35 @@ stubdemo.Polygon = {}
 ---@overload fun(corners: stubdemo.Rect[], name: string?, anchors: table<string, stubdemo.Rect>): stubdemo.Polygon
 function stubdemo.Polygon.new() end
 
+--- A measuring gauge.
+---@class stubdemo.Gauge
+---@field needle stubdemo.Gauge.Needle The current needle.
+stubdemo.Gauge = {}
+
+---@return stubdemo.Gauge
+---@overload fun(needle: stubdemo.Gauge.Needle): stubdemo.Gauge
+function stubdemo.Gauge.new() end
+
+--- Select the range.
+---@param r stubdemo.Gauge.Range the new range
+function stubdemo.Gauge:set_range(r) end
+
+--- The needle position.
+---@class stubdemo.Gauge.Needle
+---@field angle number Angle in degrees.
+stubdemo.Gauge.Needle = {}
+
+---@return stubdemo.Gauge.Needle
+---@overload fun(angle: number): stubdemo.Gauge.Needle
+function stubdemo.Gauge.Needle.new() end
+
+--- Operating range.
+---@enum stubdemo.Gauge.Range
+stubdemo.Gauge.Range = {
+    Low = 0,
+    High = 1,
+}
+
 --- Sum a list of areas.
 ---@param areas number[] the shapes' areas
 ---@return number the total area

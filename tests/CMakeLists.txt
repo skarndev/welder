@@ -130,6 +130,18 @@ add_test(NAME compile.protected_access
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_protected_access --config $<CONFIG>)
 
+# Class-nested type resolution (compile-only): is_nested_type + both shipped
+# resolutions' counts_as_registered over nested types — the member-style rules
+# (outer policy + marks + access), the recursion through the enclosing chain,
+# the incomplete/unwelded rejections and the exclude+weld manual escape.
+# static_asserts; same compile-to-pass shape as above.
+add_library(welder_nested_types OBJECT EXCLUDE_FROM_ALL core/nested_types.cpp)
+target_compile_features(welder_nested_types PRIVATE cxx_std_26)
+target_link_libraries(welder_nested_types PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.nested_types
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_nested_types --config $<CONFIG>)
+
 # Alias-welding semantics (compile-only): the reflect-layer rules for welding a
 # class-template instantiation through a namespace-scope alias
 # (names_template_specialization, alias_welded_for precedence, admissible marks).

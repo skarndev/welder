@@ -231,6 +231,14 @@ namespace foreign {
 // caveat as hand-written pybind11: declare types before signatures that use them.
 
 struct Widget {
+    // A NESTED type in an unmarked library: the greedy pass sweeps member types
+    // exactly like the stitch one (member rules over the outer), registers it as
+    // Widget.Stat, and its appearance in stats()' signature passes the gate via
+    // the same nested-aware registration oracle.
+    struct Stat {
+        int uses{0};
+    };
+
     int size{3};
     int doubled() const {
         return size * 2;
@@ -239,6 +247,7 @@ struct Widget {
     // pass the gate WITHOUT a trust_bindable hatch, because the same tack pass
     // registers them (counts_as_registered).
     Widget merged(const Widget& other) const { return Widget{size + other.size}; }
+    Stat stats() const { return Stat{size}; }
 };
 
 struct Coupler {

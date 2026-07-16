@@ -46,7 +46,7 @@ foreach(neg operand_not_welded container_of_unwelded
             virtual_needs_trampoline trampoline_missing_override
             trampoline_ambiguous tack_incomplete_param optin_uninstantiable
             return_policy_dangling alias_forbidden_mark alias_plain_welded
-            alias_duplicate)
+            alias_duplicate nested_excluded_in_signature)
   add_library(welder_neg_${neg} OBJECT EXCLUDE_FROM_ALL cpp/neg/${neg}.cpp)
   target_compile_features(welder_neg_${neg} PRIVATE cxx_std_26)
   target_link_libraries(welder_neg_${neg} PRIVATE welder::pybind11)

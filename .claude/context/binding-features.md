@@ -162,6 +162,66 @@ surface per-enumerator docs. An
 enum-typed member/parameter binds because the enum is welded (bind the enum first,
 like a welded base). Tested: `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py`.
 
+## Nested types (member classes + enums)
+A type declared INSIDE a welded class resolves like any other class member —
+the OUTER's policy + the nested type's own exclude/include/only marks
+(`class_member_participates`), with the usual access admission
+(`member_access_admitted`: private never; protected under `weld_protected`) —
+never via a `weld` of its own (nested types are interface helpers of the
+enclosing type; the enclosing weld is the discovery marker). Carriage:
+`bind_type` runs the shared `bind_class_interior` (nested walk FIRST — pybind11
+converts a later ctor/method *default argument* at registration time, so a
+nested enum must already exist — then ctors, then members); `bind_nested_types`
+walks `members_of(Outer)` for non-alias, named, complete class/enum member
+types and recurses via `bind_nested_type`/`bind_nested_enum` (which share the
+interior/enumerator machinery with `bind_type`/`bind_enum` — no participates
+assert, participation was the member resolution). Skipped deliberately: member
+type ALIASES (alias-welding is namespace-scope only), unions, unnamed types,
+incomplete member types, and a FLATTENED BASE's nested types (a nested type
+registers exactly once, with its declaring class — two deriveds flattening one
+mixin would double-register; a flattened signature naming one fails the gate
+until the base is welded).
+
+**Rod primitives (optional, requires-detected):** `make_nested_class<T, Bases>(m,
+outer_cls, name, doc, iseq)` / `make_nested_enum<E>(m, outer_cls, name, doc)` —
+place the type under the outer's binding; a rod without them falls back to flat
+module-scope `make_class`/`make_enum` (collision caveat documented). A third
+hook `finish_nested_class<T>(m, outer, cls, name)` runs AFTER the interior
+(innermost-first) for rods whose class handle re-opens by name/path. Shipped:
+pybind11/nanobind pass the outer class handle as the registration scope
+(`module.Outer.Inner`, nested `__qualname__`; `_make_class` generalized to a
+`py::handle`/`nb::handle` scope, the trampoline weaving shared via
+`_make_class_at`; `enum_handle.scope` is `py::object`); sol2 registers through
+the module then moves the usertype onto the outer's table (`outer[name] = ut`,
+temp module key nil'd — a lua reference value is a static entry; the enum
+mirror closure uses `sol::var` for the plain integer); LuaBridge3 registers
+under a temporary DOTTED module key ("Outer.Inner", re-open-by-path safe) and
+`finish_nested_class` raw-moves the class table onto the outer's static table
+(raw entries win before LuaBridge3's `__index` guard) — nested enums are raw
+value tables written via the C API, unscoped ones mirroring onto the CLASS
+table; luacats emits `---@class mod.Outer.Inner` blocks into the outer's
+`trailing` buffer (flushed after the outer's declaration; writers gained a
+`sink` redirect; `qualified_name` now walks class scopes); trampolines rod uses
+the flat fallback (its `cpp_qualified_name` already spells `::ns::Outer::Inner`).
+
+**Gate:** both resolutions' `counts_as_registered` mirror the sweep exactly via
+`detail::nested_type_registered` — see bindability-gate.md. An unscoped nested
+enum exports onto the CLASS (Robot.quiet), mirroring C++, on every rod.
+`weld_as`/`doc` on nested types ride the normal name/doc paths. A nested type
+with its own `weld` + `mark::exclude` = the manual flat-registration escape
+(`weld_type<Outer::Inner>(m, "name")` still works; without the exclude it would
+double-register).
+
+Tests: `tests/common/cpp/nested.hpp` ↔ test_nested.py / nested_spec.lua (all
+four runtime rods; Robot/Machine/Panel/Cabinet — marks, deep nesting, opt_in,
+private); greedy: `foreign::Widget::Stat` in namespace.hpp ↔ both namespace
+specs; trampolines: `Tower::Bell` in gen_trampolines.hpp ↔
+test_gen_trampolines.py; luacats golden (`stubdemo.Gauge`); compile lock
+tests/core/nested_types.cpp; neg
+tests/python/pybind11/cpp/neg/nested_excluded_in_signature.cpp. Stub note: the
+pybind11-stubgen native-enum relaxation in tests/python/pyproject.toml now
+covers `*.nested` too.
+
 ## Inheritance from public bases
 `weld` is a *discovery marker* (an independently-registered, module-discoverable
 entity), not an inheritance directive: the most-derived type's `weld` drives which

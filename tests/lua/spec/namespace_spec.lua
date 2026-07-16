@@ -86,6 +86,13 @@ describe("tack (unmarked library)", function()
     assert.are.equal(6, f.Widget.new():doubled())
   end)
 
+  it("binds an unmarked nested type", function()
+    -- greedy sweeps member types like stitch: Widget.Stat registers under
+    -- Widget, and stats()' signature passes the gate without a trust hatch.
+    assert.are.equal(0, f.Widget.Stat.new().uses)
+    assert.are.equal(3, f.Widget.new():stats().uses)
+  end)
+
   it("binds an unmarked free function and constant", function()
     assert.are.equal(7, f.add(2, 5))
     assert.are.equal(7, f.VERSION)

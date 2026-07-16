@@ -144,6 +144,24 @@ concept caster_oracle = requires {
     template <class T, auto Bases, std::size_t... I>
       static auto make_class(module_type&, const char* name, const char* doc,
                              std::index_sequence<I...>);   // Bases[I] spliced
+    // OPTIONAL (requires-detected): place a NESTED member type under its
+    // enclosing type's binding. The carriage prefers these for a class-scoped
+    // type (the outer class handle is the registration scope — Python:
+    // module.Outer.Inner); a rod without them falls back to the module-scope
+    // factories above, i.e. flat placement under the type's resolved name.
+    template <class T, auto Bases, std::size_t... I>
+      static auto make_nested_class(module_type&, auto& outer_cls, const char* name,
+                                    const char* doc, std::index_sequence<I...>);
+    template <class E>
+      static auto make_nested_enum(module_type&, auto& outer_cls, const char* name,
+                                   const char* doc);
+    // OPTIONAL: called after a nested class's whole interior has registered
+    // (innermost-first). For a rod whose class handle re-opens the class by
+    // name/path (LuaBridge3), this is where the class table actually moves
+    // under the outer — moving it at creation would break the re-opens.
+    template <class T>
+      static void finish_nested_class(module_type&, auto& outer_cls, auto& cls,
+                                      const char* name);
     template <class T, auto Ctors, bool HasDefault, bool Aggregate>
       static void add_constructors(auto& cls);  // the whole participating set
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
@@ -272,8 +290,12 @@ concept rod =
         // predicate of the declaration (never a visited-set), so welding in
         // multiple passes and forward references stay order-independent — and
         // hence no bound_into. marker_resolution: welded_for; greedy_resolution:
-        // any complete registrable type. welder::welded_registration is the
-        // reusable default.
+        // any complete registrable type. Both extend the answer to NESTED
+        // (class-scoped) types — registered iff they resolve as members of a
+        // counting enclosing class (detail::nested_type_registered, the exact
+        // mirror of the carriage's nested-type sweep). A bespoke resolution
+        // that prunes types must mirror its pruning here, nested ones included.
+        // welder::welded_registration is the reusable (welded-only) default.
     @endcode
 
     Plus one reflection-templated hook — it takes the derived type and a `lang` as

@@ -75,6 +75,7 @@
 #include "trust.hpp"
 #include "caster.hpp"
 #include "enums.hpp"
+#include "nested.hpp"
 #include "naming.hpp"
 #include "chaining.hpp"
 #include "overloads.hpp"
@@ -101,6 +102,7 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_trust(m);       // <-> test_trust.py
     register_caster(m);      // <-> test_caster.py
     register_enums(m);       // <-> test_enums.py
+    register_nested(m);      // <-> test_nested.py (class-nested types)
     register_naming(m);      // <-> test_naming.py
     register_chaining(m);    // <-> test_chaining.py (handles returned by weld_*)
     register_overloads(m);   // <-> test_overloads.py (per-overload / per-ctor marks)

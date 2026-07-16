@@ -341,11 +341,18 @@ struct module_writer {
     moved-from temporary does not double-flush. */
 struct class_writer {
     document* doc{nullptr};
+    std::string* sink{nullptr}; /**< Flush target override; null = `doc->body`.
+                                     A NESTED type's writer flushes into its
+                                     outer's @ref trailing, so its block lands
+                                     after the outer's declaration (the stub
+                                     assigns `mod.Outer.Inner = {}` only once
+                                     `mod.Outer = {}` exists). */
     std::string qualified{};  /**< Dotted LuaCATS class name. */
     std::string cls_doc{};    /**< The class `doc`. */
     std::string bases{};      /**< Comma-joined base names, or empty. */
     std::string fields{};     /**< Accumulated `---@field` / `---@operator` lines. */
     std::string methods{};    /**< Accumulated `function` statements. */
+    std::string trailing{};   /**< Nested types' flushed blocks (after methods). */
     std::vector<func_overload> ctors{}; /**< The `.new` overloads, grouped on flush. */
 
     class_writer() = default;
@@ -354,11 +361,13 @@ struct class_writer {
     class_writer(class_writer&& o) noexcept { *this = std::move(o); }
     class_writer& operator=(class_writer&& o) noexcept {
         doc = o.doc;
+        sink = o.sink;
         qualified = std::move(o.qualified);
         cls_doc = std::move(o.cls_doc);
         bases = std::move(o.bases);
         fields = std::move(o.fields);
         methods = std::move(o.methods);
+        trailing = std::move(o.trailing);
         ctors = std::move(o.ctors);
         o.doc = nullptr; // the source no longer flushes
         return *this;
@@ -366,18 +375,20 @@ struct class_writer {
     ~class_writer() {
         if (!doc)
             return;
-        emit_doc_comment(doc->body, cls_doc.empty() ? nullptr : cls_doc.c_str());
-        doc->body += "---@class " + qualified;
+        std::string& out{sink ? *sink : doc->body};
+        emit_doc_comment(out, cls_doc.empty() ? nullptr : cls_doc.c_str());
+        out += "---@class " + qualified;
         if (!bases.empty())
-            doc->body += " : " + bases;
-        doc->body += '\n';
-        doc->body += fields;
-        doc->body += qualified + " = {}\n\n";
+            out += " : " + bases;
+        out += '\n';
+        out += fields;
+        out += qualified + " = {}\n\n";
         // Constructors (all producing `Class.new`) are grouped into one documented
         // function with `---@overload` signatures; they precede the methods.
         if (!ctors.empty())
-            render_overload_group(doc->body, qualified + ".new", ctors);
-        doc->body += methods;
+            render_overload_group(out, qualified + ".new", ctors);
+        out += methods;
+        out += trailing; // nested types' blocks, after this class is complete
     }
 };
 
@@ -385,6 +396,9 @@ struct class_writer {
     as a `---@enum` block by RAII (same rationale as @ref class_writer). */
 struct enum_writer {
     document* doc{nullptr};
+    std::string* sink{nullptr}; /**< Flush target override; null = `doc->body`
+                                     (a nested enum flushes into its outer's
+                                     `trailing`, like a nested class). */
     std::string qualified{};
     std::string enum_doc{};
     std::string values{}; /**< Accumulated `    Name = value,` lines. */
@@ -395,6 +409,7 @@ struct enum_writer {
     enum_writer(enum_writer&& o) noexcept { *this = std::move(o); }
     enum_writer& operator=(enum_writer&& o) noexcept {
         doc = o.doc;
+        sink = o.sink;
         qualified = std::move(o.qualified);
         enum_doc = std::move(o.enum_doc);
         values = std::move(o.values);
@@ -404,9 +419,10 @@ struct enum_writer {
     ~enum_writer() {
         if (!doc)
             return;
-        emit_doc_comment(doc->body, enum_doc.empty() ? nullptr : enum_doc.c_str());
-        doc->body += "---@enum " + qualified + '\n';
-        doc->body += qualified + " = {\n" + values + "}\n\n";
+        std::string& out{sink ? *sink : doc->body};
+        emit_doc_comment(out, enum_doc.empty() ? nullptr : enum_doc.c_str());
+        out += "---@enum " + qualified + '\n';
+        out += qualified + " = {\n" + values + "}\n\n";
     }
 };
 

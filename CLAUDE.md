@@ -102,6 +102,15 @@ PYBIND11_MODULE(mymod, m) {
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for
 `L` → false; else an `only` mark → true iff it names `L` (either policy); else
 `automatic` → true; else (`opt_in`) → true iff explicitly included for `L`.
+**Class-NESTED types (member classes/enums) resolve like any other member** —
+the outer's policy + the nested type's own marks, never a `weld` of their own —
+and register under the outer's binding (`module.Outer.Inner` on the Python rods
+and sol2; LuaBridge3 raw-moves the class table onto the outer; luacats emits the
+dotted name), recursively; the bindability gate's registration oracle mirrors
+the sweep exactly (a signature naming a non-participating nested type is a hard
+error). `mark::exclude` + an own `weld` on a nested type = the manual
+flat-registration escape. Details: `.claude/context/binding-features.md`
+"Nested types".
 **Access admission precedes it** (bind_traits `member_access_admitted`): public
 always; protected iff the resolution's optional
 `protected_participates(mem, L, bound_into)` hook says so (default = the declaring
