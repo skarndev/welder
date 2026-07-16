@@ -307,8 +307,9 @@ vouches), `bind_type` (weld_type on a union), and the namespace walk (a
 weld-MARKED union; unmarked = skipped). ANONYMOUS union members + unnamed
 bit-fields: `bind_members` skips unnamed data members structurally, and an
 unnamed field disables the synthesized aggregate ctor. Blessed path:
-std::variant (all four rods, value conversion; sol2 matches alternatives in
-REVERSE declaration order). Full detail + escape hatches:
+std::variant (all four rods, value conversion; matching order caveat —
+Lua rods single-pass declaration order, Python rods two-pass exact-first —
+detailed in bindability-gate.md). Full detail + escape hatches:
 `.claude/context/bindability-gate.md` "Unions: categorically rejected"; guide:
 bindability.md "Unions never bind". Tests: `tests/common/cpp/unions.hpp` ↔
 test_unions.py / unions_spec.lua; neg union_weld_type / union_member /

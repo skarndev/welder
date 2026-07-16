@@ -93,9 +93,16 @@ manufacture that surface). Designed hard errors, all locked by tests:
 - nested unions: already skipped by the nested-type sweep (`is_class_type`).
 The blessed path is std::variant (in the stl_wrappers table; converts natively
 on all four rods — nanobind needs `<nanobind/stl/variant.h>`, LuaBridge3
-`<LuaBridge/Variant.h>` in the consumer TU). Cross-rod caveat: into-variant
-matching order is declaration order on pybind11/nanobind/LuaBridge3 but
-REVERSE on sol2 — keep alternatives target-unambiguous. Positive cases:
+`<LuaBridge/Variant.h>` in the consumer TU). Cross-rod caveat (probe-verified):
+into-variant matching is single-pass DECLARATION order on both Lua rods (first
+accepting check wins — a Lua number lands in a `double` declared before `int`)
+but two-pass (exact, then converting) on the Python rods (exact beats
+declaration order) — `variant<double,int>` from `42`: Lua → double, Python →
+int. Keep alternatives target-unambiguous. (sol2 3.5.0 DOES contain a
+reverse-order variant check_getter, stack_check_get_unqualified.hpp — but it
+is unreachable through binding paths: function args, properties and
+check_get/optional all route through the forward getter; don't re-document
+"sol2 is reverse" from that source reading.) Positive cases:
 `tests/common/cpp/unions.hpp` (+ test_unions.py / unions_spec.lua). Guide:
 `docs/content/guide/bindability.md` "Unions never bind".
 

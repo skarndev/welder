@@ -85,13 +85,18 @@ union-typed member, or — if you hand-register the union with the backend
 yourself (pybind11 and nanobind both allow it, with this same UB warning in
 their docs) — vouch for it via the [trust hatches](trust-casters.md).
 
-!!! warning "Variant alternative order matters across rods"
+!!! warning "Variant alternative matching differs per rod"
 
-    Converting *into* a `std::variant` tries the alternatives in declaration
-    order on pybind11 / nanobind / LuaBridge3, but in **reverse** declaration
-    order on sol2. Keep alternatives unambiguous in the target language (e.g.
-    a number vs. a welded class) and the rods agree; two Lua-coercible
-    alternatives (`int` + `std::string`) may pick differently per Lua rod.
+    Converting *into* a `std::variant`, the Lua rods (sol2, LuaBridge3) make a
+    **single pass in declaration order** — the first alternative whose check
+    accepts the value wins, and a Lua number satisfies a `double` declared
+    ahead of an `int`. The Python rods (pybind11, nanobind) make **two
+    passes** — exact matches first, then implicit conversions — so an exact
+    match beats declaration order. Concretely, `std::variant<double, int>`
+    receiving `42` becomes the `double` alternative on the Lua rods but the
+    `int` alternative on the Python rods. Keep alternatives **unambiguous in
+    the target language** (a number vs. a string vs. a welded class) and every
+    rod agrees.
 
 ## The one rod-specific leaf
 
