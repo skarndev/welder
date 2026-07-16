@@ -98,3 +98,8 @@ def test_opt_in_binds_only_included_nested_types(nested: ModuleType) -> None:
 def test_private_nested_type_never_binds(nested: ModuleType) -> None:
     assert nested.Cabinet().drawers == 2
     assert not hasattr(nested.Cabinet, "Stash")
+
+
+def test_protected_nested_type_binds_under_weld_protected(nested: ModuleType) -> None:
+    assert nested.Rig().id == 1
+    assert nested.Rig.Jig().slots == 7

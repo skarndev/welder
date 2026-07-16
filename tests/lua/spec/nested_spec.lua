@@ -64,6 +64,11 @@ describe("nested types", function()
     assert.is_true(absent(m.Panel, "Wiring"))
   end)
 
+  it("binds a protected nested type under weld_protected", function()
+    assert.are.equal(1, m.Rig.new().id)
+    assert.are.equal(7, m.Rig.Jig.new().slots)
+  end)
+
   it("never binds a private nested type", function()
     assert.are.equal(2, m.Cabinet.new().drawers)
     assert.is_true(absent(m.Cabinet, "Stash"))

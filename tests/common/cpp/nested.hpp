@@ -85,6 +85,22 @@ Panel {
     [[=welder::mark::include]] int width{10};
 };
 
+// a PROTECTED nested type binds when the outer admits protected members
+// (policy::weld_protected) — it resolves like any admitted member.
+struct
+[[
+  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::policy::weld_protected
+]]
+Rig {
+    int id{1};
+
+  protected:
+    struct Jig {
+        int slots{7};
+    };
+};
+
 // a PRIVATE nested type never binds (and is skipped without error).
 struct
 [[=welder::weld(welder::lang::py, welder::lang::lua)]]
