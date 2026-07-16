@@ -83,3 +83,18 @@ def test_weld_protected_reaches_alias_welded_instantiations(tpl: ModuleType) -> 
     assert v.peek() == 5
     assert v.locked == 5  # protected data
     assert not hasattr(v, "combination")  # private: never bound
+
+def test_nested_types_of_an_alias_welded_instantiation(tpl: ModuleType) -> None:
+    # Silo<int>'s nested class/enum resolve under the instantiation (no weld of
+    # their own) and bind under the ALIAS's name; members whose signatures use
+    # them pass the gate (the template's weld is read through the instantiation).
+    assert tpl.IntSilo.Hatch.__qualname__ == "IntSilo.Hatch"
+    s = tpl.IntSilo()
+    assert s.hatch.width == 4
+    assert s.flip(tpl.IntSilo.State.open) == tpl.IntSilo.State.shut
+
+
+def test_nested_type_of_an_alias_opted_in_template(tpl: ModuleType) -> None:
+    # The weld on the IntPack alias also brings the vendor template's nested
+    # type along — it resolves under the instantiation like any member.
+    assert tpl.IntPack.Lid().fits == 1

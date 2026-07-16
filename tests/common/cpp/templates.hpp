@@ -24,6 +24,17 @@ namespace vendor_tpl {
 
 template <class T>
 struct Pack {
+    // A nested type in the third-party template: it resolves under the
+    // instantiation like any member (no weld anywhere on it), so the alias
+    // opt-in below also brings IntPack.Lid along. NB: signatures NAMING Lid
+    // (or Pack<T> itself) would not pass the stitch gate — the registration
+    // oracle is a pure predicate of the declaration and cannot see a weld that
+    // lives on a namespace-scope alias — so none do here; that is the
+    // documented trust_bindable territory for alias-opt-in types.
+    struct Lid {
+        int fits{1};
+    };
+
     T payload{};
     T unwrap() const { return payload; }
 };
@@ -64,6 +75,30 @@ using TaggedInt = Tagged<int>;
 // alias-declaration itself (annotations are legal there) takes precedence.
 using IntPack
     [[=welder::weld(welder::lang::py, welder::lang::lua)]] = vendor_tpl::Pack<int>;
+
+// NESTED types of an alias-welded instantiation: Silo<int>'s member class/enum
+// resolve under the instantiation (the template's policy + their own marks, no
+// weld of their own) and bind under the ALIAS's name — IntSilo.Hatch /
+// IntSilo.State. Members whose signatures use them pass the gate: welded_for
+// reads the TEMPLATE's weld through the instantiation, and the oracle's nested
+// rule recurses into it.
+template <class T>
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Silo {
+    struct Hatch {
+        int width{4};
+    };
+    enum class State { open, shut };
+
+    T stored{};
+    Hatch hatch{};
+
+    State flip(State s) const {
+        return s == State::open ? State::shut : State::open;
+    }
+};
+using IntSilo = Silo<int>;
 
 // policy::weld_protected on the TEMPLATE, read through the instantiation like
 // every annotation: the alias-welded Vault<int> binds its protected members.

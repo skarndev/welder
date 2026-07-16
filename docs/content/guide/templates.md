@@ -68,6 +68,15 @@ The rules, all enforced at compile time:
 - **Plain-type aliases don't bind.** `using Alias = SomeWeldedClass;` would
   register the class a second time, so a welded target makes the alias a hard
   error — rename with `weld_as` instead.
+- **Nested types come along.** A [nested type](binding-types.md#nested-types)
+  declared in the template resolves off the *instantiation* like any member and
+  binds under the alias's name — `IntSilo.Hatch`, `IntSilo.State`. With the
+  `weld` on the template, members whose signatures use them pass the gate as
+  usual. For an alias-*opt-in* (third-party) template the nested types still
+  register, but a signature naming one — or the instantiation itself — needs a
+  [`trust_bindable` hatch](trust-casters.md): the gate's registration oracle is
+  a pure predicate of the declaration and cannot see a weld that lives on a
+  namespace-scope alias.
 
 ## Annotate once, weld each instantiation
 

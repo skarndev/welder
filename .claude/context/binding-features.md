@@ -212,15 +212,30 @@ with its own `weld` + `mark::exclude` = the manual flat-registration escape
 (`weld_type<Outer::Inner>(m, "name")` still works; without the exclude it would
 double-register).
 
+**Alias-welded instantiations:** a specialization's nested types bind too —
+under the ALIAS's name (`IntSilo.Hatch`): the sweep reads them off the
+instantiation, and (weld-on-template) the gate's welded_for reads the template's
+weld through it, so signatures using them pass. For an ALIAS-OPT-IN template
+(weld only on the alias) the nested type still REGISTERS (member rules need no
+weld), but a signature naming it — or the instantiation itself — fails the
+stitch gate: the oracle is a pure predicate of the declaration and cannot see a
+namespace-scope alias's weld (pre-existing blind spot, trust_bindable
+territory). Text-rod spelling caveat: a nested VIRTUAL type of a specialization
+can't be respelled by the trampoline generator (`cpp_qualified_name` stops at
+the unnameable `Box<int>` segment) — untested/unsupported; hand-write through
+the alias if ever needed.
+
 Tests: `tests/common/cpp/nested.hpp` ↔ test_nested.py / nested_spec.lua (all
-four runtime rods; Robot/Machine/Panel/Cabinet — marks, deep nesting, opt_in,
-private); greedy: `foreign::Widget::Stat` in namespace.hpp ↔ both namespace
-specs; trampolines: `Tower::Bell` in gen_trampolines.hpp ↔
-test_gen_trampolines.py; luacats golden (`stubdemo.Gauge`); compile lock
-tests/core/nested_types.cpp; neg
+four runtime rods; Robot/Machine/Panel/Cabinet/Rig — marks, deep nesting,
+opt_in, weld_protected, private); alias-welded: templates.hpp `Silo`/`IntSilo`
+(+ `vendor_tpl::Pack::Lid`, the opt-in registration-only case) ↔
+test_templates.py / templates_spec.lua; greedy: `foreign::Widget::Stat` in
+namespace.hpp ↔ both namespace specs; trampolines: `Tower::Bell` in
+gen_trampolines.hpp ↔ test_gen_trampolines.py; luacats golden
+(`stubdemo.Gauge`); compile lock tests/core/nested_types.cpp; neg
 tests/python/pybind11/cpp/neg/nested_excluded_in_signature.cpp. Stub note: the
-pybind11-stubgen native-enum relaxation in tests/python/pyproject.toml now
-covers `*.nested` too.
+pybind11-stubgen native-enum relaxation in tests/python/pyproject.toml covers
+`*.nested`/`*.templates` too.
 
 ## Inheritance from public bases
 `weld` is a *discovery marker* (an independently-registered, module-discoverable

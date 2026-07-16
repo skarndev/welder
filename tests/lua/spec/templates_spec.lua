@@ -42,6 +42,21 @@ describe("templates", function()
     assert.are.equal(9, p:unwrap())
   end)
 
+  it("binds nested types of an alias-welded instantiation", function()
+    -- Silo<int>'s nested class/enum resolve under the instantiation (no weld of
+    -- their own) and bind under the ALIAS's name; the flip() signature passes
+    -- the gate (the template's weld is read through the instantiation).
+    local s = m.IntSilo.new()
+    assert.are.equal(4, s.hatch.width)
+    assert.are.equal(m.IntSilo.State.shut, s:flip(m.IntSilo.State.open))
+  end)
+
+  it("binds a nested type of an alias-opted-in template", function()
+    -- The weld on the IntPack alias also brings the vendor template's nested
+    -- type along — it resolves under the instantiation like any member.
+    assert.are.equal(1, m.IntPack.Lid.new().fits)
+  end)
+
   it("weld_protected reaches alias-welded instantiations", function()
     -- policy::weld_protected sits on the Vault TEMPLATE, read through the
     -- instantiation like every annotation.

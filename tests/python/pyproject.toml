@@ -45,10 +45,10 @@ files = ["conftest.py", "test_*.py"]
 # of untyped inherited dunders (`__new__`/`__format__`). That is the tool's intended
 # output — it matches pybind11-stubgen's own reference stubs — but mypy's strict
 # enum-member (`misc`) and untyped-def (`no-untyped-def`) checks flag those
-# tool-intrinsic patterns. Relax just those two, and only on the generated `enums`
-# and `nested` stubs (the two case groups carrying py::native_enum types — `nested`
-# has the class-scoped ones), so the rest of the stub gate stays strict. (nanobind
-# emits enum members with values, so its stubs are unaffected by the relaxation.)
+# tool-intrinsic patterns. Relax just those two, and only on the generated stubs of
+# the case groups carrying py::native_enum types (`nested`/`templates` have the
+# class-scoped ones), so the rest of the stub gate stays strict. (nanobind emits
+# enum members with values, so its stubs are unaffected by the relaxation.)
 [[tool.mypy.overrides]]
-module = ["*.enums", "*.nested"]
+module = ["*.enums", "*.nested", "*.templates"]
 disable_error_code = ["misc", "no-untyped-def"]
