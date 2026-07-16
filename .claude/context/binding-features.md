@@ -299,6 +299,21 @@ tests/python/pybind11/cpp/neg/nested_excluded_in_signature.cpp. Stub note: the
 pybind11-stubgen native-enum relaxation in tests/python/pyproject.toml covers
 `*.nested`/`*.templates` too.
 
+## Unions — never bind
+Categorical, designed rejection (reading an inactive member is UB; C++ has no
+runtime active-member query, so no safe accessor can be generated). Hard errors
+at every entry: the gate (union-specific message; a `weld` on the union never
+vouches), `bind_type` (weld_type on a union), and the namespace walk (a
+weld-MARKED union; unmarked = skipped). ANONYMOUS union members + unnamed
+bit-fields: `bind_members` skips unnamed data members structurally, and an
+unnamed field disables the synthesized aggregate ctor. Blessed path:
+std::variant (all four rods, value conversion; sol2 matches alternatives in
+REVERSE declaration order). Full detail + escape hatches:
+`.claude/context/bindability-gate.md` "Unions: categorically rejected"; guide:
+bindability.md "Unions never bind". Tests: `tests/common/cpp/unions.hpp` ↔
+test_unions.py / unions_spec.lua; neg union_weld_type / union_member /
+union_welded_in_namespace.
+
 ## Inheritance from public bases
 `weld` is a *discovery marker* (an independently-registered, module-discoverable
 entity), not an inheritance directive: the most-derived type's `weld` drives which

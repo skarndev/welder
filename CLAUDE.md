@@ -115,7 +115,12 @@ castable/welded/registered targets skipped — so `value_type` conventions cost
 nothing and tack welds never sweep aliases); the class's own members gate
 through a scope-aware oracle that sees its alias registrations; exclude+alias =
 the class-scope rename escape. Details: `.claude/context/binding-features.md`
-"Nested types" / "Member type aliases".
+"Nested types" / "Member type aliases". **UNIONS never bind** (reading an
+inactive member is UB; no sweep registers one): the gate, `weld_type` and the
+namespace walk all hard-error with designed messages naming `std::variant` as
+the fix; anonymous-union members and unnamed bit-fields are skipped
+structurally (no name, no declarator to mark) — see `binding-features.md`
+"Unions" + `bindability-gate.md`.
 **Access admission precedes it** (bind_traits `member_access_admitted`): public
 always; protected iff the resolution's optional
 `protected_participates(mem, L, bound_into)` hook says so (default = the declaring

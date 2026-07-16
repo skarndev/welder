@@ -26,6 +26,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h> // std::string members / return values
 #include <nanobind/stl/vector.h> // std::vector<Handmade2> in trust.hpp
+#include <nanobind/stl/variant.h> // std::variant in unions.hpp (the blessed path)
 #include <welder/rods/python/nanobind/rod.hpp>
 #include <welder/rods/python/nanobind/trampoline.hpp> // virtual-override support
 #include <welder/rods/python/naming.hpp> // the PEP 8 style for the naming group
@@ -81,6 +82,7 @@
 #include "overloads.hpp"
 #include "retpolicy.hpp"
 #include "templates.hpp"
+#include "unions.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -108,4 +110,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_overloads(m);   // <-> test_overloads.py (per-overload / per-ctor marks)
     register_retpolicy(m);   // <-> test_retpolicy.py (return_policy + keep_alive)
     register_templates(m);   // <-> test_templates.py (alias-welded template instantiations)
+    register_unions(m);      // <-> test_unions.py (union escape hatches + std::variant)
 }

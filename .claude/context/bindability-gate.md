@@ -66,6 +66,39 @@ referencing a type *registered later* spells the raw C++ name in
 docstrings/stubs — the shared `foreign` case avoids fwd-decl hoisting for this
 reason (comment in tests/common/cpp/namespace.hpp).
 
+## Unions: categorically rejected
+Unions NEVER bind (all four backends *can* register one — pybind11 since 2.6.0,
+nanobind documented, sol2 ≥3.5.0, LuaBridge3 silently — but none tracks the
+active member; reading an inactive member is UB, so welder refuses to
+manufacture that surface). Designed hard errors, all locked by tests:
+- the gate: `bindable()` returns false for a union AFTER the trust/native-caster
+  branches (so `trust_bindable<U>`/a self-contained caster still clear it — the
+  hand-registration escape) and BEFORE `counts_as_registered` (so a `weld` mark
+  can never vouch — this closed a real hole: a welded-union member used to
+  compile clean and die at runtime, since no sweep registers unions).
+  `assert_bindable` picks a union-specific message via `detail::mentions_union`
+  (mirrors the strip+wrapper recursion; remedy = std::variant / accessors /
+  exclude / trust) — locked by `negcompile.union_member`;
+- `bind_type` static_asserts `!is_union_type(^^T)` (weld_type on a union used to
+  die incidentally in the aggregate-init path) — `negcompile.union_weld_type`;
+- the namespace walk diagnoses a `weld`-MARKED union loudly (an unmarked one is
+  skipped — tack welding can't edit third-party headers; its uses still gate) —
+  `negcompile.union_welded_in_namespace`;
+- ANONYMOUS union members (and unnamed bit-fields): `bind_members` skips
+  unnamed data members structurally (nothing to name by, no declarator to
+  mark — gcc *ignores* a pre-`union` attribute, and marks on the unnamed TYPE
+  aren't member marks, so exclusion was unspellable), and
+  `aggregate_initializable` counts an unnamed field as non-participating (no
+  synthesized field ctor). Named members around the union still bind.
+- nested unions: already skipped by the nested-type sweep (`is_class_type`).
+The blessed path is std::variant (in the stl_wrappers table; converts natively
+on all four rods — nanobind needs `<nanobind/stl/variant.h>`, LuaBridge3
+`<LuaBridge/Variant.h>` in the consumer TU). Cross-rod caveat: into-variant
+matching order is declaration order on pybind11/nanobind/LuaBridge3 but
+REVERSE on sol2 — keep alternatives target-unambiguous. Positive cases:
+`tests/common/cpp/unions.hpp` (+ test_unions.py / unions_spec.lua). Guide:
+`docs/content/guide/bindability.md` "Unions never bind".
+
 ## The one rod-specific leaf
 Native-vs-needs-registration is the rod's `has_native_caster<T>`
 (`caster_oracle`); pybind11 implements it as `!needs_registration<T>`, i.e. is T's

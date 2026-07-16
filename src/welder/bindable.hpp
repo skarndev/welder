@@ -36,6 +36,14 @@
     assert_bindable()), whose remedy is to weld the type, give it a backend type
     converter, or `mark::exclude` the member.
 
+    UNIONS are categorically unbindable — welded or not. C++ offers no way to
+    observe which union member is active, so any generated accessor could read
+    an inactive member (undefined behavior); welder refuses rather than emit
+    that surface, and the diagnostic names the real fix: `std::variant`, which
+    every rod converts natively and which knows its active alternative. The
+    trust hatches still apply (checked before the union branch), covering a
+    union the user hand-registers with the backend.
+
     Only ONE thing is backend-specific here: the leaf test — "does the backend
     natively convert this scalar/string/user-registered type, or does it need
     welder to register a class/enum for it?". A backend supplies that via the
@@ -189,8 +197,56 @@ consteval bool bindable() {
                 std::make_index_sequence<args.size()>{});
         } else if constexpr (B::template has_native_caster<typename [:u:]>) {
             return true;
+        } else if constexpr (std::meta::is_union_type(u)) {
+            // Unions never bind — not even welded ones (no sweep registers
+            // them; see assert_bindable's union diagnostic for why and for
+            // the remedies). This branch sits AFTER the trust and
+            // native-caster checks on purpose: a user who hand-registers a
+            // union with the backend (pybind11/nanobind both allow it) can
+            // still vouch for it via the trust hatches or a self-contained
+            // caster.
+            return false;
         } else {
             return Reg::counts_as_registered(u, L);
+        }
+    }
+}
+
+/** Forward declaration: mentions_union() recurses like bindable() does. */
+template <class T>
+consteval bool mentions_union();
+
+/** Whether every one of a wrapper's value arguments mentions a union.
+    @tparam Args the static array of value-argument reflections.
+    @tparam I    the index pack over @a Args. */
+template <auto Args, std::size_t... I>
+consteval bool args_mention_union(std::index_sequence<I...>) {
+    return (mentions_union<typename [:Args[I]:]>() || ...);
+}
+
+/** Does @a T — stripped exactly as bindable() strips — name a union anywhere:
+    itself, or as a value argument of a listed STL wrapper (`std::vector<U>`,
+    `std::optional<U>`, …)?
+
+    Used only to pick the right diagnostic once bindable() has already said
+    no: a failure caused by a union gets the union-specific message (whose
+    remedy is `std::variant`, not "weld it" — welding a union is itself an
+    error). The trust/native-caster short-circuits need no mirroring here:
+    when they apply, bindable() is true and no assert consults this. */
+template <class T>
+consteval bool mentions_union() {
+    constexpr std::meta::info u{std::meta::dealias(
+        ^^std::remove_cv_t<std::remove_pointer_t<std::remove_cvref_t<T>>>)};
+    if constexpr (std::meta::is_union_type(u)) {
+        return true;
+    } else {
+        constexpr long values{wrapper_value_count(u)};
+        if constexpr (values >= 0) {
+            constexpr auto args{leading_args<u, static_cast<std::size_t>(values)>()};
+            return args_mention_union<args>(
+                std::make_index_sequence<args.size()>{});
+        } else {
+            return false;
         }
     }
 }
@@ -222,8 +278,22 @@ consteval bool bindable() {
 */
 template <caster_oracle B, class T, lang L, class Reg = welded_registration>
 consteval void assert_bindable() {
+    constexpr bool ok{bindable<B, T, L, Reg>()};
+    // Two mutually exclusive asserts so a union-caused failure names the real
+    // remedy (std::variant) instead of the generic "weld it" — welding a
+    // union is itself a hard error.
     static_assert(
-        bindable<B, T, L, Reg>(),
+        ok || !detail::mentions_union<T>(),
+        "welder: this surface names a UNION, and unions do not bind — C++ has "
+        "no way to observe which member is active, so generated accessors "
+        "would read inactive members (undefined behavior). Use std::variant "
+        "instead (converted natively by every rod), or expose safe accessor "
+        "functions; otherwise mark::exclude the member that uses it. To "
+        "hand-register the union with the backend yourself, vouch for it via "
+        "welder::trust_bindable. The offending type is the template argument "
+        "of this assert_bindable<B, T, L> instantiation.");
+    static_assert(
+        ok || detail::mentions_union<T>(),
         "welder: cannot bind this C++ type to the target language. Weld it with "
         "[[=welder::weld(...)]], or register a backend type converter for it; "
         "otherwise mark::exclude the member that uses it. The offending type is "

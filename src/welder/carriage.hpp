@@ -506,7 +506,14 @@ struct basic_carriage {
 
         template for (constexpr auto mem : std::define_static_array(
                           std::meta::nonstatic_data_members_of(Src, ctx))) {
-            if constexpr (detail::member_access_admitted<Resolution>(mem, L,
+            // UNNAMED data members — anonymous unions, unnamed bit-fields —
+            // are structurally unbindable (there is nothing to name the
+            // attribute by; an anonymous union also has no declarator to
+            // carry a mark, and unions never bind anyway), so they are
+            // skipped before resolution, like unnamed nested types. The
+            // enclosing type's named members still bind.
+            if constexpr (std::meta::has_identifier(mem) &&
+                          detail::member_access_admitted<Resolution>(mem, L,
                                                                      BoundInto) &&
                           Resolution::class_member_participates(mem, L, pol,
                                                                 BoundInto)) {
@@ -689,10 +696,13 @@ struct basic_carriage {
         Deliberately skipped:
         - member type **aliases** (binding one would re-register its target;
           the alias-welding route is namespace-scope only);
-        - **unions** (`is_class_type` excludes them), **unnamed** types (there
-          is nothing to name them by — bind the *member* of that type or
-          exclude it), and **incomplete** member types (nothing to register; a
-          use of one also fails the gate);
+        - **unions** (`is_class_type` excludes them) — unions never bind
+          anywhere in welder (reading an inactive member is UB; use
+          `std::variant`), so a nested one is skipped and any member *using*
+          it fails the gate with the union diagnostic;
+        - **unnamed** types (there is nothing to name them by — bind the
+          *member* of that type or exclude it), and **incomplete** member
+          types (nothing to register; a use of one also fails the gate);
         - a flattened base's nested types: a nested type registers exactly
           once, with its DECLARING class — two derived types flattening one
           mixin would otherwise register it twice (a framework load error). A
@@ -1017,6 +1027,15 @@ struct basic_carriage {
               std::meta::info Decl = std::meta::info{}>
     static auto bind_type(typename B::module_type& m, const char* name = nullptr) {
         constexpr lang L{B::language};
+        static_assert(
+            !std::meta::is_union_type(std::meta::dealias(^^T)),
+            "welder: unions cannot be welded — C++ has no way to observe which "
+            "union member is active, so generated member accessors would read "
+            "inactive members (undefined behavior). Use std::variant instead "
+            "(converted natively by every rod), or expose the union through "
+            "safe accessor functions on an enclosing type. To hand-register it "
+            "with the backend yourself, vouch for the uses via "
+            "welder::trust_bindable.");
         // Decl is the *declaring* entity when it differs from ^^T: the namespace-
         // scope alias through which a class-template specialization was welded
         // (bind_namespace's alias branch, which has already resolved participation
@@ -1196,6 +1215,23 @@ struct basic_carriage {
             } else if constexpr (std::meta::is_type(mem) && std::meta::is_enum_type(mem)) {
                 if constexpr (Resolution::member_participates(mem, L, pol, Ns))
                     bind_enum<B, typename [:mem:], Style>(m, nullptr);
+            } else if constexpr (std::meta::is_type(mem) &&
+                                 std::meta::is_union_type(mem)) {
+                // Unions never bind (reading an inactive member is UB — see
+                // assert_bindable's union diagnostic). An unmarked union in a
+                // swept namespace is simply skipped — its uses still fail the
+                // gate — but a `weld` mark on one is an explicit attempt,
+                // diagnosed loudly rather than silently ignored.
+                static_assert(
+                    !welder::welded_for(mem, L),
+                    "welder: a union in this namespace carries "
+                    "[[=welder::weld(...)]], but unions cannot be welded — C++ "
+                    "has no way to observe which union member is active, so "
+                    "generated accessors would read inactive members (undefined "
+                    "behavior). Use std::variant instead (converted natively by "
+                    "every rod), or expose the union through safe accessor "
+                    "functions; hand-register it with the backend yourself via "
+                    "welder::trust_bindable on its uses.");
             } else if constexpr (std::meta::is_function(mem)) {
                 // Free functions bind as whole overload groups, emitted at the
                 // group's first participating overload (see bind_members).

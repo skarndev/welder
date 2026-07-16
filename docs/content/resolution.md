@@ -203,8 +203,10 @@ welded.
 Every surface of everything that binds — each member's type, each parameter,
 each return — runs the [bindability gate](guide/bindability.md): STL wrappers
 recurse into their value arguments, `trust_bindable` and native casters pass,
-and what remains is a registration-needing class/enum, answered by the
-**registration oracle**:
+a **union hard-errors with its own diagnostic** (no sweep can ever register
+one — reading an inactive member is UB; use `std::variant`, see
+[Unions never bind](guide/bindability.md#unions-never-bind)), and what remains
+is a registration-needing class/enum, answered by the **registration oracle**:
 
 ```mermaid
 flowchart TD

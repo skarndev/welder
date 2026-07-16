@@ -39,7 +39,9 @@ flowchart TD
     W -- yes --> R["binds iff its value args do<br/>(recurse into them)"]
     W -- no --> C{"native / user-caster type?"}
     C -- yes --> OK[binds as-is]
-    C -- no --> N{"registered?<br/>(welded — or a participating<br/>nested type of a registered outer)"}
+    C -- no --> U{"a union?"}
+    U -- "yes (see below)" --> ERR
+    U -- no --> N{"registered?<br/>(welded — or a participating<br/>nested type of a registered outer)"}
     N -- yes --> OK
     N -- no --> ERR["hard compile error"]
     style OK stroke:#2e7d32,stroke-width:3px
@@ -55,6 +57,41 @@ participates in its enclosing type's binding — while a nested type that does
 a signature names it. The full oracle — including the scope-aware layer that sees
 a class's own [member-alias registrations](binding-types.md#member-type-aliases)
 — is diagrammed on [The resolution algorithm](../resolution.md#the-bindability-gate-and-its-registration-oracle).
+
+## Unions never bind
+
+A **union** fails the gate unconditionally — welded or not, named or anonymous,
+bare or buried in a wrapper (`std::optional<U>`). C++ offers no way to observe
+which union member is active, so any accessor welder generated could read an
+inactive member — **undefined behavior**. Welder refuses to manufacture that
+surface, with designed hard errors at every entry:
+
+- a member, parameter, return type or variable whose type names a union fails
+  the gate with a union-specific message;
+- `weld_type` on a union, and a `weld` mark on a union in a swept namespace,
+  are hard errors of their own;
+- an **anonymous union** member is skipped automatically (there is nothing to
+  name an attribute by, and no declarator to carry a mark) — the named members
+  around it still bind, and the synthesized aggregate constructor is dropped
+  (it would leak the unnamed field as a positional parameter). The same rule
+  covers unnamed bit-fields.
+
+The fix is almost always **`std::variant`**: it knows its active alternative,
+every rod converts it natively as a value (see the wrapper table above), and it
+arrives in the target language as the active alternative's natural value. For
+an existing C-style API you cannot restructure, expose **accessor functions**
+that read the member your C++ code knows is active, `mark::exclude` the
+union-typed member, or — if you hand-register the union with the backend
+yourself (pybind11 and nanobind both allow it, with this same UB warning in
+their docs) — vouch for it via the [trust hatches](trust-casters.md).
+
+!!! warning "Variant alternative order matters across rods"
+
+    Converting *into* a `std::variant` tries the alternatives in declaration
+    order on pybind11 / nanobind / LuaBridge3, but in **reverse** declaration
+    order on sol2. Keep alternatives unambiguous in the target language (e.g.
+    a number vs. a welded class) and the rods agree; two Lua-coercible
+    alternatives (`int` + `std::string`) may pick differently per Lua rod.
 
 ## The one rod-specific leaf
 

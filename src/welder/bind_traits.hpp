@@ -317,9 +317,17 @@ consteval bool aggregate_initializable() {
     if (fields.empty())
         return false;
     const policy_kind pol{policy_of(^^T)};
-    for (auto m : fields)
+    for (auto m : fields) {
+        // An UNNAMED field (an anonymous union, an unnamed bit-field) is
+        // structurally unbindable — the member sweep skips it — so it counts
+        // as non-participating here: synthesizing a field constructor would
+        // leak it as a positional parameter (aggregate init is positional and
+        // all-or-nothing).
+        if (!std::meta::has_identifier(m))
+            return false;
         if (!Resolution::class_member_participates(m, L, pol, ^^T))
             return false;
+    }
     return true;
 }
 
