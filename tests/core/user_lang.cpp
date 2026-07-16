@@ -112,7 +112,8 @@ struct ruby_rod {
                                  std::index_sequence<I...>) {
         return {};
     }
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate,
+              bool Copyable>
     static void add_constructors(auto&) {}
     template <std::meta::info Mem, class Style>
     static void add_field(auto&) {}

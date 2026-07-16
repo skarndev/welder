@@ -83,4 +83,18 @@ struct stale_hook_signature {
         "(mem, lang, bound_into)";
 };
 
+/** Thrown by `validate_move_ctor_marks` (`<welder/bind_traits.hpp>`) — the
+    carriage runs it for every welded class — when a **move constructor**
+    carries an `include`/`only` mark. No target language has move semantics,
+    so move construction never binds; the mark is an intent welder cannot
+    honor, diagnosed rather than silently dropped. */
+struct marked_move_constructor {
+    /** What went wrong and how to fix it. */
+    const char* what =
+        "welder: a move constructor carries an include/only mark, but move "
+        "construction never binds - no target language has move semantics. "
+        "Remove the mark; copying is what crosses the boundary (the copy "
+        "constructor binds as Python __copy__/__deepcopy__)";
+};
+
 } // namespace welder::inline v0::diag

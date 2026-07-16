@@ -638,7 +638,15 @@ struct basic_carriage {
         //    constructor's own marks, per constructor) — each gated for
         //    bindability;
         //  - for a baseless aggregate whose fields all participate, a synthesized
-        //    field constructor.
+        //    field constructor;
+        //  - the COPY constructor, as a bool only — it never binds as an init
+        //    overload; its target-language spelling is the rod's (the Python
+        //    rods emit __copy__/__deepcopy__ over it, the Lua rods ignore it).
+        //    Marks on a declared copy constructor are honored exactly like the
+        //    default constructor's (copy_ctor_admitted). Move constructors
+        //    never bind at all — an include/only mark on one is a designed
+        //    hard error (validate_move_ctor_marks), not a silent drop.
+        detail::validate_move_ctor_marks<^^T>();
         constexpr bool has_default{
             [] {
                 if constexpr (requires {
@@ -679,7 +687,11 @@ struct basic_carriage {
             "members, constructors included), or mark them all "
             "[[=welder::mark::exclude]] to make a factory-only surface explicit. "
             "The type is the T of this bind_type<B, T, Style> instantiation.");
-        B::template add_constructors<T, ctors, has_default, aggregate>(cls);
+        constexpr bool copyable{
+            std::is_copy_constructible_v<T> &&
+            detail::copy_ctor_admitted<Resolution, ^^T, L>()};
+        B::template add_constructors<T, ctors, has_default, aggregate, copyable>(
+            cls);
 
         // Data members + methods + operators (T's own, plus flattened bases).
         bind_members<B, ^^T, ^^T, Style>(cls);

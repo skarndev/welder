@@ -110,7 +110,10 @@ consteval bool all_params_named() {
 /** A non-default, non-copy/move public constructor a backend should expose.
 
     The default constructor is handled separately (it may be implicit, hence not a
-    member).
+    member), as is the copy constructor — it has a target-language spelling of its
+    own (@ref copy_ctor_admitted; Python `__copy__`/`__deepcopy__`), never an init
+    overload. Move constructors never bind at all (no target language has move
+    semantics; a marked one is diagnosed — @ref validate_move_ctor_marks).
     @param c a reflection of the constructor.
     @return `true` iff @a c is public, non-deleted, not copy/move, and takes at
             least one parameter.
@@ -638,6 +641,64 @@ consteval bool default_ctor_admitted() {
                    Resolution::class_member_participates(
                        c, L, policy_kind::automatic, Type);
     return true; // implicit (or absent): constructibility alone decides
+}
+
+/** Whether the resolution admits @a Type's **copy** constructor — the marks half
+    of the copy decision; the carriage pairs it with
+    `std::is_copy_constructible_v<T>` (which also rules out abstract,
+    deleted-copy and inaccessible-copy types) and hands the result to the rod's
+    `add_constructors` as its `Copyable` flag. A copy constructor never binds as
+    an init overload (see @ref is_bindable_constructor); its target-language
+    spelling is the rod's — the Python rods emit `__copy__`/`__deepcopy__` over
+    it, the Lua rods ignore it (Lua has no copy protocol).
+
+    Mirrors @ref default_ctor_admitted exactly: the copy constructor may be
+    *implicit* — no declaration, so no marks and nothing for `opt_in` to filter:
+    admitted whenever the type is copy-constructible. A *declared* copy
+    constructor is consulted under `policy_kind::automatic` — its explicit marks
+    are honored (so `[[=welder::mark::exclude]] T(const T&);` suppresses the
+    copy binding, per language when the mark is scoped), but `opt_in`'s
+    default-out is not: you cannot `include` an implicit constructor, so
+    filtering the declared spelling by default would make
+    `T(const T&) = default;` (a C++ no-op) silently change the binding.
+    @tparam Resolution the carriage's resolution.
+    @tparam Type       the class type reflection.
+    @tparam L          the target language. */
+template <class Resolution, std::meta::info Type, lang L>
+consteval bool copy_ctor_admitted() {
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    bool declared{false};
+    for (auto c : std::meta::members_of(Type, ctx))
+        if (std::meta::is_copy_constructor(c)) {
+            declared = true;
+            if (std::meta::is_public(c) && !std::meta::is_deleted(c) &&
+                Resolution::class_member_participates(
+                    c, L, policy_kind::automatic, Type))
+                return true;
+        }
+    return !declared; // implicit: constructibility alone decides
+}
+
+/** Reject an `include`/`only` mark on a **move constructor** of @a Type.
+
+    Move construction never crosses a language boundary — no target language
+    has move semantics — so a move constructor is skipped structurally
+    everywhere (it is not a bindable-shape constructor, and the copy decision
+    never consults it). An `include` or `only` mark on one is therefore an
+    intent welder cannot honor: diagnosed as a hard error rather than silently
+    dropped. `mark::exclude` stays a harmless no-op (excluding what never binds
+    restricts nothing).
+    @tparam Type the class type reflection.
+    @throws diag::marked_move_constructor (a constant-evaluation error) on a
+            marked move constructor. */
+template <std::meta::info Type>
+consteval void validate_move_ctor_marks() {
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    for (auto c : std::meta::members_of(Type, ctx))
+        if (std::meta::is_move_constructor(c) &&
+            (!std::meta::annotations_of_with_type(c, ^^include_spec).empty() ||
+             !std::meta::annotations_of_with_type(c, ^^only_spec).empty()))
+            throw diag::marked_move_constructor{};
 }
 
 // --- inheritance: native bases ----------------------------------------------

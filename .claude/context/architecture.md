@@ -212,8 +212,10 @@ headers instead of the struct: the Python dunder map into
   they reuse backend types like `py::class_` / `py::dict` / `sol::table`. luacats keeps its
   `module_writer` / `class_writer` in `document.hpp` as a deliberate document object model.)
 - **Type binding:** `make_class<T, Bases…>`, `add_constructors<T, Ctors, HasDefault,
-  Aggregate>` (the whole participating constructor set + the two carriage-computed
-  synthesized forms, in ONE call), `add_field<Mem, Style>`; OPTIONAL
+  Aggregate, Copyable>` (the whole participating constructor set + the
+  carriage-computed default/aggregate/copy flags, in ONE call — `Copyable` = the
+  admitted copy ctor: Python rods emit `__copy__`/`__deepcopy__`, Lua rods ignore
+  it), `add_field<Mem, Style>`; OPTIONAL
   (requires-detected) nested-type placement — `make_nested_class<T, Bases>(m,
   outer_cls, name, doc, iseq)` / `make_nested_enum<E>(m, outer_cls, name, doc)`
   (register a class-scoped member type under its outer's binding; absent them the
@@ -296,7 +298,8 @@ the interesting part:
   `__ge` (Lua derives `~=`/`>`/`>=` from `__eq`/`__lt`/`__le`), `^`→`__bxor` not
   `__pow`, and bitwise metamethods `#if`-gated to Lua ≥ 5.3.
 - **constructors, all at once**: the driver's single `add_constructors<T, Ctors,
-  HasDefault, Aggregate>` call is turned into one `sol::constructors<…>` assignment
+  HasDefault, Aggregate, Copyable>` call (the copy flag ignored — Lua has no copy
+  protocol) is turned into one `sol::constructors<…>` assignment
   (`ctor_sig`s built via `substitute` from the passed pieces). Aggregates ride C++26
   parenthesized aggregate init.
 - **full welded-base closure**: sol2's `sol::bases<…>` must list *every* welded

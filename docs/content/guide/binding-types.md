@@ -62,7 +62,9 @@ welder binds:
 - the **default constructor**, if present;
 - **each public, non-copy/non-move constructor** → `pybind11::init<…>`;
 - for a **baseless aggregate**, a *synthesized field constructor* that brace-inits
-  it — giving Python `T(f0, f1, …)`.
+  it — giving Python `T(f0, f1, …)`;
+- the **copy constructor**, as the target language's copy protocol rather than an
+  init overload — see [Copy and move constructors](#copy-and-move-constructors).
 
 !!! note "Why aggregates are special"
 
@@ -102,6 +104,41 @@ Rect {
     Rect(double width, double height) : w{width}, h{height} {}
 };
 ```
+
+### Copy and move constructors
+
+The **copy constructor** never binds as an init overload — it gets the target
+language's own copy spelling instead. The Python rods bind it as the copy
+protocol: `__copy__` and `__deepcopy__(memo)`, both delegating to the C++ copy
+constructor, so `copy.copy(obj)` / `copy.deepcopy(obj)` just work on any
+copy-constructible welded type. The deep/shallow distinction is the
+constructor's own — value members duplicate, a pointer member copies as a
+pointer — and the memo argument is accepted but unused (a fresh C++ object
+holds no Python references to track). The Lua rods ignore it: Lua has no copy
+protocol, exactly as they ignore `doc` and `return_policy`.
+
+```pycon
+>>> import copy
+>>> a = Rect(2.0, 3.0)
+>>> b = copy.copy(a)      # a second C++ object, copy-constructed
+>>> b.w = 9.0
+>>> a.w
+2.0
+```
+
+Admission mirrors the default constructor's: an *implicit* copy constructor
+rides along whenever the type is copy-constructible (nothing to mark, so
+`policy::opt_in`'s default-out does not apply), while a *declared* one's
+explicit marks are honored — `[[=welder::mark::exclude]] T(const T&);`
+suppresses the copy protocol, per language when the mark is scoped
+(`exclude(welder::lang::py)`). A deleted or inaccessible copy constructor
+simply means no copy protocol; the type still binds.
+
+The **move constructor** never binds at all — no target language has move
+semantics — so it is skipped structurally, and `mark::exclude` on one is a
+harmless no-op. Asking for it is diagnosed: an `include`/`only` mark on a move
+constructor is a hard compile error naming the copy protocol as what actually
+crosses the boundary.
 
 ### Parameter names → keyword arguments (Python)
 

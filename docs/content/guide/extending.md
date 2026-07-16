@@ -59,14 +59,17 @@ Callables arrive as whole **overload groups**: `auto Fns` is a
 (resolve it from `Fns[0]`), computed and bindability-gated by the driver from its
 resolution — a chained-def framework loops the group, a one-value-per-name
 framework registers it as one overload set. Constructors arrive the same way, as
-one call carrying the participating constructor reflections plus the two
-driver-computed synthesized forms:
+one call carrying the participating constructor reflections plus three
+driver-computed flags: the two synthesized forms (default and aggregate field
+constructor) and the admitted **copy** constructor — never an init overload; give
+it your language's own copy spelling (the Python rods emit
+`__copy__`/`__deepcopy__`), or ignore it where none exists (the Lua rods):
 
 ```cpp
     template <class T, auto Bases, std::size_t... I>
     static auto make_class(module_type&, const char* name, const char* doc,
                            std::index_sequence<I...>);        // Bases[I] spliced
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(auto& cls);   // the whole participating set
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
     template <auto Fns, class Style> static void add_method(auto& cls);

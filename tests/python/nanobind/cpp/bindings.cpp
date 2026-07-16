@@ -83,6 +83,7 @@
 #include "retpolicy.hpp"
 #include "templates.hpp"
 #include "unions.hpp"
+#include "copying.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -111,4 +112,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_retpolicy(m);   // <-> test_retpolicy.py (return_policy + keep_alive)
     register_templates(m);   // <-> test_templates.py (alias-welded template instantiations)
     register_unions(m);      // <-> test_unions.py (union escape hatches + std::variant)
+    register_copying(m);     // <-> test_copying.py (__copy__/__deepcopy__ via the copy ctor)
 }

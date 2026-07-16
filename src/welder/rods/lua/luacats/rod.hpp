@@ -234,8 +234,10 @@ struct rod {
     /** Emit the whole `.new(…)` constructor overload set (the driver-passed
         pieces: a no-argument overload when @a HasDefault, one per member of
         @a Ctors, and the aggregate field constructor when @a Aggregate); grouped
-        into `---@overload` lines on flush. @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+        into `---@overload` lines on flush. @a Copyable is ignored — the stub
+        mirrors the Lua runtime rods, and Lua has no copy protocol for the copy
+        constructor to bind to. @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(class_writer& w) {
         if constexpr (HasDefault) {
             func_overload o{};

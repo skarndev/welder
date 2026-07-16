@@ -500,9 +500,12 @@ struct rod {
 
     /** Install @a T's whole constructor set — exactly what sol2 wants (one
         `sol::constructors<…>` assignment covering the call form `T(…)` and the
-        idiomatic `T.new(…)`), built from the driver-passed pieces.
+        idiomatic `T.new(…)`), built from the driver-passed pieces. @a Copyable
+        is ignored: Lua has no copy protocol for the copy constructor to bind
+        to (the Python rods' `__copy__`/`__deepcopy__` home), exactly as
+        `[[=welder::doc]]` and `return_policy` are ignored here.
         @see _ctor_signatures @see _set_constructors @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(::sol::usertype<T>& ut) {
         constexpr auto sigs{_ctor_sigs_array<T, Ctors, HasDefault, Aggregate>()};
         if constexpr (sigs.size() != 0)

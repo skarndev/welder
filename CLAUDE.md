@@ -134,7 +134,13 @@ Constructors resolve symmetrically (opt_in binds only marked-include ctors), wit
 two fail-safes: the default ctor is exempt from opt_in's default-out (an implicit
 one has nothing to mark; explicit marks on a declared one ARE honored), and
 filtering that leaves a type with NO constructor is a hard error unless explicit
-(mark::exclude on every ctor = a deliberate factory-only surface). A class-template
+(mark::exclude on every ctor = a deliberate factory-only surface). The **copy**
+ctor never binds as an init overload — it follows the default ctor's admission
+pattern (implicit → rides along when copy-constructible; declared → explicit
+marks honored) and reaches the rod as `add_constructors`' `Copyable` flag: the
+Python rods bind it as `__copy__`/`__deepcopy__`, the Lua rods ignore it (no
+copy protocol). **Move** ctors never bind — an `include`/`only` mark on one is a
+designed hard error (`diag::marked_move_constructor`); `exclude` is a no-op. A class-template
 **instantiation** is welded through a **namespace-scope alias** (`using IntBox =
 Box<int>;`): the sweep enumerates the alias (never the specialization), which
 supplies both the C++ spelling (for text-emitting rods) and the target name; only

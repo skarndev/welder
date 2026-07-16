@@ -442,8 +442,11 @@ struct rod {
     /** Register @a T's whole constructor set — exactly what LuaBridge3 wants (one
         variadic `addConstructor` for the call form `T(…)` plus the `.new` factory
         set) — built from the driver-passed pieces on the re-opened class.
+        @a Copyable is ignored: Lua has no copy protocol for the copy constructor
+        to bind to (the Python rods' `__copy__`/`__deepcopy__` home), exactly as
+        `[[=welder::doc]]` and `return_policy` are ignored here.
         @see _ctor_arg_lists @see _add_constructors @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(auto& h) {
         constexpr auto sigs{_ctor_sigs_array<T, Ctors, HasDefault, Aggregate>()};
         constexpr auto factories{_factory_array<T, Ctors, HasDefault, Aggregate>()};

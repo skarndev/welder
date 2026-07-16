@@ -15,8 +15,9 @@ const); a member's `[[=welder::doc]]` becomes its property `__doc__` (see
 non-copy/move ctor → `pybind11::init<...>`; plus, for a baseless **aggregate**,
 a synthesized field constructor that brace-inits it, giving Python `T(f0, f1, …)`
 — only when every field binds, since aggregate init is positional/all-or-nothing);
-methods, static methods, overloads. All three pieces reach the rod as ONE
-`add_constructors<T, Ctors, HasDefault, Aggregate>` call (carriage-computed).
+methods, static methods, overloads. All the pieces reach the rod as ONE
+`add_constructors<T, Ctors, HasDefault, Aggregate, Copyable>` call
+(carriage-computed).
 Constructors resolve SYMMETRICALLY (policy + per-ctor marks — opt_in binds only
 marked-include ctors; bind_traits `ctor_group<R,Type,L,Pol>`), with two
 fail-safes: the DEFAULT ctor is exempt from opt_in's default-out (an implicit one
@@ -29,6 +30,23 @@ any policy doesn't false-fire). Locked by overloads.hpp `OptInCtor`/`FactoryOnly
 `NoDefault` + negcompile.optin_uninstantiable. Function / method / constructor **parameter
 names** reach Python as keyword arguments (`py::arg`) when every parameter of that
 signature is named.
+
+**Copy & move ctors:** the COPY ctor never binds as an init overload — it is the
+`Copyable` bool of `add_constructors` (carriage: `is_copy_constructible_v<T>` &&
+bind_traits `copy_ctor_admitted<R,Type,L>`); the Python rods spell it
+`__copy__`/`__deepcopy__(memo)` (both = the C++ copy ctor; memo typed `object`
+not `dict` — bare `dict` fails strict-mypy stubcheck), the Lua/luacats/trampoline
+rods ignore it (no Lua copy protocol — same bucket as doc/return_policy).
+Admission mirrors `default_ctor_admitted` exactly: implicit copy ctor → admitted
+iff copy-constructible (opt_in default-out does NOT apply); declared → its
+explicit marks honored under an `automatic` baseline (exclude / exclude(lang)
+suppresses; deleted/private copy = no protocol, no error). MOVE ctors never bind
+anywhere: skipped structurally, `exclude` a no-op, but an `include`/`only` mark
+on one is a designed hard error (bind_traits `validate_move_ctor_marks`, run by
+bind_class_interior for every welded/nested class → throws
+`diag::marked_move_constructor` naming __copy__ as what crosses). Cases:
+`tests/common/cpp/copying.hpp` + test_copying.py (Python-only inclusion, like
+doc.hpp) + negcompile.move_ctor_marked.
 
 **Member resolution marks:** `exclude`/`include` plus `mark::only(lang...)` — the
 closed-world mark: the COMPLETE set of languages the member binds for; under

@@ -394,12 +394,19 @@ struct rod {
     using class_handle_type = decltype(make_class<T, std::array<std::meta::info, 0>{}>(
         std::declval<module_type&>(), nullptr, nullptr, std::index_sequence<>{}));
 
-    /** Bind the default constructor. @see welder::rod */
     /** Bind @a T's whole constructor set (a chained-def framework just loops it):
         the default constructor when @a HasDefault, an `nb::init<…>` per member of
         @a Ctors, and the synthesized aggregate field constructor when
-        @a Aggregate. @see _def_init @see _def_aggregate_init @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+        @a Aggregate.
+
+        @a Copyable (the carriage-admitted copy constructor) is Python's copy
+        protocol: `__copy__` and `__deepcopy__(memo)` both delegate to the C++
+        copy constructor — the deep/shallow distinction is the constructor's own
+        (value members duplicate; a pointer member copies as a pointer), and the
+        memo dict is accepted but unused (a fresh C++ object holds no Python
+        references to track). @see _def_init @see _def_aggregate_init
+        @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(auto& cls) {
         if constexpr (HasDefault)
             cls.def(nb::init<>());
@@ -410,6 +417,16 @@ struct rod {
         if constexpr (Aggregate) {
             constexpr auto fields{::welder::detail::aggregate_fields<T>()};
             _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
+        }
+        if constexpr (Copyable) {
+            cls.def("__copy__", [](const T& self) { return T{self}; });
+            // The memo parameter is typed `object`, not `dict`: it is never
+            // inspected (nothing Python-side to track), and a bare `dict` in
+            // the generated stub fails strict mypy (disallow_any_generics).
+            cls.def(
+                "__deepcopy__",
+                [](const T& self, const nb::object&) { return T{self}; },
+                nb::arg("memo"));
         }
     }
 

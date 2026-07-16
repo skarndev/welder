@@ -137,9 +137,12 @@ concept caster_oracle = requires {
     loops the group, a one-value-per-name framework (the Lua rods) registers it as
     one overload set. The group's name resolves from `Fns[0]`. Constructors arrive
     the same way, as one `add_constructors` call carrying the participating
-    constructor reflections plus the two carriage-computed synthesized forms (the
-    default constructor — decided against `construction_type<T>` where the rod
-    nominates one — and the aggregate field constructor):
+    constructor reflections plus three carriage-computed flags: the two
+    synthesized forms (the default constructor — decided against
+    `construction_type<T>` where the rod nominates one — and the aggregate field
+    constructor) and the admitted **copy** constructor (`Copyable` — never an
+    init overload; a rod gives it the target language's own copy spelling, or
+    ignores it where none exists):
     @code
     template <class T, auto Bases, std::size_t... I>
       static auto make_class(module_type&, const char* name, const char* doc,
@@ -169,8 +172,10 @@ concept caster_oracle = requires {
     template <class T>
       static void finish_nested_class(module_type&, auto& outer_cls, auto& cls,
                                       const char* name);
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
-      static void add_constructors(auto& cls);  // the whole participating set
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+      static void add_constructors(auto& cls);  // the whole participating set;
+        // Copyable = the admitted copy constructor (never an init overload —
+        // the Python rods emit __copy__/__deepcopy__, the Lua rods ignore it)
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
     template <auto Fns, class Style> static void add_method(auto& cls);
     template <auto Fns, class Style> static void add_static_method(auto& cls);
@@ -237,7 +242,7 @@ concept rod =
              typename B::template enum_handle_type<detail::any_enum>& en) {
         B::template add_constructors<detail::any_type,
                                      std::array<std::meta::info, 0>{}, false,
-                                     false>(cls);
+                                     false, false>(cls);
         B::template add_field<^^int, detail::any_type>(cls);
         B::template add_method<std::array<std::meta::info, 1>{^^int},
                                detail::any_type>(cls);

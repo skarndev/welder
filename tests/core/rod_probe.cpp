@@ -64,8 +64,9 @@ struct probe_rod {
         return {};
     }
     // Constructors arrive as ONE call: the participating constructor reflections
-    // (an array NTTP) plus the carriage-computed default/aggregate flags.
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate>
+    // (an array NTTP) plus the carriage-computed default/aggregate/copy flags.
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate,
+              bool Copyable>
     static void add_constructors(auto&) {}
     // The name-producing primitives take a trailing name-style parameter (the
     // driver threads welder::welder's Style through); a real rod resolves its own
