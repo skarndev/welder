@@ -52,7 +52,9 @@ arguments. The "registered?" leaf mirrors welder's traversal exactly: a welded
 type counts, and so does a [nested type](binding-types.md#nested-types) that
 participates in its enclosing type's binding — while a nested type that does
 *not* participate (excluded, private, forward-declared) fails the gate wherever
-a signature names it.
+a signature names it. The full oracle — including the scope-aware layer that sees
+a class's own [member-alias registrations](binding-types.md#member-type-aliases)
+— is diagrammed on [The resolution algorithm](../resolution.md#the-bindability-gate-and-its-registration-oracle).
 
 ## The one rod-specific leaf
 
@@ -63,8 +65,8 @@ registering a class for it? That's the rod's `has_native_caster<T>` (the
 
 | Rod | `has_native_caster<T>` reads |
 |---|---|
-| **pybind11** | `!_needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? |
-| **nanobind** | `!nb::detail::is_base_caster_v<make_caster<T>>` — same question, nanobind's spelling |
+| **pybind11** | `!_needs_registration<T>` — is T's caster the generic `type_caster_base` fallback? Enums are *forced* needs-registration (their dedicated caster converts only once the enum is registered) |
+| **nanobind** | `!nb::detail::is_base_caster_v<make_caster<T>>` — same question, nanobind's spelling; enums forced likewise |
 | **sol2** (Lua) | `sol::lua_type_of<T> != userdata` — does Lua have a native representation? |
 | **LuaBridge3** (Lua) | `!luabridge::detail::IsUserdata<T>` — same question, LuaBridge3's spelling |
 

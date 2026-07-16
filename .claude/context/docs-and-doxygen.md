@@ -187,7 +187,14 @@ One modern site, two toolchains cleanly separated, wired by `docs/CMakeLists.txt
   deep-orange/amber "spark" palette with a light/dark toggle that follows the OS;
   `content/stylesheets/extra.css` for the few tweaks Material doesn't own).
   `docs/mkdocs.yml` is the config (`docs_dir: content`; superfences+mermaid, tabbed,
-  admonitions, code copy/annotate).
+  admonitions, code copy/annotate). Under the nav's Architecture section,
+  `content/resolution.md` ("The resolution algorithm") is the single reference
+  map of the whole participation/registration decision procedure — 7 mermaid
+  flowcharts (entry points, namespace sweep, class interior, access admission,
+  member_bound, nested types + member aliases, the registration oracle incl. the
+  scope-aware layer) + an entity-kind table + the tack differences. KEEP IT IN
+  SYNC when resolution semantics change (it duplicates rules by design —
+  binding-features.md is the impl companion, this is the user-facing map).
 - **Doxygen** renders the *full C++ reference* — public API **and** `detail/`
   internals **and** every template/concept (`EXTRACT_ALL`/`EXTRACT_PRIVATE`/
   `INTERNAL_DOCS`, source browser on) — from the real `src/welder/**.hpp` through

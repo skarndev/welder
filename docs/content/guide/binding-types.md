@@ -203,6 +203,9 @@ Vec2 {
 
 ## Nested types
 
+*(The full decision flowcharts for everything on this page live on
+[The resolution algorithm](../resolution.md).)*
+
 A class or enum declared **inside** a welded type resolves like any other class
 member: the *outer's* policy plus the nested type's own
 [`exclude` / `include` / `only` marks](annotations.md#mark-per-member-overrides)

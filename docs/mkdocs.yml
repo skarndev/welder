@@ -148,5 +148,6 @@ nav:
       - Shipping to multiple languages: backends/multiple.md
   - Architecture:
       - architecture.md
+      - The resolution algorithm: resolution.md
       - Header-only for now: header-only.md
   - C++ API Reference: reference.md

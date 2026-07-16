@@ -90,7 +90,10 @@ participate* — a **resolution** policy. Two ship, each with a carriage alias:
 
 Both run the same traversal and the same [bindability
 gate](guide/bindability.md) — tack welding drops the *marker* requirement,
-never the representability one. The seam is open: a custom
+never the representability one. The complete decision procedure — every
+entity kind, the member-resolution and access-admission machines, nested types
+and member aliases, and the registration oracle, each as a flowchart — has its
+own page: **[The resolution algorithm](resolution.md)**. The seam is open: a custom
 `welder::carriages::basic_carriage<Resolution>` plugs in any resolution that can
 answer the five participation questions (does this entity/member/nested
 namespace participate? is this base native? which bases are native?).
