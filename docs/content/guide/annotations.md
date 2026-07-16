@@ -182,8 +182,9 @@ also counts as the member's opt-in, so no separate `include` is needed.
     explicit (`mark::exclude` on every constructor declares a factory-only
     surface, and compiles).
 
-    The **copy constructor** follows the default constructor's pattern (it never
-    binds as an init overload — the Python rods spell it `__copy__`/`__deepcopy__`):
+    The **copy constructor** follows the default constructor's pattern (it gets
+    the target language's own copy spelling — Python: `T(other)` plus a
+    subclass-faithful `__copy__`/`__deepcopy__`):
     an implicit one rides along whenever the type is copy-constructible, and a
     declared one's explicit marks are honored, `exclude` included. The **move
     constructor** never binds — an `include`/`only` mark on one is a hard

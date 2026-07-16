@@ -21,12 +21,12 @@ struct [[=welder::weld(welder::lang::py)]] Beast {
 };
 
 struct [[=welder::rods::python::trampoline]] PyBeastA : Beast {
-    WELDER_PY_TRAMPOLINE(Beast);
+    WELDER_PY_TRAMPOLINE(PyBeastA, Beast);
     std::string roar() const override { WELDER_PY_OVERRIDE(roar); }
 };
 
 struct [[=welder::rods::python::trampoline]] PyBeastB : Beast {
-    WELDER_PY_TRAMPOLINE(Beast);
+    WELDER_PY_TRAMPOLINE(PyBeastB, Beast);
     std::string roar() const override { WELDER_PY_OVERRIDE(roar); }
 };
 

@@ -138,8 +138,11 @@ filtering that leaves a type with NO constructor is a hard error unless explicit
 ctor never binds as an init overload — it follows the default ctor's admission
 pattern (implicit → rides along when copy-constructible; declared → explicit
 marks honored) and reaches the rod as `add_constructors`' `Copyable` flag: the
-Python rods bind it as `__copy__`/`__deepcopy__`, the Lua rods ignore it (no
-copy protocol). **Move** ctors never bind — an `include`/`only` mark on one is a
+Python rods bind it as a visible `T(other)` plus a **subclass-faithful**
+`__copy__`/`__deepcopy__` (a Python subclass copies as itself — type, `__dict__`
+and virtual dispatch intact; `WELDER_PY_TRAMPOLINE(Tramp, Base)` declares the
+copy-from-base trampoline ctor this needs), the Lua rods ignore it (no copy
+protocol). **Move** ctors never bind — an `include`/`only` mark on one is a
 designed hard error (`diag::marked_move_constructor`); `exclude` is a no-op. A class-template
 **instantiation** is welded through a **namespace-scope alias** (`using IntBox =
 Box<int>;`): the sweep enumerates the alias (never the specialization), which

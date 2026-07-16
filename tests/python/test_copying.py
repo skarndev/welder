@@ -1,12 +1,18 @@
 """Tests for the copy-constructor binding (Python's copy protocol).
 
-The copy constructor never binds as an init overload; the Python rods spell it
-as ``__copy__`` and ``__deepcopy__(memo)``, both delegating to the C++ copy
-constructor. Admission mirrors the default constructor's: an implicit copy
-constructor rides along whenever the type is copy-constructible, a declared
-one's explicit marks are honored (per language when scoped), and opt_in's
-default-out does not apply. Move constructors never bind — an include/only
-mark on one is a designed hard error (locked by ``negcompile.move_ctor_marked``).
+The copy constructor never binds as an init overload; it becomes the visible
+copy constructor ``T(other)`` plus the copy protocol — ``__copy__`` and
+``__deepcopy__(memo)``, both **subclass-faithful**: like Python's own copy
+machinery they transfer state without calling ``__init__`` (a
+``type(self).__new__`` shell, the C++ payload copy-constructed in place, the
+instance ``__dict__`` carried over — deep-copied through the memo on the
+deepcopy path), so a Python subclass copies as itself, overrides and
+attributes intact. Admission mirrors the default constructor's: an implicit
+copy constructor rides along whenever the type is copy-constructible, a
+declared one's explicit marks are honored (per language when scoped), and
+opt_in's default-out does not apply. Move constructors never bind — an
+include/only mark on one is a designed hard error (locked by
+``negcompile.move_ctor_marked``).
 C++ side: tests/common/cpp/copying.hpp.
 """
 
@@ -91,20 +97,60 @@ def test_move_ctor_is_silently_skipped(cp: ModuleType) -> None:
     assert copy.copy(s).n == 6
 
 
-# --- polymorphic types: the copy protocol copies the C++ subobject ------------
+# --- the visible copy constructor: T(other) ------------------------------------
+def test_copy_construction_from_python(cp: ModuleType) -> None:
+    s = cp.Sheet()
+    s.width = 4
+    assert cp.Sheet(s).width == 4
+
+
+# --- Python subclasses copy as themselves --------------------------------------
+def test_subclass_copy_is_faithful(cp: ModuleType) -> None:
+    # State transfer, never __init__ (exactly like Python's default copy
+    # machinery): the subclass __init__ below has a different signature and
+    # must NOT be re-run; the attributes it set carry over via __dict__.
+    class Ledger(cp.Sheet):  # type: ignore[misc, name-defined]
+        def __init__(self) -> None:
+            super().__init__()
+            self.notes = ["a"]
+
+    a = Ledger()
+    a.width = 7
+    c = copy.copy(a)
+    assert type(c) is Ledger
+    assert c.width == 7 and c.notes == ["a"]
+    # __copy__ is shallow: the Python-side attribute is shared, deepcopy's isn't
+    assert c.notes is a.notes
+    d = copy.deepcopy(a)
+    assert type(d) is Ledger and d.notes == ["a"] and d.notes is not a.notes
+
+
+def test_deepcopy_memo_dedups_and_terminates_cycles(cp: ModuleType) -> None:
+    class Ledger(cp.Sheet):  # type: ignore[misc, name-defined]
+        pass
+
+    a = Ledger()
+    a.buddy = a  # a reference cycle through the instance __dict__
+    d = copy.deepcopy(a)
+    assert d.buddy is d
+    pair = copy.deepcopy([a, a])
+    assert pair[0] is pair[1]
+
+
+# --- polymorphic types: the copy keeps dispatching into Python -----------------
 def test_virtual_type_carries_the_copy_protocol(cp: ModuleType) -> None:
     b = cp.Brush()
     b.width = 3
     c = copy.copy(b)
-    assert c.width == 3
+    assert type(c) is cp.Brush and c.width == 3
     c.width = 9
     assert b.width == 3
 
 
-def test_copying_a_python_subclass_slices(cp: ModuleType) -> None:
-    # Brush{self} copies the C++ base subobject only: the copy is base-typed,
-    # dispatches the base virtual (no Python override), and drops Python-side
-    # attributes — while the C++ state still carries over.
+def test_copying_a_python_subclass_keeps_the_overrides(cp: ModuleType) -> None:
+    # The trampoline's copy-from-base constructor lets the backend build the
+    # ALIAS payload on the subclass shell, so C++ virtual calls on the copy
+    # still dispatch into the Python override — no slicing.
     class Dotted(cp.Brush):  # type: ignore[misc, name-defined]
         def stroke(self) -> str:
             return "dotted"
@@ -113,9 +159,11 @@ def test_copying_a_python_subclass_slices(cp: ModuleType) -> None:
     d.width = 7
     assert d.paint() == "paint:dotted"  # C++ dispatches into the override
     c = copy.copy(d)
-    assert type(c) is cp.Brush
-    assert c.paint() == "paint:solid"
+    assert type(c) is Dotted
     assert c.width == 7
+    assert c.paint() == "paint:dotted"  # ... and so does the copy
+    c.width = 100
+    assert d.width == 7
 
 
 def test_abstract_type_binds_no_protocol(cp: ModuleType) -> None:

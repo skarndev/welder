@@ -33,10 +33,25 @@ signature is named.
 
 **Copy & move ctors:** the COPY ctor never binds as an init overload — it is the
 `Copyable` bool of `add_constructors` (carriage: `is_copy_constructible_v<T>` &&
-bind_traits `copy_ctor_admitted<R,Type,L>`); the Python rods spell it
-`__copy__`/`__deepcopy__(memo)` (both = the C++ copy ctor; memo typed `object`
-not `dict` — bare `dict` fails strict-mypy stubcheck), the Lua/luacats/trampoline
-rods ignore it (no Lua copy protocol — same bucket as doc/return_policy).
+bind_traits `copy_ctor_admitted<R,Type,L>`); the Python rods turn it into THREE
+things — a visible `init<const T&>` (Python `T(other)`, doubling as the in-place
+construction vehicle) and a SUBCLASS-FAITHFUL `__copy__`/`__deepcopy__(memo)`
+(rod `_copy_instance<T>`: `type(self).__new__` shell → registered copy `__init__`
+re-run on it (never the subclass `__init__`, matching Python's own copy
+machinery) → `__dict__` carried over, deepcopy'd through the memo with
+`memo[id(self)]` recorded FIRST so cycles terminate; memo typed `object` not
+`dict` — bare `dict` fails strict-mypy stubcheck). A Python subclass thus copies
+as itself with overrides dispatching. The trampoline interplay: the backend
+builds the ALIAS payload on a subclass shell only if the trampoline is
+constructible from `const T&` — `WELDER_PY_TRAMPOLINE(TRAMP, BASE)` (macro now
+takes the trampoline's own name) declares a guarded template copy-from-base ctor
+(+ `TRAMP() = default`; SFINAE'd away for noncopyable bases; the generated
+trampolines rod emits the same macro), and the rods static_assert
+`is_constructible_v<construction_type<T>, const T&>` in the Copyable block so a
+hand-rolled trampoline without it is a designed compile error (else the copy
+would silently hold a plain-base payload and stop dispatching). The
+Lua/luacats/trampoline rods ignore Copyable (no Lua copy protocol — same bucket
+as doc/return_policy).
 Admission mirrors `default_ctor_admitted` exactly: implicit copy ctor → admitted
 iff copy-constructible (opt_in default-out does NOT apply); declared → its
 explicit marks honored under an `automatic` baseline (exclude / exclude(lang)
@@ -46,7 +61,9 @@ on one is a designed hard error (bind_traits `validate_move_ctor_marks`, run by
 bind_class_interior for every welded/nested class → throws
 `diag::marked_move_constructor` naming __copy__ as what crosses). Cases:
 `tests/common/cpp/copying.hpp` + test_copying.py (Python-only inclusion, like
-doc.hpp) + negcompile.move_ctor_marked.
+doc.hpp; subclass fidelity, memo/cycles, trampoline dispatch-on-copy, tack) +
+negcompile.move_ctor_marked. Mechanism probed standalone first (pybind11 +
+nanobind, scratchpad copyprobe) per house convention.
 
 **Member resolution marks:** `exclude`/`include` plus `mark::only(lang...)` — the
 closed-world mark: the COMPLETE set of languages the member binds for; under
@@ -435,7 +452,7 @@ instance up under the wrong registration and silently misses the override (C++ s
 base impl). nanobind is unaffected — it dispatches through its own trampoline storage +
 `detail::ticket`, not `typeid`. Base fallback is a **textually
 qualified** `welder_py_base::fn(args)` lambda — NOT `self.[:Fn:]()`, which splices to
-a *virtual* call and infinitely recurses. `WELDER_PY_TRAMPOLINE(Base)` injects the
+a *virtual* call and infinitely recurses. `WELDER_PY_TRAMPOLINE(Tramp, Base)` injects the
 `welder_py_base` alias + inherited ctors, plus (nanobind only) a
 `nb::detail::trampoline<slot_count>` storage member; pybind11 uses `get_override` +
 `detail::cast_safe`, no storage. **Reference** returns are `static_assert`-rejected
@@ -449,7 +466,7 @@ trampoline is mechanical, so a build-time text-emitting rod emits it — the Pyt
 analogue of the LuaCATS stub rod, over the same driver. Files:
 `src/welder/rods/python/trampolines/{document,rod,module}.hpp`; CMake helper
 `cmake/WelderTrampolines.cmake` (`welder_generate_trampolines()`); target
-`welder::trampolines`. Only `make_class<T>` emits (a `struct … : T { WELDER_PY_TRAMPOLINE;
+`welder::trampolines`. Only `make_class<T>` emits (a `struct … : T { WELDER_PY_TRAMPOLINE(PyT, T);
 one WELDER_PY_OVERRIDE_AS per overridable virtual };` + a `trampoline_for<T>` spec), skipping
 a whole-type `bind_flat` and types with no overridable virtuals; every other rod hook is a
 no-op and `has_native_caster` is permissive (it reproduces only virtual *signatures*). Each

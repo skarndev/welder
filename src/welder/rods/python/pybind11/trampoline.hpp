@@ -89,14 +89,30 @@ decltype(auto) override_dispatch(const Self& self, BaseCall&& base_call,
 
 } // namespace welder::rods::pybind11
 
-/** Declare a class a pybind11 trampoline for @a BASE.
+/** Declare class @a TRAMP a pybind11 trampoline for @a BASE.
 
     Place at the top of a trampoline subclass body. Introduces the `welder_py_base`
-    alias the override macro keys off and inherits @a BASE's constructors. pybind11
-    needs no per-instance storage (the override is found from `this`), so — unlike the
-    nanobind spelling — this adds no data member. Neutral name across the Python rods. */
-#define WELDER_PY_TRAMPOLINE(BASE)                                             \
+    alias the override macro keys off, inherits @a BASE's constructors, and — the
+    reason the macro takes the trampoline's own name — declares the two
+    constructors inherited-constructor syntax cannot provide: a defaulted default
+    constructor (any user-declared constructor would otherwise suppress it) and a
+    guarded **copy-from-base** constructor. The latter is what keeps the copy
+    protocol faithful for Python subclasses: `__copy__`/`__deepcopy__` re-run the
+    registered copy `__init__` on a `type(self).__new__` shell, and pybind11 then
+    needs the *alias* type constructible from `const BASE&` — or the copied
+    subclass instance would hold a plain @a BASE payload and stop dispatching
+    virtuals into Python. It is a constrained template, so a noncopyable @a BASE
+    simply leaves the trampoline non-copy-constructible (no error). pybind11 needs
+    no per-instance storage (the override is found from `this`), so — unlike the
+    nanobind spelling — this adds no data member. Neutral name across the Python
+    rods. */
+#define WELDER_PY_TRAMPOLINE(TRAMP, BASE)                                      \
     using welder_py_base = BASE;                                              \
+    TRAMP() = default;                                                        \
+    template <class WelderSrc = BASE>                                         \
+        requires ::std::is_copy_constructible_v<WelderSrc>                    \
+    explicit TRAMP(const WelderSrc& welder_src)                               \
+        : welder_py_base(welder_src) {}                                       \
     using welder_py_base::welder_py_base
 
 /** Body of a single virtual override in a `WELDER_PY_TRAMPOLINE` class, keyed on an

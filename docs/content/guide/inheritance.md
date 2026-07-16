@@ -134,7 +134,7 @@ struct [[=welder::weld(welder::lang::py)]] Animal {
 };
 
 struct [[=welder::rods::python::trampoline]] PyAnimal : Animal {
-    WELDER_PY_TRAMPOLINE(Animal);                            // slot count = reflected
+    WELDER_PY_TRAMPOLINE(PyAnimal, Animal);                            // slot count = reflected
     std::string speak() const override { WELDER_PY_OVERRIDE(speak); }
     int         legs()  const override { WELDER_PY_OVERRIDE(legs); }
 };
@@ -156,6 +156,15 @@ macro body never repeats them. The trampoline's slot count is reflected from the
 class, so it never drifts. welder checks at **compile time** that the trampoline
 overrides *every* overridable virtual — a forgotten override is a build error, not a
 method that silently never reaches Python.
+
+`WELDER_PY_TRAMPOLINE(Tramp, Base)` takes the trampoline's own name because it
+also declares constructors: the inherited set (`using Base::Base`), a defaulted
+default constructor, and — when `Base` is copy-constructible — a
+**copy-from-base** constructor. The last one is what keeps welder's copy
+protocol faithful for Python subclasses (`copy.copy` of a `Dog` stays a `Dog`
+whose overrides still receive C++ virtual calls — see
+[Copy and move constructors](binding-types.md#copy-and-move-constructors)); a
+hand-rolled trampoline provides the same as `Tramp(const Base&)`.
 
 !!! note "Derived welded types cover inherited virtuals too"
     If you weld a class that *inherits* virtuals from a welded base — whether or not it
@@ -213,7 +222,7 @@ struct [[=welder::weld(welder::lang::py)]] Shape {
     double scaled_area(double f) const { return area() * f; }
 };
 struct [[=welder::rods::python::trampoline]] PyShape : Shape {
-    WELDER_PY_TRAMPOLINE(Shape);
+    WELDER_PY_TRAMPOLINE(PyShape, Shape);
     double area() const override { WELDER_PY_OVERRIDE(area); }
 };
 ```
@@ -261,7 +270,7 @@ struct [[=welder::weld(welder::lang::py)]] Robot {
 };
 
 struct [[=welder::rods::python::trampoline]] PyRobot : Robot {
-    WELDER_PY_TRAMPOLINE(Robot);
+    WELDER_PY_TRAMPOLINE(PyRobot, Robot);
     std::string send(int code) const override {
         WELDER_PY_OVERRIDE_AS((welder::rods::python::virtual_slot(
                                   ^^Robot, "send", ^^std::string(int) const)),
@@ -324,7 +333,7 @@ WELDER_TRAMPOLINES_MAIN(mymod)   // a generator main() that writes mymod's tramp
 ```
 
 `welder_generate_trampolines()` (CMake) builds that generator and runs it into a
-`.hpp` of `struct … : T { WELDER_PY_TRAMPOLINE(T); … };` blocks plus their
+`.hpp` of `struct PyT : T { WELDER_PY_TRAMPOLINE(PyT, T); … };` blocks plus their
 `trampoline_for<T>` registrations — one per welded virtual type in the namespace,
 inherited virtuals covered, `bind_flat` honoured. The binding TU includes the active
 backend's `trampoline.hpp`, then the generated header, then binds as usual; the

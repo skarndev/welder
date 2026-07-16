@@ -139,7 +139,7 @@ consteval std::string render_trampoline(std::meta::info type) {
     const std::string ident{trampoline_ident(type)};
     std::string s{};
     s += "struct " + ident + " : " + base + " {\n";
-    s += "    WELDER_PY_TRAMPOLINE(" + base + ");\n";
+    s += "    WELDER_PY_TRAMPOLINE(" + ident + ", " + base + ");\n";
 
     std::size_t k{0};
     for (auto slot : ::welder::rods::python::overridable_virtuals(type)) {

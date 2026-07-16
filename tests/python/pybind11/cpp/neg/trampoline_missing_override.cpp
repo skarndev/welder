@@ -25,7 +25,7 @@ struct [[=welder::weld(welder::lang::py)]] Beast {
 };
 
 struct PyBeast : Beast {
-    WELDER_PY_TRAMPOLINE(Beast);
+    WELDER_PY_TRAMPOLINE(PyBeast, Beast);
     std::string roar() const override { WELDER_PY_OVERRIDE(roar); }
     // MISSING: an override for size().
 };

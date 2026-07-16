@@ -101,11 +101,14 @@ Shifty {
     int n{4};
 };
 
-// --- a polymorphic type: the copy protocol copies the C++ subobject ----------
+// --- a polymorphic type: the copy protocol stays subclass-faithful -----------
 // The base binding carries __copy__/__deepcopy__ (Brush is concrete and
-// copy-constructible); copying an instance of a *Python subclass* SLICES —
-// Brush{self} copies the C++ base subobject only, so the result is base-typed,
-// with base virtual behavior and without the Python-side state. Python-only
+// copy-constructible). Copying an instance of a *Python subclass* preserves
+// its dynamic type, its __dict__ and its virtual dispatch: the protocol
+// re-runs the registered copy __init__ on a type(self).__new__ shell, and the
+// trampoline's copy-from-base constructor (declared by WELDER_PY_TRAMPOLINE)
+// lets the backend construct the ALIAS payload there — without it the copy
+// would hold a plain Brush and stop dispatching into Python. Python-only
 // (trampolines are a Python-family concept, like overridable.hpp).
 
 struct
@@ -120,7 +123,7 @@ Brush {
     }
 
     // A C++ caller dispatching the virtual polymorphically: observing its result
-    // on a copy proves the copy is a plain C++ Brush, not the Python subclass.
+    // on a copy proves the copy still dispatches into the Python override.
     std::string paint() const {
         return "paint:" + stroke();
     }
@@ -129,7 +132,7 @@ Brush {
 };
 
 struct [[=welder::rods::python::trampoline]] PyBrush : Brush {
-    WELDER_PY_TRAMPOLINE(Brush);
+    WELDER_PY_TRAMPOLINE(PyBrush, Brush);
     std::string stroke() const override { WELDER_PY_OVERRIDE(stroke); }
 };
 
@@ -144,7 +147,7 @@ Stencil {
 };
 
 struct [[=welder::rods::python::trampoline]] PyStencil : Stencil {
-    WELDER_PY_TRAMPOLINE(Stencil);
+    WELDER_PY_TRAMPOLINE(PyStencil, Stencil);
     int holes() const override { WELDER_PY_OVERRIDE(holes); }
 };
 

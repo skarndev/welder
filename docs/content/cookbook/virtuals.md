@@ -30,7 +30,7 @@ Robot {
 };
 
 struct PyRobot : Robot {
-    WELDER_PY_TRAMPOLINE(Robot);
+    WELDER_PY_TRAMPOLINE(PyRobot, Robot);
     std::string name() const override { WELDER_PY_OVERRIDE(name); }
     int speed() const override { WELDER_PY_OVERRIDE(speed); }
 };

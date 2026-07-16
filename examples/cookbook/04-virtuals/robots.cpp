@@ -44,7 +44,7 @@ Robot {
 // overridable virtual. `vendor()` is bind_flat, so it is intentionally absent —
 // welder statically checks that everything else is covered.
 struct PyRobot : Robot {
-    WELDER_PY_TRAMPOLINE(Robot);
+    WELDER_PY_TRAMPOLINE(PyRobot, Robot);
     std::string name() const override { WELDER_PY_OVERRIDE(name); }
     int speed() const override { WELDER_PY_OVERRIDE(speed); }
 };
@@ -66,7 +66,7 @@ Mission {
 // This trampoline uses the ANNOTATION discovery form — the [[=trampoline]] mark
 // lets welder find it by scanning Mission's namespace, no registration needed.
 struct [[=welder::rods::python::trampoline]] PyMission : Mission {
-    WELDER_PY_TRAMPOLINE(Mission);
+    WELDER_PY_TRAMPOLINE(PyMission, Mission);
     std::string duty() const override { WELDER_PY_OVERRIDE(duty); }
 };
 

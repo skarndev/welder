@@ -63,8 +63,9 @@ welder binds:
 - **each public, non-copy/non-move constructor** → `pybind11::init<…>`;
 - for a **baseless aggregate**, a *synthesized field constructor* that brace-inits
   it — giving Python `T(f0, f1, …)`;
-- the **copy constructor**, as the target language's copy protocol rather than an
-  init overload — see [Copy and move constructors](#copy-and-move-constructors).
+- the **copy constructor**, given the target language's own copy spelling
+  (Python: `T(other)` plus the copy protocol) — see
+  [Copy and move constructors](#copy-and-move-constructors).
 
 !!! note "Why aggregates are special"
 
@@ -107,15 +108,16 @@ Rect {
 
 ### Copy and move constructors
 
-The **copy constructor** never binds as an init overload — it gets the target
-language's own copy spelling instead. The Python rods bind it as the copy
-protocol: `__copy__` and `__deepcopy__(memo)`, both delegating to the C++ copy
-constructor, so `copy.copy(obj)` / `copy.deepcopy(obj)` just work on any
-copy-constructible welded type. The deep/shallow distinction is the
-constructor's own — value members duplicate, a pointer member copies as a
-pointer — and the memo argument is accepted but unused (a fresh C++ object
-holds no Python references to track). The Lua rods ignore it: Lua has no copy
-protocol, exactly as they ignore `doc` and `return_policy`.
+The **copy constructor** does not ride the ordinary per-constructor path — it
+gets the target language's own copy spelling instead. The Python rods bind it
+three ways: a
+visible copy constructor (`Rect(other)`) and the copy protocol — `__copy__` and
+`__deepcopy__(memo)` — so `copy.copy(obj)` / `copy.deepcopy(obj)` just work on
+any copy-constructible welded type. The C++ payload is duplicated by the copy
+constructor (the deep/shallow distinction there is the constructor's own —
+value members duplicate, a pointer member copies as a pointer). The Lua rods
+ignore all of it: Lua has no copy protocol, exactly as they ignore `doc` and
+`return_policy`.
 
 ```pycon
 >>> import copy
@@ -125,6 +127,30 @@ protocol, exactly as they ignore `doc` and `return_policy`.
 >>> a.w
 2.0
 ```
+
+The protocol is **subclass-faithful**: like Python's own copy machinery it
+transfers *state*, never calling `__init__` — a `type(self).__new__` shell, the
+C++ payload copy-constructed in place, then the instance `__dict__` carried
+over (shallow for `copy.copy`, deep-copied through the memo for
+`copy.deepcopy`, so shared references dedup and cycles terminate). A Python
+subclass therefore copies as itself — its type, attributes and overridden
+virtuals intact:
+
+```pycon
+>>> class Dotted(Brush):
+...     def stroke(self): return "dotted"
+>>> d = Dotted()
+>>> copy.copy(d).paint()   # C++ still dispatches into the Python override
+'paint:dotted'
+```
+
+For a type with virtual methods this keeps working because the
+`WELDER_PY_TRAMPOLINE(Tramp, Base)` macro also declares a **copy-from-base
+constructor** on the trampoline (see
+[Overriding virtual methods](inheritance.md)) — the backend needs it to build
+the trampoline payload on a subclass shell. A hand-rolled trampoline without
+one is a compile error on copyable types (welder names the fix); welder's
+*generated* trampolines carry it automatically.
 
 Admission mirrors the default constructor's: an *implicit* copy constructor
 rides along whenever the type is copy-constructible (nothing to mark, so

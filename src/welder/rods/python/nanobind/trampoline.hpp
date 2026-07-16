@@ -80,15 +80,29 @@ decltype(auto) override_dispatch(const nb::detail::trampoline<N>& tr,
 
 } // namespace welder::rods::nanobind
 
-/** Declare a class a nanobind trampoline for @a BASE.
+/** Declare class @a TRAMP a nanobind trampoline for @a BASE.
 
     Place at the top of a trampoline subclass body. Introduces the `welder_py_base`
-    alias the override macro keys off, inherits @a BASE's constructors, and adds the
+    alias the override macro keys off, inherits @a BASE's constructors, adds the
     nanobind trampoline storage sized by reflection — the `N` in the slot count never
-    drifts from @a BASE's virtuals. Neutral name: pybind11's rod defines the same
-    macro without a storage member. */
-#define WELDER_PY_TRAMPOLINE(BASE)                                             \
+    drifts from @a BASE's virtuals — and (the reason the macro takes the
+    trampoline's own name) declares the two constructors inherited-constructor
+    syntax cannot provide: a defaulted default constructor and a guarded
+    **copy-from-base** constructor. The latter is what keeps the copy protocol
+    faithful for Python subclasses: `__copy__`/`__deepcopy__` re-run the
+    registered copy `__init__` on a `type(self).__new__` shell, and nanobind then
+    needs the *alias* type constructible from `const BASE&` — or the copied
+    subclass instance would hold a plain @a BASE payload and stop dispatching
+    virtuals into Python. It is a constrained template, so a noncopyable @a BASE
+    simply leaves the trampoline non-copy-constructible (no error). Neutral name:
+    pybind11's rod defines the same macro without a storage member. */
+#define WELDER_PY_TRAMPOLINE(TRAMP, BASE)                                      \
     using welder_py_base = BASE;                                              \
+    TRAMP() = default;                                                        \
+    template <class WelderSrc = BASE>                                         \
+        requires ::std::is_copy_constructible_v<WelderSrc>                    \
+    explicit TRAMP(const WelderSrc& welder_src)                               \
+        : welder_py_base(welder_src) {}                                       \
     using welder_py_base::welder_py_base;                                     \
     ::nanobind::detail::trampoline<                                           \
         ::welder::rods::python::virtual_slot_count(^^BASE)>                   \

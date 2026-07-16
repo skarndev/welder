@@ -42,7 +42,7 @@ Animal {
 // The trampoline: one neutral storage line + one neutral line per overridable
 // virtual. `kingdom()` is bind_flat, so it is intentionally NOT overridden here.
 struct PyAnimal : Animal {
-    WELDER_PY_TRAMPOLINE(Animal);
+    WELDER_PY_TRAMPOLINE(PyAnimal, Animal);
     std::string speak() const override { WELDER_PY_OVERRIDE(speak); }
     int legs() const override { WELDER_PY_OVERRIDE(legs); }
 };
@@ -66,7 +66,7 @@ Shape {
 // This trampoline uses the *annotation* form: the [[=trampoline]] mark lets welder
 // discover it by scanning Shape's namespace — no trampoline_for<Shape> needed.
 struct [[=welder::rods::python::trampoline]] PyShape : Shape {
-    WELDER_PY_TRAMPOLINE(Shape);
+    WELDER_PY_TRAMPOLINE(PyShape, Shape);
     double area() const override { WELDER_PY_OVERRIDE(area); }
 };
 
@@ -85,7 +85,7 @@ Bird : Animal {
 };
 
 struct PyBird : Bird {
-    WELDER_PY_TRAMPOLINE(Bird);
+    WELDER_PY_TRAMPOLINE(PyBird, Bird);
     std::string speak() const override { WELDER_PY_OVERRIDE(speak); }  // inherited
     int legs() const override { WELDER_PY_OVERRIDE(legs); }            // inherited
     std::string fly() const override { WELDER_PY_OVERRIDE(fly); }      // own
@@ -131,7 +131,7 @@ Robot {
 };
 
 struct PyRobot : Robot {
-    WELDER_PY_TRAMPOLINE(Robot);
+    WELDER_PY_TRAMPOLINE(PyRobot, Robot);
     std::string obey(const std::string& order, int times) const override {
         WELDER_PY_OVERRIDE(obey, order, times);
     }
@@ -178,12 +178,12 @@ Tree : Plant {
 };
 
 struct PyPlant : Plant {
-    WELDER_PY_TRAMPOLINE(Plant);
+    WELDER_PY_TRAMPOLINE(PyPlant, Plant);
     Plant* parent() const override { WELDER_PY_OVERRIDE(parent); }
 };
 
 struct PyTree : Tree {
-    WELDER_PY_TRAMPOLINE(Tree);
+    WELDER_PY_TRAMPOLINE(PyTree, Tree);
     Tree* parent() const override { WELDER_PY_OVERRIDE(parent); }  // the narrowed slot
 };
 
@@ -204,7 +204,7 @@ Gauge {
 using IntGauge = Gauge<int>;
 
 struct PyIntGauge : IntGauge {
-    WELDER_PY_TRAMPOLINE(IntGauge);
+    WELDER_PY_TRAMPOLINE(PyIntGauge, IntGauge);
     int read() const override { WELDER_PY_OVERRIDE(read); }
 };
 
