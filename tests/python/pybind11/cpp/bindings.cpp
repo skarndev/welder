@@ -42,6 +42,9 @@
     ::welder::welder<::welder::rods::pybind11::rod<::welder::rods::python::sphinx_style>>
 #define WELDER_TEST_MODULE_T ::pybind11::module_
 #define WELDER_TEST_MULTIPLE_INHERITANCE 1
+// The backend's generic-object type (copying.hpp's greedy-constructor case:
+// a ctor accepting ANY Python object must not intercept the copy vehicle).
+#define WELDER_TEST_PYOBJECT ::pybind11::object
 // The one module-handle op the shared register_* helpers need; the Lua backend,
 // whose handle is a sol::table with no def_submodule, defines it differently.
 #define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)

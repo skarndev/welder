@@ -125,6 +125,36 @@ def test_subclass_copy_is_faithful(cp: ModuleType) -> None:
     assert type(d) is Ledger and d.notes == ["a"] and d.notes is not a.notes
 
 
+def test_slots_subclass_state_carries(cp: ModuleType) -> None:
+    # A subclass keeping its state in __slots__ (no instance __dict__) still
+    # copies whole: slot names are collected via copyreg._slotnames, the same
+    # MRO walk pickle uses.
+    class Slotted(cp.Sheet):  # type: ignore[misc, name-defined]
+        __slots__ = ("gain",)
+
+    s = Slotted()
+    s.width = 2
+    s.gain = 5
+    c = copy.copy(s)
+    assert type(c) is Slotted and c.width == 2 and c.gain == 5
+    assert copy.deepcopy(s).gain == 5
+
+    # deepcopy duplicates slot values through the memo, copy shares them
+    class Bag(cp.Sheet):  # type: ignore[misc, name-defined]
+        __slots__ = ("items",)
+
+    b = Bag()
+    b.items = [1]
+    assert copy.copy(b).items is b.items
+    d = copy.deepcopy(b)
+    assert d.items == [1] and d.items is not b.items
+
+    # an unassigned slot stays unassigned on the copy
+    u = Slotted()
+    with pytest.raises(AttributeError):
+        _ = copy.copy(u).gain
+
+
 def test_deepcopy_memo_dedups_and_terminates_cycles(cp: ModuleType) -> None:
     class Ledger(cp.Sheet):  # type: ignore[misc, name-defined]
         pass
@@ -170,6 +200,19 @@ def test_abstract_type_binds_no_protocol(cp: ModuleType) -> None:
     # Not copy-constructible (pure virtual), so no protocol — and no error.
     assert not hasattr(cp.Stencil, "__copy__")
     assert not hasattr(cp.Stencil, "__deepcopy__")
+
+
+# --- the copy vehicle beats a permissive user constructor ----------------------
+def test_copy_vehicle_beats_a_greedy_constructor(cp: ModuleType) -> None:
+    # Grabby declares a C++ constructor accepting ANY Python object (n = -1).
+    # The copy vehicle is registered ahead of user constructors, so a Grabby
+    # argument reaches the C++ copy constructor — never the greedy one.
+    g = cp.Grabby()
+    g.n = 5
+    assert cp.Grabby(g).n == 5  # T(other) copies
+    assert copy.copy(g).n == 5  # the protocol copies
+    assert copy.deepcopy(g).n == 5
+    assert cp.Grabby("anything").n == -1  # the greedy ctor still serves the rest
 
 
 # --- tack welding: admission never depended on marks ---------------------------

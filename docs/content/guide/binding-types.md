@@ -130,8 +130,10 @@ ignore all of it: Lua has no copy protocol, exactly as they ignore `doc` and
 
 The protocol is **subclass-faithful**: like Python's own copy machinery it
 transfers *state*, never calling `__init__` — a `type(self).__new__` shell, the
-C++ payload copy-constructed in place, then the instance `__dict__` carried
-over (shallow for `copy.copy`, deep-copied through the memo for
+C++ payload copy-constructed in place, then the instance `__dict__` **and any
+`__slots__`-declared attributes** carried over (slot names are collected the
+way pickle collects them, so a subclass that keeps its state out of `__dict__`
+copies whole; shallow for `copy.copy`, deep-copied through the memo for
 `copy.deepcopy`, so shared references dedup and cycles terminate). A Python
 subclass therefore copies as itself — its type, attributes and overridden
 virtuals intact:
@@ -151,6 +153,13 @@ constructor** on the trampoline (see
 the trampoline payload on a subclass shell. A hand-rolled trampoline without
 one is a compile error on copyable types (welder names the fix); welder's
 *generated* trampolines carry it automatically.
+
+The copy vehicle (`T(other)`) is registered **ahead of the type's own
+constructors**, and overloads are tried in registration order — so a
+permissive constructor of yours (one taking a generic Python object, say)
+cannot intercept a `T`-instance argument: copy construction and the protocol
+always reach the C++ copy constructor, while your constructor still serves
+everything else.
 
 Admission mirrors the default constructor's: an *implicit* copy constructor
 rides along whenever the type is copy-constructible (nothing to mark, so

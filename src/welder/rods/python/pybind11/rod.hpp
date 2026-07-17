@@ -230,7 +230,11 @@ struct rod {
         over. With @a memo (the `__deepcopy__` path) the fresh object is
         recorded under `id(self)` *before* the `__dict__` is deep-copied through
         it, so shared references dedup and reference cycles terminate, exactly
-        per the `copy` module's contract.
+        per the `copy` module's contract. `__slots__`-declared state carries
+        over too: slot names are collected by `copyreg._slotnames` — the
+        stdlib's own MRO-walking collector (what pickle uses), private-name
+        mangling included — so a subclass keeping its state out of `__dict__`
+        still copies whole.
         @tparam T the registered type.
         @param self the instance being copied (possibly of a Python subclass).
         @param memo the `__deepcopy__` memo dict, or nullptr for `__copy__`.
@@ -248,6 +252,15 @@ struct rod {
             if (memo)
                 d = py::module_::import("copy").attr("deepcopy")(d, *memo);
             out.attr("__dict__").attr("update")(d);
+        }
+        for (py::handle name :
+             py::module_::import("copyreg").attr("_slotnames")(cls)) {
+            if (!py::hasattr(self, name))
+                continue; // an unassigned slot stays unassigned on the copy
+            py::object v{py::getattr(self, name)};
+            if (memo)
+                v = py::module_::import("copy").attr("deepcopy")(v, *memo);
+            py::setattr(out, name, v);
         }
         return out;
     }
@@ -451,14 +464,6 @@ struct rod {
     static void add_constructors(auto& cls) {
         if constexpr (HasDefault)
             cls.def(py::init<>());
-        template for (constexpr auto ctor : std::define_static_array(Ctors)) {
-            _def_init<ctor>(cls, std::make_index_sequence<
-                                     std::meta::parameters_of(ctor).size()>{});
-        }
-        if constexpr (Aggregate) {
-            constexpr auto fields{::welder::detail::aggregate_fields<T>()};
-            _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
-        }
         if constexpr (Copyable) {
             // A trampolined type must keep the copy faithful for Python
             // subclasses: pybind11 constructs the ALIAS payload on a subclass
@@ -471,6 +476,11 @@ struct rod {
                 "Python. The WELDER_PY_TRAMPOLINE(TRAMP, BASE) macro declares "
                 "it; a hand-rolled trampoline needs 'Tramp(const Base&)' — or "
                 "mark::exclude the copy constructor.");
+            // Registered BEFORE the user constructors: overloads are tried in
+            // registration order, so a permissive user constructor (one taking
+            // a generic object, a variant embedding T, …) cannot intercept a
+            // T-instance argument — T(other) and the copy protocol always
+            // reach the C++ copy constructor.
             cls.def(py::init<const T&>());
             cls.def("__copy__", [](py::handle self) {
                 return _copy_instance<T>(self, nullptr);
@@ -481,6 +491,14 @@ struct rod {
                     return _copy_instance<T>(self, &memo);
                 },
                 py::arg("memo"));
+        }
+        template for (constexpr auto ctor : std::define_static_array(Ctors)) {
+            _def_init<ctor>(cls, std::make_index_sequence<
+                                     std::meta::parameters_of(ctor).size()>{});
+        }
+        if constexpr (Aggregate) {
+            constexpr auto fields{::welder::detail::aggregate_fields<T>()};
+            _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
         }
     }
 

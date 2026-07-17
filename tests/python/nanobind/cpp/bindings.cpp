@@ -45,6 +45,9 @@
 #define WELDER_TEST_SPHINX_WELDER \
     ::welder::welder<::welder::rods::nanobind::rod<::welder::rods::python::sphinx_style>>
 #define WELDER_TEST_MODULE_T ::nanobind::module_
+// The backend's generic-object type (copying.hpp's greedy-constructor case:
+// a ctor accepting ANY Python object must not intercept the copy vehicle).
+#define WELDER_TEST_PYOBJECT ::nanobind::object
 // The one module-handle op the shared register_* helpers need; the Lua backend,
 // whose handle is a sol::table with no def_submodule, defines it differently.
 #define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)

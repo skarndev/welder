@@ -35,11 +35,16 @@ signature is named.
 `Copyable` bool of `add_constructors` (carriage: `is_copy_constructible_v<T>` &&
 bind_traits `copy_ctor_admitted<R,Type,L>`); the Python rods turn it into THREE
 things — a visible `init<const T&>` (Python `T(other)`, doubling as the in-place
-construction vehicle) and a SUBCLASS-FAITHFUL `__copy__`/`__deepcopy__(memo)`
+construction vehicle; registered BEFORE the user ctors so a permissive user
+ctor — py::object/nb::object param, locked by copying.hpp `Grabby` via the
+`WELDER_TEST_PYOBJECT` seam — can't intercept a T-instance argument) and a
+SUBCLASS-FAITHFUL `__copy__`/`__deepcopy__(memo)`
 (rod `_copy_instance<T>`: `type(self).__new__` shell → registered copy `__init__`
 re-run on it (never the subclass `__init__`, matching Python's own copy
 machinery) → `__dict__` carried over, deepcopy'd through the memo with
-`memo[id(self)]` recorded FIRST so cycles terminate; memo typed `object` not
+`memo[id(self)]` recorded FIRST so cycles terminate → `__slots__` state carried
+too, names via `copyreg._slotnames` (the stdlib's own MRO walk, what pickle
+uses); memo typed `object` not
 `dict` — bare `dict` fails strict-mypy stubcheck). A Python subclass thus copies
 as itself with overrides dispatching. The trampoline interplay: the backend
 builds the ALIAS payload on a subclass shell only if the trampoline is
