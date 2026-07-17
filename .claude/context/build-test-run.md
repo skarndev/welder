@@ -325,7 +325,15 @@ This lint is what caught the invalid `---@operator eq/lt/le/index` emissions.
 Three test-side mypy gates:
 - `stubcheck` — mypy over each stub tree.
 - `typingcases` — pytest-mypy-testing cases in `tests/python/test_types.mypy-testing`
-  against the backend-neutral canonical name `welder_test` on `MYPYPATH`.
+  against the backend-neutral canonical name `welder_test` on `MYPYPATH`. Covers the
+  scalar surfaces AND the STL-container typing (stl.hpp below): a container
+  *parameter* types as the wide accepted input (`Sequence[T]` — lists and tuples
+  typecheck), a *return* as the concrete `list[T]`/`dict[K, V]`/`tuple[…]`/`T | None`;
+  the `# R:` reveals must match BOTH rods' stubs byte-for-byte (mypy 2.x concise
+  names: `list[int]`, `int | None`, classes fully qualified `welder_test.stl.Item`),
+  which also means only *returns* are revealed — parameter spellings differ per
+  stubgen (pybind11 `typing.SupportsInt` vs nanobind `int`), so argument typing is
+  asserted by *acceptance* (a call that must typecheck), never revealed.
 - `mypy.tests` — plain mypy over the `.py` specs (which are `Any` to mypy via the
   `ModuleType` fixture).
 
@@ -365,8 +373,9 @@ doxyfilter tests also use it for `lark`) but manages the pyproject that now live
 
 **Lua tree** (`tests/lua/`): **busted** (installed via luarocks, nothing vendored —
 see the sol2 section above) is the Lua counterpart of uv+pytest. The shared
-`common/cpp` groups (all but `doc.hpp`, whose `__doc__`/`attr` hooks are
-Python-only) build into a `.so` per enabled Lua rod — `welder_test_sol2.so`
+`common/cpp` groups (all but the two Python-only ones: `doc.hpp`, whose
+`__doc__`/`attr` hooks have no Lua slot, and `stl.hpp`, whose audience is mypy)
+build into a `.so` per enabled Lua rod — `welder_test_sol2.so`
 (`cpp/bindings.cpp`) and `welder_test_luabridge.so` (`cpp/bindings_luabridge.cpp`) —
 and the **same** per-group busted specs (`spec/*_spec.lua`) assert **both**: the spec
 `helper.lua` picks the module by the `WELDER_TEST_LUA_MODULE` env var (set per CTest
@@ -406,6 +415,12 @@ POST_BUILD, since its stubs are a separate custom target.) Key locations by feat
   for sol2), asserting the reshaped names and the per-language `weld_as` verbatim
   override. luacats keeps its own dedicated `stub_gen.cpp`, so its golden is unaffected.
 - `tests/common/cpp/doc.hpp` `Gadget`/`combine` + `tests/python/test_doc.py` — docstrings (multiline/dedent)
+- `tests/common/cpp/stl.hpp` + `tests/python/test_stl.py` + the container cases in
+  `test_types.mypy-testing` — STL-container conversions (vector/map/optional/pair,
+  free functions AND container-typed members): runtime round-trips plus the stub
+  typing above. Python-only group (like doc.hpp — not included by the Lua rods);
+  nanobind's bindings.cpp carries the per-container `<nanobind/stl/*.h>` includes
+  it needs (map/optional/pair; pybind11's stl.h is all-in-one)
 - `tests/doxyfilter/` — Doxygen filter goldens + e2e (run with the uv venv Python, pins `lark`)
 
 Gotcha: uv rejects the Homebrew python for some operations — see the test-harness

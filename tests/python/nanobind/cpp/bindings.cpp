@@ -25,8 +25,11 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h> // std::string members / return values
-#include <nanobind/stl/vector.h> // std::vector<Handmade2> in trust.hpp
+#include <nanobind/stl/vector.h> // std::vector<Handmade2> in trust.hpp; stl.hpp
 #include <nanobind/stl/variant.h> // std::variant in unions.hpp (the blessed path)
+#include <nanobind/stl/map.h>      // std::map in stl.hpp
+#include <nanobind/stl/optional.h> // std::optional in stl.hpp
+#include <nanobind/stl/pair.h>     // std::pair in stl.hpp
 #include <welder/rods/python/nanobind/rod.hpp>
 #include <welder/rods/python/nanobind/trampoline.hpp> // virtual-override support
 #include <welder/rods/python/naming.hpp> // the PEP 8 style for the naming group
@@ -87,6 +90,7 @@
 #include "templates.hpp"
 #include "unions.hpp"
 #include "copying.hpp"
+#include "stl.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -116,4 +120,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_templates(m);   // <-> test_templates.py (alias-welded template instantiations)
     register_unions(m);      // <-> test_unions.py (union escape hatches + std::variant)
     register_copying(m);     // <-> test_copying.py (__copy__/__deepcopy__ via the copy ctor)
+    register_stl(m);         // <-> test_stl.py (STL-container conversions; typed in test_types.mypy-testing)
 }

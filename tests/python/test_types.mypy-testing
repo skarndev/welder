@@ -49,3 +49,64 @@ def mypy_test_bound_namespace_is_a_typed_submodule() -> None:
     reveal_type(documented.add(1, 2))  # R: int
     reveal_type(documented.Circle(1.0).area())  # R: float
     reveal_type(documented.ANSWER)  # R: int
+
+
+# --- STL containers (C++ side: tests/common/cpp/stl.hpp) ---------------------
+# A container PARAMETER types as the wide accepted input (a Sequence — so plain
+# lists and tuples typecheck as arguments), while a RETURN types as the concrete
+# native object the caster produces (list[T], dict[K, V], tuple[...], T | None).
+
+
+@pytest.mark.mypy_testing
+def mypy_test_vector_returns_are_lists_and_parameters_accept_lists() -> None:
+    from welder_test import stl
+
+    reveal_type(stl.iota(3))  # R: list[int]
+    # a std::vector<int> parameter accepts a list — and any other sequence
+    reveal_type(stl.total([1, 2, 3]))  # R: int
+    reveal_type(stl.total((4, 5)))  # R: int
+
+
+@pytest.mark.mypy_testing
+def mypy_test_vector_of_welded_type_spells_the_bound_name() -> None:
+    from welder_test import stl
+
+    reveal_type(stl.wrap_all([7, 9]))  # R: list[welder_test.stl.Item]
+
+
+@pytest.mark.mypy_testing
+def mypy_test_map_returns_a_dict() -> None:
+    from welder_test import stl
+
+    reveal_type(stl.histogram(["a", "b", "a"]))  # R: dict[str, int]
+
+
+@pytest.mark.mypy_testing
+def mypy_test_optional_is_value_or_none() -> None:
+    from welder_test import stl
+
+    reveal_type(stl.find_positive([-1, 5]))  # R: int | None
+    # a std::optional<int> parameter accepts None and a plain int
+    reveal_type(stl.value_or(None, 8))  # R: int
+    reveal_type(stl.value_or(3, 8))  # R: int
+
+
+@pytest.mark.mypy_testing
+def mypy_test_pair_returns_a_tuple() -> None:
+    from welder_test import stl
+
+    reveal_type(stl.labelled(5))  # R: tuple[int, str]
+
+
+@pytest.mark.mypy_testing
+def mypy_test_container_members_read_concrete_and_write_wide() -> None:
+    from welder_test import stl
+
+    b = stl.Basket()
+    reveal_type(b.ints)  # R: list[int]
+    reveal_type(b.ranks)  # R: dict[str, int]
+    reveal_type(b.discount)  # R: float | None
+    # the property setters accept the wide forms
+    b.ints = [1, 2]
+    b.ranks = {"gold": 1}
+    b.discount = None
