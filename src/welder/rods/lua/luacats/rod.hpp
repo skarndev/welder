@@ -311,29 +311,50 @@ struct rod {
             sigs);
     }
 
-    /** Emit operator overload group @a Fns as `---@operator name(rhs): R` lines on
+    /** Emit operator slot group @a Fns as `---@operator name(rhs): R` lines on
         the class block (one line per overload — LuaCATS has no operator
-        `---@overload` form, the tag itself repeats). @see welder::rod */
-    template <auto Fns>
+        `---@overload` form, the tag itself repeats). Member and anchored free
+        entries mix in one group; a free entry's operand is its *second*
+        parameter (the first is the anchor). A REVERSED free entry (@a T on the
+        right — `operator*(double, Vec)`) is runtime-only: `---@operator` types
+        `self` as the left operand, so it is dropped here, like the
+        `eq`/`lt`/`le` slots LuaLS rejects. @see welder::rod */
+    template <class T, auto Fns>
     static void add_operator(class_writer& w) {
         template for (constexpr auto fn : std::define_static_array(Fns)) {
-            const char* op{operator_luacats(fn)};
-            w.fields += "---@operator ";
-            w.fields += op;
-            if constexpr (!::welder::detail::is_unary_operator(fn)) {
-                constexpr auto types{param_lua_types<fn>()};
-                w.fields += "(";
-                w.fields += types[0];
-                w.fields += ")";
+            if constexpr (!::welder::detail::free_operator_reflected(fn, ^^T)) {
+                const char* op{operator_luacats(fn)};
+                w.fields += "---@operator ";
+                w.fields += op;
+                if constexpr (!::welder::detail::is_unary_operator(fn)) {
+                    constexpr auto types{param_lua_types<fn>()};
+                    constexpr std::size_t opnd{
+                        std::meta::is_class_member(fn) ? 0u : 1u};
+                    w.fields += "(";
+                    w.fields += types[opnd];
+                    w.fields += ")";
+                }
+                using R = [:std::meta::return_type_of(fn):];
+                if constexpr (!std::is_void_v<R>) {
+                    w.fields += ": ";
+                    w.fields += lua_type(std::meta::return_type_of(fn));
+                }
+                w.fields += '\n';
             }
-            using R = [:std::meta::return_type_of(fn):];
-            if constexpr (!std::is_void_v<R>) {
-                w.fields += ": ";
-                w.fields += lua_type(std::meta::return_type_of(fn));
-            }
-            w.fields += '\n';
         }
     }
+
+    /** Comparison synthesis has no stub form: LuaLS rejects `---@operator
+        lt/le` (`unknown-operator`), exactly as it does for explicit relational
+        operators — the synthesized `__lt`/`__le` work at runtime, the stub
+        just cannot type them. @see welder::rod */
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(class_writer&) {}
+
+    /** `__tostring` needs no LuaCATS tag — `tostring()`/`print()` are typed
+        generically by the language server. @see welder::rod */
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(class_writer&) {}
 
     // --- enum binding -------------------------------------------------------
 

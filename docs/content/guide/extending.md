@@ -74,9 +74,20 @@ it your language's own copy spelling (the Python rods emit
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
     template <auto Fns, class Style> static void add_method(auto& cls);
     template <auto Fns, class Style> static void add_static_method(auto& cls);
-    template <auto Fns>              static void add_operator(auto& cls);
+    template <class T, auto Fns>     static void add_operator(auto& cls);
+        // one (operator, arity) slot, whole: member overloads and anchored
+        // FREE operators mixed — an entry with T on the right is a reflected
+        // operand (Python binds __radd__ &co. through a swapping wrapper)
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(auto& cls);
+        // the operator<=> group: synthesize the relational slots not already
+        // Covered ({lt,le,gt,ge} flags) as rewritten expressions (a < b, ...)
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(auto& cls);
+        // the free ostream inserter -> your to-string protocol (__str__ /
+        // __tostring); no-op if your language has none
     static consteval const char* special_method_name(std::meta::info op_fn);
-        // your language's name for a member operator ("__add__", "__eq"),
+        // your language's name for an operator ("__add__", "__eq"),
         // or nullptr if you don't expose it — this drives add_operator eligibility
 ```
 

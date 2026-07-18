@@ -62,7 +62,7 @@ differ:
 | Synthesized aggregate field constructor | ✅ | ✅ (placement `__init__`) |
 | Named params → keyword arguments | ✅ | ✅ |
 | Overloaded methods / constructors | ✅ dispatched | ✅ dispatched |
-| Member operators → dunders (free operators [not yet](../guide/binding-types.md#overloaded-operators)) | ✅ | ✅ |
+| Operators → dunders ([member + anchored free](../guide/binding-types.md#overloaded-operators), reflected `__r*__`, `<=>` synthesis, `__str__`) | ✅ | ✅ |
 | Enums | `IntEnum` (`py::native_enum`) | `IntEnum` (`nb::is_arithmetic`) |
 | Single welded base | ✅ | ✅ |
 | **Multiple / virtual welded bases** | ✅ | ❌ single base only |
@@ -110,9 +110,10 @@ welder's shared inheritance test guards the diamond case behind
 
 ## Operators become dunders
 
-Every welded **member** operator binds to a Python special method ("dunder"), told
-apart unary vs. binary by arity. Both Python rods map the *identical* set — this is the
-complete list:
+Every welded operator — **member or anchored free** (see the
+[guide](../guide/binding-types.md#overloaded-operators)) — binds to a Python
+special method ("dunder"), told apart unary vs. binary by arity. Both Python
+rods map the *identical* set — this is the complete list:
 
 | C++ | Python | | C++ | Python |
 |---|---|---|---|---|
@@ -134,6 +135,24 @@ compound assignments (`operator+=`, …) are not mapped — Python falls back to
 are left alone. See the [guide's operator
 section](../guide/binding-types.md#overloaded-operators) for the full list of
 deliberately-excluded operators.
+
+Three additions ride on top of the table:
+
+- A free operator with the welded type on the **right** binds under the
+  reflected dunder (`__radd__`, `__rmul__`, … — comparisons mirror instead:
+  a free `operator<(int, T)` lands in `T.__gt__`), through an operand-swapping
+  wrapper, so `2.0 * v` works from Python.
+- A participating `operator<=>` synthesizes `__lt__`/`__le__`/`__gt__`/`__ge__`
+  as rewritten expressions (`a < b`, …); a *defaulted* spaceship's implicit
+  `operator==` binds `__eq__` through the ordinary path. Explicit relational
+  operators beat synthesis slot by slot.
+- The free ostream inserter `operator<<(std::ostream&, T)` binds as `__str__`.
+
+Every binary arithmetic / comparison dunder is registered as a true operator
+(`py::is_operator` / `nb::is_operator`): a failed operand conversion returns
+`NotImplemented` — so Python's reflected fallback (`5 < obj` →
+`obj.__gt__(5)`) works — instead of raising `TypeError`. `__call__` and
+`__getitem__` keep raising, as Python's protocol expects.
 
 ## `.pyi` stubs
 

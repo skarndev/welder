@@ -518,9 +518,13 @@ struct rod {
             std::make_index_sequence<Fns.size()>{});
     }
 
-    /** Bind member operator @a Fn under its Lua metamethod `__name`. The specific
-        overload is spliced (unary/binary forms never collide); several overloads
-        mapping to the same slot are gathered into one variadic `addFunction`.
+    /** Bind operator slot group @a Fns under its Lua metamethod `__name` — one
+        (operator, arity) slot whole, member and anchored *free* entries mixed
+        into a single variadic `addFunction` (one value per slot, so a free
+        `operator+` and a member `operator+` share the slot instead of
+        clobbering). A free entry with @a T on the right needs no swapping: Lua
+        passes a metamethod its operands as written, and the overload's exact
+        signature dispatches it.
 
         `operator[]` is special: it maps to `__index`, but LuaBridge3 *reserves*
         `__index` for its own member/property resolution and forbids replacing it (an
@@ -540,9 +544,8 @@ struct rod {
         type the adapter therefore coerces the key with `lua_tonumberx` (which accepts a
         numeric string), and only treats a genuinely non-numeric key as a member miss.
         @see welder::rod */
-    template <auto Fns>
+    template <class T, auto Fns>
     static void add_operator(auto& h) {
-        using T = _class_type<decltype(h)>;
         constexpr auto Fn{Fns[0]};
         {
             auto cls{_open_class<T>(h.mod, h.name.c_str())};
@@ -568,11 +571,196 @@ struct rod {
                     });
             } else {
                 constexpr const char* slot{lua_metamethod_name(Fn)};
-                _add_function<Fns>(cls, slot, std::make_index_sequence<Fns.size()>{});
+                constexpr auto direct{
+                    ::welder::detail::partition_reflected<Fns, ^^T, false>()};
+                _add_operator_slot<T, Fns, direct>(
+                    cls, slot, std::make_index_sequence<direct.size()>{});
             }
         }
     }
 
+    /** Synthesize `__lt`/`__le` from `operator<=>` group @a Fns via rewritten
+        expressions — Lua derives `>`, `>=` and `~=` by swapping operands /
+        negating, so two slots cover all four C++ relationals. Each
+        heterogeneous overload contributes BOTH operand orders (Lua passes the
+        operands as written). Slots an explicit participating operator already
+        @a Covered are skipped (explicit beats synthesis). @see welder::rod */
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(auto& h) {
+        auto cls{_open_class<T>(h.mod, h.name.c_str())};
+        constexpr auto seq{std::make_index_sequence<Fns.size()>{}};
+        if constexpr (!Covered[0])
+            _add_synth_cmp<T, Fns, ::welder::detail::cmp_slot::lt>(cls, "__lt",
+                                                                   seq);
+        if constexpr (!Covered[1])
+            _add_synth_cmp<T, Fns, ::welder::detail::cmp_slot::le>(cls, "__le",
+                                                                   seq);
+    }
+
+    /** Bind the swept free ostream inserter @a Fn as `__tostring` (via
+        @ref welder::detail::stringify). @see welder::rod */
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(auto& h) {
+        auto cls{_open_class<T>(h.mod, h.name.c_str())};
+        cls.addFunction("__tostring", &::welder::detail::stringify<T, Fn>);
+    }
+
+  private:
+    /** Register one operator slot. When every entry is *direct* (member, or
+        free with @a T first — the shape LuaBridge3's typed `addFunction`
+        accepts), the entries are spliced as usual. A group carrying a REFLECTED
+        free entry (`operator*(double, Scaled)`) goes down the raw route
+        instead: LuaBridge3's typed path statically requires @a T as the first
+        parameter, AND it splits const/non-const callables into disjoint
+        overload sets (the non-const one shadowing the other on the class
+        table), so mixing typed entries with a raw fallback would lose one half
+        — the WHOLE group becomes a single raw `lua_CFunction` dispatcher. */
+    template <class T, auto Fns, auto Direct, class C, std::size_t... I>
+    static void _add_operator_slot(C& cls, const char* slot,
+                                   std::index_sequence<I...>) {
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            ::welder::validate_return_policy<fn, language>();
+        }
+        if constexpr (Direct.size() == Fns.size())
+            cls.addFunction(slot, &[:Direct[I]:]...);
+        else
+            cls.addFunction(slot, &_op_dispatch<T, Fns>);
+    }
+
+    /** The raw slot dispatcher: try each entry in turn against the operands on
+        the stack (Lua hands a metamethod its operands as written, so
+        `2 * obj` arrives as `(2, obj)`). */
+    template <class T, auto Fns>
+    static int _op_dispatch(lua_State* L) {
+        int done{-1};
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            if (done < 0)
+                done = _try_operator_entry<T, fn>(L);
+        }
+        if (done < 0)
+            return luaL_error(
+                L, "welder: no matching operator overload for these operands");
+        return done;
+    }
+
+    /** Try one (binary) entry: convert both operands to the entry's declared
+        types — by value via `LuaRef::cast`, which fails cleanly on a shape
+        mismatch — and on a match invoke and push. @return 1 on success, -1 when
+        the operands do not fit @a Fn. */
+    template <class T, std::meta::info Fn>
+    static int _try_operator_entry(lua_State* L) {
+        if (lua_gettop(L) < 2)
+            return -1;
+        const lb::LuaRef a{lb::LuaRef::fromStack(L, 1)};
+        const lb::LuaRef b{lb::LuaRef::fromStack(L, 2)};
+        if constexpr (std::meta::is_class_member(Fn)) {
+            using B_ = std::remove_cvref_t<typename [:std::meta::type_of(
+                std::meta::parameters_of(Fn)[0]):]>;
+            const auto vb{b.template cast<B_>()};
+            if (!vb)
+                return -1;
+            if constexpr (requires(const T& s, const B_& x) { s.[:Fn:](x); }) {
+                const auto pt{a.template cast<const T*>()};
+                if (!pt || *pt == nullptr)
+                    return -1;
+                return _push_result(L, ((**pt).[:Fn:])(*vb));
+            } else {
+                const auto pt{a.template cast<T*>()};
+                if (!pt || *pt == nullptr)
+                    return -1;
+                return _push_result(L, ((**pt).[:Fn:])(*vb));
+            }
+        } else {
+            using A_ = std::remove_cvref_t<typename [:std::meta::type_of(
+                std::meta::parameters_of(Fn)[0]):]>;
+            using B_ = std::remove_cvref_t<typename [:std::meta::type_of(
+                std::meta::parameters_of(Fn)[1]):]>;
+            const auto va{a.template cast<A_>()};
+            if (!va)
+                return -1;
+            const auto vb{b.template cast<B_>()};
+            if (!vb)
+                return -1;
+            return _push_result(L, [:Fn:](*va, *vb));
+        }
+    }
+
+    /** Push an operator result and report success to Lua. */
+    template <class R>
+    static int _push_result(lua_State* L, R&& v) {
+        const auto r{lb::Stack<std::remove_cvref_t<R>>::push(
+            L, std::forward<R>(v))};
+        if (!r)
+            return luaL_error(L, "welder: failed to push operator result");
+        return 1;
+    }
+
+    /** Register one synthesized comparison slot. All-homogeneous groups bind
+        the forward (@a T-first) rewritten-expression wrappers through the typed
+        path; a heterogeneous group needs BOTH operand orders (`5 < obj`
+        arrives as `(5, obj)`), whose reversed half LuaBridge3's typed path
+        cannot express — so, as in `_add_operator_slot`, the whole slot becomes
+        one raw dispatcher. @tparam S which slot (`lt`/`le`). */
+    template <class T, auto Fns, ::welder::detail::cmp_slot S, class C,
+              std::size_t... I>
+    static void _add_synth_cmp(C& cls, const char* name,
+                               std::index_sequence<I...>) {
+        using ::welder::detail::synthesized_comparison;
+        if constexpr (::welder::detail::has_heterogeneous_comparison<Fns,
+                                                                     ^^T>())
+            cls.addFunction(name, &_cmp_dispatch<T, Fns, S>);
+        else
+            cls.addFunction(
+                name,
+                &synthesized_comparison<
+                    T,
+                    std::remove_cvref_t<typename [: ::welder::detail::
+                                                        comparison_operand(
+                                                            Fns[I], ^^T) :]>,
+                    S>::call...);
+    }
+
+    /** The raw comparison dispatcher: per spaceship overload, try the forward
+        `(T, P)` order, then — heterogeneous only — the reversed `(P, T)`. */
+    template <class T, auto Fns, ::welder::detail::cmp_slot S>
+    static int _cmp_dispatch(lua_State* L) {
+        int done{-1};
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            using P = std::remove_cvref_t<
+                typename [: ::welder::detail::comparison_operand(fn, ^^T) :]>;
+            if (done < 0)
+                done = _try_cmp<T, P, S, false>(L);
+            if constexpr (!std::is_same_v<P, T>) {
+                if (done < 0)
+                    done = _try_cmp<T, P, S, true>(L);
+            }
+        }
+        if (done < 0)
+            return luaL_error(
+                L, "welder: no matching comparison for these operands");
+        return done;
+    }
+
+    /** Try one comparison direction: stack = `(T, P)`, or `(P, T)` when
+        @a Rev. */
+    template <class T, class P, ::welder::detail::cmp_slot S, bool Rev>
+    static int _try_cmp(lua_State* L) {
+        using A_ = std::conditional_t<Rev, P, T>;
+        using B_ = std::conditional_t<Rev, T, P>;
+        if (lua_gettop(L) < 2)
+            return -1;
+        const auto va{lb::LuaRef::fromStack(L, 1).template cast<A_>()};
+        if (!va)
+            return -1;
+        const auto vb{lb::LuaRef::fromStack(L, 2).template cast<B_>()};
+        if (!vb)
+            return -1;
+        return _push_result(
+            L, ::welder::detail::synthesized_comparison<A_, B_, S>::call(*va,
+                                                                         *vb));
+    }
+
+  public:
     // --- enum binding -------------------------------------------------------
 
     /** Create the enum's nested namespace (a `Name = value` table) on the module

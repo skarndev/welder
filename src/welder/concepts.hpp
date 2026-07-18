@@ -179,10 +179,21 @@ concept caster_oracle = requires {
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
     template <auto Fns, class Style> static void add_method(auto& cls);
     template <auto Fns, class Style> static void add_static_method(auto& cls);
-    template <auto Fns>              static void add_operator(auto& cls); // fixed op name
+    template <class T, auto Fns>     static void add_operator(auto& cls);
+        // one (operator, arity) SLOT, whole: member overloads (own + flattened
+        // bases') and anchored FREE operators mixed — a free entry with T on the
+        // right binds reflected (__radd__ &co.) on the Python rods
+    template <class T, auto Fns, auto Covered>
+                                     static void add_comparisons(auto& cls);
+        // the operator<=> group; synthesize the relational slots not already
+        // Covered ({lt,le,gt,ge} flags) via rewritten expressions
+    template <class T, std::meta::info Fn>
+                                     static void add_stringifier(auto& cls);
+        // the free ostream inserter -> __str__ / __tostring
     static consteval const char* special_method_name(std::meta::info op_fn);
-        // target special-method name for a member operator, or nullptr if the
-        // backend does not expose it (drives add_operator eligibility)
+        // target special-method name for an operator (member or free), or
+        // nullptr if the backend does not expose it (drives add_operator
+        // eligibility)
     @endcode
 
     **Enum binding** (the enum handle is whatever `make_enum` returns; deduced):
@@ -248,7 +259,12 @@ concept rod =
                                detail::any_type>(cls);
         B::template add_static_method<std::array<std::meta::info, 1>{^^int},
                                       detail::any_type>(cls);
-        B::template add_operator<std::array<std::meta::info, 1>{^^int}>(cls);
+        B::template add_operator<detail::any_type,
+                                 std::array<std::meta::info, 1>{^^int}>(cls);
+        B::template add_comparisons<detail::any_type,
+                                    std::array<std::meta::info, 1>{^^int},
+                                    std::array<bool, 4>{}>(cls);
+        B::template add_stringifier<detail::any_type, ^^int>(cls);
         B::template add_enumerator<^^int, detail::any_type>(en);
         B::template finish_enum<detail::any_enum>(en);
     };

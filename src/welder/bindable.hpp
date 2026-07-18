@@ -372,4 +372,48 @@ consteval void assert_callable_bindable() {
         assert_signature_bindable<B, Fn, L, Reg>();
 }
 
+namespace detail {
+
+/** The parameter walk behind @ref assert_operands_bindable: gate each parameter
+    that is not the anchor type itself.
+    @tparam B the rod. @tparam Fn the spaceship overload. @tparam Type the
+    anchor type reflection. @tparam L the language. @tparam I the index pack. */
+template <caster_oracle B, std::meta::info Fn, std::meta::info Type, lang L,
+          class Reg, std::size_t... I>
+consteval void assert_operands(std::index_sequence<I...>) {
+    static constexpr auto params{param_types<Fn>()};
+    (
+        [] {
+            if constexpr (std::meta::dealias(std::meta::remove_cvref(
+                              params[I])) != std::meta::dealias(Type))
+                assert_bindable<B, typename [:params[I]:], L, Reg>();
+        }(),
+        ...);
+}
+
+} // namespace detail
+
+/** Assert the **operand** types of an `operator<=>` overload bind, unless the
+    overload is trusted — the comparison-synthesis gate.
+
+    Parameters only, and only those that are not the welded type itself: the
+    ordering return type (`std::strong_ordering` &co.) deliberately never faces
+    the gate, because it never crosses the language boundary — the rod binds
+    synthesized `bool`-returning comparisons, not the spaceship itself.
+    @tparam B    the rod.
+    @tparam Fn   a reflection of the spaceship overload.
+    @tparam Type the welded anchor type's reflection.
+    @tparam L    the target language.
+*/
+template <caster_oracle B, std::meta::info Fn, std::meta::info Type, lang L,
+          class Reg = welded_registration>
+consteval void assert_operands_bindable() {
+    if constexpr (!welder::trusted_for(Fn, L)) {
+        constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+        if constexpr (n != 0)
+            detail::assert_operands<B, Fn, Type, L, Reg>(
+                std::make_index_sequence<n>{});
+    }
+}
+
 } // namespace welder

@@ -121,8 +121,12 @@ struct ruby_rod {
     static void add_method(auto&) {}
     template <auto Fns, class Style>
     static void add_static_method(auto&) {}
-    template <auto Fns>
+    template <class T, auto Fns>
     static void add_operator(auto&) {}
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(auto&) {}
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(auto&) {}
 
     template <class E>
     static ruby_class make_enum(module_type&, const char*, const char*) {

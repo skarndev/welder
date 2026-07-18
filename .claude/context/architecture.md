@@ -227,11 +227,19 @@ headers instead of the struct: the Python dunder map into
   receives it), and `finish_nested_class<T>(m, outer, cls, name)` (post-interior
   placement for re-open-by-path handle models — LuaBridge3 moves the class table
   here); and the GROUP hooks
-  `add_method<Fns, Style>` / `add_static_method<Fns, Style>` / `add_operator<Fns>`
-  (`Fns` = a std::array<info, N> overload group sharing one target name, resolve it
-  from Fns[0]; carriage-computed + gated), and `consteval special_method_name(op)`
-  (the operator→target-name map, e.g. pybind's `operator+`→`__add__`; nullptr =
-  not exposed, which also gates operator eligibility in the driver).
+  `add_method<Fns, Style>` / `add_static_method<Fns, Style>` /
+  `add_operator<T, Fns>` (`Fns` = a std::array<info, N> overload group sharing
+  one target name, resolve it from Fns[0]; carriage-computed + gated). An
+  operator group is one (operator, arity) SLOT and may mix member and anchored
+  FREE entries (T leads the template so a rod can classify each entry —
+  reflected right-operand vs direct); plus `add_comparisons<T, Fns, Covered>`
+  (the `operator<=>` group — synthesize the relational slots not already
+  Covered by explicit operators, as rewritten expressions) and
+  `add_stringifier<T, Fn>` (the free ostream inserter → `__str__`/`__tostring`;
+  no-op where the language has no to-string protocol), and
+  `consteval special_method_name(op)` (the operator→target-name map, e.g.
+  pybind's `operator+`→`__add__`; nullptr = not exposed, which also gates slot
+  eligibility in the driver — spaceship branches before the map).
 - **Enum binding:** `make_enum<E>`, `add_enumerator<Enum, Style>`, `finish_enum<E>` (the
   whole-enum finalizer, e.g. pybind's `export_values()` for unscoped enums).
 - **Namespace/module binding:** `open_module`→ a per-(sub)module *session* (rod

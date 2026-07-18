@@ -522,12 +522,15 @@ struct basic_carriage {
             }
         }
 
-        // Methods and operators are emitted as whole OVERLOAD GROUPS: the walk
-        // fires on each group's first participating overload (the leader),
-        // gathers the resolution-admitted set, gates every member, and hands the
-        // group to the rod in one call — so one-value-per-name frameworks (the
-        // Lua rods) register a complete set, and per-overload marks / bespoke
-        // resolutions shape the group identically on every rod.
+        // Methods are emitted as whole OVERLOAD GROUPS: the walk fires on each
+        // group's first participating overload (the leader), gathers the
+        // resolution-admitted set, gates every member, and hands the group to
+        // the rod in one call — so one-value-per-name frameworks (the Lua rods)
+        // register a complete set, and per-overload marks / bespoke resolutions
+        // shape the group identically on every rod. (Operators are NOT handled
+        // here: their slot groups span this flattening recursion AND the
+        // anchored free operators of the enclosing namespace, so they are
+        // emitted once per welded type — see bind_operators.)
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
             if constexpr (detail::is_method_candidate(fn) &&
@@ -549,27 +552,6 @@ struct basic_carriage {
                         B::template add_static_method<grp, Style>(cls);
                     else
                         B::template add_method<grp, Style>(cls);
-                }
-            } else if constexpr (detail::is_operator_candidate(fn) &&
-                                 detail::member_access_admitted<Resolution>(
-                                     fn, L, BoundInto) &&
-                                 Resolution::class_member_participates(fn, L, pol,
-                                                                       BoundInto) &&
-                                 B::special_method_name(fn) != nullptr) {
-                // A member operator group binds under the backend's special-method
-                // name (operator+ -> __add__, ...); unary/binary forms are distinct
-                // groups (distinct arity), so they never collide.
-                if constexpr (detail::is_overload_leader<
-                                  detail::operator_overload_set<Resolution>>(
-                                  fn, L, BoundInto)) {
-                    constexpr auto grp{detail::overload_group<
-                        detail::operator_overload_set<Resolution>, fn, L,
-                        BoundInto>()};
-                    template for (constexpr auto member :
-                                  std::define_static_array(grp)) {
-                        welder::assert_callable_bindable<B, member, L, Reg>();
-                    }
-                    B::template add_operator<grp>(cls);
                 }
             }
             // A member function TEMPLATE falls through every branch: not a
@@ -693,8 +675,86 @@ struct basic_carriage {
         B::template add_constructors<T, ctors, has_default, aggregate, copyable>(
             cls);
 
-        // Data members + methods + operators (T's own, plus flattened bases).
+        // Data members + methods (T's own, plus flattened bases).
         bind_members<B, ^^T, ^^T, Style>(cls);
+
+        // Operators — emitted once per welded type, across every source.
+        bind_operators<B, T>(cls);
+    }
+
+    /** Emit @a T's operators: member ones (own + flattened bases') and the
+        **anchored free operators** of T's enclosing namespace, combined per
+        `(operator, arity)` slot (`detail::operator_entries` /
+        `operator_slot_set`) so a one-value-per-slot backend (the Lua rods)
+        receives each slot's complete overload set in one call — a free
+        `operator+` and a member `operator+` can never clobber each other, and a
+        flattened base's operator now shares its slot with the derived type's
+        instead of being overwritten.
+
+        Three routes out of the combined entry list:
+        - a **spaceship** group (`operator<=>`, member or free) never binds
+          directly — it reaches the rod as `add_comparisons`, which synthesizes
+          the four relational slots via rewritten expressions (`a < b`), skipping
+          any slot an explicit participating operator already covers
+          (`covered_comparison_slots`); only the *operand* types face the gate
+          (the `std::*_ordering` return never crosses);
+        - the free **ostream inserter** (`operator<<(std::ostream&, T)`) becomes
+          the rod's stringifier (`__str__` / `__tostring`) via `add_stringifier`
+          — collected separately, so its `std::ostream&` never faces the gate;
+        - every other slot goes to `add_operator` when the rod exposes it
+          (`special_method_name` on the slot's leader), each entry gated whole.
+
+        @tparam B the rod.
+        @tparam T the welded type.
+        @param cls the class handle. */
+    template <rod B, class T, class Cls>
+    static void bind_operators(Cls& cls) {
+        constexpr lang L{B::language};
+        using Reg = detail::scoped_registration<Resolution, ^^T>;
+
+        template for (constexpr auto fn :
+                      std::define_static_array(
+                          detail::operator_entries<Resolution>(^^T, L))) {
+            if constexpr (std::meta::operator_of(fn) ==
+                          std::meta::operators::op_spaceship) {
+                if constexpr (detail::is_overload_leader<
+                                  detail::operator_slot_set<Resolution>>(fn, L,
+                                                                         ^^T)) {
+                    constexpr auto grp{detail::overload_group<
+                        detail::operator_slot_set<Resolution>, fn, L, ^^T>()};
+                    template for (constexpr auto member :
+                                  std::define_static_array(grp)) {
+                        welder::assert_operands_bindable<B, member, ^^T, L,
+                                                         Reg>();
+                    }
+                    B::template add_comparisons<
+                        T, grp,
+                        detail::covered_comparison_slots<Resolution>(^^T, L)>(
+                        cls);
+                }
+            } else if constexpr (B::special_method_name(fn) != nullptr) {
+                if constexpr (detail::is_overload_leader<
+                                  detail::operator_slot_set<Resolution>>(fn, L,
+                                                                         ^^T)) {
+                    constexpr auto grp{detail::overload_group<
+                        detail::operator_slot_set<Resolution>, fn, L, ^^T>()};
+                    template for (constexpr auto member :
+                                  std::define_static_array(grp)) {
+                        welder::assert_callable_bindable<B, member, L, Reg>();
+                    }
+                    B::template add_operator<T, grp>(cls);
+                }
+            }
+        }
+
+        // The stringifier: at most one inserter binds (the to-string protocols
+        // take no second operand to overload on; entry [0] wins, in declaration
+        // order). Only T itself is gated — it is the welded type, so there is
+        // nothing further to assert.
+        constexpr auto strs{std::define_static_array(
+            detail::stringifier_entries<Resolution>(^^T, L))};
+        if constexpr (strs.size() != 0)
+            B::template add_stringifier<T, strs[0]>(cls);
     }
 
     /** Register the participating **member types** of @a Outer onto its class
@@ -1244,9 +1304,14 @@ struct basic_carriage {
                     "every rod), or expose the union through safe accessor "
                     "functions; hand-register it with the backend yourself via "
                     "welder::trust_bindable on its uses.");
-            } else if constexpr (std::meta::is_function(mem)) {
+            } else if constexpr (std::meta::is_function(mem) &&
+                                 !std::meta::is_operator_function(mem)) {
                 // Free functions bind as whole overload groups, emitted at the
                 // group's first participating overload (see bind_members).
+                // OPERATOR functions are deliberately not functions here: a free
+                // operator is part of its anchor type's interface (ADL), so the
+                // type's own binding sweeps it (bind_operators) — and it has no
+                // identifier for a module-level name anyway.
                 if constexpr (Resolution::member_participates(mem, L, pol, Ns)) {
                     if constexpr (detail::is_overload_leader<
                                       detail::function_overload_set<Resolution>>(

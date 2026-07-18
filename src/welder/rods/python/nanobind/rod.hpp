@@ -578,17 +578,101 @@ struct rod {
         }
     }
 
-    /** Bind operator overload group @a Fns under its Python dunder (one operator +
-        arity per group, so `Fns[0]` names the slot). @see welder::rod */
-    template <auto Fns>
+    /** Bind operator slot group @a Fns — one (operator, arity) slot whole,
+        member and anchored *free* entries mixed. A member (or @a T-on-the-left
+        free) entry binds under the slot's dunder; a free entry with @a T as the
+        RIGHT operand binds under the REFLECTED dunder (`__rmul__`, or the
+        mirrored comparison) through an operand-swapping wrapper. Binary
+        arithmetic/comparison defs carry `nb::is_operator()`: a failed operand
+        conversion returns `NotImplemented` (Python then tries the other
+        operand's reflected method) instead of raising `TypeError`.
+        @see welder::rod */
+    template <class T, auto Fns>
     static void add_operator(auto& cls) {
-        constexpr const char* name{::welder::rods::python::operator_dunder(Fns[0])};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
-            _def_function<fn>(name, [&cls](auto&&... a) {
-                cls.def(std::forward<decltype(a)>(a)...);
-            });
+            if constexpr (::welder::detail::free_operator_reflected(fn, ^^T)) {
+                _def_reflected_operator<T, fn>(cls);
+            } else {
+                _def_operator<fn, ::welder::rods::python::
+                                      dunder_uses_not_implemented(fn)>(
+                    ::welder::rods::python::operator_dunder(fn), cls,
+                    std::make_index_sequence<
+                        ::welder::detail::keep_alive_pairs<fn>().size()>{});
+            }
         }
     }
+
+    /** Synthesize the relational dunders from `operator<=>` group @a Fns via
+        rewritten expressions (`a < b`, …), skipping the slots an explicit
+        participating operator already @a Covered — the same semantics as the
+        pybind11 rod (the shared walk is
+        @ref welder::rods::python::synthesize_comparisons). @see welder::rod */
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(auto& cls) {
+        ::welder::rods::python::synthesize_comparisons<T, Fns, Covered>(
+            [&cls](const char* name, auto fp) {
+                cls.def(name, fp, nb::is_operator{});
+            });
+    }
+
+    /** Bind the swept free ostream inserter @a Fn as `__str__` (via
+        @ref welder::detail::stringify). @see welder::rod */
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(auto& cls) {
+        cls.def("__str__", &::welder::detail::stringify<T, Fn>);
+    }
+
+  private:
+    /** Def operator @a Fn (member, or free with the anchor on the left) under
+        dunder @a name. Unlike `_def_function`, never passes `nb::arg` names —
+        Python's operator protocol is positional-only. Docstring,
+        `return_policy` and `keep_alive`s ride along as usual; @a NotImpl
+        appends `nb::is_operator()` (see `add_operator`).
+        @tparam Fn the operator. @tparam K the keep_alive index pack. */
+    template <std::meta::info Fn, bool NotImpl, class Cls, std::size_t... K>
+    static void _def_operator(const char* name, Cls& cls,
+                              std::index_sequence<K...>) {
+        static constexpr auto ka{::welder::detail::keep_alive_pairs<Fn>()};
+        ::welder::validate_return_policy<Fn, language>();
+        constexpr nb::rv_policy rvp{
+            _rv_policy(::welder::return_policy_of(Fn, language))};
+        const std::string doc{::welder::function_docstring<Fn, DocStyle>()};
+        auto def{[&](auto&&... extra) {
+            if (doc.empty())
+                cls.def(name, &[:Fn:], rvp,
+                        nb::keep_alive<ka[K].nurse, ka[K].patient>()...,
+                        std::forward<decltype(extra)>(extra)...);
+            else
+                cls.def(name, &[:Fn:], doc.c_str(), rvp,
+                        nb::keep_alive<ka[K].nurse, ka[K].patient>()...,
+                        std::forward<decltype(extra)>(extra)...);
+        }};
+        if constexpr (NotImpl)
+            def(nb::is_operator{});
+        else
+            def();
+    }
+
+    /** Bind reflected free operator @a Fn (@a T is its right operand) under its
+        reflected dunder, swapping the operands back into declaration order for
+        the C++ call. @tparam T the anchor type. @tparam Fn the operator. */
+    template <class T, std::meta::info Fn>
+    static void _def_reflected_operator(auto& cls) {
+        constexpr const char* name{::welder::rods::python::reflected_dunder(Fn)};
+        if constexpr (name != nullptr) {
+            ::welder::validate_return_policy<Fn, language>();
+            using Lhs = typename
+                [:std::meta::type_of(std::meta::parameters_of(Fn)[0]):];
+            cls.def(
+                name,
+                [](const T& self, Lhs lhs) {
+                    return [:Fn:](static_cast<Lhs&&>(lhs), self);
+                },
+                nb::is_operator{});
+        }
+    }
+
+  public:
 
     // --- enum binding -------------------------------------------------------
 

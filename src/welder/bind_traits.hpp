@@ -1,7 +1,10 @@
 #pragma once
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <meta>
+#include <sstream> // std::ostream (the stringifier-shape test) + stringify's stream
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <vector>
@@ -164,6 +167,203 @@ consteval bool is_operator_candidate(std::meta::info f) {
            !std::meta::is_private(f) && !std::meta::is_deleted(f);
 }
 
+// --- freestanding (namespace-scope) operators --------------------------------
+//
+// A free operator is part of a type's interface exactly as a member one is (C++
+// finds it by ADL), so welder sweeps a welded type's enclosing namespace for
+// operators *anchored* on the type — one operand IS the type — and folds them
+// into the type's binding. Hidden friends are the one shape reflection cannot
+// see (P2996 enumerates neither a class's friends nor ADL): move them to
+// namespace scope, or bind them by hand on the returned class handle.
+
+/** Whether type reflection @a t is exactly the (welded) type @a type once
+    stripped of cv/ref qualifiers and aliases. The anchor test — exact identity,
+    never a base: a base-anchored free operator rides through the target
+    language's class inheritance when the base is welded.
+    @param t    a type reflection (possibly qualified / aliased).
+    @param type the plain type to compare against.
+    @return `true` iff @a t decays to @a type. */
+consteval bool decays_to(std::meta::info t, std::meta::info type) {
+    return std::meta::dealias(std::meta::remove_cvref(t)) ==
+           std::meta::dealias(type);
+}
+
+/** The *shape* of a bindable freestanding operator: a non-deleted
+    namespace-scope operator function. Participation is still the resolution's
+    call (under the anchor type's policy, with the operator's own marks).
+    @param f a reflection of the function.
+    @return `true` iff @a f is a non-deleted namespace-scope operator. */
+consteval bool is_free_operator_candidate(std::meta::info f) {
+    return std::meta::is_function(f) && std::meta::is_operator_function(f) &&
+           !std::meta::is_class_member(f) && !std::meta::is_deleted(f);
+}
+
+/** Whether @a f is the stream-inserter ("stringifier") shape for @a type:
+    `operator<<(std::ostream&, T)`. Never bound as a shift slot — a rod maps it
+    to the target's to-string protocol (Python `__str__`, Lua `__tostring`), so
+    the `std::ostream&` parameter is deliberately not gated for bindability.
+    @param f    a reflection of the function.
+    @param type the anchor type.
+    @return `true` iff @a f is @a type's ostream inserter. */
+consteval bool is_stringifier_for(std::meta::info f, std::meta::info type) {
+    if (!is_free_operator_candidate(f) ||
+        std::meta::operator_of(f) != std::meta::operators::op_less_less)
+        return false;
+    auto ps{std::meta::parameters_of(f)};
+    if (ps.size() != 2)
+        return false;
+    const auto p0{std::meta::type_of(ps[0])};
+    return std::meta::is_lvalue_reference_type(p0) &&
+           decays_to(p0, ^^std::ostream) &&
+           decays_to(std::meta::type_of(ps[1]), type);
+}
+
+/** Whether free operator @a f is **anchored** on @a type: some parameter decays
+    to exactly @a type (an rvalue-reference operand disqualifies — it consumes
+    the object, which no binding call form expresses). The stringifier shape is
+    excluded (it has its own route).
+    @param f    a reflection of the function.
+    @param type the candidate anchor type.
+    @return `true` iff @a f participates in @a type's operator sweep. */
+consteval bool free_operator_anchored(std::meta::info f, std::meta::info type) {
+    if (!is_free_operator_candidate(f) || is_stringifier_for(f, type))
+        return false;
+    for (auto p : std::meta::parameters_of(f)) {
+        const auto t{std::meta::type_of(p)};
+        if (decays_to(t, type) && !std::meta::is_rvalue_reference_type(t))
+            return true;
+    }
+    return false;
+}
+
+/** Whether anchored free operator @a f binds **reflected** for @a type: @a type
+    is the *right* operand and the left is something else (`operator*(double,
+    Vec)`). The Python rods bind such an entry under the reflected dunder
+    (`__rmul__`, or the operand-swapped comparison); the Lua rods need no
+    distinction (a metamethod receives the operands as passed).
+    @param f    a reflection of the anchored operator.
+    @param type the anchor type.
+    @return `true` iff @a type is only the right operand. */
+consteval bool free_operator_reflected(std::meta::info f, std::meta::info type) {
+    if (std::meta::is_class_member(f))
+        return false;
+    auto ps{std::meta::parameters_of(f)};
+    return ps.size() == 2 && !decays_to(std::meta::type_of(ps[0]), type);
+}
+
+/** Split slot group @a Fns by @ref free_operator_reflected: the entries whose
+    reflectedness equals @a Reflected, in group order. A rod whose framework
+    registers by exact signature shape (LuaBridge3) uses this to route the
+    direct (anchor-on-the-left) entries through its typed registration and the
+    reflected ones through a raw fallback.
+    @tparam Fns       the slot group (a static array of reflections).
+    @tparam Type      the anchor type's reflection.
+    @tparam Reflected which partition to keep.
+    @return the matching entries as a static array. */
+template <auto Fns, std::meta::info Type, bool Reflected>
+consteval auto partition_reflected() {
+    constexpr std::size_t n{[] {
+        std::size_t c{0};
+        for (auto f : Fns)
+            if (free_operator_reflected(f, Type) == Reflected)
+                ++c;
+        return c;
+    }()};
+    std::array<std::meta::info, n> out{};
+    // Guard the fill: std::array<T, 0>::operator[] is not consteval.
+    if constexpr (n != 0) {
+        std::size_t i{0};
+        for (auto f : Fns)
+            if (free_operator_reflected(f, Type) == Reflected)
+                out[i++] = f;
+    }
+    return out;
+}
+
+/** The nearest enclosing **namespace** of @a type — the scope its anchored free
+    operators are swept from (for a nested class, the namespace enclosing the
+    outermost class, mirroring where C++ requires such operators to live).
+    @param type a reflection of the type.
+    @return the enclosing namespace reflection. */
+consteval std::meta::info enclosing_namespace(std::meta::info type) {
+    auto p{std::meta::parent_of(type)};
+    while (!std::meta::is_namespace(p))
+        p = std::meta::parent_of(p);
+    return p;
+}
+
+/** The operand a comparison synthesized from spaceship overload @a f takes: the
+    parameter type that is not the anchor @a type itself — or @a type for the
+    homogeneous form.
+    @param f    a reflection of an `operator<=>` overload (member or anchored free).
+    @param type the anchor type.
+    @return the operand's declared type reflection. */
+consteval std::meta::info comparison_operand(std::meta::info f,
+                                             std::meta::info type) {
+    for (auto p : std::meta::parameters_of(f))
+        if (!decays_to(std::meta::type_of(p), type))
+            return std::meta::type_of(p);
+    return type; // homogeneous: every operand is the type itself
+}
+
+/** Whether spaceship group @a Fns contains a heterogeneous overload (an operand
+    that is not @a Type itself) — the trigger for a reversed-operand fallback on
+    rods whose framework registers by exact signature shape.
+    @tparam Fns  the spaceship group.
+    @tparam Type the anchor type's reflection.
+    @return `true` iff some overload compares against another type. */
+template <auto Fns, std::meta::info Type>
+consteval bool has_heterogeneous_comparison() {
+    for (auto f : Fns)
+        if (!decays_to(comparison_operand(f, Type), Type))
+            return true;
+    return false;
+}
+
+/** The rewritten-expression comparison a rod binds for a type whose C++
+    comparisons come from `operator<=>`: plain `a < b` (etc.), so C++'s own
+    operator-rewriting rules ([over.match.oper]) pick the spaceship overload —
+    heterogeneous and reversed operands included — and the target language sees
+    exactly what a C++ caller sees. The four relational forms are synthesized;
+    `==` never is (C++ itself only rewrites `==` from `operator==`, which a
+    *defaulted* spaceship implicitly declares — and that member then binds
+    through the ordinary operator path).
+    @tparam A the left operand type.
+    @tparam B the right operand type.
+    @tparam S which relational slot this wrapper fills. */
+enum class cmp_slot : std::uint8_t { lt = 0, le = 1, gt = 2, ge = 3 };
+template <class A, class B, cmp_slot S>
+struct synthesized_comparison {
+    /** Evaluate `a OP b` through C++'s rewriting rules.
+        @param a the left operand. @param b the right operand.
+        @return the comparison result. */
+    static bool call(const A& a, const B& b) {
+        if constexpr (S == cmp_slot::lt)
+            return a < b;
+        else if constexpr (S == cmp_slot::le)
+            return a <= b;
+        else if constexpr (S == cmp_slot::gt)
+            return a > b;
+        else
+            return a >= b;
+    }
+};
+
+/** The stringifier wrapper every runtime rod binds for a swept ostream inserter
+    (see `is_stringifier_for`): run the specific participating overload @a Fn
+    into a string stream and hand back the text — the body of Python's `__str__`
+    and Lua's `__tostring`.
+    @tparam T  the welded type.
+    @tparam Fn the inserter's reflection.
+    @param self the object to stringify.
+    @return the inserted text. */
+template <class T, std::meta::info Fn>
+std::string stringify(const T& self) {
+    std::ostringstream os{};
+    [:Fn:](os, self);
+    return os.str();
+}
+
 /** Is @a mem's *access level* admitted for binding under @a Resolution?
 
     The access counterpart of `class_member_participates`: public members are
@@ -257,15 +457,21 @@ struct field_access {
     static void set(class_type& c, const field_type& v) { c.[:Mem:] = v; }
 };
 
-/** Whether a member operator is unary (0 parameters) vs binary (1 parameter).
+/** Whether an operator function is unary vs binary.
 
     Told apart by arity — this disambiguates the operators with both forms
-    (`+`, `-`); backends use it to pick, e.g., `__neg__` vs `__sub__`.
+    (`+`, `-`); backends use it to pick, e.g., `__neg__` vs `__sub__`. A
+    non-static *member* operator's left operand is the implicit object (unary =
+    0 parameters); a namespace-scope (or static member) operator spells both
+    operands out (unary = 1 parameter).
     @param f a reflection of the operator function.
     @return `true` iff @a f is unary.
 */
 consteval bool is_unary_operator(std::meta::info f) {
-    return std::meta::parameters_of(f).empty();
+    const std::size_t n{std::meta::parameters_of(f).size()};
+    return (std::meta::is_class_member(f) && !std::meta::is_static_member(f))
+               ? n == 0
+               : n == 1;
 }
 
 // --- aggregate initialization -----------------------------------------------
@@ -448,28 +654,138 @@ consteval std::vector<std::meta::info> method_overload_set(
     return out;
 }
 
-/** The participating operator overloads sharing @a fn's target slot (same
-    operator and arity — hence the same special-method name), from @a fn's
-    declaring class.
+/** Collect the participating *member* operators visible on @a bound_into's
+    binding: @a src's own, preceded by those of its flattened (non-native
+    according to @a Resolution) bases, recursively — mirroring `bind_members`'
+    flattening, so a slot's group spans exactly what the class surface exposes.
+    Each candidate passes access admission and the resolution under its
+    *declaring* class's policy.
     @tparam Resolution the carriage's resolution.
-    @param fn a reflection of one participating operator (see is_operator_candidate).
-    @param L  the target language.
-    @param bound_into the entity whose binding receives the group.
-    @return the overload set (always contains @a fn). */
+    @param src        the class whose members to collect (a base during recursion).
+    @param L          the target language.
+    @param bound_into the welded type whose binding receives the operators.
+    @param out        the collection target (bases append first). */
 template <class Resolution>
-consteval std::vector<std::meta::info> operator_overload_set(
-    std::meta::info fn, lang L, std::meta::info bound_into) {
-    const std::meta::info cls{std::meta::parent_of(fn)};
-    const policy_kind pol{::welder::policy_of(cls)};
-    std::vector<std::meta::info> out{};
-    for (auto m : std::meta::members_of(cls, std::meta::access_context::unchecked()))
+consteval void collect_member_operators(std::meta::info src, lang L,
+                                        std::meta::info bound_into,
+                                        std::vector<std::meta::info>& out) {
+    for (auto base : ::welder::public_bases(src))
+        if (!Resolution::is_native_base(base, L, src))
+            collect_member_operators<Resolution>(base, L, bound_into, out);
+    const policy_kind pol{::welder::policy_of(src)};
+    for (auto m :
+         std::meta::members_of(src, std::meta::access_context::unchecked()))
         if (is_operator_candidate(m) &&
             member_access_admitted<Resolution>(m, L, bound_into) &&
-            Resolution::class_member_participates(m, L, pol, bound_into) &&
-            std::meta::operator_of(m) == std::meta::operator_of(fn) &&
+            Resolution::class_member_participates(m, L, pol, bound_into))
+            out.push_back(m);
+}
+
+/** Every participating operator entry of @a type's binding — member operators
+    (own + flattened bases') and the **anchored free operators** of the type's
+    enclosing namespace — in one list, so the carriage can slot-group across all
+    sources (a one-value-per-slot backend must receive each slot whole). A free
+    operator resolves like a member of its anchor: the type's policy plus the
+    operator's own marks, through `class_member_participates` with the type as
+    `bound_into`. The stringifier shape is excluded (see
+    `stringifier_entries`); spaceship entries are included (the carriage routes
+    them to comparison synthesis, never to a direct slot).
+    @tparam Resolution the carriage's resolution.
+    @param type the welded type.
+    @param L    the target language.
+    @return the entries, flattened bases first, then own members, then free. */
+template <class Resolution>
+consteval std::vector<std::meta::info> operator_entries(std::meta::info type,
+                                                        lang L) {
+    std::vector<std::meta::info> out{};
+    collect_member_operators<Resolution>(type, L, type, out);
+    const policy_kind pol{::welder::policy_of(type)};
+    for (auto m : std::meta::members_of(enclosing_namespace(type),
+                                        std::meta::access_context::unchecked()))
+        if (free_operator_anchored(m, type) &&
+            Resolution::class_member_participates(m, L, pol, type))
+            out.push_back(m);
+    return out;
+}
+
+/** The participating operator entries sharing @a fn's target slot (same
+    operator and arity — hence the same special-method name) on @a bound_into's
+    binding, across every source `operator_entries` sweeps (member + free).
+    Matches the `overload_selector` shape so `overload_group` /
+    `is_overload_leader` drive it like the other selectors.
+    @tparam Resolution the carriage's resolution.
+    @param fn a reflection of one participating entry.
+    @param L  the target language.
+    @param bound_into the welded type whose binding receives the group.
+    @return the slot's group (always contains @a fn). */
+template <class Resolution>
+consteval std::vector<std::meta::info> operator_slot_set(
+    std::meta::info fn, lang L, std::meta::info bound_into) {
+    std::vector<std::meta::info> out{};
+    for (auto m : operator_entries<Resolution>(bound_into, L))
+        if (std::meta::operator_of(m) == std::meta::operator_of(fn) &&
             is_unary_operator(m) == is_unary_operator(fn))
             out.push_back(m);
     return out;
+}
+
+/** The participating stringifier entries for @a type: free
+    `operator<<(std::ostream&, T)` overloads of its enclosing namespace, resolved
+    like the anchored operators. At most one is bound (the target to-string
+    protocols take no second operand — cv-variant duplicates would collide), so
+    the carriage emits entry `[0]`.
+    @tparam Resolution the carriage's resolution.
+    @param type the welded type.
+    @param L    the target language.
+    @return the participating inserter reflections, in declaration order. */
+template <class Resolution>
+consteval std::vector<std::meta::info> stringifier_entries(std::meta::info type,
+                                                           lang L) {
+    std::vector<std::meta::info> out{};
+    const policy_kind pol{::welder::policy_of(type)};
+    for (auto m : std::meta::members_of(enclosing_namespace(type),
+                                        std::meta::access_context::unchecked()))
+        if (is_stringifier_for(m, type) &&
+            Resolution::class_member_participates(m, L, pol, type))
+            out.push_back(m);
+    return out;
+}
+
+/** Which relational slots (`lt`, `le`, `gt`, `ge` — indexed by @ref cmp_slot)
+    are already covered by an **explicit** participating operator on @a type's
+    binding. Comparison synthesis from `operator<=>` fills only the uncovered
+    slots: an explicit operator beats synthesis (mirroring C++ overload
+    resolution's preference for non-rewritten candidates), and a slot is skipped
+    whole so a one-value-per-slot backend never sees two writers.
+    @tparam Resolution the carriage's resolution.
+    @param type the welded type.
+    @param L    the target language.
+    @return covered flags, indexed by @ref cmp_slot. */
+template <class Resolution>
+consteval std::array<bool, 4> covered_comparison_slots(std::meta::info type,
+                                                       lang L) {
+    std::array<bool, 4> covered{};
+    for (auto m : operator_entries<Resolution>(type, L)) {
+        if (is_unary_operator(m))
+            continue;
+        switch (std::meta::operator_of(m)) {
+            case std::meta::operators::op_less:
+                covered[0] = true;
+                break;
+            case std::meta::operators::op_less_equals:
+                covered[1] = true;
+                break;
+            case std::meta::operators::op_greater:
+                covered[2] = true;
+                break;
+            case std::meta::operators::op_greater_equals:
+                covered[3] = true;
+                break;
+            default:
+                break;
+        }
+    }
+    return covered;
 }
 
 /** The participating free-function overloads sharing @a fn's name, from @a fn's

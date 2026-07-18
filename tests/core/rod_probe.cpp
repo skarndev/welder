@@ -79,8 +79,15 @@ struct probe_rod {
     static void add_method(auto&) {}
     template <auto Fns, class Style>
     static void add_static_method(auto&) {}
-    template <auto Fns>
+    // An operator slot arrives whole (member + anchored free entries), with the
+    // welded type leading; comparison synthesis and the ostream stringifier are
+    // their own hooks (see the welder::rod contract).
+    template <class T, auto Fns>
     static void add_operator(auto&) {}
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(auto&) {}
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(auto&) {}
 
     // --- enum binding -------------------------------------------------------
     template <class E>

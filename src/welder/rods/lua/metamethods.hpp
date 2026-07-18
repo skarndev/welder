@@ -35,13 +35,17 @@
 
 namespace welder::inline v0::rods::lua {
 
-/** Map a member operator to its Lua metamethod `__name`, or `nullptr` if welder
-    does not expose it (which also gates operator eligibility in the driver).
+/** Map an operator (member or anchored free) to its Lua metamethod `__name`,
+    or `nullptr` if welder does not expose it (which also gates operator
+    eligibility in the driver).
 
-    Unary vs binary is told apart by arity (a member operator takes 0 parameters
-    when unary, 1 when binary), disambiguating the operators with both forms
-    (`+`, `-`, `*`, `&`, `~`). In-place compound assignments (`operator+=`, …),
-    `<=>`, `&&`, `||`, `++`, `--` and `=` are not mapped (same as the Python rods).
+    Unary vs binary is told apart by arity (@ref welder::detail::is_unary_operator
+    — a member operator's left operand is implicit, a free one spells both out),
+    disambiguating the operators with both forms (`+`, `-`, `*`, `&`, `~`).
+    In-place compound assignments (`operator+=`, …), `&&`, `||`, `++`, `--` and
+    `=` are not mapped (same as the Python rods); `operator<=>` never binds
+    under a slot of its own — it synthesizes `__lt`/`__le` instead (see the
+    rods' `add_comparisons`).
 
     @param f a reflection of the operator function.
     @return the metamethod `__name`, or `nullptr` when not exposed.

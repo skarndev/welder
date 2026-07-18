@@ -74,6 +74,16 @@ stubdemo.Mask = {}
 ---@overload fun(bits: integer): stubdemo.Mask
 function stubdemo.Mask.new() end
 
+--- A scalable impulse (exercises free operators).
+---@class stubdemo.Impulse
+---@field mag number The magnitude.
+---@operator mul(number): stubdemo.Impulse
+stubdemo.Impulse = {}
+
+---@return stubdemo.Impulse
+---@overload fun(mag: number): stubdemo.Impulse
+function stubdemo.Impulse.new() end
+
 --- Axis-aligned box (aggregate).
 ---@class stubdemo.Rect
 ---@field width number Width in units.

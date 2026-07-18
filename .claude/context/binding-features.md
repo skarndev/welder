@@ -172,16 +172,67 @@ detail::aggregate_fields gained the n!=0 fill guard (std::array<info,0>::
 operator[] is not consteval — a FIELDLESS class hard-errored the Lua rods'
 ctor machinery; Meter was the first such class in the suite).
 
-## Overloaded operators → Python special methods
-A *member* operator binds under its dunder (`operator+` → `__add__`, `operator==`
-→ `__eq__`, `operator[]` → `__getitem__`, `operator()` → `__call__`, …), unary vs
-binary told apart by arity so the two `operator-` forms map to `__neg__` /
-`__sub__`. Arithmetic / bitwise / comparison / call / subscript are covered;
-in-place compound assignment (`operator+=`) is intentionally not mapped (Python
-falls back to `a = a + b` via `__add__`), nor are `<=>`, `&&`, `||`, `++`, `--`,
-`operator=` (special member). *Free* (non-member) operators aren't bound yet.
-The operator→name map is the rod's `special_method_name(op)` (nullptr = not
-exposed, which also gates operator eligibility in the driver).
+## Operators (member + free + spaceship synthesis + stringifier)
+An operator binds under its dunder/metamethod (`operator+` → `__add__`/`__add`,
+…), unary vs binary told apart by arity (`is_unary_operator` — member: 0/1
+params; free/static: 1/2). **Emission is one combined SLOT GROUP per (operator,
+arity) per welded type** (carriage `bind_operators`, run once per type after
+`bind_members` — NOT part of the flattening walk): entries = T's member
+operators + flattened non-native bases' + the **anchored free operators** of
+T's nearest enclosing namespace (`operator_entries`/`operator_slot_set` in
+bind_traits; anchor = a param decays to exactly T, rvalue-ref operand
+disqualifies; base-anchored free ops ride class inheritance instead). A free
+operator resolves like a member of its anchor (T's policy + own marks,
+`class_member_participates`, bound_into = ^^T); the namespace walk's function
+branch now SKIPS operator functions (they'd have no module name anyway). Rod
+hook: `add_operator<T, Fns>` (T leads; group may mix member/free). Python rods:
+per-entry — reflected free entries (T on the RIGHT, `free_operator_reflected`)
+bind the reflected dunder (`reflected_dunder` in python/operators.hpp:
+`__rmul__`… ; comparisons mirror: free `<(int,T)` → `__gt__`) via an
+operand-swapping wrapper; all binary arith/cmp defs pass
+`py::is_operator`/`nb::is_operator` (`dunder_uses_not_implemented`) so failed
+conversions yield NotImplemented (reflected protocol works); operator defs
+never pass py::arg names (`_def_operator` — dunders are positional-only, and
+pybind rejects annotations on a 2-arg free fn def'd as a method). Lua rods: one
+registration per slot (sol2 `sol::overload`; LuaBridge3 typed `addFunction`
+when every entry is direct, else the WHOLE group becomes one raw lua_CFunction
+dispatcher `_op_dispatch` — LuaBridge3's typed path statically requires T as
+first param AND splits const/non-const into disjoint shadowing overload sets).
+sol2's automagic operator enrollments (to_string/call/eq/lt/le) are now OFF
+(_make_usertype: they bypassed marks — caught by PyOnlyCmp); bases now assigned
+post-creation (`ut[sol::base_classes]`), default ctor off in enrollments
+(replaces sol::no_constructor).
+**`operator<=>` never binds directly** (std::*_ordering doesn't cross): the
+slot group routes to `add_comparisons<T, Fns, Covered>` which synthesizes
+REWRITTEN EXPRESSIONS (`welder::detail::synthesized_comparison<A,B,cmp_slot>` —
+plain `a < b`, so C++ rewriting picks the overload; heterogeneous + reversed
+included). Python: 4 slots (`synthesize_comparisons` in operators.hpp); Lua:
+`__lt`/`__le` only (both operand orders for hetero; LuaBridge hetero → raw
+`_cmp_dispatch`). `Covered` = `covered_comparison_slots` (explicit participating
+`< <= > >=` beat synthesis per slot; also keeps Lua one-writer-per-slot). `==`
+NEVER synthesized — C++ only rewrites `==` from `operator==`; a DEFAULTED <=>
+implicitly declares one and members_of enumerates it (probed), so it binds via
+the normal path. Gate: `assert_operands_bindable` (operand types only, never
+the ordering return). Lua semantic seam: `a > b` IS `b < a`, so an explicit
+inverted `<` makes Lua's `>` mirror it while Python synthesizes `>` from <=>
+(locked in operators_spec).
+**Stringifier**: free `operator<<(std::ostream&, T)` (`is_stringifier_for`,
+excluded from slot groups, ostream param exempt from the gate) →
+`add_stringifier<T, Fn>` → Python `__str__` / Lua `__tostring` via shared
+`welder::detail::stringify<T, Fn>`; luacats/trampolines no-op. Entry `[0]` only.
+**Hidden friends are invisible to P2996** (not in members_of(class) nor the
+namespace — probed): document-only limitation (move to namespace scope or bind
+by hand). luacats: free-left entries emit `---@operator` with operand =
+param[1]; reflected entries dropped (self is left in LuaCATS); <=>/tostring
+emit nothing (Impulse in the stub_gen corpus locks this).
+The operator→name map stays the rod's `special_method_name(op_fn)` (nullptr =
+not exposed, gates slot eligibility; spaceship branches BEFORE the map).
+In-place compound assignment (`operator+=`), `&&`, `||`, `++`, `--`,
+`operator=` remain unmapped. Cases: tests/common/cpp/operators.hpp (Coin free +
+excluded free −, Mixed member+free one slot, Scaled reflected + inserter,
+Version defaulted <=>, Temp custom <=> no ==, Account hetero <=>(int)+==(int),
+Ordered explicit-beats-synthesis, PyOnlyCmp exclude(lua) on <=>) +
+test_operators.py / operators_spec.lua.
 
 ## Enums → `enum.IntEnum`
 A welded enum (scoped or unscoped) binds via `weld_type<E>` (dispatched from the

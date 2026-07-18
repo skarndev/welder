@@ -106,7 +106,7 @@ A rod is a stateless struct (`welder::rods::<name>::rod`) satisfying the
 | Group | Primitives |
 |---|---|
 | **Associated facts** | `language`, `module_type`, the `class_handle_type<T>` / `enum_handle_type<E>` aliases, and `has_native_caster<T>` |
-| **Binding a type** | `make_class`, `add_default_ctor`, `add_constructor`, `add_aggregate_constructor`, `add_field`, `add_method`, `add_static_method`, `add_operator`, `special_method_name` |
+| **Binding a type** | `make_class`, `add_default_ctor`, `add_constructor`, `add_aggregate_constructor`, `add_field`, `add_method`, `add_static_method`, `add_operator`, `add_comparisons`, `add_stringifier`, `special_method_name` |
 | **Binding an enum** | `make_enum`, `add_enumerator`, `finish_enum` |
 | **Binding a module** | `open_module`, `set_module_doc`, `add_function`, `add_variable`, `add_submodule`, `close_module` |
 

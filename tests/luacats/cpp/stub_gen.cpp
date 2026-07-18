@@ -11,6 +11,7 @@
 // function, a namespace variable, the STL type map (vector/map/optional), and a
 // nested namespace. WELDER_LUACATS_MAIN emits the ---@meta stub for `stubdemo`;
 // the CTest golden-compares it (tests/luacats/stub.golden.lua).
+#include <compare>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -94,6 +95,19 @@ Mask {
     Mask operator<<([[=welder::doc("shift distance")]] unsigned n) const;
     Mask operator>>(unsigned n) const;
 };
+
+// FREE operators anchored on a welded type. The anchor-on-the-left form renders
+// like a member `---@operator` (operand = the second parameter); the REFLECTED
+// form (Impulse on the right) is runtime-only — `---@operator` types self as
+// the left operand — and is dropped, like the eq/lt/le slots. The spaceship
+// synthesizes runtime __lt/__le only, so it emits nothing here either.
+struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A scalable impulse (exercises free operators).")]]
+Impulse {
+    [[=welder::doc("The magnitude.")]] double mag{0.0};
+    std::strong_ordering operator<=>(const Impulse& rhs) const;
+};
+Impulse operator*(const Impulse& i, double k);
+Impulse operator*(double k, const Impulse& i);
 
 // Another type rename, this one reached only through *container* references:
 // Polygon's `vector<Box>` and `map<string, Box>` must render `Rect[]` /

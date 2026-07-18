@@ -84,13 +84,93 @@ def test_operator_over_unwelded_operand_is_rejected(ops: ModuleType) -> None:
     assert not hasattr(ops, "Tagged")
 
 
-def test_free_operator_is_not_bound(ops: ModuleType) -> None:
-    # Coin's operator+ is a free (non-member) function defined separately from the
-    # class. welder only scans a type's own members, so the free operator is not
-    # discovered: __add__ is absent and Coin + Coin is unsupported.
-    assert not hasattr(ops.Coin, "__add__")
+def test_free_operator_is_bound(ops: ModuleType) -> None:
+    # Coin's operator+ is a free (non-member) function defined separately from
+    # the class. welder sweeps the type's enclosing namespace for operators
+    # anchored on it, so the free operator binds as __add__ like a member one.
+    assert (ops.Coin(1) + ops.Coin(2)).cents == 3
+
+
+def test_free_operator_honors_marks(ops: ModuleType) -> None:
+    # The mark::exclude'd free operator- resolves out exactly like an excluded
+    # member operator: no __sub__.
+    assert not hasattr(ops.Coin, "__sub__")
     with pytest.raises(TypeError):
-        ops.Coin(1) + ops.Coin(2)
+        ops.Coin(3) - ops.Coin(1)
+
+
+def test_member_and_free_operator_share_a_slot(ops: ModuleType) -> None:
+    # Mixed has a member operator+(Mixed) AND a free operator+(Mixed, int): the
+    # carriage hands both to the rod as one __add__ group, so both call forms work.
+    assert (ops.Mixed(3) + ops.Mixed(4)).v == 7
+    assert (ops.Mixed(3) + 4).v == 7
+
+
+def test_reflected_free_operator(ops: ModuleType) -> None:
+    # operator*(double, Scaled) has the welded type on the RIGHT: it binds as
+    # __rmul__, so both 2 * s and s * 2 work (the latter via operator*(Scaled,
+    # double) under plain __mul__).
+    assert (ops.Scaled(3.0) * 2.0).f == 6.0
+    assert (2.0 * ops.Scaled(3.0)).f == 6.0
+
+
+def test_free_ostream_inserter_is_str(ops: ModuleType) -> None:
+    # operator<<(std::ostream&, Scaled) becomes __str__.
+    assert str(ops.Scaled(2.5)) == "Scaled(2.5)"
+
+
+# --- comparisons synthesized from operator<=> --------------------------------
+
+
+def test_defaulted_spaceship_full_comparison_set(ops: ModuleType) -> None:
+    # A defaulted <=> synthesizes __lt__/__le__/__gt__/__ge__, and its implicitly
+    # declared defaulted operator== binds as __eq__ — the full comparison set.
+    assert ops.Version(1, 2) < ops.Version(1, 3)
+    assert ops.Version(1, 2) <= ops.Version(1, 2)
+    assert ops.Version(2, 0) > ops.Version(1, 9)
+    assert ops.Version(2, 0) >= ops.Version(2, 0)
+    assert ops.Version(1, 2) == ops.Version(1, 2)
+    assert ops.Version(1, 2) != ops.Version(1, 3)
+
+
+def test_custom_spaceship_synthesizes_relationals_only(ops: ModuleType) -> None:
+    # A custom (non-defaulted) <=> synthesizes the four relationals; == is NOT
+    # synthesized (C++ itself only rewrites == from operator==, and Temp declares
+    # none) — equality falls back to Python identity.
+    assert ops.Temp(1.0) < ops.Temp(2.0)
+    assert ops.Temp(2.0) > ops.Temp(1.0)
+    assert ops.Temp(1.0) <= ops.Temp(1.0)
+    assert ops.Temp(1.0) >= ops.Temp(1.0)
+    t = ops.Temp(1.0)
+    assert t == t  # identity
+    assert ops.Temp(1.0) != ops.Temp(1.0)  # no C++ ==: distinct objects differ
+
+
+def test_heterogeneous_spaceship_both_directions(ops: ModuleType) -> None:
+    # <=>(int) synthesizes int-operand comparisons; the reversed direction rides
+    # Python's reflected protocol (5 < a -> a.__gt__(5)), which works because the
+    # synthesized slots return NotImplemented on an operand mismatch.
+    a = ops.Account(10)
+    assert a < 20
+    assert a > 5
+    assert 5 < a
+    assert 20 > a
+    assert a == 10  # the member operator==(int)
+    assert a != 11
+
+
+def test_explicit_operator_beats_synthesis(ops: ModuleType) -> None:
+    # Ordered declares an (inverted) operator< AND a <=>: the explicit operator
+    # wins its slot, the rest synthesize — exactly what a C++ caller sees.
+    assert ops.Ordered(2) < ops.Ordered(1)  # the inverted explicit <
+    assert ops.Ordered(2) > ops.Ordered(1)  # synthesized from <=>
+    assert ops.Ordered(1) <= ops.Ordered(2)  # synthesized from <=>
+
+
+def test_spaceship_marks_scope_per_language(ops: ModuleType) -> None:
+    # PyOnlyCmp's <=> is exclude(lua)'d: Python still synthesizes (the Lua specs
+    # assert the absence on their side).
+    assert ops.PyOnlyCmp(1) < ops.PyOnlyCmp(2)
 
 
 # --- exclude/include marks on operators resolve like they do on methods. ---

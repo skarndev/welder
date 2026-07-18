@@ -134,7 +134,11 @@ struct rod {
     static void add_method(class_handle&) {}
     template <auto Fns, class = ::welder::naming::none>
     static void add_static_method(class_handle&) {}
-    template <auto Fns> static void add_operator(class_handle&) {}
+    template <class T, auto Fns> static void add_operator(class_handle&) {}
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(class_handle&) {}
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(class_handle&) {}
 
     // --- enum binding: nothing to emit --------------------------------------
 

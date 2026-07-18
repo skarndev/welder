@@ -252,15 +252,29 @@ struct rod {
     template <class T, auto Bases, std::size_t... I>
     static auto _make_usertype(::sol::table& m, const char* name,
                                std::index_sequence<I...>) {
-        // sol::no_constructor suppresses sol2's implicit constructor; the real set
-        // is installed afterwards by add_constructors (the driver's one call).
-        if constexpr (sizeof...(I) == 0) {
-            return ::sol::usertype<T>{m.new_usertype<T>(name, ::sol::no_constructor)};
-        } else {
-            return ::sol::usertype<T>{m.new_usertype<T>(
-                name, ::sol::no_constructor, ::sol::base_classes,
-                ::sol::bases<typename [:Bases[I]:]...>())};
-        }
+        // sol2's "automagic" enrollment would auto-register metamethods straight
+        // off the C++ type (SFINAE-detected operator==/</<=, operator(), the
+        // ostream inserter) — bypassing welder's resolution, so an excluded or
+        // per-language-scoped operator would leak into Lua anyway. Welder
+        // registers every operator slot itself (add_operator/add_comparisons/
+        // add_stringifier), so those enrollments are switched off; the
+        // default constructor is off too (the real set is installed afterwards
+        // by add_constructors, the driver's one call — this is what
+        // sol::no_constructor achieved before enrollments took its overload
+        // slot). Destructor/pairs/length automagic stay on (welder has no
+        // opinion there).
+        ::sol::automagic_enrollments enroll{};
+        enroll.default_constructor = false;
+        enroll.to_string_operator = false;
+        enroll.call_operator = false;
+        enroll.less_than_operator = false;
+        enroll.less_than_or_equal_to_operator = false;
+        enroll.equal_to_operator = false;
+        ::sol::usertype<T> ut{m.new_usertype<T>(name, enroll)};
+        if constexpr (sizeof...(I) != 0)
+            ut[::sol::base_classes] =
+                ::sol::bases<typename [:Bases[I]:]...>();
+        return ut;
     }
 
     /** Collect *all* welded ancestors of @a type (transitively), deduplicated.
@@ -561,13 +575,71 @@ struct rod {
             std::make_index_sequence<Fns.size()>{});
     }
 
-    /** Bind operator overload group @a Fns under its Lua metamethod (one operator +
-        arity per group; each overload is spliced, several same-slot overloads become
-        one `sol::overload(…)`). @see welder::rod */
-    template <auto Fns>
+    /** Bind operator slot group @a Fns under its Lua metamethod — one
+        (operator, arity) slot whole, member and anchored *free* entries mixed
+        into a single `sol::overload(…)` assignment (sol2 stores one value per
+        slot, so the combined group is what keeps a free `operator+` and a
+        member `operator+` from clobbering each other). A free entry with @a T
+        on the right (`operator*(double, Vec)`) needs no swapping here: Lua
+        calls a metamethod with the operands as written, and the overload's
+        exact signature dispatches it. @see welder::rod */
+    template <class T, auto Fns>
     static void add_operator(auto& ut) {
         _register_operator<Fns>(ut, std::make_index_sequence<Fns.size()>{});
     }
+
+    /** Synthesize `__lt`/`__le` from `operator<=>` group @a Fns via rewritten
+        expressions (`a < b`, …) — Lua derives `>`, `>=` and `~=` by swapping
+        operands / negating, so two slots cover all four C++ relationals. Each
+        heterogeneous overload contributes BOTH operand orders (Lua passes the
+        operands as written: `5 < obj` reaches `__lt(5, obj)`). Slots an
+        explicit participating operator already @a Covered are skipped
+        (explicit beats synthesis). @see welder::rod */
+    template <class T, auto Fns, auto Covered>
+    static void add_comparisons(auto& ut) {
+        constexpr auto seq{std::make_index_sequence<Fns.size()>{}};
+        if constexpr (!Covered[0])
+            _register_synth_cmp<T, Fns, ::welder::detail::cmp_slot::lt>(ut, seq);
+        if constexpr (!Covered[1])
+            _register_synth_cmp<T, Fns, ::welder::detail::cmp_slot::le>(ut, seq);
+    }
+
+    /** Bind the swept free ostream inserter @a Fn as `__tostring` (via
+        @ref welder::detail::stringify — `print(obj)` / `tostring(obj)` then
+        show the C++ text). @see welder::rod */
+    template <class T, std::meta::info Fn>
+    static void add_stringifier(auto& ut) {
+        ut[::sol::meta_function::to_string] = &::welder::detail::stringify<T, Fn>;
+    }
+
+  private:
+    /** Assign one synthesized comparison slot: a `sol::overload` of the
+        rewritten-expression wrappers, both operand orders per overload (the
+        homogeneous form's duplicate reverse is never reached — sol2 dispatches
+        first match). @tparam S which slot (`lt`/`le`). */
+    template <class T, auto Fns, ::welder::detail::cmp_slot S, class Target,
+              std::size_t... I>
+    static void _register_synth_cmp(Target& ut, std::index_sequence<I...>) {
+        constexpr ::sol::meta_function slot{
+            S == ::welder::detail::cmp_slot::lt
+                ? ::sol::meta_function::less_than
+                : ::sol::meta_function::less_than_or_equal_to};
+        using ::welder::detail::synthesized_comparison;
+        ut[slot] = ::sol::overload(
+            &synthesized_comparison<
+                T,
+                std::remove_cvref_t<typename [: ::welder::detail::
+                                                    comparison_operand(
+                                                        Fns[I], ^^T) :]>,
+                S>::call...,
+            &synthesized_comparison<
+                std::remove_cvref_t<typename [: ::welder::detail::
+                                                    comparison_operand(
+                                                        Fns[I], ^^T) :]>,
+                T, S>::call...);
+    }
+
+  public:
 
     // --- enum binding -------------------------------------------------------
 

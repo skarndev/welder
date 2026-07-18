@@ -226,8 +226,13 @@ Rect {
 
 ## Overloaded operators
 
-A **member** operator binds under the target language's special method /
-metamethod, told apart unary vs. binary by arity. The mapping differs per language:
+An operator binds under the target language's special method / metamethod, told
+apart unary vs. binary by arity. **Member and freestanding operators both
+participate**: welder also sweeps a welded type's enclosing namespace for
+operators *anchored* on it (an operand is the type) — the ADL surface C++
+callers see — and each `(operator, arity)` slot reaches the backend as **one
+combined group**, so a member `operator+` and a free `operator+` overload one
+another instead of colliding. The mapping differs per language:
 
 === ":simple-python: Python"
 
@@ -264,14 +269,72 @@ Vec2 {
     Vec2 operator-() const { return {-x, -y}; }        // unary → __neg__ / __unm
     bool operator==(const Vec2& o) const { return x == o.x && y == o.y; }
 };
+
+// Freestanding operators anchored on Vec2 bind too — marks on them resolve
+// exactly like marks on members (under Vec2's policy):
+Vec2 operator*(const Vec2& v, double k);   // __mul__ / __mul
+Vec2 operator*(double k, const Vec2& v);   // Python __rmul__ (2.0 * v); Lua __mul
+std::ostream& operator<<(std::ostream& os, const Vec2& v);  // __str__ / __tostring
+```
+
+Three free-operator shapes get special treatment:
+
+- **Reflected operands** — a free operator with the welded type on the *right*
+  (`operator*(double, Vec2)`) binds under Python's reflected dunder (`__rmul__`,
+  or the mirrored comparison), so `2.0 * v` works exactly as in C++. Lua needs
+  no distinction: a metamethod receives its operands as written, and the
+  overload's exact signature dispatches it.
+- **The ostream inserter** — `operator<<(std::ostream&, T)` never binds as a
+  shift: it becomes Python `__str__` / Lua `__tostring` (the `std::ostream&`
+  parameter is exempt from the bindability gate).
+- **Python's `NotImplemented` protocol** — every binary arithmetic / comparison
+  dunder is bound as a *true* operator: a failed operand conversion returns
+  `NotImplemented` (letting Python try the other operand's reflected method)
+  instead of raising `TypeError`.
+
+!!! warning "Hidden friends are invisible to reflection"
+
+    A **hidden friend** operator (defined inline inside the class as a
+    `friend`) can be found only by ADL — P2996 reflection enumerates neither a
+    class's friends nor its ADL surface, so welder cannot see it. Move it to
+    namespace scope, or bind it by hand on the class handle `weld_type` returns.
+
+### `operator<=>` synthesizes the comparisons
+
+The spaceship itself never binds (`std::strong_ordering` has no target-language
+counterpart). Instead, a participating `operator<=>` — member or free —
+**synthesizes the relational operators** as plain rewritten expressions
+(`a < b`, …), so C++'s own rewriting rules pick the overload and the target
+language sees exactly what a C++ caller sees:
+
+- **Python** gets `__lt__` / `__le__` / `__gt__` / `__ge__`; a heterogeneous
+  `operator<=>(int)` compares both ways (`a < 5`, and `5 < a` via the reflected
+  protocol).
+- **Lua** gets `__lt` / `__le` only — Lua derives `>`, `>=` and `~=` by
+  swapping operands / negating. For a heterogeneous spaceship both operand
+  orders are registered (`5 < a` reaches `__lt(5, a)`).
+- `==` is **never** synthesized: C++ itself only rewrites `==` from
+  `operator==`. A *defaulted* spaceship implicitly declares a defaulted
+  `operator==`, and that member binds through the ordinary operator path — so a
+  `= default` spaceship yields the full comparison set with one line.
+- An **explicit** relational operator beats synthesis for its slot (mirroring
+  C++'s preference for non-rewritten candidates), and marks on the spaceship
+  scope the synthesis per language like any member mark. Only the *operand*
+  types face the bindability gate — the ordering return type never crosses.
+
+```cpp
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Version {
+    int maj{0}, mnr{0};
+    auto operator<=>(const Version&) const = default;  // <, <=, >, >=, ==, !=
+};
 ```
 
 !!! info "Deliberately not mapped"
 
     In-place compound assignment (`operator+=`) is **not** mapped — Python falls
-    back to `a = a + b` via `__add__`. Nor are `<=>`, `&&`, `||`, `++`, `--`, or
-    `operator=` (a special member). **Free** (non-member) operators aren't bound
-    yet.
+    back to `a = a + b` via `__add__`. Nor are `&&`, `||`, `++`, `--`, or
+    `operator=` (a special member).
 
 ## Nested types
 

@@ -2,14 +2,16 @@
 // Overloaded operators — mirrors tests/test_operators.py. A member operator binds
 // as the matching Python special method (operator+ -> __add__, ...). Exercises
 // binary arithmetic, the unary-vs-binary disambiguation of operator-, comparison,
-// and subscript.
+// subscript, FREE (namespace-scope) operators anchored on a welded type (plain,
+// mixed member+free slots, reflected right-operand, the ostream stringifier),
+// and the comparisons synthesized from operator<=>.
 //
 // The cases live in namespace `operators`, bound under an `operators` submodule
 // via WELDER_TEST_WELDER::weld_namespace so the Python package mirrors this file.
-// (The free operator+ below is non-welded, so bind_namespace skips it — which is
-// exactly the "free operators aren't bound yet" case it documents.)
 //
 // #included by bindings.cpp after the welder vocabulary + the active Python backend.
+#include <compare>
+#include <ostream>
 
 namespace operators {
 
@@ -77,9 +79,10 @@ Meters {
 //   };
 
 // Case 3: the operator is defined *separately* from the class as a free,
-// non-member function (legal C++). welder scans only a type's own members, so a
-// free operator is not discovered and __add__ never appears. Documents the
-// current "free operators aren't bound yet" limitation.
+// non-member function. welder sweeps the welded type's enclosing namespace for
+// operators ANCHORED on it (an operand IS the type), so the free operator+
+// binds as __add__ exactly like a member one — and a marked one resolves like
+// any member (the excluded operator- below never appears).
 struct
 [[=welder::weld(welder::lang::py, welder::lang::lua)]]
 Coin {
@@ -88,6 +91,115 @@ Coin {
     explicit Coin(int c) : cents{c} {}
 };
 inline Coin operator+(const Coin& a, const Coin& b) { return Coin{a.cents + b.cents}; }
+[[=welder::mark::exclude]]
+inline Coin operator-(const Coin& a, const Coin& b) { return Coin{a.cents - b.cents}; }
+
+// A member and a free operator sharing one slot: the carriage combines them into
+// ONE group per (operator, arity), so both bind — critical on the Lua rods,
+// which store one value per metamethod slot (two separate registrations would
+// clobber; one sol::overload / variadic addFunction holds both).
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Mixed {
+    int v{0};
+    Mixed() = default;
+    explicit Mixed(int x) : v{x} {}
+    Mixed operator+(const Mixed& o) const { return Mixed{v + o.v}; } // member
+};
+inline Mixed operator+(const Mixed& a, int b) { return Mixed{a.v + b}; } // free, same slot
+
+// Reflected operand + stringifier. operator*(double, Scaled) has the welded type
+// on the RIGHT: the Python rods bind it as __rmul__ (through an operand-swapping
+// wrapper) so `2.0 * s` works; the Lua rods just add the exact (number, Scaled)
+// signature to __mul (Lua passes a metamethod its operands as written). The free
+// ostream inserter becomes Python __str__ / Lua __tostring.
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Scaled {
+    double f{1.0};
+    Scaled() = default;
+    explicit Scaled(double v) : f{v} {}
+};
+inline Scaled operator*(const Scaled& s, double k) { return Scaled{s.f * k}; }
+inline Scaled operator*(double k, const Scaled& s) { return Scaled{k * s.f}; }
+inline std::ostream& operator<<(std::ostream& os, const Scaled& s) {
+    return os << "Scaled(" << s.f << ")";
+}
+
+// --- operator<=> synthesizes the relational slots. --------------------------
+// The spaceship itself never binds (std::*_ordering does not cross); welder
+// synthesizes rewritten expressions (`a < b`, ...) instead: __lt__/__le__/
+// __gt__/__ge__ on Python, __lt/__le on Lua (which derives >, >=, ~= itself).
+
+// A DEFAULTED spaceship also implicitly declares a defaulted operator==, which
+// binds through the ordinary operator path — so Version gets the full set.
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Version {
+    // (not `major`/`minor` — glibc leaks those as macros)
+    int maj{0};
+    int mnr{0};
+    Version() = default;
+    Version(int mj, int mn) : maj{mj}, mnr{mn} {}
+    auto operator<=>(const Version&) const = default;
+};
+
+// A CUSTOM spaceship synthesizes the four relationals but NOT == (C++ itself
+// only rewrites == from operator==; none is declared here).
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Temp {
+    double celsius{0.0};
+    Temp() = default;
+    explicit Temp(double c) : celsius{c} {}
+    std::strong_ordering operator<=>(const Temp& o) const {
+        return celsius < o.celsius   ? std::strong_ordering::less
+               : celsius > o.celsius ? std::strong_ordering::greater
+                                     : std::strong_ordering::equal;
+    }
+};
+
+// A HETEROGENEOUS spaceship: comparisons against a plain int, both directions
+// (Python routes `5 < a` through the reflected protocol — the synthesized slots
+// return NotImplemented on an operand mismatch; Lua consults either operand's
+// metamethod and the synthesis registers both operand orders).
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Account {
+    int balance{0};
+    Account() = default;
+    explicit Account(int b) : balance{b} {}
+    std::weak_ordering operator<=>(int b) const { return balance <=> b; }
+    bool operator==(int b) const { return balance == b; }
+};
+
+// An EXPLICIT relational operator beats synthesis, slot by slot (mirroring
+// C++'s preference for non-rewritten candidates): the deliberately INVERTED
+// operator< is what < binds, while >, <=, >= still synthesize from <=> — the
+// exact asymmetry a C++ caller sees.
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Ordered {
+    int rank{0};
+    Ordered() = default;
+    explicit Ordered(int r) : rank{r} {}
+    bool operator<(const Ordered& o) const { return rank > o.rank; } // inverted!
+    std::strong_ordering operator<=>(const Ordered& o) const {
+        return rank <=> o.rank;
+    }
+};
+
+// Marks on the spaceship scope the synthesis per language like any member:
+// Python compares, Lua does not.
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+PyOnlyCmp {
+    int v{0};
+    PyOnlyCmp() = default;
+    explicit PyOnlyCmp(int x) : v{x} {}
+    [[=welder::mark::exclude(welder::lang::lua)]]
+    auto operator<=>(const PyOnlyCmp&) const = default;
+};
 
 // --- Operators honor the same exclude/include/policy resolution as methods. ---
 // is_bindable_operator consults member_bound (the shared resolver), so a marked

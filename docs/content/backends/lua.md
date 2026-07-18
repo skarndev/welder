@@ -104,9 +104,10 @@ changes.
 
 ### Operators become metamethods
 
-Lua's metamethod set is smaller and asymmetric. Every welded **member** operator
-binds to a metamethod (told apart unary vs. binary by arity); this is the complete
-set welder maps:
+Lua's metamethod set is smaller and asymmetric. Every welded operator — **member
+or anchored free** (see the
+[guide](../guide/binding-types.md#overloaded-operators)) — binds to a metamethod
+(told apart unary vs. binary by arity); this is the complete set welder maps:
 
 | C++ | Lua | | C++ | Lua |
 |---|---|---|---|---|
@@ -129,6 +130,26 @@ they are `#if`-gated:
 `operator!=`, `operator>` and `operator>=` map to **nothing** — Lua derives `~=`,
 `>` and `>=` from `__eq`, `__lt` and `__le`, so they just work once those are bound.
 Note C++ `operator^` is bitwise-xor → `__bxor` (**not** `__pow`/power).
+
+On top of the table:
+
+- **Free operators need no reflected form here**: Lua hands a metamethod its
+  operands as written (`2 * obj` reaches `__mul(2, obj)`), so the free
+  overload's exact signature dispatches either operand order — member and free
+  entries for one slot always arrive as a *single* registration (one value per
+  metamethod slot).
+- A participating **`operator<=>`** synthesizes `__lt` and `__le` (both operand
+  orders for a heterogeneous spaceship); `>`/`>=`/`~=` then derive as usual. A
+  *defaulted* spaceship's implicit `operator==` binds `__eq` through the
+  ordinary path. Note the derivation seam: Lua's `a > b` **is** `b < a`, so
+  when an explicit `operator<` disagrees with the spaceship's ordering, Lua's
+  `>` mirrors the explicit `<` while Python/C++ synthesize `>` from `<=>`
+  independently.
+- The free ostream inserter `operator<<(std::ostream&, T)` binds as
+  `__tostring` (`print(obj)` shows the C++ text).
+- Since welder registers every operator slot itself, **sol2's "automagic"
+  operator enrollment is switched off** — an operator you exclude stays
+  excluded instead of being SFINAE-detected off the raw C++ type.
 
 ### Everything else
 
@@ -223,7 +244,11 @@ operators the language server models — the arithmetic and bitwise ones plus
 **subscript** (`[]`) metamethods the sol2 runtime binds are *omitted* from the stub:
 lua-language-server has no `---@operator` spelling for them (`==` is always allowed
 and yields a boolean; indexing is expressed with `---@field [key] value`). They work
-at runtime regardless; the stub simply can't type them.
+at runtime regardless; the stub simply can't type them. The same applies to the
+comparisons synthesized from `operator<=>`, to `__tostring` (`tostring()` is typed
+generically), and to a **reflected** free operator (the welded type on the right —
+`---@operator` types `self` as the left operand): runtime-only. An anchored free
+operator with the type on the *left* is typed like a member one.
 
 welder's own test suite runs the emitted stub through `lua-language-server --check`
 when the server is installed (the Lua analogue of type-checking the `.pyi` stubs with
