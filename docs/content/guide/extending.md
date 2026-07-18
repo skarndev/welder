@@ -72,6 +72,11 @@ it your language's own copy spelling (the Python rods emit
     template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(auto& cls);   // the whole participating set
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(auto& cls, const char* name);
+        // one resolved method-backed property (getter/setter marks); Setter is
+        // a null reflection for read-only, the name arrives driver-resolved,
+        // and a non-void setter return must be DISCARDED (it is never gated)
     template <auto Fns, class Style> static void add_method(auto& cls);
     template <auto Fns, class Style> static void add_static_method(auto& cls);
     template <class T, auto Fns>     static void add_operator(auto& cls);

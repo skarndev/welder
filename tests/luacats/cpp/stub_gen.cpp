@@ -109,6 +109,22 @@ Impulse {
 Impulse operator*(const Impulse& i, double k);
 Impulse operator*(double k, const Impulse& i);
 
+// Method-backed properties (getter/setter marks): a paired accessor renders as
+// a plain ---@field of the getter's return type; a lone getter adds the same
+// (read-only) note a const data member gets; an explicit name is verbatim.
+struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A throttle (exercises properties).")]]
+Throttle {
+    Throttle() = default;
+    [[=welder::getter]] [[=welder::doc("The lever position, 0..1.")]]
+    double get_position() const { return position_; }
+    [[=welder::setter]] void set_position(double p) { position_ = p; }
+    [[=welder::getter]] bool is_open() const { return position_ > 0.0; }
+    [[=welder::getter("ratio")]] double raw() const { return position_; }
+
+  private:
+    double position_{0.0};
+};
+
 // Another type rename, this one reached only through *container* references:
 // Polygon's `vector<Box>` and `map<string, Box>` must render `Rect[]` /
 // `table<string, Rect>`, proving the reconciliation reaches inside the STL wrappers.

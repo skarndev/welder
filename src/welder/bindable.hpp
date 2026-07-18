@@ -372,9 +372,32 @@ consteval void assert_callable_bindable() {
         assert_signature_bindable<B, Fn, L, Reg>();
 }
 
+/** Assert a property **setter**'s parameter binds, unless trusted — the write
+    half of the getter/setter machinery.
+
+    Parameters only, sharing the rationale of @ref assert_operands_bindable —
+    the property protocol has no slot for a setter's return value, so every rod
+    *discards* it (a fluent `T& set_x(…)` chains in C++ but writes plainly from
+    the target language) — a return type that never crosses the boundary never
+    faces the gate.
+    @tparam B  the rod.
+    @tparam Fn a reflection of the setter.
+    @tparam L  the target language.
+*/
+template <caster_oracle B, std::meta::info Fn, lang L,
+          class Reg = welded_registration>
+consteval void assert_setter_bindable() {
+    if constexpr (!welder::trusted_for(Fn, L)) {
+        constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+        if constexpr (n != 0)
+            detail::assert_params_bindable<B, Fn, L, Reg>(
+                std::make_index_sequence<n>{});
+    }
+}
+
 namespace detail {
 
-/** The parameter walk behind @ref assert_operands_bindable: gate each parameter
+/** The parameter walk behind @ref@ref assert_operands_bindable — gate each parameter
     that is not the anchor type itself.
     @tparam B the rod. @tparam Fn the spaceship overload. @tparam Type the
     anchor type reflection. @tparam L the language. @tparam I the index pack. */

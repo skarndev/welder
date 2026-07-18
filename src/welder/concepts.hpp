@@ -177,6 +177,13 @@ concept caster_oracle = requires {
         // Copyable = the admitted copy constructor (never an init overload —
         // the Python rods emit __copy__/__deepcopy__, the Lua rods ignore it)
     template <std::meta::info Mem, class Style> static void add_field(auto& cls);
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+      static void add_property(auto& cls, const char* name);
+        // one resolved method-backed property (getter/setter marks): Getter is
+        // the read half, Setter the write half or a null reflection (= read-
+        // only). The NAME arrives resolved (the driver owns property naming —
+        // the mark's explicit name verbatim, else the styled-then-stripped
+        // identifier); the doc rides the getter's [[=welder::doc]]
     template <auto Fns, class Style> static void add_method(auto& cls);
     template <auto Fns, class Style> static void add_static_method(auto& cls);
     template <class T, auto Fns>     static void add_operator(auto& cls);
@@ -250,11 +257,14 @@ concept rod =
     // signatures are checked; the placeholder reflections (`^^int`) / types
     // (@ref detail::any_type) reach only the bodies, which are not instantiated.
     requires(typename B::template class_handle_type<detail::any_type>& cls,
-             typename B::template enum_handle_type<detail::any_enum>& en) {
+             typename B::template enum_handle_type<detail::any_enum>& en,
+             const char* s) {
         B::template add_constructors<detail::any_type,
                                      std::array<std::meta::info, 0>{}, false,
                                      false, false>(cls);
         B::template add_field<^^int, detail::any_type>(cls);
+        B::template add_property<detail::any_type, ^^int, std::meta::info{}>(cls,
+                                                                             s);
         B::template add_method<std::array<std::meta::info, 1>{^^int},
                                detail::any_type>(cls);
         B::template add_static_method<std::array<std::meta::info, 1>{^^int},

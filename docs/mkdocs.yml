@@ -119,6 +119,7 @@ nav:
       - Getting started: guide/getting-started.md
       - Annotation vocabulary: guide/annotations.md
       - Binding a type: guide/binding-types.md
+      - Properties: guide/properties.md
       - Binding templates: guide/templates.md
       - Enums: guide/enums.md
       - Inheritance: guide/inheritance.md

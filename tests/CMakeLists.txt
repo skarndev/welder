@@ -188,6 +188,19 @@ add_test(NAME compile.naming
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_naming --config $<CONFIG>)
 
+# Method-backed property semantics (compile-only): case detection, the
+# accessor-word strip (pairing key + styled-name derivation), property pairing
+# over a welded type (mixed conventions, explicit names, read-only), the
+# per-style property_bound_name resolution, and the opt_in implication of an
+# accessor mark. Runtime behavior lives with the rods (test_properties.py /
+# properties_spec.lua); this locks the consteval machinery those observe.
+add_library(welder_properties OBJECT EXCLUDE_FROM_ALL core/properties.cpp)
+target_compile_features(welder_properties PRIVATE cxx_std_26)
+target_link_libraries(welder_properties PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.properties
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_properties --config $<CONFIG>)
+
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 

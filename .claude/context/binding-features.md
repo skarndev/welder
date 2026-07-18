@@ -172,6 +172,79 @@ detail::aggregate_fields gained the n!=0 fill guard (std::array<info,0>::
 operator[] is not consteval — a FIELDLESS class hard-errored the Lua rods'
 ctor machinery; Meter was the first such class in the suite).
 
+## Method-backed properties — `getter` / `setter`
+`[[=welder::getter]]` (const, 0-param, non-void, non-&&-qualified) /
+`[[=welder::setter]]` (exactly 1 param) member functions bind as ONE idiomatic
+property instead of methods, for the languages the mark covers (bare = all;
+callable `getter([lang…,] "name")` — the weld_as arg grammar with the name
+OPTIONAL). Stored form `detail::accessor_spec` is deliberately NON-templated
+(fixed 64-char inline name buffer, `accessor_name_capacity`): the resolution
+machinery reads it off DYNAMIC reflections (member_bound, overload-set
+selectors) where a length-templated spec can't be extracted. Readers
+(reflect.hpp): `accessor_marked` / `is_accessor_for` / `has_accessor_mark` /
+`accessor_explicit_name`.
+**Resolution:** the accessor mark IMPLIES the opt-in under `policy::opt_in`
+(member_bound's opt_in branch ORs `is_accessor_for`; scoped marks imply only
+for covered langs); exclude still beats it. The method sweep SKIPS accessors
+symmetrically (bind_members' method loop + `method_overload_set` both filter
+`!is_accessor_for(m, L)`), so for uncovered languages the function binds as an
+ordinary method (the per-language degradation).
+**Naming/pairing** (naming.hpp `detect_case`/`accessor_property_words`/
+`strip_accessor_word` + bind_traits `property_key`/`property_bound_name`):
+explicit mark name = verbatim (never styled; `weld_as` on an accessor is
+diagnosed — the mark IS the rename tool); else derive by stripping a leading
+`get`/`set` WORD (≥2 words only; `is_` never stripped) — the derived name is
+`Style::transform_field(Getter)` FIRST, then stripped in the styled spelling's
+own detected convention (keeps the info-taking hook contract; commutes with
+word-preserving styles). PAIRING keys on the case-normalized word list, so
+get_x/setX/SetX/overload-style all pair, mixed conventions included; the
+getter's spelling is authoritative.
+**Machinery** (bind_traits "method-backed properties" section):
+`collect_accessors` (own + flattened non-native bases, mirrors
+collect_member_operators) → `property_entries<Resolution>(type, L)` (validate →
+pair; getters decl-order fix emission order) → carriage `bind_properties`
+(bind_class_interior, after bind_members) → rod hook
+`add_property<T, Getter, Setter>(cls, name)` — Setter = null info{} =
+read-only; NAME arrives driver-resolved (the driver owns property naming, like
+class/enum names). Gate: getter via assert_callable_bindable; setter via NEW
+`assert_setter_bindable` (bindable.hpp) — PARAMETER only, the return is
+discarded by every rod (a fluent `T& set_x()` chains in C++, writes plainly
+outside), so pybind11/nanobind/sol2 wrap a non-void setter in a void lambda
+(LuaBridge3 wraps via callables) — binding the member pointer directly would
+convert an ungated value.
+**Diagnostics** (diag.hpp, all thrown in property_entries unless noted):
+malformed_getter / malformed_setter / accessor_role_conflict (both marks, one
+fn, one lang) / duplicate_property_accessor / setter_without_getter (no
+write-only properties) / accessor_weld_as_conflict / static_property_accessor
+(deferred — def_property_static exists, Lua has no surface) /
+virtual_property_accessor (a property under the method name breaks by-name
+Python override dispatch — rejected, not subtly wrong) /
+property_name_collision (vs bound fields + non-accessor methods, WORD-KEY
+comparison — deliberately convention-insensitive; nested types exempt —
+PascalCase type vs camel property is legit) / accessor_name_too_long (factory).
+Free-function accessor marks: static_assert in the namespace walk's function
+branch + bind_function. Alias admissibility lists reject accessor_spec too.
+**Rods:** pybind11 def_property(_readonly) (unannotated → framework default
+reference_internal, rvalue-forced to move); nanobind def_prop_rw/ro (nanobind
+does NOT default prop getters to reference_internal → rod passes it explicitly
+for pointer/lvalue-ref returns, `automatic` for values — an explicit reference
+policy on a value would dangle); sol2 `sol::property`/`readonly_property`;
+LuaBridge3 `addProperty` over pms held as `GF T::*` (base→derived pm
+conversion, the add_field maneuver); luacats `---@field name <ret-type>` +
+`(read-only)` note (getter doc = description); trampolines no-op. Getter doc =
+property __doc__ (doc_of, not function_docstring); return_policy on the getter
+honored by the Python rods.
+Tests: tests/common/cpp/properties.hpp ↔ test_properties.py /
+properties_spec.lua (all four runtime rods; Circle overload-style +
+read-only + control method, Vehicle camel/mixed/is_-predicate, Gauge explicit
+names + py-scoped marks + lua-excluded setter, Padlock opt_in implication, Tag
+flattened-base + fluent setter, Sealed weld_protected); compile lock
+tests/core/properties.cpp (detect_case, strip, pairing, per-style
+property_bound_name, member_bound implication); neg
+property_{setter_without_getter,nonconst_getter,virtual_accessor,
+weld_as_on_accessor,shadows_member,free_function_accessor}; luacats golden
+`stubdemo.Throttle`; rod_probe + user_lang probe rods carry the hook.
+
 ## Operators (member + free + spaceship synthesis + stringifier)
 An operator binds under its dunder/metamethod (`operator+` → `__add__`/`__add`,
 …), unary vs binary told apart by arity (`is_unary_operator` — member: 0/1
@@ -782,10 +855,11 @@ Tested by the shared cases bound for `lua`, asserted by the busted specs in
 `tests/lua/spec/*_spec.lua`.
 
 ## Not yet implemented
-Properties (getter/setter pairs) are designed-for but not yet implemented; so are
-further languages. (Enums, custom type converters, the Lua/sol2 rod, sol2
-overload grouping, live sol2 namespace variables, and the LuaCATS stub emitter now
-are.) Remaining sol2 rod enhancement: LuaJIT's 5.1 operator-map branch. LuaCATS stub: overloaded methods/constructors/free functions now render as
+Further languages are designed-for but not yet implemented; so are STATIC
+properties (a marked static accessor is a designed error — see the properties
+section). (Enums, custom type converters, the Lua/sol2 rod, sol2 overload
+grouping, live sol2 namespace variables, the LuaCATS stub emitter, and
+method-backed properties now are.) Remaining sol2 rod enhancement: LuaJIT's 5.1 operator-map branch. LuaCATS stub: overloaded methods/constructors/free functions now render as
 one documented `function` plus `---@overload fun(…)` lines (the primary — kept with
 its full `@param`/summary docs — is the first overload carrying a doc); a **const**
 member's read-only-ness is surfaced as a `(read-only)` description note, since

@@ -224,6 +224,13 @@ Rect {
     print(Rect.square(5.0):area())   --> 25.0  (static uses `.`)
     ```
 
+!!! tip "Accessor pairs can bind as properties"
+
+    A `get_x()`/`set_x(v)` (or `x()`/`x(v)`) pair doesn't have to bind as two
+    methods: mark the functions `[[=welder::getter]]` / `[[=welder::setter]]` and
+    welder builds one idiomatic read/write property instead — see
+    [Properties](properties.md).
+
 ## Overloaded operators
 
 An operator binds under the target language's special method / metamethod, told

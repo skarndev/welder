@@ -130,6 +130,8 @@ struct rod {
     static void add_constructors(class_handle&) {}
     template <std::meta::info, class = ::welder::naming::none>
     static void add_field(class_handle&) {}
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(class_handle&, const char*) {}
     template <auto Fns, class = ::welder::naming::none>
     static void add_method(class_handle&) {}
     template <auto Fns, class = ::welder::naming::none>

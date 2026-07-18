@@ -51,7 +51,10 @@ foreach(neg operand_not_welded container_of_unwelded
             member_alias_cross_class alias_optin_in_signature
             nested_virtual_in_specialization
             union_weld_type union_member union_welded_in_namespace
-            move_ctor_marked)
+            move_ctor_marked
+            property_setter_without_getter property_nonconst_getter
+            property_virtual_accessor property_weld_as_on_accessor
+            property_shadows_member property_free_function_accessor)
   add_library(welder_neg_${neg} OBJECT EXCLUDE_FROM_ALL cpp/neg/${neg}.cpp)
   target_compile_features(welder_neg_${neg} PRIVATE cxx_std_26)
   target_link_libraries(welder_neg_${neg} PRIVATE welder::pybind11)

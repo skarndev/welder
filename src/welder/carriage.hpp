@@ -533,7 +533,11 @@ struct basic_carriage {
         // emitted once per welded type — see bind_operators.)
         template for (constexpr auto fn :
                       std::define_static_array(std::meta::members_of(Src, ctx))) {
+            // An accessor-marked function (getter/setter covering L) is not a
+            // method here — it binds as a PROPERTY (see bind_properties); for
+            // languages its marks don't cover, it stays an ordinary method.
             if constexpr (detail::is_method_candidate(fn) &&
+                          !welder::is_accessor_for(fn, L) &&
                           detail::member_access_admitted<Resolution>(fn, L,
                                                                      BoundInto) &&
                           Resolution::class_member_participates(fn, L, pol,
@@ -678,8 +682,43 @@ struct basic_carriage {
         // Data members + methods (T's own, plus flattened bases).
         bind_members<B, ^^T, ^^T, Style>(cls);
 
+        // Method-backed properties (getter/setter marks) — resolved once per
+        // welded type across the same flattening, like the operator slots.
+        bind_properties<B, T, Style>(cls);
+
         // Operators — emitted once per welded type, across every source.
         bind_operators<B, T>(cls);
+    }
+
+    /** Emit @a T's method-backed **properties**: every accessor-marked member
+        function (own + flattened bases', see `detail::collect_accessors`),
+        shape-validated and paired into one `detail::property_entry` per
+        property name by `detail::property_entries` — the getter authoritative,
+        the setter optional (absent = read-only). Each half is gated for
+        bindability like any callable; the resolved name (explicit mark name
+        verbatim, else the styled-then-stripped identifier) is computed here —
+        the driver owns property naming, like class/enum names — and handed to
+        the rod's `add_property<T, Getter, Setter>` hook.
+        @tparam B     the rod.
+        @tparam T     the welded type.
+        @tparam Style the name style.
+        @param cls the class handle. */
+    template <rod B, class T, class Style, class Cls>
+    static void bind_properties(Cls& cls) {
+        constexpr lang L{B::language};
+        using Reg = detail::scoped_registration<Resolution, ^^T>;
+        template for (constexpr auto p :
+                      std::define_static_array(
+                          detail::property_entries<Resolution>(^^T, L))) {
+            welder::assert_callable_bindable<B, p.getter, L, Reg>();
+            // The setter gates its PARAMETER only: its return value (a fluent
+            // T& chains in C++) is discarded by every rod — the property
+            // protocol has no slot for it — so it never faces the gate.
+            if constexpr (p.setter != std::meta::info{})
+                welder::assert_setter_bindable<B, p.setter, L, Reg>();
+            B::template add_property<T, p.getter, p.setter>(
+                cls, detail::property_bound_name<p.getter, L, Style>());
+        }
     }
 
     /** Emit @a T's operators: member ones (own + flattened bases') and the
@@ -1163,6 +1202,10 @@ struct basic_carriage {
         static_assert(Resolution::participates(Fn, L),
                       "welder: weld_function<Fn>: Fn is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
+        static_assert(!welder::has_accessor_mark(Fn),
+                      "welder: weld_function<Fn>: Fn carries a getter/setter "
+                      "mark, but properties are a class surface — the marks "
+                      "apply to member functions only");
         constexpr auto grp{detail::manual_function_group<Resolution, Fn, L>()};
         template for (constexpr auto member : std::define_static_array(grp)) {
             welder::assert_callable_bindable<B, member, L, Resolution>();
@@ -1312,6 +1355,13 @@ struct basic_carriage {
                 // operator is part of its anchor type's interface (ADL), so the
                 // type's own binding sweeps it (bind_operators) — and it has no
                 // identifier for a module-level name anyway.
+                static_assert(
+                    !welder::has_accessor_mark(mem),
+                    "welder: a getter/setter mark sits on a NAMESPACE-SCOPE "
+                    "function, but properties are a class surface — the marks "
+                    "apply to member functions only. Bind the free function as "
+                    "an ordinary module function (drop the mark), or wrap the "
+                    "pair in a class.");
                 if constexpr (Resolution::member_participates(mem, L, pol, Ns)) {
                     if constexpr (detail::is_overload_leader<
                                       detail::function_overload_set<Resolution>>(

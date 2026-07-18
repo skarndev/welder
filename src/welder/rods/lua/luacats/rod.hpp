@@ -280,6 +280,26 @@ struct rod {
         w.fields += '\n';
     }
 
+    /** Emit a `---@field` line for the resolved property (@a Getter + optional
+        @a Setter) under the driver-resolved @a name — the stub's view of a
+        method-backed property is exactly a field of the getter's (dereferenced)
+        return type, with the getter's `[[=welder::doc]]` as the description
+        and, when no setter participates, the same `(read-only)` note a const
+        data member gets. @see welder::rod */
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(class_writer& w, const char* name) {
+        w.fields += "---@field ";
+        w.fields += name;
+        w.fields += ' ';
+        w.fields += lua_type(std::meta::remove_cvref(std::meta::return_type_of(Getter)));
+        std::string d{one_line(::welder::doc_of<Getter>())};
+        if constexpr (Setter == std::meta::info{})
+            d = d.empty() ? "(read-only)" : d + " (read-only)";
+        if (!d.empty())
+            w.fields += ' ' + d;
+        w.fields += '\n';
+    }
+
     /** Emit method overload group @a Fns as one documented `Class:name(…)`
         (further overloads as `---@overload` lines; name from `Fns[0]`).
         @see welder::rod */

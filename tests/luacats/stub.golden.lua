@@ -84,6 +84,16 @@ stubdemo.Impulse = {}
 ---@overload fun(mag: number): stubdemo.Impulse
 function stubdemo.Impulse.new() end
 
+--- A throttle (exercises properties).
+---@class stubdemo.Throttle
+---@field position number The lever position, 0..1.
+---@field is_open boolean (read-only)
+---@field ratio number (read-only)
+stubdemo.Throttle = {}
+
+---@return stubdemo.Throttle
+function stubdemo.Throttle.new() end
+
 --- Axis-aligned box (aggregate).
 ---@class stubdemo.Rect
 ---@field width number Width in units.

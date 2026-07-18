@@ -167,6 +167,87 @@ consteval std::string restyle(std::string_view id, case_kind kind) {
            std::string(trail, '_');
 }
 
+/** The convention an identifier already reads as — the inverse guess a
+    re-speller needs when it must *preserve* the source convention (the
+    accessor-word strip below re-joins in the identifier's own spelling).
+
+    Heuristic and deliberately coarse: a hyphen ⇒ kebab; an underscore (or no
+    letters at all) ⇒ snake, or screaming-snake when no lowercase appears; else
+    a leading capital ⇒ pascal, any capital ⇒ camel, all-lower ⇒ snake (for a
+    separator-free all-lower identifier every convention re-joins identically,
+    so the answer is moot there).
+    @param id the identifier (any spelling).
+    @return the detected @ref case_kind. */
+consteval case_kind detect_case(std::string_view id) {
+    bool has_underscore{false}, has_hyphen{false}, has_lower{false},
+        has_upper{false};
+    bool first_alpha_upper{false}, seen_alpha{false};
+    for (char c : id) {
+        if (c == '_')
+            has_underscore = true;
+        else if (c == '-')
+            has_hyphen = true;
+        else if (c >= 'a' && c <= 'z')
+            has_lower = true;
+        else if (c >= 'A' && c <= 'Z')
+            has_upper = true;
+        if (!seen_alpha && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) {
+            seen_alpha = true;
+            first_alpha_upper = (c >= 'A' && c <= 'Z');
+        }
+    }
+    if (has_hyphen)
+        return case_kind::kebab;
+    if (has_underscore || !has_upper)
+        return has_lower || !has_upper ? case_kind::snake
+                                       : case_kind::screaming_snake;
+    return first_alpha_upper ? case_kind::pascal : case_kind::camel;
+}
+
+/** The words of an accessor's *property*: @a id split, with a leading `get` /
+    `set` word stripped when at least one word follows it (case-insensitively —
+    `get_area`, `getArea`, `GetArea` and `GET_AREA` all yield `{"area"}`; a
+    single-word `radius` is already the property and is never stripped).
+
+    This is both halves of the property story: the **pairing key** (getter and
+    setter match on this case-normalized word sequence, so `get_name` pairs with
+    `SetName`) and the derived name's word list. `is_`-style predicates are
+    deliberately not stripped — `is_empty` *is* the idiomatic property name.
+    @param id the accessor function's identifier (any spelling).
+    @return the property's lower-cased words, in order. */
+consteval std::vector<std::string> accessor_property_words(std::string_view id) {
+    std::vector<std::string> words{split_words(id)};
+    if (words.size() >= 2 && (words[0] == "get" || words[0] == "set"))
+        words.erase(words.begin());
+    return words;
+}
+
+/** Strip the accessor word off an already *styled* accessor name, re-joining
+    the remainder in @a styled's own detected convention (leading/trailing
+    underscore runs preserved, like @ref restyle).
+
+    The derivation route: the driver styles the accessor's identifier through
+    the name style's `transform_field` hook first — a property is
+    attribute-shaped — and then drops the `get`/`set` word here. Stripping after
+    styling keeps the existing per-kind hook contract (a hook takes a
+    reflection, so it cannot style a pre-stripped string), and commutes with any
+    word-preserving style.
+    @param styled the styled accessor name.
+    @return the property name in @a styled's convention. */
+consteval std::string strip_accessor_word(std::string_view styled) {
+    std::string::size_type lead{0};
+    while (lead < styled.size() && styled[lead] == '_')
+        ++lead;
+    if (lead == styled.size())
+        return std::string{styled};
+    std::string::size_type trail{0};
+    while (styled[styled.size() - 1 - trail] == '_')
+        ++trail;
+    return std::string(lead, '_') +
+           join_words(accessor_property_words(styled), detect_case(styled)) +
+           std::string(trail, '_');
+}
+
 // --- the style customization point ------------------------------------------
 //
 // The `name_style` concept — the per-kind hook contract a style below implements —

@@ -56,6 +56,7 @@ inline ::sol::table welder_test_submodule(::sol::table& m, const char* name) {
 #include "chaining.hpp"
 #include "overloads.hpp"
 #include "retpolicy.hpp"
+#include "properties.hpp"
 #include "templates.hpp"
 #include "unions.hpp"
 
@@ -78,6 +79,7 @@ extern "C" int luaopen_welder_test_sol2(lua_State* L) {
     register_chaining(m);    // <-> chaining_spec.lua (handles returned by weld_*)
     register_overloads(m);   // <-> overloads_spec.lua (per-overload / per-ctor marks)
     register_retpolicy(m);   // <-> retpolicy_spec.lua (return_policy is structural in Lua)
+    register_properties(m); // <-> properties_spec.lua (getter/setter marks)
     register_templates(m);   // <-> templates_spec.lua (alias-welded template instantiations)
     register_unions(m);      // <-> unions_spec.lua (union escape hatches + std::variant)
     return ::sol::stack::push(L, m);

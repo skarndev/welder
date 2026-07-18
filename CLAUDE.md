@@ -90,6 +90,8 @@ PYBIND11_MODULE(mymod, m) {
 | `mark::include` / `mark::include(lang...)` | Opt a member in (meaningful under `policy::opt_in`). |
 | `mark::only(lang...)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Must be called with ≥ 1 lang (bare form diagnosed); `exclude` still beats it; repeats union. |
 | `mark::trust_bindable` / `mark::trust_bindable(lang...)` | Vouch that this member's type (or a callable's whole signature) is representable outside welder's view (e.g. hand-registered with pybind11); suppresses the bindability gate. |
+| `getter` / `getter([lang…,] "name")` | Bind this **const, 0-param** member function as a property read (alone = read-only property); the marked function stops being a method for the covered languages (elsewhere it stays one). Name = explicit (verbatim, the property's `weld_as` — a real `weld_as` on an accessor is diagnosed) else the identifier styled-then-stripped of a leading `get`/`set` word (`is_` never stripped). Under `opt_in` the mark is also the opt-in. Static/virtual accessors and free-function marks are designed errors. |
+| `setter` / `setter([lang…,] "name")` | The property write half (exactly 1 param), paired with a getter on the case-normalized word key (so `get_x`/`setX`/`SetX`/overload-style all pair; getter's spelling authoritative). A setter with no getter is a hard error (no write-only properties); a non-void (fluent) setter return is discarded by every rod and never gated. Rods: `def_property(_readonly)` / `def_prop_rw(_ro)` / `sol::property` / `addProperty` / luacats `---@field` (+`(read-only)` note). |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. A specializable `bool` variable template, not an attribute. |
 | `doc("text")` | Docstring for a class, namespace, function, function parameter, or data member. Surfaced as `__doc__` by the Python rods (a data member's rides on its property; const → read-only); ignored on namespace variables. Lua has no runtime docstring slot, so the sol2 rod ignores it at runtime — its home there is the generated **LuaCATS (`---@meta`) stub** (`welder::rods::luacats::rod`). |
 | `returns("text")` | Documents a function's return value (a `Returns:` block). Distinct from the summary `doc`. |
@@ -101,7 +103,8 @@ PYBIND11_MODULE(mymod, m) {
 `policy::auto` from the original sketch is spelled `policy::automatic` (`auto` is
 reserved). Resolution per language `L` (`reflect.hpp` `member_bound`): excluded for
 `L` → false; else an `only` mark → true iff it names `L` (either policy); else
-`automatic` → true; else (`opt_in`) → true iff explicitly included for `L`.
+`automatic` → true; else (`opt_in`) → true iff explicitly included for `L` (a
+`getter`/`setter` mark covering `L` also counts as the include).
 **Class-NESTED types (member classes/enums) resolve like any other member** —
 the outer's policy + the nested type's own marks, never a `weld` of their own —
 and register under the outer's binding (`module.Outer.Inner` on the Python rods

@@ -453,7 +453,7 @@ struct rod {
         things: a Python-visible copy constructor (`T(other)`, the
         `nb::init<const T&>` that also serves as the in-place construction
         vehicle) and the copy protocol — `__copy__` and `__deepcopy__(memo)`,
-        both **subclass-faithful** via @ref _copy_instance: a Python subclass
+        both **subclass-faithful** via @ref@ref _copy_instance — a Python subclass
         instance copies as its own type, `__dict__` and virtual dispatch intact,
         with the C++ payload duplicated by the copy constructor (whose
         deep/shallow distinction is its own: value members duplicate, a pointer
@@ -550,6 +550,61 @@ struct rod {
             else
                 cls.def_rw(name, &[:Mem:]);
         }
+    }
+
+    /** Bind the resolved property (@a Getter + optional @a Setter) as a Python
+        property named @a name (driver-resolved).
+
+        `def_prop_rw` / `def_prop_ro` over the spliced member pointers; the
+        getter's `[[=welder::doc]]` becomes the property `__doc__` (only the
+        getter's doc surfaces on a Python `property` — the `add_field`
+        rationale). A `[[=welder::return_policy]]` on the getter is honored;
+        unannotated, a reference/pointer-returning getter gets an explicit
+        `reference_internal` (nanobind, unlike pybind11, does not default
+        property getters to it — this matches `def_rw` and the pybind11 rod),
+        while a by-value getter keeps nanobind's `automatic` (a move — an
+        explicit reference policy there would dangle). @see welder::rod */
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(auto& cls, const char* name) {
+        ::welder::validate_return_policy<Getter, language>();
+        constexpr ::welder::rv_kind rvk{::welder::return_policy_of(Getter, language)};
+        constexpr const char* doc{::welder::doc_of<Getter>()};
+        auto def{[&](auto&&... extra) {
+            if constexpr (Setter == std::meta::info{}) {
+                cls.def_prop_ro(name, &[:Getter:],
+                                std::forward<decltype(extra)>(extra)...);
+            } else if constexpr (std::is_void_v<
+                                     typename [:std::meta::return_type_of(Setter):]>) {
+                cls.def_prop_rw(name, &[:Getter:], &[:Setter:],
+                                std::forward<decltype(extra)>(extra)...);
+            } else {
+                // A value-returning setter (a fluent T& set_x(…)): discard the
+                // return — the property protocol has no slot for it, and the
+                // gate deliberately never checked it.
+                using Arg = typename
+                    [:std::meta::type_of(std::meta::parameters_of(Setter)[0]):];
+                static constexpr auto sp{&[:Setter:]};
+                cls.def_prop_rw(
+                    name, &[:Getter:],
+                    [](T& self, Arg v) { (self.*sp)(std::forward<Arg>(v)); },
+                    std::forward<decltype(extra)>(extra)...);
+            }
+        }};
+        constexpr nb::rv_policy rvp{[] {
+            if constexpr (rvk != ::welder::rv_kind::automatic) {
+                return _rv_policy(rvk);
+            } else {
+                constexpr auto rt{std::meta::return_type_of(Getter)};
+                return std::meta::is_pointer_type(rt) ||
+                               std::meta::is_lvalue_reference_type(rt)
+                           ? nb::rv_policy::reference_internal
+                           : nb::rv_policy::automatic;
+            }
+        }()};
+        if constexpr (doc)
+            def(rvp, doc);
+        else
+            def(rvp);
     }
 
     /** Bind method overload group @a Fns (name from `Fns[0]`; nanobind chains one

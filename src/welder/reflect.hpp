@@ -1,5 +1,6 @@
 #pragma once
 #include <meta>
+#include <string> // accessor_explicit_name
 
 #include <welder/diag.hpp>
 
@@ -81,7 +82,8 @@ consteval bool alias_marks_admissible(std::meta::info mem) {
         if (t == ^^detail::policy_spec || t == ^^detail::weld_protected_spec ||
             t == ^^detail::exclude_spec || t == ^^detail::include_spec ||
             t == ^^detail::only_spec || t == ^^detail::trust_bindable_spec ||
-            t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec)
+            t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec ||
+            t == ^^detail::accessor_spec)
             return false;
         if (std::meta::has_template_arguments(t)) {
             auto tmpl{std::meta::template_of(t)};
@@ -112,7 +114,8 @@ consteval bool member_alias_marks_admissible(std::meta::info mem) {
         if (t == ^^detail::weld_spec || t == ^^detail::policy_spec ||
             t == ^^detail::weld_protected_spec ||
             t == ^^detail::trust_bindable_spec ||
-            t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec)
+            t == ^^detail::return_policy_spec || t == ^^detail::keep_alive_spec ||
+            t == ^^detail::accessor_spec)
             return false;
         if (std::meta::has_template_arguments(t)) {
             auto tmpl{std::meta::template_of(t)};
@@ -214,6 +217,66 @@ consteval bool trusted_for(std::meta::info member, lang L) {
     return false;
 }
 
+/** Does @a member carry a `getter`/`setter` mark of @a role covering @a L?
+
+    The stored @ref detail::accessor_spec is deliberately non-templated (see
+    `accessor_name_capacity`), so this reads off a *dynamic* reflection — usable
+    inside `member_bound` and the overload-set selectors, where the member is a
+    plain value.
+    @param member a reflection of the member function to test.
+    @param role   which property half to look for.
+    @param L      the target language.
+    @return `true` iff a mark of @a role applies to @a L (mask `0` covers all
+            languages). */
+consteval bool accessor_marked(std::meta::info member, accessor_role role, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(member, ^^detail::accessor_spec)) {
+        auto s{std::meta::extract<detail::accessor_spec>(a)};
+        if (s.role == role && (s.mask == 0 || (s.mask & lang_bit(L)) != 0))
+            return true;
+    }
+    return false;
+}
+
+/** Does @a member supply either property half for language @a L — i.e. is it an
+    accessor the property machinery claims (and the method sweep must skip)?
+    @param member a reflection of the member function to test.
+    @param L      the target language.
+    @return `true` iff a `getter` or `setter` mark covers @a L. */
+consteval bool is_accessor_for(std::meta::info member, lang L) {
+    return accessor_marked(member, accessor_role::getter, L) ||
+           accessor_marked(member, accessor_role::setter, L);
+}
+
+/** Does @a member carry any `getter`/`setter` mark at all (any role, any
+    language)? The namespace walk uses this to diagnose accessor marks on free
+    functions, where no property surface exists.
+    @param member a reflection of the entity to test.
+    @return `true` iff an accessor mark is present. */
+consteval bool has_accessor_mark(std::meta::info member) {
+    return !std::meta::annotations_of_with_type(member, ^^detail::accessor_spec)
+                .empty();
+}
+
+/** The explicit property name an accessor mark of @a role forces for @a L, or
+    `""` when the name derives from the function's identifier.
+
+    The first covering mark with a non-empty name wins (repeat the annotation
+    for a different name per language, like `weld_as`).
+    @param member a reflection of the accessor function.
+    @param role   which property half to read.
+    @param L      the target language.
+    @return the explicit name (verbatim), or an empty string. */
+consteval std::string accessor_explicit_name(std::meta::info member,
+                                             accessor_role role, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(member, ^^detail::accessor_spec)) {
+        auto s{std::meta::extract<detail::accessor_spec>(a)};
+        if (s.role == role && (s.mask == 0 || (s.mask & lang_bit(L)) != 0) &&
+            s.name[0] != '\0')
+            return std::string{s.name};
+    }
+    return {};
+}
+
 /** The return-value policy declared on callable @a fn for language @a L.
 
     Reads @a fn's `return_policy` annotations, honoring the first one whose mask
@@ -269,7 +332,10 @@ consteval void validate_return_policy() {
     @param pol    the enclosing type's reflection policy.
     @return excluded ⇒ `false`; else an `only` mark ⇒ `true` iff it names @a L
             (under either policy — `only` is also the opt-in); else `automatic`
-            ⇒ `true`; else (`opt_in`) ⇒ `true` iff explicitly included.
+            ⇒ `true`; else (`opt_in`) ⇒ `true` iff explicitly included — where a
+            `getter`/`setter` mark covering @a L also counts as the opt-in
+            (marking an accessor is an unambiguous statement of intent, like
+            `only`).
     @throws diag::bare_mark_only (a constant-evaluation error) on an uncalled
             `[[=welder::mark::only]]` — it must name the languages.
 */
@@ -289,7 +355,7 @@ consteval bool member_bound(std::meta::info member, lang L, policy_kind pol) {
     }
     if (pol == policy_kind::automatic)
         return true;
-    return included_for(member, L);
+    return included_for(member, L) || is_accessor_for(member, L);
 }
 
 /** The types of the *public* base classes of @a type.

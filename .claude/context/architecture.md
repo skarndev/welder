@@ -215,7 +215,11 @@ headers instead of the struct: the Python dunder map into
   Aggregate, Copyable>` (the whole participating constructor set + the
   carriage-computed default/aggregate/copy flags, in ONE call — `Copyable` = the
   admitted copy ctor: Python rods emit `__copy__`/`__deepcopy__`, Lua rods ignore
-  it), `add_field<Mem, Style>`; OPTIONAL
+  it), `add_field<Mem, Style>`, `add_property<T, Getter, Setter>(cls, name)`
+  (one resolved method-backed getter/setter property — Setter is a null
+  reflection for read-only; the name arrives DRIVER-resolved, unlike the
+  Style-taking hooks; a non-void setter return must be discarded, it is never
+  gated — see binding-features.md "Method-backed properties"); OPTIONAL
   (requires-detected) nested-type placement — `make_nested_class<T, Bases>(m,
   outer_cls, name, doc, iseq)` / `make_nested_enum<E>(m, outer_cls, name, doc)`
   (register a class-scoped member type under its outer's binding; absent them the

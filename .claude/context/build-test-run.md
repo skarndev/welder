@@ -403,6 +403,7 @@ trees use only relative imports. (nanobind's copy hangs off its stub *target*'s
 POST_BUILD, since its stubs are a separate custom target.) Key locations by feature:
 - `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py` — enums
 - `tests/common/cpp/overloads.hpp` + `tests/python/test_overloads.py` + `tests/lua/spec/overloads_spec.lua` — per-overload / per-constructor marks (carriage-computed overload groups; opt_in-vs-constructibility)
+- `tests/common/cpp/properties.hpp` + `tests/python/test_properties.py` + `tests/lua/spec/properties_spec.lua` — method-backed properties (getter/setter marks; all four runtime rods); compile lock `tests/core/properties.cpp` (`compile.properties`); neg `negcompile.property_*`; luacats golden `stubdemo.Throttle`
 - `tests/python/{pybind11,nanobind}/cpp/trust.hpp` + `tests/python/test_trust.py` — trust hatches
 - `tests/python/{pybind11,nanobind}/cpp/caster.hpp` + `tests/python/test_caster.py` — self-contained type casters
 - `tests/python/{pybind11,nanobind}/cpp/neg/` — bindability negative-compile (`negcompile.*` CTests, `WILL_FAIL`)

@@ -75,6 +75,11 @@ struct probe_rod {
     // N> sharing one target name — resolve it from Fns[0]).
     template <std::meta::info Mem, class Style>
     static void add_field(auto&) {}
+    // A resolved method-backed property (getter/setter marks): the write half is
+    // a null reflection for a read-only property; the name arrives resolved (the
+    // driver owns property naming).
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(auto&, const char*) {}
     template <auto Fns, class Style>
     static void add_method(auto&) {}
     template <auto Fns, class Style>
@@ -133,6 +138,12 @@ struct [[=welder::weld(welder::lang::py)]] Widget {
     Widget operator+(const Widget& o) const {
         return Widget{width + o.width, height + o.height};
     }
+    // A method-backed property (exercises the bind_properties driver path).
+    [[=welder::getter]] int depth() const { return depth_; }
+    [[=welder::setter]] void depth(int d) { depth_ = d; }
+
+  private:
+    int depth_{0};
 };
 
 struct [[=welder::weld(welder::lang::py)]] Point { // aggregate

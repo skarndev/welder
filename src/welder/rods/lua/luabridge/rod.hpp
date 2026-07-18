@@ -492,6 +492,46 @@ struct rod {
         }
     }
 
+    /** Bind the resolved property (@a Getter + optional @a Setter) as a class
+        property named @a name (driver-resolved) — `addProperty` over the
+        spliced member pointers, read-only without a setter.
+
+        The member pointers are held as pointers-to-member-of-@a T (the
+        standard base→derived conversion, a no-op for @a T's own accessors) so
+        a flattened base's accessor fits LuaBridge3's `T`-fixed `addProperty`
+        deduction — the `add_field` maneuver. A setter returning a value (a
+        fluent `T& set_x(…)`) does not fit the typed `void (T::*)(TS)` overload,
+        so that shape goes through callable wrappers discarding the return.
+        Ownership is structural (the Lua story), so a `return_policy` has no
+        runtime effect; a self-contradictory one is still rejected.
+        @see welder::rod */
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(auto& h, const char* name) {
+        ::welder::validate_return_policy<Getter, language>();
+        auto cls{_open_class<T>(h.mod, h.name.c_str())};
+        using GF = typename [:std::meta::type_of(Getter):];
+        static constexpr GF T::* get{&[:Getter:]};
+        if constexpr (Setter == std::meta::info{}) {
+            cls.addProperty(name, get);
+        } else {
+            using SF = typename [:std::meta::type_of(Setter):];
+            static constexpr SF T::* set{&[:Setter:]};
+            if constexpr (std::meta::dealias(std::meta::return_type_of(Setter)) ==
+                          ^^void) {
+                cls.addProperty(name, get, set);
+            } else {
+                // A value-returning setter: wrap both halves as callables and
+                // discard the setter's return (the property protocol has no
+                // slot for it).
+                using Arg = typename
+                    [:std::meta::type_of(std::meta::parameters_of(Setter)[0]):];
+                cls.addProperty(
+                    name, [](const T* self) -> decltype(auto) { return (self->*get)(); },
+                    [](T* self, Arg v) { (self->*set)(std::forward<Arg>(v)); });
+            }
+        }
+    }
+
     /** Bind method overload group @a Fns as one method (`obj:name(…)`) via a single
         variadic `addFunction` — LuaBridge3 dispatches by arity/type at call time.
         The name resolves from `Fns[0]`. @see welder::rod */

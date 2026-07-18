@@ -553,6 +553,36 @@ struct rod {
         }
     }
 
+    /** Bind the resolved property (@a Getter + optional @a Setter) as a
+        usertype property named @a name (driver-resolved) — `sol::property`
+        over the spliced member pointers, read-only without a setter.
+
+        Ownership of the read value is structural, as everywhere on the Lua
+        rods (a value → a VM-owned copy, a reference → a non-owning view), so a
+        `[[=welder::return_policy]]` on the getter has no runtime effect here —
+        but a self-contradictory one is still rejected, and the getter's
+        `[[=welder::doc]]`'s home is the LuaCATS stub. @see welder::rod */
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(auto& ut, const char* name) {
+        ::welder::validate_return_policy<Getter, language>();
+        if constexpr (Setter == std::meta::info{}) {
+            ut[name] = ::sol::readonly_property(&[:Getter:]);
+        } else if constexpr (std::is_void_v<
+                                 typename [:std::meta::return_type_of(Setter):]>) {
+            ut[name] = ::sol::property(&[:Getter:], &[:Setter:]);
+        } else {
+            // A value-returning setter (a fluent T& set_x(…)): discard the
+            // return — the property protocol has no slot for it, and the gate
+            // deliberately never checked it.
+            using Arg = typename
+                [:std::meta::type_of(std::meta::parameters_of(Setter)[0]):];
+            static constexpr auto sp{&[:Setter:]};
+            ut[name] = ::sol::property(
+                &[:Getter:],
+                [](T& self, Arg v) { (self.*sp)(std::forward<Arg>(v)); });
+        }
+    }
+
     /** Bind method overload group @a Fns as one method (`obj:name(…)`) — a single
         callable when unique, one `sol::overload(…)` when several (sol2 stores one
         value per table key). The name resolves from `Fns[0]`. @see welder::rod */

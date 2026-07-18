@@ -117,6 +117,8 @@ struct ruby_rod {
     static void add_constructors(auto&) {}
     template <std::meta::info Mem, class Style>
     static void add_field(auto&) {}
+    template <class T, std::meta::info Getter, std::meta::info Setter>
+    static void add_property(auto&, const char*) {}
     template <auto Fns, class Style>
     static void add_method(auto&) {}
     template <auto Fns, class Style>

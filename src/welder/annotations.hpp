@@ -63,6 +63,15 @@ enum class policy_kind : unsigned char {
     opt_in,    /**< Reflect only members explicitly marked `include`. */
 };
 
+/** Which half of a property a marked accessor function supplies.
+
+    @see welder::getter / welder::setter for the annotations; the stored form is
+         welder::detail::accessor_spec. */
+enum class accessor_role : unsigned char {
+    getter, /**< The function reads the property's value (const, no parameters). */
+    setter, /**< The function writes it (exactly one parameter). */
+};
+
 /** How a bound callable's returned object is owned/converted in the target
     language — welder's backend-neutral spelling of the return-value policy.
 
@@ -239,6 +248,92 @@ struct trust_bindable_spec {
     template <class... Ls>
     consteval trust_bindable_spec operator()(Ls... ls) const {
         return trust_bindable_spec{lang_mask(ls...)};
+    }
+};
+
+// --- getter / setter: method-backed properties -------------------------------
+
+/** The inline capacity of an accessor's explicit property name.
+
+    Unlike `weld_as_spec`, the accessor spec is **not** templated on the name
+    length: the resolution machinery reads accessor marks off *dynamic*
+    reflections (inside `member_bound` and the overload-set selectors, where the
+    member is a plain `std::meta::info` value, not a template argument), and
+    `std::meta::extract` needs the annotation's exact type spelled statically —
+    which a length-templated spec cannot provide there. A fixed-capacity inline
+    buffer keeps the spec one extractable type; the factory diagnoses an
+    over-long name at the annotation site. */
+inline constexpr size_type accessor_name_capacity{64};
+
+// The `getter(langs…[, "name"])` argument list is a run of `lang` markers
+// optionally followed by an explicit property name — the weld_as argument
+// grammar, with the trailing string optional (absent = derive the name from the
+// function's identifier). Two pack-walkers mirror weld_as_mask / weld_as_name:
+// one ORs the leading markers, one copies the trailing name (or leaves the
+// buffer empty). No std headers, keeping the vocabulary module-safe.
+
+/** The language mask of an accessor argument list: the OR of its leading `lang`
+    markers (a trailing name contributes nothing; none → `0` = all). */
+consteval unsigned accessor_mask() { return 0u; }
+template <size_type N>
+consteval unsigned accessor_mask(const char (&)[N]) { return 0u; }
+template <class... Rest>
+consteval unsigned accessor_mask(lang l, Rest&&... rest) {
+    return lang_bit(l) | accessor_mask(static_cast<Rest&&>(rest)...);
+}
+
+/** Copy an accessor argument list's trailing explicit name into @a dst (left
+    empty when the list carries none — the derive-from-identifier sentinel).
+    @throws diag::accessor_name_too_long (a constant-evaluation error) when the
+            name exceeds the inline capacity. */
+consteval void accessor_name(char (&)[accessor_name_capacity]) {}
+template <size_type N>
+consteval void accessor_name(char (&dst)[accessor_name_capacity],
+                             const char (&s)[N]) {
+    if (N > accessor_name_capacity)
+        throw diag::accessor_name_too_long{};
+    for (size_type i{0}; i < N; ++i)
+        dst[i] = s[i];
+}
+template <class... Rest>
+consteval void accessor_name(char (&dst)[accessor_name_capacity], lang,
+                             Rest&&... rest) {
+    accessor_name(dst, static_cast<Rest&&>(rest)...);
+}
+
+/** The stored form of a `getter` / `setter` mark: which property half the
+    function supplies, for which languages, under which (optional) explicit name.
+
+    Each marker is a constexpr object usable bare as an annotation (all
+    languages, name derived from the function's identifier) or called with an
+    optional run of `lang` markers and an optional trailing explicit name —
+    the `weld_as` argument grammar with the name optional:
+    @code
+    [[=welder::getter]]                                // all languages, derived name
+    [[=welder::getter("radius")]]                      // explicit name, verbatim
+    [[=welder::setter(welder::lang::py)]]              // Python only, derived name
+    [[=welder::getter(welder::lang::py, "radius")]]    // Python only, explicit name
+    @endcode
+    Repeat the annotation for a different name (or admission) per language. An
+    explicit name is used **verbatim** — it never flows through a name style —
+    exactly like `weld_as` (which is diagnosed on an accessor: the explicit
+    property name *is* the rename tool there). An empty name means "derive from
+    the function's identifier" (strip a leading `get`/`set` word, keep the rest
+    in the identifier's own convention). */
+struct accessor_spec {
+    accessor_role role{};              /**< Which half this function supplies. */
+    unsigned mask = 0;                 /**< The languages it applies to; `0` == all. */
+    char name[accessor_name_capacity]{}; /**< The explicit property name; empty == derive. */
+
+    /** Scope the mark by language and/or force an explicit property name.
+        @tparam Args the leading `lang` markers, then the optional name (deduced).
+        @param args zero or more languages, optionally followed by the name.
+        @return a scoped/named accessor_spec of the same role. */
+    template <class... Args>
+    consteval accessor_spec operator()(Args&&... args) const {
+        accessor_spec s{role, accessor_mask(static_cast<Args&&>(args)...), {}};
+        accessor_name(s.name, static_cast<Args&&>(args)...);
+        return s;
     }
 };
 
@@ -435,6 +530,31 @@ inline constexpr detail::include_spec include{};               /**< @see welder:
 inline constexpr detail::only_spec only{};                     /**< @see welder::detail::only_spec — must be called with ≥ 1 language */
 inline constexpr detail::trust_bindable_spec trust_bindable{}; /**< @see welder::detail::trust_bindable_spec */
 } // namespace mark
+
+// --- getter / setter: method-backed properties -------------------------------
+
+/** Mark a member function as a property **getter** (const, no parameters).
+
+    A marked getter binds as an idiomatic read property instead of a method; a
+    same-property `setter` (matched by name — explicit, or derived from the
+    identifiers with the leading `get`/`set` word stripped) makes it read/write,
+    alone it is read-only. Bare = all languages; call it to scope by language
+    and/or force an explicit property name (see
+    @ref welder::detail::accessor_spec). Under `policy::opt_in` the mark also
+    counts as the member's opt-in (like `mark::only`); an explicit `exclude`
+    still beats it. For languages the mark does not cover, the function binds
+    as an ordinary method.
+    @code
+    [[=welder::getter]] double radius() const;         // property "radius"
+    [[=welder::setter]] void   radius(double v);       // …made read/write
+    @endcode */
+inline constexpr detail::accessor_spec getter{accessor_role::getter};
+
+/** Mark a member function as a property **setter** (exactly one parameter) —
+    the write half of @ref welder::getter, paired by property name. A setter
+    whose property has no participating getter in a language is a hard error
+    (welder binds no write-only properties). */
+inline constexpr detail::accessor_spec setter{accessor_role::setter};
 
 // --- doc: human-readable documentation --------------------------------------
 

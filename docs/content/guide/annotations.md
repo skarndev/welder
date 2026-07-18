@@ -15,6 +15,8 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `mark::only(lang…)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Always called with ≥ 1 language. |
 | `mark::trust_bindable` / `…(lang…)` | Vouch that a member's type / callable signature is representable outside welder's view. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. |
+| `getter` / `getter([lang…,] "name")` | Bind this const, parameterless member function as a **property read** — alone it makes a read-only property; under `opt_in` the mark is also the opt-in. See [Properties](properties.md). |
+| `setter` / `setter([lang…,] "name")` | The **property write** half, paired with a getter by (explicit or derived) name. See [Properties](properties.md). |
 | `doc("text")` | Docstring for a class / namespace / function / parameter / data member. |
 | `returns("text")` | Documents a function's return value. |
 | `tparam("T", "text")` | Documents a template parameter (repeatable, ordered). |

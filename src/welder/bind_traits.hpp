@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <welder/diag.hpp>    // the consteval diagnostics (stale_hook_signature)
+#include <welder/naming.hpp>  // property naming: accessor_property_words / strip_accessor_word
 #include <welder/reflect.hpp> // resolution: welded_for / member_bound / public_bases
 
 /** @file
@@ -251,7 +252,7 @@ consteval bool free_operator_reflected(std::meta::info f, std::meta::info type) 
     return ps.size() == 2 && !decays_to(std::meta::type_of(ps[0]), type);
 }
 
-/** Split slot group @a Fns by @ref free_operator_reflected: the entries whose
+/** Split slot group @a Fns by @ref@ref free_operator_reflected — the entries whose
     reflectedness equals @a Reflected, in group order. A rod whose framework
     registers by exact signature shape (LuaBridge3) uses this to route the
     direct (anchor-on-the-left) entries through its typed registration and the
@@ -629,7 +630,10 @@ consteval bool namespace_has_bindable(std::meta::info ns, lang L) {
 // welded/unwelded set under one name can never split into clobbering halves.
 
 /** The participating method overloads sharing @a fn's name and static-ness, from
-    the class where @a fn is declared, in declaration order.
+    the class where @a fn is declared, in declaration order. An accessor-marked
+    overload (a `getter`/`setter` covering @a L) is not a method — it binds as a
+    property — so it never joins the group (nor leads one: the carriage's
+    method sweep skips it symmetrically).
     @tparam Resolution the carriage's resolution.
     @param fn a reflection of one participating method (see is_method_candidate).
     @param L  the target language.
@@ -648,6 +652,7 @@ consteval std::vector<std::meta::info> method_overload_set(
         if (is_method_candidate(m) &&
             member_access_admitted<Resolution>(m, L, bound_into) &&
             Resolution::class_member_participates(m, L, pol, bound_into) &&
+            !::welder::is_accessor_for(m, L) &&
             std::meta::is_static_member(m) == is_static &&
             std::meta::identifier_of(m) == name)
             out.push_back(m);
@@ -1015,6 +1020,224 @@ consteval void validate_move_ctor_marks() {
             (!std::meta::annotations_of_with_type(c, ^^include_spec).empty() ||
              !std::meta::annotations_of_with_type(c, ^^only_spec).empty()))
             throw diag::marked_move_constructor{};
+}
+
+// --- method-backed properties (getter / setter marks) -------------------------
+//
+// A `[[=welder::getter]]` / `[[=welder::setter]]` member function binds as an
+// idiomatic PROPERTY instead of a method, for the languages its mark covers.
+// The machinery here mirrors the operator slot story: accessors are collected
+// once per welded type across the flattening walk (own members + non-native
+// bases'), validated, PAIRED by property name — the case-normalized word
+// sequence of the explicit name or the get/set-stripped identifier, so the
+// overload style (radius()/radius(double)), the prefix styles (get_x/set_x,
+// getX/setX, GetX/SetX) and even mixed conventions all pair — and handed to the
+// rod one resolved property at a time (add_property<T, Getter, Setter>). The
+// method sweep skips accessor-marked functions for the covered languages (see
+// method_overload_set / the carriage's bind_members); for languages a mark does
+// not cover, the function binds as an ordinary method.
+
+/** One resolved property: its getter and its (optional) setter. */
+struct property_entry {
+    std::meta::info getter{}; /**< The read half (always present). */
+    std::meta::info setter{}; /**< The write half; a null reflection = read-only. */
+};
+
+/** Does @a m carry a (templated) `weld_as` annotation? Property machinery
+    diagnoses it on accessors — the explicit accessor name is the rename tool
+    there. Readable off a dynamic reflection (only the template is compared,
+    nothing extracted). */
+consteval bool carries_weld_as(std::meta::info m) {
+    for (auto a : std::meta::annotations_of(m)) {
+        auto t{std::meta::type_of(a)};
+        if (std::meta::has_template_arguments(t) &&
+            std::meta::template_of(t) == ^^weld_as_spec)
+            return true;
+    }
+    return false;
+}
+
+/** The pairing key of accessor @a mem's property for language @a L: the
+    case-normalized word sequence of its explicit name (when the mark carries
+    one) or of its identifier with the leading `get`/`set` word stripped.
+    @param mem  a reflection of the accessor function.
+    @param role which property half @a mem supplies.
+    @param L    the target language.
+    @return the property's lower-cased words. */
+consteval std::vector<std::string> property_key(std::meta::info mem,
+                                                accessor_role role, lang L) {
+    std::string explicit_name{::welder::accessor_explicit_name(mem, role, L)};
+    if (!explicit_name.empty())
+        return naming::split_words(explicit_name);
+    return naming::accessor_property_words(std::meta::identifier_of(mem));
+}
+
+/** Collect the participating accessor-marked member functions visible on
+    @a bound_into's binding: @a src's own, preceded by its flattened (non-native)
+    bases' — mirroring `bind_members`' flattening, exactly like
+    `collect_member_operators`.
+    @tparam Resolution the carriage's resolution.
+    @param src        the class whose members to collect (a base during recursion).
+    @param L          the target language.
+    @param bound_into the welded type whose binding receives the properties.
+    @param out        the collection target (bases append first). */
+template <class Resolution>
+consteval void collect_accessors(std::meta::info src, lang L,
+                                 std::meta::info bound_into,
+                                 std::vector<std::meta::info>& out) {
+    for (auto base : ::welder::public_bases(src))
+        if (!Resolution::is_native_base(base, L, src))
+            collect_accessors<Resolution>(base, L, bound_into, out);
+    const policy_kind pol{::welder::policy_of(src)};
+    for (auto m :
+         std::meta::members_of(src, std::meta::access_context::unchecked()))
+        if (is_method_candidate(m) &&
+            member_access_admitted<Resolution>(m, L, bound_into) &&
+            Resolution::class_member_participates(m, L, pol, bound_into) &&
+            ::welder::is_accessor_for(m, L))
+            out.push_back(m);
+}
+
+/** Guard the property surface against name shadowing: no property's key may
+    equal a bound data member's or (non-accessor) method's identifier key on the
+    same class surface (own + flattened bases). Keys are case-normalized word
+    sequences, so the comparison is deliberately convention-insensitive — a
+    property and a member differing only in spelling convention collide under
+    any styled binding. Nested types are exempt (a PascalCase nested type
+    legitimately shares its words with a camel/snake property).
+    @tparam Resolution the carriage's resolution.
+    @param src        the class to scan (a base during recursion).
+    @param L          the target language.
+    @param bound_into the welded type.
+    @param keys       the property keys to check against.
+    @throws diag::property_name_collision on a clash. */
+template <class Resolution>
+consteval void validate_property_shadowing(
+    std::meta::info src, lang L, std::meta::info bound_into,
+    const std::vector<std::vector<std::string>>& keys) {
+    for (auto base : ::welder::public_bases(src))
+        if (!Resolution::is_native_base(base, L, src))
+            validate_property_shadowing<Resolution>(base, L, bound_into, keys);
+    constexpr auto ctx{std::meta::access_context::unchecked()};
+    const policy_kind pol{::welder::policy_of(src)};
+    auto clashes{[&](std::meta::info m) {
+        const auto words{naming::split_words(std::meta::identifier_of(m))};
+        for (const auto& k : keys)
+            if (k == words)
+                return true;
+        return false;
+    }};
+    for (auto m : std::meta::nonstatic_data_members_of(src, ctx))
+        if (std::meta::has_identifier(m) &&
+            member_access_admitted<Resolution>(m, L, bound_into) &&
+            Resolution::class_member_participates(m, L, pol, bound_into) &&
+            clashes(m))
+            throw diag::property_name_collision{};
+    for (auto m : std::meta::members_of(src, ctx))
+        if (is_method_candidate(m) &&
+            member_access_admitted<Resolution>(m, L, bound_into) &&
+            Resolution::class_member_participates(m, L, pol, bound_into) &&
+            !::welder::is_accessor_for(m, L) && clashes(m))
+            throw diag::property_name_collision{};
+}
+
+/** The resolved properties of @a type for language @a L: every participating
+    accessor collected (own + flattened bases), shape-validated, and paired by
+    property key — getters first (in declaration order, which fixes the emission
+    order), then each setter matched to its getter.
+
+    Validation (each a designed constant-evaluation error, see `<welder/diag.hpp>`):
+    a getter must be a const member function with no parameters and a non-void
+    return; a setter takes exactly one parameter; one function cannot supply
+    both halves for one language; static and virtual accessors are rejected
+    (deferred / unsupported); `weld_as` on an accessor conflicts with the
+    explicit accessor name; two getters (or setters) per property, or a setter
+    with no getter, are errors; and no property may shadow a bound member's
+    name (see @ref validate_property_shadowing).
+    @tparam Resolution the carriage's resolution.
+    @param type the welded type.
+    @param L    the target language.
+    @return the properties, one entry per resolved name. */
+template <class Resolution>
+consteval std::vector<property_entry> property_entries(std::meta::info type,
+                                                       lang L) {
+    std::vector<std::meta::info> acc{};
+    collect_accessors<Resolution>(type, L, type, acc);
+
+    for (auto m : acc) {
+        if (::welder::accessor_marked(m, accessor_role::getter, L) &&
+            ::welder::accessor_marked(m, accessor_role::setter, L))
+            throw diag::accessor_role_conflict{};
+        if (std::meta::is_static_member(m))
+            throw diag::static_property_accessor{};
+        if (std::meta::is_virtual(m))
+            throw diag::virtual_property_accessor{};
+        if (carries_weld_as(m))
+            throw diag::accessor_weld_as_conflict{};
+    }
+
+    std::vector<property_entry> props{};
+    std::vector<std::vector<std::string>> keys{};
+    for (auto m : acc) {
+        if (!::welder::accessor_marked(m, accessor_role::getter, L))
+            continue;
+        if (!std::meta::parameters_of(m).empty() ||
+            std::meta::dealias(std::meta::return_type_of(m)) == ^^void ||
+            !std::meta::is_const(m) ||
+            std::meta::is_rvalue_reference_qualified(m))
+            throw diag::malformed_getter{};
+        auto key{property_key(m, accessor_role::getter, L)};
+        for (const auto& k : keys)
+            if (k == key)
+                throw diag::duplicate_property_accessor{};
+        props.push_back({m, std::meta::info{}});
+        keys.push_back(std::move(key));
+    }
+    for (auto m : acc) {
+        if (!::welder::accessor_marked(m, accessor_role::setter, L))
+            continue;
+        if (std::meta::parameters_of(m).size() != 1 ||
+            std::meta::is_rvalue_reference_qualified(m))
+            throw diag::malformed_setter{};
+        const auto key{property_key(m, accessor_role::setter, L)};
+        bool matched{false};
+        for (std::size_t i{0}; i < keys.size(); ++i) {
+            if (keys[i] != key)
+                continue;
+            if (props[i].setter != std::meta::info{})
+                throw diag::duplicate_property_accessor{};
+            props[i].setter = m;
+            matched = true;
+            break;
+        }
+        if (!matched)
+            throw diag::setter_without_getter{};
+    }
+
+    validate_property_shadowing<Resolution>(type, L, type, keys);
+    return props;
+}
+
+/** The bound name of the property @a Getter defines, for language @a L under
+    name style @a Style: the mark's explicit name **verbatim** when present
+    (never styled — the accessor analogue of `weld_as`), else the getter's
+    identifier styled through @a Style's field hook (a property is
+    attribute-shaped) with the leading `get`/`set` word then stripped in the
+    styled spelling's own convention (see
+    @ref welder::naming::strip_accessor_word).
+    @tparam Getter the property's getter reflection (the authoritative name source).
+    @tparam L      the target language.
+    @tparam Style  the name style.
+    @return the bound property name, in static storage. */
+template <std::meta::info Getter, lang L, class Style>
+consteval const char* property_bound_name() {
+    constexpr std::string_view explicit_name{std::define_static_string(
+        ::welder::accessor_explicit_name(Getter, accessor_role::getter, L))};
+    if constexpr (!explicit_name.empty())
+        return explicit_name.data();
+    else
+        return std::define_static_string(
+            naming::strip_accessor_word(Style::transform_field(Getter)));
 }
 
 // --- inheritance: native bases ----------------------------------------------
