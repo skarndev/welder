@@ -265,11 +265,43 @@ struct rod {
         return out;
     }
 
+    /** The `py::arg` for field @a I of aggregate @a T: named after the field and,
+        for the defaultable NSDMI suffix (see
+        @ref welder::detail::aggregate_defaults_from), carrying the field's NSDMI
+        value — read off the value-initialized @a probe — as a real keyword
+        default, so Python may omit it or skip past it by keyword.
+        @tparam T the aggregate type.
+        @tparam I the field index.
+        @param probe a value-initialized instance supplying the default values
+                     (unused for a required field). */
+    template <class T, std::size_t I>
+    static auto _aggregate_arg([[maybe_unused]] const T& probe) {
+        static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
+        constexpr const char* name{
+            std::define_static_string(std::meta::identifier_of(fields[I]))};
+        if constexpr (I >= ::welder::detail::aggregate_defaults_from<T>()) {
+            using field_type = std::remove_const_t<
+                typename [:std::meta::type_of(fields[I]):]>;
+            if constexpr (has_native_caster<field_type>)
+                return py::arg(name) = probe.[:fields[I]:];
+            else
+                // A registration-needed default (a welded class/enum instance)
+                // has no expression-shaped repr — signatures and stubs would
+                // carry "<X object at 0x…>", which pybind11-stubgen rejects.
+                // The runtime default stays; the signature spells it `...`.
+                return py::arg_v(name, probe.[:fields[I]:], "...");
+        } else {
+            return py::arg(name);
+        }
+    }
+
     /** Synthesize a field constructor for a baseless aggregate @a T.
 
         Emits `py::init([](F0 f0, …) { return T{f0, …}; }, py::arg("f0"), …)` so
         Python can build it from field values (`T(f0, f1)`) rather than only
-        default-construct then assign.
+        default-construct then assign. Fields in the NSDMI suffix become keyword
+        parameters with real defaults (@ref _aggregate_arg), matching the C++
+        omission semantics of aggregate init.
         @tparam T the aggregate type.
         @tparam I the field index pack.
         @param cls the class handle.
@@ -277,11 +309,25 @@ struct rod {
     template <class T, std::size_t... I>
     static void _def_aggregate_init(auto& cls, std::index_sequence<I...>) {
         static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
-        cls.def(py::init([](typename [:std::meta::type_of(fields[I]):]... args) {
-                    return T{std::move(args)...};
-                }),
-                py::arg(std::define_static_string(
-                    std::meta::identifier_of(fields[I])))...);
+        // The probe exists only when a default is extractable (defaults_from
+        // guarantees T{} is well-formed then); a braced local, not a static —
+        // registration runs once per module and T may be import-order sensitive.
+        if constexpr (::welder::detail::aggregate_defaults_from<T>() <
+                      fields.size()) {
+            const T probe{};
+            cls.def(py::init(
+                        [](typename [:std::meta::type_of(fields[I]):]... args) {
+                            return T{std::move(args)...};
+                        }),
+                    _aggregate_arg<T, I>(probe)...);
+        } else {
+            cls.def(py::init(
+                        [](typename [:std::meta::type_of(fields[I]):]... args) {
+                            return T{std::move(args)...};
+                        }),
+                    py::arg(std::define_static_string(
+                        std::meta::identifier_of(fields[I])))...);
+        }
     }
 
     /** Give module @a m live get/set semantics for the names in @a props.

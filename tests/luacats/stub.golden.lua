@@ -71,7 +71,7 @@ function stubdemo.Circle:scaled(k) end
 stubdemo.Mask = {}
 
 ---@return stubdemo.Mask
----@overload fun(bits: integer): stubdemo.Mask
+---@overload fun(bits?: integer): stubdemo.Mask
 function stubdemo.Mask.new() end
 
 --- A scalable impulse (exercises free operators).
@@ -81,7 +81,7 @@ function stubdemo.Mask.new() end
 stubdemo.Impulse = {}
 
 ---@return stubdemo.Impulse
----@overload fun(mag: number): stubdemo.Impulse
+---@overload fun(mag?: number): stubdemo.Impulse
 function stubdemo.Impulse.new() end
 
 --- A throttle (exercises properties).
@@ -103,6 +103,16 @@ stubdemo.Rect = {}
 ---@return stubdemo.Rect
 ---@overload fun(width: number, height: number): stubdemo.Rect
 function stubdemo.Rect.new() end
+
+--- A splash screen (NSDMI-defaults aggregate).
+---@class stubdemo.Splash
+---@field caption string Window caption.
+---@field seconds number Display duration in seconds.
+stubdemo.Splash = {}
+
+---@return stubdemo.Splash
+---@overload fun(caption: string, seconds?: number): stubdemo.Splash
+function stubdemo.Splash.new() end
 
 --- A polygon.
 ---@class stubdemo.Polygon
@@ -138,7 +148,7 @@ function stubdemo.Gauge:face_plate() end
 stubdemo.Gauge.Needle = {}
 
 ---@return stubdemo.Gauge.Needle
----@overload fun(angle: number): stubdemo.Gauge.Needle
+---@overload fun(angle?: number): stubdemo.Gauge.Needle
 function stubdemo.Gauge.Needle.new() end
 
 --- Operating range.
@@ -153,7 +163,7 @@ stubdemo.Gauge.Range = {
 stubdemo.Gauge.Face = {}
 
 ---@return stubdemo.Gauge.Face
----@overload fun(thickness: number): stubdemo.Gauge.Face
+---@overload fun(thickness?: number): stubdemo.Gauge.Face
 function stubdemo.Gauge.Face.new() end
 
 --- Sum a list of areas.
@@ -178,6 +188,6 @@ stubdemo.units.tau = nil
 stubdemo.Pair = {}
 
 ---@return stubdemo.Pair
----@overload fun(first: number, second: number): stubdemo.Pair
+---@overload fun(first?: number, second?: number): stubdemo.Pair
 function stubdemo.Pair.new() end
 

@@ -135,6 +135,15 @@ Box {
     [[=welder::doc("Height in units.")]] double height;
 };
 
+// An aggregate with an NSDMI suffix: the omissible fields render as `?`
+// optional parameters in the synthesized constructor's signature — the stub's
+// spelling of the runtime rods' per-arity overloads.
+struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A splash screen (NSDMI-defaults aggregate).")]]
+Splash {
+    [[=welder::doc("Window caption.")]] std::string caption;
+    [[=welder::doc("Display duration in seconds.")]] double seconds{2.5};
+};
+
 /// A polygon holding vertices and per-vertex labels.
 struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A polygon.")]]
 Polygon {

@@ -6,6 +6,7 @@
 // WELDER_TEST_WELDER::weld_namespace so the Python package mirrors this file.
 //
 // #included by bindings.cpp after the welder vocabulary + the active Python backend.
+#include <string>
 
 namespace methods {
 
@@ -78,6 +79,35 @@ struct
 Vec2 {
     double x{0.0};
     double y{0.0};
+};
+
+// --- NSDMI defaults on the synthesized field constructor ---------------------
+// The fields after the last one WITHOUT a default member initializer are the
+// omissible suffix: aggregate init fills omitted trailing elements from their
+// NSDMIs, so Python attaches them as real keyword defaults and the Lua rods
+// expose one constructor arity per omissible tail. `samples` has an NSDMI but
+// sits BEFORE the required `title`, so it stays required — a parameter list
+// allows no gaps, exactly like C++ default function arguments.
+
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Window {
+    int samples{4};
+    std::string title;
+    int width{800};
+    int height{600};
+    bool resizable{true};
+};
+
+// Const members keep a struct an aggregate: an immutable settings-style value
+// binds with read-only fields while the synthesized field constructor (and its
+// NSDMI defaults) still brace-initializes it.
+
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Frozen {
+    const std::string name;
+    const int level{1};
 };
 
 } // namespace methods

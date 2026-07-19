@@ -271,11 +271,25 @@ struct rod {
                 args.push_back(std::meta::type_of(p));
             lists.push_back(args);
         }
-        if (Aggregate) {
-            std::vector<std::meta::info> args;
-            for (auto fld : ::welder::detail::aggregate_fields<T>())
-                args.push_back(std::meta::type_of(fld));
-            lists.push_back(args);
+        // constexpr-if: the branch indexes the field array, which must not be
+        // instantiated for a fieldless type (the array<info, 0> trap) — and
+        // Aggregate guarantees at least one field.
+        if constexpr (Aggregate) {
+            // One arity per omissible NSDMI-suffix tail (aggregate_required_arity):
+            // C++26 parenthesized aggregate init fills omitted trailing fields
+            // from their NSDMIs, so T(prefix…) is valid for every prefix length
+            // down to the required arity. Arity 0 would duplicate the default
+            // constructor's signature, so it starts at 1 when that is bound.
+            auto fields{::welder::detail::aggregate_fields<T>()};
+            std::size_t start{::welder::detail::aggregate_required_arity<T>()};
+            if (HasDefault && start == 0)
+                start = 1;
+            for (std::size_t arity{start}; arity <= fields.size(); ++arity) {
+                std::vector<std::meta::info> args;
+                for (std::size_t i{0}; i < arity; ++i)
+                    args.push_back(std::meta::type_of(fields[i]));
+                lists.push_back(args);
+            }
         }
         return lists;
     }

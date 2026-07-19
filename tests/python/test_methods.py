@@ -86,3 +86,40 @@ def test_aggregate_keyword_constructor(meth: ModuleType) -> None:
 def test_aggregate_default_constructor_still_bound(meth: ModuleType) -> None:
     v = meth.Vec2()
     assert (v.x, v.y) == (0.0, 0.0)
+
+
+# --- NSDMI defaults on the synthesized field constructor ---------------------
+def test_aggregate_nsdmi_suffix_defaults(meth: ModuleType) -> None:
+    # Only the required prefix is passed; the NSDMI suffix fills in.
+    w = meth.Window(4, "editor")
+    assert (w.samples, w.title) == (4, "editor")
+    assert (w.width, w.height, w.resizable) == (800, 600, True)
+
+
+def test_aggregate_keyword_skips_middle_default(meth: ModuleType) -> None:
+    # A keyword argument can skip past earlier defaulted fields.
+    w = meth.Window(4, "editor", height=900)
+    assert (w.width, w.height) == (800, 900)
+
+
+def test_aggregate_nsdmi_before_required_stays_required(meth: ModuleType) -> None:
+    # `samples` has an NSDMI but precedes the required `title`: no gaps in a
+    # parameter list, so it must still be passed.
+    with pytest.raises(TypeError):
+        meth.Window(title="editor")
+
+
+def test_aggregate_all_nsdmi_fields_default(meth: ModuleType) -> None:
+    # Vec2's fields are all NSDMI'd, so every one is omissible now.
+    v = meth.Vec2(x=3.0)
+    assert (v.x, v.y) == (3.0, 0.0)
+
+
+def test_const_member_aggregate(meth: ModuleType) -> None:
+    # Const members keep the struct an aggregate: the field constructor works,
+    # the NSDMI default applies, and the fields are read-only.
+    f = meth.Frozen("locked")
+    assert (f.name, f.level) == ("locked", 1)
+    assert meth.Frozen("up", 3).level == 3
+    with pytest.raises(AttributeError):
+        f.level = 9

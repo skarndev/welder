@@ -107,9 +107,15 @@ struct rod {
             std::define_static_string(std::meta::identifier_of(fields[J]))...};
         static constexpr const char* types[]{
             lua_type(std::meta::type_of(fields[J]))...};
+        // The omissible NSDMI suffix renders as `?` optional parameters — the
+        // stub's spelling of the runtime rods' per-arity overloads.
+        constexpr std::size_t required{
+            ::welder::detail::aggregate_required_arity<T>()};
         for (std::size_t i{0}; i < sizeof...(J); ++i) {
             out += "---@param ";
             out += names[i];
+            if (i >= required)
+                out += '?';
             out += ' ';
             out += types[i];
             out += '\n';
@@ -119,7 +125,8 @@ struct rod {
     }
 
     /** The `<field>: <type>, …` list for an aggregate's `.new` `fun(…)` signature
-        (its `---@overload` line). Same field source as @ref _aggregate_param_lines. */
+        (its `---@overload` line). Same field source as @ref _aggregate_param_lines,
+        with the same `?` marking of the omissible NSDMI suffix. */
     template <class T, std::size_t... J>
     static std::string _aggregate_fun_params(std::index_sequence<J...>) {
         static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
@@ -127,11 +134,15 @@ struct rod {
             std::define_static_string(std::meta::identifier_of(fields[J]))...};
         static constexpr const char* types[]{
             lua_type(std::meta::type_of(fields[J]))...};
+        constexpr std::size_t required{
+            ::welder::detail::aggregate_required_arity<T>()};
         std::string s{};
         for (std::size_t i{0}; i < sizeof...(J); ++i) {
             if (i)
                 s += ", ";
             s += names[i];
+            if (i >= required)
+                s += '?';
             s += ": ";
             s += types[i];
         }

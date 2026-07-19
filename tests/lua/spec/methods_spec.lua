@@ -28,4 +28,30 @@ describe("methods", function()
     assert.are.equal(3.0, v.x)
     assert.are.equal(4.0, v.y)
   end)
+
+  it("exposes one constructor arity per omissible NSDMI-suffix tail", function()
+    -- Window: samples{4} (NSDMI but BEFORE the required title -> still
+    -- required), title (required), then width{800}/height{600}/resizable{true}
+    -- as the omissible suffix.
+    local w = m.Window.new(4, "editor")
+    assert.are.equal("editor", w.title)
+    assert.are.equal(800, w.width)                -- NSDMI fills the omitted tail
+    assert.are.equal(600, w.height)
+    assert.is_true(w.resizable)
+    assert.are.equal(1024, m.Window.new(4, "editor", 1024).width)
+    assert.are.equal(768, m.Window.new(4, "editor", 1024, 768).height)
+    assert.is_false(m.Window.new(4, "editor", 1024, 768, false).resizable)
+    -- All of Vec2's fields are NSDMI'd, so the one-arg arity exists too.
+    local v = m.Vec2.new(3.0)
+    assert.are.equal(3.0, v.x)
+    assert.are.equal(0.0, v.y)
+  end)
+
+  it("binds const-member aggregates with read-only fields", function()
+    local f = m.Frozen.new("locked")
+    assert.are.equal("locked", f.name)
+    assert.are.equal(1, f.level)                  -- NSDMI default
+    assert.are.equal(3, m.Frozen.new("up", 3).level)
+    assert.has_error(function() f.level = 9 end)  -- const -> read-only
+  end)
 end)

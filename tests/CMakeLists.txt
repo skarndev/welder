@@ -153,6 +153,19 @@ add_test(NAME compile.weld_alias
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_weld_alias --config $<CONFIG>)
 
+# Aggregate NSDMI-default selection (compile-only): the consteval selectors
+# behind the synthesized field constructor's optional suffix —
+# aggregate_required_arity (Lua per-arity overloads; an NSDMI before a required
+# field stays required) and aggregate_defaults_from (Python value defaults:
+# shrinks past non-copyable fields, off when T{} is ill-formed). static_asserts;
+# same compile-to-pass shape as above.
+add_library(welder_aggregate_defaults OBJECT EXCLUDE_FROM_ALL core/aggregate_defaults.cpp)
+target_compile_features(welder_aggregate_defaults PRIVATE cxx_std_26)
+target_link_libraries(welder_aggregate_defaults PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.aggregate_defaults
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_aggregate_defaults --config $<CONFIG>)
+
 # Docstring dedent semantics (compile-only): welder::cleandoc (doc.hpp) mirrors
 # Python inspect.cleandoc / PEP 257 so multiline docs can be indented to match the
 # source without the indentation leaking into __doc__. static_asserts lock the

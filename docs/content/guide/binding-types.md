@@ -93,6 +93,65 @@ Rect {                 // an aggregate: no user ctors, no bases
     print(Rect(2.0, 3.0).w)   --> 2.0   (synthesized field constructor)
     ```
 
+### NSDMI defaults on the field constructor
+
+The fields after the last one **without** a default member initializer are the
+*omissible suffix*: aggregate initialization fills omitted trailing elements
+from their NSDMIs, and the synthesized constructor mirrors that. Python attaches
+the NSDMI values as real keyword defaults (so a later field can also be set *by
+keyword*, skipping earlier defaulted ones); the Lua rods expose one constructor
+arity per omissible tail; the [LuaCATS stub](stubs.md) marks the suffix `?`.
+
+```cpp
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Window {
+    std::string title;      // required — no NSDMI
+    int width{800};         // the omissible suffix...
+    int height{600};
+    bool resizable{true};
+};
+```
+
+=== ":simple-python: Python"
+
+    ```pycon
+    >>> w = Window("editor")            # suffix filled from the NSDMIs
+    >>> w.width, w.height, w.resizable
+    (800, 600, True)
+    >>> Window("editor", height=900).height   # keyword skips past width
+    900
+    ```
+
+=== ":simple-lua: Lua"
+
+    ```lua
+    local w = Window("editor")          -- the shortest arity
+    print(w.width)                      --> 800
+    print(Window("editor", 1024).width) --> 1024
+    ```
+
+An NSDMI'd field declared *before* a required one stays required — a parameter
+list allows no gaps, exactly like C++ default function arguments. Two Python
+wrinkles: a default whose type needs registration (a welded class or enum
+instance) is attached at runtime but spelled `...` in signatures and `.pyi`
+stubs (an object repr is not a valid stub expression), and a move-only field's
+value cannot be copied off the probe instance, so such a field is omissible in
+Lua's arity form but carries no Python default. **Const members keep a struct an
+aggregate**: an immutable settings-style type binds with read-only fields while
+the synthesized constructor (and its defaults) still brace-initializes it.
+
+!!! warning "Defaults convert at registration time"
+
+    The Python default values are converted to Python objects **eagerly**, when
+    the aggregate registers — so a default whose type is itself welded (that
+    `...`-spelled case) must already be *registered* at that point. Within a
+    module weld the walk follows **declaration order**, so declare the field's
+    type before the first opening of the namespace that carries the aggregate
+    (an umbrella header that pre-opens a submodule namespace for a `doc`
+    annotation moves that submodule to the front of the walk — open it *after*
+    the types its aggregates default to). Getting this wrong raises
+    `std::bad_cast` at import.
+
 Compare with a type that declares its own constructors — each public one binds:
 
 ```cpp

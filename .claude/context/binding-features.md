@@ -18,6 +18,30 @@ a synthesized field constructor that brace-inits it, giving Python `T(f0, f1, �
 methods, static methods, overloads. All the pieces reach the rod as ONE
 `add_constructors<T, Ctors, HasDefault, Aggregate, Copyable>` call
 (carriage-computed).
+**NSDMI defaults on the synthesized field ctor** (bind_traits
+`aggregate_required_arity` / `aggregate_defaults_from`): fields after the LAST
+one without an NSDMI are the omissible suffix — Python attaches their values as
+real keyword defaults (read off a value-initialized `T{}` probe at registration;
+P2996 has no NSDMI-value query), the Lua rods emit one ctor arity per omissible
+tail (C++26 paren aggregate init fills the omitted tail from NSDMIs — the
+Aggregate branches are `if constexpr` so the field-array indexing never
+instantiates for a fieldless type, the array<info,0> trap), luacats marks the
+suffix `?`. An NSDMI before a required field stays required (no parameter gaps).
+`aggregate_defaults_from` is the stricter value-extracting form: whole-T must be
+default-constructible, shrinks past non-copy-constructible fields. A default
+whose type needs registration (welded class/enum instance) has no
+expression-shaped repr, so both Python rods spell it `...` in the signature
+(pybind11 `arg_v` descr / nanobind `arg::sig`) while keeping the runtime value —
+otherwise pybind11-stubgen hard-fails on `<X object at …>`. CAVEAT: those
+defaults convert EAGERLY at registration — a welded default type must register
+before the aggregate does; the module walk is declaration-ordered, so an
+umbrella that pre-opens a submodule namespace (for its doc annotation) ahead of
+the core types moves that submodule to the walk's front and imports die with
+std::bad_cast (guide has a warning box). Const members keep a
+struct an aggregate: read-only fields + the field ctor still brace-inits (the
+immutable-settings pattern). Locked by core/aggregate_defaults.cpp
+(compile.aggregate_defaults) + methods.hpp `Window`/`Frozen` ↔ test_methods.py /
+methods_spec.lua + the stub golden's `Splash` and `?`-marked suffixes.
 Constructors resolve SYMMETRICALLY (policy + per-ctor marks — opt_in binds only
 marked-include ctors; bind_traits `ctor_group<R,Type,L,Pol>`), with two
 fail-safes: the DEFAULT ctor is exempt from opt_in's default-out (an implicit one

@@ -541,6 +541,67 @@ consteval bool aggregate_initializable() {
     return true;
 }
 
+/** How many leading fields the synthesized aggregate field constructor
+    REQUIRES: everything up to and including the last field *without* a default
+    member initializer.
+
+    The trailing fields after that point — all NSDMI'd — are the **omissible
+    suffix**: aggregate initialization (braced or C++26 parenthesized) fills
+    omitted trailing elements from their NSDMIs, so a backend may expose them as
+    optional (Python keyword defaults, Lua per-arity constructor overloads,
+    LuaCATS `?` parameters). An NSDMI'd field *before* a required one counts as
+    required — a parameter list allows no gaps, exactly like C++ default
+    function arguments.
+
+    @tparam T the aggregate type.
+    @return the required-prefix length (`== field count` when nothing is
+            omissible). */
+template <class T>
+consteval std::size_t aggregate_required_arity() {
+    constexpr auto fields{aggregate_fields<T>()};
+    std::size_t required{0};
+    // Guard the indexing: std::array<info, 0>::operator[] is not consteval, so
+    // it must not be instantiated for a fieldless type (same trap as the
+    // aggregate_fields fill).
+    if constexpr (fields.size() != 0) {
+        for (std::size_t i{0}; i < fields.size(); ++i)
+            if (!std::meta::has_default_member_initializer(fields[i]))
+                required = i + 1;
+    }
+    return required;
+}
+
+/** The field index from which a *value-extracting* backend (the Python rods)
+    can attach the NSDMI defaults as real parameter default values.
+
+    Stricter than @ref aggregate_required_arity, because extracting a default
+    VALUE — rather than merely omitting the argument — needs two things the
+    arity form doesn't: the whole aggregate must be value-initializable (the
+    defaults are read off a `T{}` probe instance at registration time; reading
+    an NSDMI's value directly is outside P2996), and each defaulted field must
+    be copy-constructible (the value is copied out of the probe). A field that
+    fails the copy test pushes the start past itself — later fields can still
+    default.
+
+    @tparam T the aggregate type.
+    @return the first defaultable index (`== field count` when no default
+            values can be attached; always `>= aggregate_required_arity<T>()`). */
+template <class T>
+consteval std::size_t aggregate_defaults_from() {
+    constexpr auto fields{aggregate_fields<T>()};
+    if (!std::meta::is_default_constructible_type(^^T))
+        return fields.size();
+    std::size_t from{aggregate_required_arity<T>()};
+    // Guarded indexing, as in aggregate_required_arity.
+    if constexpr (fields.size() != 0) {
+        for (std::size_t i{from}; i < fields.size(); ++i)
+            if (!std::meta::is_copy_constructible_type(
+                    std::meta::type_of(fields[i])))
+                from = i + 1;
+    }
+    return from;
+}
+
 // --- namespace-member eligibility -------------------------------------------
 
 /** The member kinds welder can expose from a namespace.
