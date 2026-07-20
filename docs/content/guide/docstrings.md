@@ -207,6 +207,37 @@ A `const` member is bound read-only (get, no set); a mutable one is read/write.
 Only the getter's doc is surfaced — a Python `property` has a single `__doc__` —
 so there is no separate setter docstring.
 
+## Enumerators
+
+An **enumerator** has no per-member docstring slot the Python stub tools surface
+(a stub lists a member as a bare `Name = value`), so a `doc` on one is folded into
+the enum's **class** docstring as an *Attributes* section — the one place
+`pybind11-stubgen` / nanobind's stubgen carries it into the [stubs](#stubs):
+
+```cpp
+enum class
+[[=welder::weld(welder::lang::py), =welder::doc("A compass bearing.")]]
+Direction {
+    North [[=welder::doc("towards the pole")]],
+    East  [[=welder::doc("sunrise")]],
+    South,   // undocumented -> no Attributes line
+};
+```
+
+```pycon
+>>> print(Direction.__doc__)
+A compass bearing.
+
+Attributes:
+    North: towards the pole
+    East: sunrise
+```
+
+The enum's own `doc` is the summary; each documented, *bound* enumerator adds a
+line (an [excluded](enums.md) one appears nowhere). The section is spelled in the
+rod's [style](#choosing-a-docstring-style) — Google `Attributes:`, NumPy underlined
+`Attributes`, Sphinx `:var:`.
+
 ## `tparam` — documenting templates
 
 Template parameters aren't reflectable entities either, so their docs ride on the
@@ -231,10 +262,12 @@ Box { T value; };
   attribute has no `__doc__`. (Class *data members* do carry docs, via properties —
   see [Data members](#data-members) above; and the Doxygen filter surfaces variable
   docs on the C++ side.)
-- **Per-enumerator docs** are omitted at runtime by every rod — neither Python
-  binding framework exposes a per-member docstring slot for enum members, and Lua
-  has no runtime docstring at all. They still reach the
-  [C++ reference](cpp-docs.md).
+- **Per-enumerator docs** are dropped at *runtime* by the **Lua** rods (Lua has no
+  runtime docstring), but the LuaCATS stub carries them as a `---` comment above
+  each enumerator in the `---@enum` table; they also reach the
+  [C++ reference](cpp-docs.md). The **Python** rods carry them at runtime — folded
+  into the enum's class docstring as an Attributes section (see
+  [Enumerators](#enumerators) above).
 
 !!! note "Docs are stored inline"
 

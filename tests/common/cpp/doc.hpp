@@ -141,6 +141,25 @@ int combine(
     return a + b;
 }
 
+// --- enum + per-enumerator docs ---------------------------------------------
+// An enum has no per-enumerator docstring slot the Python stub tools surface, so a
+// [[=welder::doc]] on an enumerator is folded into the enum's *class* docstring as
+// an Attributes section (Google here, the rod's default style) — the one place
+// pybind11-stubgen / nanobind's stubgen carries it into the .pyi. The enum's own
+// doc is the summary; an undocumented enumerator (Blue) contributes no line; an
+// excluded one (Alpha) is neither bound nor documented.
+enum class
+[[
+  =welder::weld(welder::lang::py),
+  =welder::doc("A colour channel.")
+]]
+Channel {
+    Red [[=welder::doc("the warm primary")]],
+    Green [[=welder::doc("the middle primary")]],
+    Blue,                                          // undocumented -> no Attributes line
+    Alpha [[=welder::mark::exclude]],              // excluded -> absent everywhere
+};
+
 // --- variable doc is ignored (no module/attr __doc__ in Python) -------------
 [[
   =welder::weld(welder::lang::py),
@@ -174,4 +193,9 @@ inline void register_doc_styles(WELDER_TEST_MODULE_T& m) {
     WELDER_TEST_NUMPY_WELDER::weld_function<^^documented::add>(n);
     auto s{WELDER_TEST_SUBMODULE(m, "documented_sphinx")};
     WELDER_TEST_SPHINX_WELDER::weld_function<^^documented::add>(s);
+    // The enum Attributes section renders per style too, but a pybind11 enum type
+    // registers once per interpreter — re-welding Channel here would collide with
+    // the `documented` binding. The three styles' format_enum is instead locked
+    // exactly by the compile-time goldens in tests/core/doc_styles.cpp; this
+    // runtime path proves the folded docstring reaches __doc__/.pyi (Google style).
 }

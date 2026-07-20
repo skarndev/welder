@@ -31,16 +31,22 @@ namespace welder::inline v0::rods::luacats {
 /** Append @a text as `--- ` comment lines (each source line prefixed), so a
     multiline summary lands as a LuaCATS description block. A null/empty @a text
     emits nothing.
-    @param out  the document buffer to append to.
-    @param text the summary text (may be null/empty). */
-inline void emit_doc_comment(std::string& out, const char* text) {
+    @param out    the document buffer to append to.
+    @param text   the summary text (may be null/empty).
+    @param indent an optional prefix placed before each `--- ` (to nest the block,
+                  e.g. a documented enumerator inside its `---@enum` table). */
+inline void emit_doc_comment(std::string& out, const char* text,
+                             std::string_view indent = {}) {
     if (!text || !*text)
         return;
+    out += indent;
     out += "--- ";
     for (const char* c{text}; *c; ++c) {
         out += *c;
-        if (*c == '\n' && c[1] != '\0')
+        if (*c == '\n' && c[1] != '\0') {
+            out += indent;
             out += "--- ";
+        }
     }
     out += '\n';
 }

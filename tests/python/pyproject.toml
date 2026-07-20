@@ -47,8 +47,9 @@ files = ["conftest.py", "test_*.py"]
 # enum-member (`misc`) and untyped-def (`no-untyped-def`) checks flag those
 # tool-intrinsic patterns. Relax just those two, and only on the generated stubs of
 # the case groups carrying py::native_enum types (`nested`/`templates` have the
-# class-scoped ones), so the rest of the stub gate stays strict. (nanobind emits
+# class-scoped ones; `documented` has the enum whose enumerator docs fold into an
+# Attributes section), so the rest of the stub gate stays strict. (nanobind emits
 # enum members with values, so its stubs are unaffected by the relaxation.)
 [[tool.mypy.overrides]]
-module = ["*.enums", "*.nested", "*.templates"]
+module = ["*.enums", "*.nested", "*.templates", "*.documented"]
 disable_error_code = ["misc", "no-untyped-def"]

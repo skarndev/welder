@@ -784,23 +784,30 @@ struct rod {
         pybind11 backend, whose `py::native_enum` also binds an `enum.IntEnum`.
         @see welder::rod */
     template <class E>
-    static auto make_enum(module_type& m, const char* name, const char* doc) {
-        // A non-null doc is the enum docstring (a bare const char* extra); nullptr
-        // is branched out rather than passed.
-        if (doc)
-            return nb::enum_<E>(m, name, doc, nb::is_arithmetic());
+    static auto make_enum(module_type& m, const char* name,
+                          const ::welder::detail::enum_doc& ed) {
+        // ed's summary + documented enumerators fold into the class docstring under
+        // DocStyle (an Attributes section) — the one place nanobind's stub generator
+        // carries an enumerator's doc into the .pyi. Empty (wholly undocumented) is
+        // branched out rather than passed. nb::enum_ builds the type in its ctor and
+        // copies the doc, so the transient string here is safe.
+        const std::string doc{DocStyle::format_enum(ed)};
+        if (!doc.empty())
+            return nb::enum_<E>(m, name, doc.c_str(), nb::is_arithmetic());
         return nb::enum_<E>(m, name, nb::is_arithmetic());
     }
 
     /** Create the `nb::enum_<E>` for a **nested** member enum, scoped to its
         enclosing type's class handle — Python sees `module.Outer.Mode`, and an
         *unscoped* nested enum's `export_values()` lands its enumerators on the
-        class (mirroring C++'s `Outer::red`). @see welder::rod */
+        class (mirroring C++'s `Outer::red`). @a ed folds in as for @ref make_enum.
+        @see welder::rod */
     template <class E>
     static auto make_nested_enum(module_type&, auto& outer_cls, const char* name,
-                                 const char* doc) {
-        if (doc)
-            return nb::enum_<E>(outer_cls, name, doc, nb::is_arithmetic());
+                                 const ::welder::detail::enum_doc& ed) {
+        const std::string doc{DocStyle::format_enum(ed)};
+        if (!doc.empty())
+            return nb::enum_<E>(outer_cls, name, doc.c_str(), nb::is_arithmetic());
         return nb::enum_<E>(outer_cls, name, nb::is_arithmetic());
     }
 

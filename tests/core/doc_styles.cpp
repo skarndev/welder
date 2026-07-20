@@ -88,4 +88,76 @@ static_assert(fmt_is<py::google_style>(summary_only, "Just a summary."sv));
 static_assert(fmt_is<py::numpy_style>(summary_only, "Just a summary."sv));
 static_assert(fmt_is<py::sphinx_style>(summary_only, "Just a summary."sv));
 
+// --- Enum docstrings: enumerator docs fold into an Attributes section -----------
+// An enum has no per-enumerator docstring slot the Python stub tools surface, so a
+// documented enumerator's text rides in the enum's *class* docstring — the one place
+// pybind11-stubgen / nanobind's stubgen carries it into the .pyi. Each style spells
+// that section its own way; these goldens lock the layout, mirroring the function
+// goldens above.
+constexpr welder::detail::enumerator_doc members[]{
+    {"Red", "the warm one"},
+    {"Blue", "the cool one,\nover two lines"},
+};
+constexpr welder::detail::enum_doc enum_full{
+    "A palette.", std::span<const welder::detail::enumerator_doc>{members}};
+
+template <class Style>
+consteval bool enum_fmt_is(const welder::detail::enum_doc& e, std::string_view expected) {
+    return Style::format_enum(e) == expected;
+}
+
+// Google: an `Attributes:` block, continuation lines indented 8 (like `Args:`).
+static_assert(enum_fmt_is<py::google_style>(
+    enum_full,
+    "A palette.\n"
+    "\n"
+    "Attributes:\n"
+    "    Red: the warm one\n"
+    "    Blue: the cool one,\n"
+    "        over two lines\n"sv));
+
+// NumPy: an underlined `Attributes` section, name then indented body.
+static_assert(enum_fmt_is<py::numpy_style>(
+    enum_full,
+    "A palette.\n"
+    "\n"
+    "Attributes\n"
+    "----------\n"
+    "Red\n"
+    "    the warm one\n"
+    "Blue\n"
+    "    the cool one,\n"
+    "    over two lines\n"sv));
+
+// Sphinx: a `:var name:` field per enumerator.
+static_assert(enum_fmt_is<py::sphinx_style>(
+    enum_full,
+    "A palette.\n"
+    "\n"
+    ":var Red: the warm one\n"
+    ":var Blue: the cool one,\n"
+    "    over two lines\n"sv));
+
+// Summary only (every enumerator undocumented): the summary verbatim, no section.
+constexpr welder::detail::enum_doc enum_summary_only{"Just an enum."};
+static_assert(enum_fmt_is<py::google_style>(enum_summary_only, "Just an enum."sv));
+static_assert(enum_fmt_is<py::numpy_style>(enum_summary_only, "Just an enum."sv));
+static_assert(enum_fmt_is<py::sphinx_style>(enum_summary_only, "Just an enum."sv));
+
+// Enumerator docs but no enum summary: the section stands alone, no leading blank.
+constexpr welder::detail::enum_doc enum_no_summary{
+    nullptr, std::span<const welder::detail::enumerator_doc>{members}};
+static_assert(enum_fmt_is<py::google_style>(
+    enum_no_summary,
+    "Attributes:\n"
+    "    Red: the warm one\n"
+    "    Blue: the cool one,\n"
+    "        over two lines\n"sv));
+
+// Wholly undocumented enum: every style yields the empty string.
+constexpr welder::detail::enum_doc enum_empty{};
+static_assert(enum_fmt_is<py::google_style>(enum_empty, ""sv));
+static_assert(enum_fmt_is<py::numpy_style>(enum_empty, ""sv));
+static_assert(enum_fmt_is<py::sphinx_style>(enum_empty, ""sv));
+
 int main() {}

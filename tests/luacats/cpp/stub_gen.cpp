@@ -39,8 +39,15 @@ stubdemo {
 enum [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Cardinal directions.")]]
 Direction { North, East, South, West };
 
+// Per-enumerator docs: LuaCATS has no per-member tag, but the language server
+// attaches a `---` comment above a field in the `---@enum` table to that member
+// (hover/completion). An undocumented enumerator (Blue) gets no comment.
 enum class [[=welder::weld(welder::lang::lua)]] [[=welder::doc("Named colors.")]]
-Color { Red, Green = 2, Blue };
+Color {
+    Red [[=welder::doc("the warm primary")]],
+    Green [[=welder::doc("chlorophyll")]] = 2,
+    Blue,
+};
 
 // weld_as renames the *type*: the stub must carry `Figure` at the declaration AND
 // wherever Shape is referenced (here, as Circle's base) — exercising the type

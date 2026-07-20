@@ -586,6 +586,39 @@ struct basic_carriage {
         }
     }
 
+    /** Gather the *documented, participating* enumerators of @a E as
+        @ref welder::detail::enumerator_doc entries, in declaration order, to fold
+        into the enum's class docstring (an @ref welder::detail::enum_doc).
+
+        An enum has no per-enumerator docstring slot the Python stub tools surface,
+        so a `[[=welder::doc]]` on an enumerator rides in the *class* docstring's
+        Attributes section instead — the one place the stub generators carry it into
+        the `.pyi`. This mirrors @ref emit_enumerators' participation test exactly
+        (an excluded enumerator neither binds nor is documented) and uses the same
+        styled name the stub shows, so the section describes precisely the
+        enumerators the binding exposes. A backend that folds it (the Python rods)
+        takes the extended `make_enum`; one that does not (the Lua/luacats rods)
+        sees only the summary via the legacy `make_enum` — see @ref make_enum_of.
+        @tparam B     the rod.
+        @tparam E     the enum type.
+        @tparam Style the name style. */
+    template <rod B, class E, class Style>
+    static std::vector<welder::detail::enumerator_doc> collect_enum_docs() {
+        constexpr lang L{B::language};
+        constexpr policy_kind pol{policy_of(^^E)};
+        std::vector<welder::detail::enumerator_doc> out{};
+        template for (constexpr auto en :
+                      std::define_static_array(std::meta::enumerators_of(^^E))) {
+            if constexpr (Resolution::class_member_participates(en, L, pol, ^^E)) {
+                constexpr const char* text{welder::doc_of<en>()};
+                if constexpr (text != nullptr)
+                    out.push_back(
+                        {welder::name_of<en, L, Style, ent_kind::enumerator>(), text});
+            }
+        }
+        return out;
+    }
+
     /** Everything a class binding contains beyond the class handle itself —
         shared by `bind_type` (a module-scope class) and `bind_nested_type` (a
         class-scoped one).
@@ -974,8 +1007,9 @@ struct basic_carriage {
         constexpr lang L{B::language};
         const char* enum_name{
             welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
-        auto e{make_nested_enum_of<B, E>(m, outer, enum_name,
-                                         welder::doc_of<^^E>())};
+        const auto docs{collect_enum_docs<B, E, Style>()};
+        const welder::detail::enum_doc ed{welder::doc_of<^^E>(), docs};
+        auto e{make_nested_enum_of<B, E>(m, outer, enum_name, ed)};
         emit_enumerators<B, E, Style>(e);
         B::template finish_enum<E>(e);
     }
@@ -1023,24 +1057,54 @@ struct basic_carriage {
             return make_class_of<B, T, decl, Bases>(m, cls_name, doc);
     }
 
+    /** Create the module-scope enum handle for @a E, folding its enumerator docs
+        into the class docstring where the backend supports it.
+
+        A doc-folding rod (the Python rods) declares the extended
+        `make_enum<E>(m, name, const enum_doc&)` — its `DocStyle` renders the summary
+        plus an Attributes section listing @a ed's enumerators. A rod that has no
+        such surface (the Lua rods; luacats, which documents enumerators through its
+        own `---@field` emission) keeps the legacy `make_enum<E>(m, name, summary)`,
+        which sees only @a ed's summary.
+        @tparam B the rod.
+        @tparam E the enum type.
+        @param m    the module handle.
+        @param name the resolved target-language name.
+        @param ed   the enum docstring pieces (summary + documented enumerators).
+        @return the rod's enum handle for @a E. */
+    template <rod B, class E>
+    static auto make_enum_of(typename B::module_type& m, const char* name,
+                             const welder::detail::enum_doc& ed) {
+        if constexpr (requires { B::template make_enum<E>(m, name, ed); })
+            return B::template make_enum<E>(m, name, ed);
+        else
+            return B::template make_enum<E>(m, name, ed.summary);
+    }
+
     /** `make_nested_class_of`'s enum counterpart: the rod's `make_nested_enum`
-        when present, else the module-scope `make_enum`.
+        when present, else the module-scope `make_enum` — each preferring the
+        extended enum-doc-folding form over the legacy summary-only one, exactly
+        like @ref make_enum_of.
         @tparam B the rod.
         @tparam E the nested enum type.
         @param m     the module handle.
         @param outer the enclosing type's class handle.
         @param name  the resolved target-language name.
-        @param doc   the enum docstring, or `nullptr`.
+        @param ed    the enum docstring pieces (summary + documented enumerators).
         @return the rod's enum handle for @a E. */
     template <rod B, class E, class OuterCls>
     static auto make_nested_enum_of(typename B::module_type& m, OuterCls& outer,
-                                    const char* name, const char* doc) {
-        if constexpr (requires {
-                          B::template make_nested_enum<E>(m, outer, name, doc);
-                      })
-            return B::template make_nested_enum<E>(m, outer, name, doc);
+                                    const char* name,
+                                    const welder::detail::enum_doc& ed) {
+        if constexpr (requires { B::template make_nested_enum<E>(m, outer, name, ed); })
+            return B::template make_nested_enum<E>(m, outer, name, ed);
+        else if constexpr (requires {
+                               B::template make_nested_enum<E>(m, outer, name,
+                                                               ed.summary);
+                           })
+            return B::template make_nested_enum<E>(m, outer, name, ed.summary);
         else
-            return B::template make_enum<E>(m, name, doc);
+            return make_enum_of<B, E>(m, name, ed);
     }
 
   public:
@@ -1066,7 +1130,9 @@ struct basic_carriage {
                       "language; annotate it with [[=welder::weld(...)]]");
         const char* enum_name{
             welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
-        auto e{B::template make_enum<E>(m, enum_name, welder::doc_of<^^E>())};
+        const auto docs{collect_enum_docs<B, E, Style>()};
+        const welder::detail::enum_doc ed{welder::doc_of<^^E>(), docs};
+        auto e{make_enum_of<B, E>(m, enum_name, ed)};
         emit_enumerators<B, E, Style>(e);
         B::template finish_enum<E>(e);
         return e;

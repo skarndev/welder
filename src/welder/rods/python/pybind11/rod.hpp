@@ -843,29 +843,44 @@ struct rod {
         std::declval<module_type&>(), nullptr, nullptr, std::index_sequence<>{}));
     template <class E> using enum_handle_type = enum_handle<E>;
 
-    /** Create the `enum_handle` for @a E (a non-null @a doc becomes its docstring).
-        @see welder::rod */
+    /** Assemble @a ed — the enum summary plus its documented enumerators — into the
+        enum's class docstring under this rod's `DocStyle`: the summary, then an
+        Attributes section listing each enumerator's `doc`. An enum has no
+        per-enumerator docstring slot pybind11-stubgen surfaces, so this class
+        docstring is the one place a `[[=welder::doc]]` on an enumerator rides into
+        the generated `.pyi`. Empty when the enum is wholly undocumented. */
+    static std::string _enum_docstring(const ::welder::detail::enum_doc& ed) {
+        return DocStyle::format_enum(ed);
+    }
+
+    /** Create the `enum_handle` for @a E; @a ed's summary + enumerator docs become
+        its class docstring (see @ref _enum_docstring). @see welder::rod */
     template <class E>
     static enum_handle<E> make_enum(module_type& m, const char* name,
-                                    const char* doc) {
-        // native_enum's class_doc "" means "leave __doc__ untouched"; a non-null doc
-        // is the enum docstring, applied at finalize().
+                                    const ::welder::detail::enum_doc& ed) {
+        // native_enum copies class_doc into a std::string (so the transient doc here
+        // is safe) and treats "" as "leave __doc__ untouched" — matching the prior
+        // nullptr behaviour when the enum carries no documentation.
+        const std::string doc{_enum_docstring(ed)};
         return {m, name,
                 std::make_unique<py::native_enum<E>>(m, name, "enum.IntEnum",
-                                                     doc ? doc : "")};
+                                                     doc.c_str())};
     }
 
     /** Create the `enum_handle` for a **nested** member enum @a E, scoped to its
         enclosing type's class handle — Python sees `module.Outer.Mode`, and an
         *unscoped* nested enum's `export_values()` lands its enumerators on the
-        class (mirroring C++'s `Outer::red`). @see welder::rod */
+        class (mirroring C++'s `Outer::red`). @a ed folds in as for @ref make_enum.
+        @see welder::rod */
     template <class E>
     static enum_handle<E> make_nested_enum(module_type&, auto& outer_cls,
-                                           const char* name, const char* doc) {
+                                           const char* name,
+                                           const ::welder::detail::enum_doc& ed) {
+        const std::string doc{_enum_docstring(ed)};
         return {outer_cls, name,
                 std::make_unique<py::native_enum<E>>(outer_cls, name,
                                                      "enum.IntEnum",
-                                                     doc ? doc : "")};
+                                                     doc.c_str())};
     }
 
     /** Add enumerator @a Enum to the enum handle. @see welder::rod */

@@ -62,6 +62,7 @@ enum class any_enum {};
     stays a dependency-light leaf the machinery headers can include. */
 namespace detail {
 struct function_doc;
+struct enum_doc;
 } // namespace detail
 
 /** The one bindability fact a backend must provide: can it natively convert a
@@ -164,7 +165,8 @@ concept caster_oracle = requires {
                                     const char* doc, std::index_sequence<I...>);
     template <class E>
       static auto make_nested_enum(module_type&, auto& outer_cls, const char* name,
-                                   const char* doc);
+                                   const detail::enum_doc& doc); // or a `const char*`
+                                   // summary — the same dual form as make_enum below
     // OPTIONAL: called after a nested class's whole interior has registered
     // (innermost-first). For a rod whose class handle re-opens the class by
     // name/path (LuaBridge3), this is where the class table actually moves
@@ -203,10 +205,17 @@ concept caster_oracle = requires {
         // eligibility)
     @endcode
 
-    **Enum binding** (the enum handle is whatever `make_enum` returns; deduced):
+    **Enum binding** (the enum handle is whatever `make_enum` returns; deduced).
+    `make_enum` takes @ref welder::detail::enum_doc — the enum summary plus its
+    documented enumerators — when the backend folds enumerator docs into the class
+    docstring (the Python rods, whose `DocStyle::format_enum` renders an Attributes
+    section); a backend that does not (the Lua/luacats rods) declares the legacy
+    summary-only `const char* doc` form, and the carriage's `make_enum_of` picks
+    whichever is present:
     @code
     template <class E> static auto make_enum(module_type&, const char* name,
-                                             const char* doc);
+                                             const detail::enum_doc& doc);
+        // legacy alternative: (module_type&, const char* name, const char* summary)
     template <std::meta::info Enum, class Style> static void add_enumerator(auto& e);
     template <class E> static void finish_enum(auto& e); // e.g. export unscoped
     @endcode
@@ -385,19 +394,24 @@ concept resolution =
             std::meta::info>;
     };
 
-/** A *style* folds a @ref welder::detail::function_doc into one docstring.
+/** A *style* folds a @ref welder::detail::function_doc into one docstring, and a
+    @ref welder::detail::enum_doc (an enum's summary plus its enumerator docs) into
+    the enum's class docstring.
 
     It is the customization point for how documentation reads in the target
     language; swap it to emit Google-, NumPy-, or any house style. Any type with
-    `static std::string format(const detail::function_doc&)` qualifies. Concrete styles
-    live with the rods that share them (e.g. `welder::rods::python::google_style`
-    in `<welder/rods/python/doc_style.hpp>`), keeping this core layer neutral.
+    `static std::string format(const detail::function_doc&)` **and**
+    `static std::string format_enum(const detail::enum_doc&)` qualifies. Concrete
+    styles live with the rods that share them (e.g.
+    `welder::rods::python::google_style` in `<welder/rods/python/doc_style.hpp>`),
+    keeping this core layer neutral.
 
     @tparam S the candidate style type.
 */
 template <class S>
-concept doc_style = requires(const detail::function_doc& d) {
+concept doc_style = requires(const detail::function_doc& d, const detail::enum_doc& e) {
     { S::format(d) } -> std::same_as<std::string>;
+    { S::format_enum(e) } -> std::same_as<std::string>;
 };
 
 namespace naming {

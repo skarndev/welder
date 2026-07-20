@@ -100,7 +100,10 @@ it your language's own copy spelling (the Python rods emit
 
 ```cpp
     template <class E> static auto make_enum(module_type&, const char* name,
-                                             const char* doc);
+                                             const welder::detail::enum_doc& doc);
+        // ^ or the legacy summary-only `const char* doc` if you don't fold
+        //   enumerator docs into the class docstring (the Lua/luacats rods);
+        //   the carriage's make_enum_of picks whichever overload you declare
     template <std::meta::info Enum, class Style> static void add_enumerator(auto& e);
     template <class E> static void finish_enum(auto& e);   // e.g. export unscoped values
 
@@ -211,24 +214,31 @@ These semantics are locked by the compile-time test
 
 ## Writing a doc style
 
-A **doc style** decides how a function's documentation pieces — the summary, the
-per-parameter docs, the `returns` text — fold into one docstring. The three
+A **doc style** decides how documentation pieces fold into a docstring — a
+function's (summary, per-parameter docs, `returns` text) and an enum's (summary
+plus its enumerator docs). The three
 [shipped Python styles](docstrings.md#choosing-a-docstring-style) (Google,
-NumPy, Sphinx) are ordinary implementations of the same one-function contract,
+NumPy, Sphinx) are ordinary implementations of the same two-function contract,
 the `welder::doc_style` concept:
 
 ```cpp
 template <class S>
-concept doc_style = requires(const welder::detail::function_doc& d) {
+concept doc_style = requires(const welder::detail::function_doc& d,
+                             const welder::detail::enum_doc& e) {
     { S::format(d) } -> std::same_as<std::string>;
+    { S::format_enum(e) } -> std::same_as<std::string>;
 };
 ```
 
-`format()` receives the raw pieces as a `welder::detail::function_doc` — a
-`summary` (`const char*`), the `params` (a span of `{name, text}` pairs in
-declaration order) and the `returns` text. **Any piece may be null/empty** (a
-function with only a `returns` is valid); return an empty string for a wholly
-undocumented function and the rod skips emitting a docstring. The text arrives
+`format()` receives the raw function pieces as a `welder::detail::function_doc` —
+a `summary` (`const char*`), the `params` (a span of `{name, text}` pairs in
+declaration order) and the `returns` text. `format_enum()` receives a
+`welder::detail::enum_doc` — a `summary` plus `members` (a span of documented,
+bound enumerators as `{name, text}` pairs); it lays them out as an *Attributes*
+section on the enum's class docstring (an enumerator has no per-member slot the
+stubs surface). **Any piece may be null/empty** (a function with only a `returns`
+is valid; an enum may have no documented enumerators); return an empty string when
+wholly undocumented and the rod skips emitting a docstring. The text arrives
 already [dedented](docstrings.md#multiline-docstrings), so a style only lays
 out sections. A minimal house style:
 
@@ -247,6 +257,17 @@ struct terse_style {
         if (d.returns) {
             out += "\n  -> ";
             out += d.returns;
+        }
+        return out;
+    }
+    static constexpr std::string format_enum(const welder::detail::enum_doc& e) {
+        std::string out{e.summary ? e.summary : ""};
+        for (const auto& m : e.members) {
+            if (!out.empty()) out += '\n';
+            out += "  ";
+            out += m.name;
+            out += " — ";
+            out += m.text;
         }
         return out;
     }

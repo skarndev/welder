@@ -229,8 +229,11 @@ comments and `@field`/`@param`/`@return` tags. The C++→LuaCATS **type map** co
 scalars (`integer`/`number`/`boolean`/`string`), the STL wrappers welder recurses
 (`std::vector<T>` → `T[]`, `std::map<K,V>` → `table<K,V>`, `std::optional<T>` →
 `T?`, smart pointers → the pointee) and welded classes/enums (their dotted name);
-anything else degrades to `any`. Enums become `---@enum` tables, welded bases become
-`---@class X : Base`. Overloaded methods, constructors and free functions render as a
+anything else degrades to `any`. Enums become `---@enum` tables — a documented
+enumerator's `doc` rides as a `---` comment above its `Name = value` entry, which
+the language server attaches to that member (hover/completion), the Lua counterpart
+of the Python rods folding enumerator docs into the enum's class docstring. Welded
+bases become `---@class X : Base`. Overloaded methods, constructors and free functions render as a
 single documented `function` plus idiomatic `---@overload fun(…)` lines (the primary
 signature keeps its full `@param`/summary docs; the extra signatures carry types
 only, which is all LuaCATS `---@overload` records). A `const` data member is noted

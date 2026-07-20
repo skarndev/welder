@@ -118,6 +118,31 @@ struct google_style {
         }
         return out;
     }
+
+    /** Assemble enum @a e into a Google-style docstring: the summary, then an
+        `Attributes:` block listing each documented enumerator (`    Name: text`) —
+        the Napoleon spelling for class/enum members. Empty when the enum carries no
+        documentation at all.
+        @param e the enum documentation pieces.
+        @return the formatted docstring (possibly empty). */
+    static constexpr std::string format_enum(const ::welder::detail::enum_doc& e) {
+        std::string out{};
+        if (e.summary)
+            out += e.summary;
+
+        if (!e.members.empty()) {
+            detail::blank_line(out);
+            out += "Attributes:\n";
+            for (const auto& m : e.members) {
+                out += "    ";
+                out += m.name;
+                out += ": ";
+                detail::append_indented(out, m.text, "        ");
+                out += '\n';
+            }
+        }
+        return out;
+    }
 };
 
 static_assert(::welder::doc_style<google_style>);
@@ -172,6 +197,32 @@ struct numpy_style {
         }
         return out;
     }
+
+    /** Assemble enum @a e into a NumPy-style docstring: the summary, then an
+        underlined `Attributes` section listing each documented enumerator (the name
+        on its own line, its doc indented four spaces beneath) — the numpydoc form
+        for class/enum members. Empty when the enum carries no documentation at all.
+        @param e the enum documentation pieces.
+        @return the formatted docstring (possibly empty). */
+    static constexpr std::string format_enum(const ::welder::detail::enum_doc& e) {
+        std::string out{};
+        if (e.summary)
+            out += e.summary;
+
+        if (!e.members.empty()) {
+            detail::blank_line(out);
+            out += "Attributes\n";
+            out.append(std::string_view{"Attributes"}.size(), '-');
+            out += '\n';
+            for (const auto& m : e.members) {
+                out += m.name;
+                out += "\n    ";
+                detail::append_indented(out, m.text, "    ");
+                out += '\n';
+            }
+        }
+        return out;
+    }
 };
 
 static_assert(::welder::doc_style<numpy_style>);
@@ -212,6 +263,30 @@ struct sphinx_style {
         if (d.returns) {
             out += ":returns: ";
             detail::append_indented(out, d.returns, "    ");
+        }
+        return out;
+    }
+
+    /** Assemble enum @a e into a Sphinx (reStructuredText) docstring: the summary,
+        then a `:var Name: text` field per documented enumerator — the reST field
+        `sphinx.ext.autodoc` reads for a class/enum attribute. Empty when the enum
+        carries no documentation at all.
+        @param e the enum documentation pieces.
+        @return the formatted docstring (possibly empty). */
+    static constexpr std::string format_enum(const ::welder::detail::enum_doc& e) {
+        std::string out{};
+        if (e.summary)
+            out += e.summary;
+
+        if (!e.members.empty())
+            detail::blank_line(out);
+
+        for (const auto& m : e.members) {
+            out += ":var ";
+            out += m.name;
+            out += ": ";
+            detail::append_indented(out, m.text, "    ");
+            out += '\n';
         }
         return out;
     }

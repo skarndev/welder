@@ -422,9 +422,15 @@ struct rod {
         return w;
     }
 
-    /** Emit an `Name = <int>` line for enumerator @a Enum. @see welder::rod */
+    /** Emit an `Name = <int>` line for enumerator @a Enum, preceded by its `doc`
+        rendered as a nested `--- ` comment block. LuaCATS has no per-member tag for
+        an enum, but the language server attaches a `---` comment above a field
+        inside the `---@enum` table to that member (surfaced on hover/completion) —
+        the Lua analogue of the Python rods folding enumerator docs into the class
+        docstring. @see welder::rod */
     template <std::meta::info Enum, class Style = ::welder::naming::none>
     static void add_enumerator(enum_writer& w) {
+        emit_doc_comment(w.values, ::welder::doc_of<Enum>(), "    ");
         w.values += "    ";
         w.values +=
             ::welder::name_of<Enum, language, Style, ::welder::ent_kind::enumerator>();

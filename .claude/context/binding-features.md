@@ -345,10 +345,25 @@ enumerator does not renumber the rest. An **unscoped** enum also `export_values(
 (a stdlib `enum.IntEnum`; `py::enum_` is discouraged as of pybind11 3.0) — it is
 move-only and needs an explicit `.finalize()`, so `make_enum` returns a
 `unique_ptr` handle (the movable value `bind_enum` returns) and `finish_enum`
-finalizes. The enum `doc` becomes the Python docstring; welder doesn't currently
-surface per-enumerator docs. An
+finalizes. The enum `doc` becomes the Python docstring. **Per-enumerator docs** —
+an enumerator has no per-member docstring slot the Python stub tools surface — are
+folded into the enum's **class** docstring as an *Attributes* section (the one
+place `pybind11-stubgen`/nanobind's stubgen carries them into the `.pyi`): the
+carriage's `collect_enum_docs<B,E,Style>()` gathers the participation-filtered,
+styled `{name, doc}` pairs (mirroring `emit_enumerators`) into a
+`welder::detail::enum_doc`, and the Python rod's `make_enum` renders it via
+`DocStyle::format_enum` (Google `Attributes:`, NumPy underlined, Sphinx `:var:` —
+locked by `tests/core/doc_styles.cpp`). The doc-folding rods take the extended
+`make_enum(m, name, const enum_doc&)`; the Lua/luacats rods keep the legacy
+summary-only `const char* doc` form, and the carriage's `make_enum_of` /
+`make_nested_enum_of` pick whichever is present. (The **luacats** rod surfaces
+per-enumerator docs its own way — `add_enumerator` emits each enumerator's `doc`
+as a nested `--- ` comment above its `Name = <int>` entry in the `---@enum` table;
+LuaLS attaches that to the member for hover/completion, verified warning-clean. The
+sol2/LuaBridge3 runtimes have no docstring slot and drop it.) An
 enum-typed member/parameter binds because the enum is welded (bind the enum first,
-like a welded base). Tested: `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py`.
+like a welded base). Tested: `tests/common/cpp/enums.hpp` + `tests/python/test_enums.py`;
+per-enumerator docs in `tests/common/cpp/doc.hpp` (`Channel`) + `tests/python/test_doc.py`.
 
 ## Nested types (member classes + enums)
 A type declared INSIDE a welded class resolves like any other class member —

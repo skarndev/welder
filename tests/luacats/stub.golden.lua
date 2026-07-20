@@ -18,7 +18,9 @@ stubdemo.Direction = {
 --- Named colors.
 ---@enum stubdemo.Color
 stubdemo.Color = {
+    --- the warm primary
     Red = 0,
+    --- chlorophyll
     Green = 2,
     Blue = 3,
 }

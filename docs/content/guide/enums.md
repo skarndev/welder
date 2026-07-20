@@ -106,15 +106,35 @@ Compass {
 When you [bind a whole namespace](namespaces-modules.md), declaration order handles
 this for you — put the enums before the structs that use them.
 
-!!! note "Per-enumerator docs are omitted at runtime"
+!!! note "Per-enumerator docs ride in the enum's class docstring"
 
-    A `doc` on an individual **enumerator** does not reach the generated runtime
-    bindings: neither Python rod has a per-member docstring slot to fill
-    (pybind11/nanobind expose none for enum members), and Lua has no runtime
-    docstring at all. The text is not lost — the [Doxygen filter](cpp-docs.md)
-    surfaces enumerator docs in the C++ reference, and the
-    [LuaCATS stub](../backends/lua.md#stubs-luacats) documents the bound table
-    (marked `---@enum`). How docs flow in general is covered later, in
+    A `doc` on an individual **enumerator** has no per-member docstring slot the
+    Python stub tools surface (a stub lists a member as a bare `Name = value`), so
+    welder folds it into the enum's **class** docstring as an *Attributes* section —
+    the one place `pybind11-stubgen` / nanobind's stubgen carries it into the
+    `.pyi`:
+
+    ```python
+    class Direction(enum.IntEnum):
+        """
+        A compass bearing.
+
+        Attributes:
+            North: towards the pole
+            East: sunrise
+        """
+    ```
+
+    The section is spelled in the rod's [docstring
+    style](docstrings.md#choosing-a-docstring-style) — Google `Attributes:`, NumPy
+    underlined `Attributes`, Sphinx `:var:`. An
+    undocumented enumerator contributes no line; an excluded one appears nowhere.
+    The **Lua** rods have no runtime docstring, so they ignore it at load time; the
+    [LuaCATS stub](../backends/lua.md#stubs-luacats) instead emits each enumerator's
+    doc as a `---` comment above its entry in the `---@enum` table (the language
+    server attaches that to the member, shown on hover/completion). The doc also
+    reaches the C++ reference, where the [Doxygen filter](cpp-docs.md) surfaces it
+    as a trailing `/**< */` comment. How docs flow in general is covered later, in
     [Docstrings](docstrings.md).
 
 Next: [Inheritance](inheritance.md).

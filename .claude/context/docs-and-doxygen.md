@@ -77,7 +77,9 @@ text-emitting `welder::rod` that plugs the *same* generic driver as sol2 (so
 member selection / base flattening / policy-marks / the bindability gate are reused
 verbatim), swapping the emission primitives to append LuaCATS text — `--- ` summary
 lines, `---@field`/`---@param`/`---@return name type description` tags, `---@class X
-: Base`, `---@enum`, `---@operator`. The one thing sol2 didn't need is the
+: Base`, `---@enum` (a documented enumerator gets a nested `--- ` comment above its
+`Name = <int>` table entry — LuaCATS has no per-member enum tag, but LuaLS attaches
+that comment to the member for hover/completion), `---@operator`. The one thing sol2 didn't need is the
 C++→LuaCATS type map (`lua_type_string`; see build-test-run.md). Overloaded
 methods/constructors/free functions collapse to one documented `function` + idiomatic
 `---@overload fun(…)` lines (grouped via the shared `*_overload_set` selectors in

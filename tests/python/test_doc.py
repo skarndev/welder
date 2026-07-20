@@ -161,6 +161,42 @@ def test_sphinx_style_docstring(mod: ModuleType) -> None:
     assert "Parameters" not in text
 
 
+# --- enum + per-enumerator docs ---------------------------------------------
+# An enum has no per-enumerator docstring slot the Python stub tools surface, so a
+# `doc` on an enumerator is folded into the enum's *class* docstring as an
+# Attributes section (Google-style by default) — the one place pybind11-stubgen /
+# nanobind's stubgen carries it into the .pyi.
+def test_enum_class_docstring_has_attributes_section(doc: ModuleType) -> None:
+    text = doc.Channel.__doc__
+    assert "A colour channel." in text  # the enum's own doc is the summary
+    assert "Attributes:" in text
+    assert text.index("A colour channel.") < text.index("Attributes:")
+    assert "    Red: the warm primary" in text
+    assert "    Green: the middle primary" in text
+    # the enumerators are still bound as values
+    assert int(doc.Channel.Red) == 0
+    assert int(doc.Channel.Green) == 1
+
+
+def test_enum_undocumented_enumerator_has_no_attributes_line(doc: ModuleType) -> None:
+    # Blue is bound but carries no doc -> no Attributes line (it appears nowhere in
+    # the class docstring), yet it is still a usable member.
+    assert "Blue" not in doc.Channel.__doc__
+    assert int(doc.Channel.Blue) == 2
+
+
+def test_enum_excluded_enumerator_is_absent(doc: ModuleType) -> None:
+    # Alpha is mark::exclude'd -> neither bound nor documented.
+    assert not hasattr(doc.Channel, "Alpha")
+    assert "Alpha" not in doc.Channel.__doc__
+
+
+# The numpy/sphinx renderings of an enum's Attributes section are locked exactly by
+# the compile-time goldens in tests/core/doc_styles.cpp; a pybind11 enum type
+# registers once per interpreter, so Channel can't be re-welded through the styled
+# submodules the way the free function `add` is above.
+
+
 # --- namespace docstring (adopted as the module docstring) -------------------
 def test_namespace_docstring_becomes_module_doc(doc: ModuleType) -> None:
     assert doc.__doc__ == "The documented sample namespace."

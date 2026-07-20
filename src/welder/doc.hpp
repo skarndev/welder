@@ -255,6 +255,30 @@ struct function_doc {
     std::span<const param_doc> params{}; /**< Per-parameter `doc`, declaration order. */
     const char* returns{nullptr};        /**< The function's `returns`. */
 };
+
+/** One enumerator's documentation for the @ref enum_doc list: its bound
+    (target-language) name and its `doc` text. Only *documented*, *participating*
+    enumerators appear, so both members are always non-null. */
+struct enumerator_doc {
+    const char* name{nullptr}; /**< The enumerator's bound name. */
+    const char* text{nullptr}; /**< Its `doc` text. */
+};
+
+/** The raw documentation pieces of an enum, handed to a style to assemble.
+
+    An enum has no per-enumerator docstring slot the Python doc tools surface (a
+    stub lists a member as a bare `Name = value`), so a documented enumerator's
+    text is folded into the enum's **class** docstring as an *Attributes* section —
+    the one place `pybind11-stubgen`/nanobind's stub generator carries it into the
+    `.pyi`. The style decides that section's spelling (Google `Attributes:`, NumPy
+    underlined `Attributes`, Sphinx `:var:`); this struct is the neutral input, a
+    sibling of @ref function_doc. The carriage gathers the (participation-filtered,
+    styled-named) enumerator list; the rod's `DocStyle::format_enum` folds it. */
+struct enum_doc {
+    const char* summary{nullptr};             /**< The enum's own `doc`. */
+    std::span<const enumerator_doc> members{}; /**< Documented, bound enumerators, in
+                                                    declaration order. */
+};
 } // namespace detail
 
 // The `doc_style` concept — the customization point that folds a `function_doc`
