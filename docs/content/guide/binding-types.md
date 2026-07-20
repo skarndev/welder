@@ -64,7 +64,7 @@ welder binds:
 - for a **baseless aggregate**, a *synthesized field constructor* that brace-inits
   it — giving Python `T(f0, f1, …)`;
 - the **copy constructor**, given the target language's own copy spelling
-  (Python: `T(other)` plus the copy protocol) — see
+  (Python: the `__copy__`/`__deepcopy__` protocol) — see
   [Copy and move constructors](#copy-and-move-constructors).
 
 !!! note "Why aggregates are special"
@@ -169,14 +169,15 @@ Rect {
 
 The **copy constructor** does not ride the ordinary per-constructor path — it
 gets the target language's own copy spelling instead. The Python rods bind it
-three ways: a
-visible copy constructor (`Rect(other)`) and the copy protocol — `__copy__` and
-`__deepcopy__(memo)` — so `copy.copy(obj)` / `copy.deepcopy(obj)` just work on
-any copy-constructible welded type. The C++ payload is duplicated by the copy
-constructor (the deep/shallow distinction there is the constructor's own —
-value members duplicate, a pointer member copies as a pointer). The Lua rods
-ignore all of it: Lua has no copy protocol, exactly as they ignore `doc` and
-`return_policy`.
+as the copy protocol alone — `__copy__` and `__deepcopy__(memo)` — so
+`copy.copy(obj)` / `copy.deepcopy(obj)` just work on any copy-constructible
+welded type. It is deliberately **not** exposed as a `Rect(other)` init
+overload: that spelling is a C++-ism (Python copies through the `copy` module,
+not a copy constructor) and would collide with a one-argument constructor of
+your own. The C++ payload is duplicated by the copy constructor (the
+deep/shallow distinction there is the constructor's own — value members
+duplicate, a pointer member copies as a pointer). The Lua rods ignore all of
+it: Lua has no copy protocol, exactly as they ignore `doc` and `return_policy`.
 
 ```pycon
 >>> import copy
@@ -213,12 +214,12 @@ the trampoline payload on a subclass shell. A hand-rolled trampoline without
 one is a compile error on copyable types (welder names the fix); welder's
 *generated* trampolines carry it automatically.
 
-The copy vehicle (`T(other)`) is registered **ahead of the type's own
-constructors**, and overloads are tried in registration order — so a
-permissive constructor of yours (one taking a generic Python object, say)
-cannot intercept a `T`-instance argument: copy construction and the protocol
-always reach the C++ copy constructor, while your constructor still serves
-everything else.
+The protocol is **independent of your constructors**: `__copy__`/`__deepcopy__`
+copy-construct the C++ payload directly, never through Python's constructor
+overload resolution. So even a permissive constructor of yours (one taking a
+generic Python object, say) that would happily accept a `T`-instance argument
+never interferes — the copy always duplicates faithfully, and your constructor
+still serves everything else.
 
 Admission mirrors the default constructor's: an *implicit* copy constructor
 rides along whenever the type is copy-constructible (nothing to mark, so

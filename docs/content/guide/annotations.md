@@ -185,8 +185,8 @@ also counts as the member's opt-in, so no separate `include` is needed.
     surface, and compiles).
 
     The **copy constructor** follows the default constructor's pattern (it gets
-    the target language's own copy spelling — Python: `T(other)` plus a
-    subclass-faithful `__copy__`/`__deepcopy__`):
+    the target language's own copy spelling — Python: the subclass-faithful
+    `__copy__`/`__deepcopy__` protocol, never a `T(other)` init overload):
     an implicit one rides along whenever the type is copy-constructible, and a
     declared one's explicit marks are honored, `exclude` included. The **move
     constructor** never binds — an `include`/`only` mark on one is a hard

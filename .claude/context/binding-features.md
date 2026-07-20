@@ -57,19 +57,25 @@ signature is named.
 
 **Copy & move ctors:** the COPY ctor never binds as an init overload — it is the
 `Copyable` bool of `add_constructors` (carriage: `is_copy_constructible_v<T>` &&
-bind_traits `copy_ctor_admitted<R,Type,L>`); the Python rods turn it into THREE
-things — a visible `init<const T&>` (Python `T(other)`, doubling as the in-place
-construction vehicle; registered BEFORE the user ctors so a permissive user
-ctor — py::object/nb::object param, locked by copying.hpp `Grabby` via the
-`WELDER_TEST_PYOBJECT` seam — can't intercept a T-instance argument) and a
-SUBCLASS-FAITHFUL `__copy__`/`__deepcopy__(memo)`
-(rod `_copy_instance<T>`: `type(self).__new__` shell → registered copy `__init__`
-re-run on it (never the subclass `__init__`, matching Python's own copy
-machinery) → `__dict__` carried over, deepcopy'd through the memo with
-`memo[id(self)]` recorded FIRST so cycles terminate → `__slots__` state carried
-too, names via `copyreg._slotnames` (the stdlib's own MRO walk, what pickle
-uses); memo typed `object` not
-`dict` — bare `dict` fails strict-mypy stubcheck). A Python subclass thus copies
+bind_traits `copy_ctor_admitted<R,Type,L>`); the Python rods turn it into the
+SUBCLASS-FAITHFUL copy protocol `__copy__`/`__deepcopy__(memo)` **only** — never
+a `T(other)` init overload (that C++-ism is unpythonic — copying goes through the
+`copy` module — and would clash with a one-arg user ctor; so a lone Grabby-style
+greedy ctor now serves `T(other)`, and copying.hpp `Grabby` /
+`test_copy_protocol_is_independent_of_constructors` lock exactly that: the
+protocol still copies faithfully because it never routes through Python ctor
+overload resolution). `_copy_instance<T>`: `type(self).__new__` shell → the C++
+payload copy-constructed *in place* on it (NOT via `__init__`) — a subclass shell
+(`Py_TYPE(out) != tinfo->type` on pybind11 / `nb_inst_python_derived` on nanobind)
+gets `construction_type<T>` (the trampoline), a plain instance gets `T`; pybind11
+sets `v_h.value_ptr()` then `tinfo->init_instance(inst, nullptr)` (the exact
+finalize pybind11's own ctor path runs, pybind11.h:~1237), nanobind placement-news
+into `inst_ptr<void>(out)` then `inst_mark_ready` (every nanobind instance is
+alias-sized, so either payload fits) → `__dict__` carried over, deepcopy'd through
+the memo with `memo[id(self)]` recorded FIRST so cycles terminate → `__slots__`
+state carried too, names via `copyreg._slotnames` (the stdlib's own MRO walk, what
+pickle uses); memo typed `object` not
+`dict` — bare `dict` fails strict-mypy stubcheck. A Python subclass thus copies
 as itself with overrides dispatching. The trampoline interplay: the backend
 builds the ALIAS payload on a subclass shell only if the trampoline is
 constructible from `const T&` — `WELDER_PY_TRAMPOLINE(TRAMP, BASE)` (macro now

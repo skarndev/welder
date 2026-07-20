@@ -151,12 +151,13 @@ struct [[=welder::rods::python::trampoline]] PyStencil : Stencil {
     int holes() const override { WELDER_PY_OVERRIDE(holes); }
 };
 
-// --- ordering: the copy vehicle beats a permissive user constructor ----------
+// --- the copy protocol is independent of user constructors -------------------
 // Grabby's own constructor accepts ANY Python object (the backend's generic
-// object type, via the WELDER_TEST_PYOBJECT seam), so a Grabby argument would
-// satisfy it too. The rods register the copy vehicle (T(other)) AHEAD of user
-// constructors, so copy construction and the copy protocol always reach the
-// C++ copy constructor instead of being intercepted.
+// object type, via the WELDER_TEST_PYOBJECT seam), so a Grabby argument
+// satisfies it too — `Grabby(other)` reaches the greedy ctor (n = -1), not a
+// copy (there is no bound copy constructor). The copy protocol is unaffected:
+// __copy__/__deepcopy__ construct the C++ copy directly, never through Python
+// constructor overload resolution, so they always duplicate faithfully.
 
 #ifdef WELDER_TEST_PYOBJECT
 struct

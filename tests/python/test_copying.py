@@ -1,12 +1,12 @@
 """Tests for the copy-constructor binding (Python's copy protocol).
 
-The copy constructor never binds as an init overload; it becomes the visible
-copy constructor ``T(other)`` plus the copy protocol — ``__copy__`` and
-``__deepcopy__(memo)``, both **subclass-faithful**: like Python's own copy
-machinery they transfer state without calling ``__init__`` (a
-``type(self).__new__`` shell, the C++ payload copy-constructed in place, the
-instance ``__dict__`` carried over — deep-copied through the memo on the
-deepcopy path), so a Python subclass copies as itself, overrides and
+The copy constructor never binds as an init overload — no ``T(other)``, which
+is a C++-ism copying doesn't take in Python. It becomes the copy protocol
+alone: ``__copy__`` and ``__deepcopy__(memo)``, both **subclass-faithful**:
+like Python's own copy machinery they transfer state without calling
+``__init__`` (a ``type(self).__new__`` shell, the C++ payload copy-constructed
+in place, the instance ``__dict__`` carried over — deep-copied through the memo
+on the deepcopy path), so a Python subclass copies as itself, overrides and
 attributes intact. Admission mirrors the default constructor's: an implicit
 copy constructor rides along whenever the type is copy-constructible, a
 declared one's explicit marks are honored (per language when scoped), and
@@ -97,11 +97,16 @@ def test_move_ctor_is_silently_skipped(cp: ModuleType) -> None:
     assert copy.copy(s).n == 6
 
 
-# --- the visible copy constructor: T(other) ------------------------------------
-def test_copy_construction_from_python(cp: ModuleType) -> None:
+# --- no C++-style copy constructor: T(other) is not a binding ------------------
+def test_no_copy_constructor_overload(cp: ModuleType) -> None:
+    # The copy constructor is exposed only through the copy protocol, never as
+    # an unpythonic `Sheet(other)` init overload. Sheet's constructors are the
+    # default and the (width, title) aggregate ctor, so a single Sheet argument
+    # matches neither and raises.
     s = cp.Sheet()
     s.width = 4
-    assert cp.Sheet(s).width == 4
+    with pytest.raises(TypeError):
+        cp.Sheet(s)
 
 
 # --- Python subclasses copy as themselves --------------------------------------
@@ -202,17 +207,18 @@ def test_abstract_type_binds_no_protocol(cp: ModuleType) -> None:
     assert not hasattr(cp.Stencil, "__deepcopy__")
 
 
-# --- the copy vehicle beats a permissive user constructor ----------------------
-def test_copy_vehicle_beats_a_greedy_constructor(cp: ModuleType) -> None:
+# --- the copy protocol is independent of user constructors ---------------------
+def test_copy_protocol_is_independent_of_constructors(cp: ModuleType) -> None:
     # Grabby declares a C++ constructor accepting ANY Python object (n = -1).
-    # The copy vehicle is registered ahead of user constructors, so a Grabby
-    # argument reaches the C++ copy constructor — never the greedy one.
+    # With no bound copy constructor, `Grabby(other)` reaches that greedy ctor,
+    # but the copy protocol constructs the C++ copy directly — never through
+    # Python constructor overload resolution — so it duplicates faithfully.
     g = cp.Grabby()
     g.n = 5
-    assert cp.Grabby(g).n == 5  # T(other) copies
     assert copy.copy(g).n == 5  # the protocol copies
     assert copy.deepcopy(g).n == 5
-    assert cp.Grabby("anything").n == -1  # the greedy ctor still serves the rest
+    assert cp.Grabby(g).n == -1  # a Grabby argument reaches the greedy ctor
+    assert cp.Grabby("anything").n == -1  # ...as does anything else
 
 
 # --- tack welding: admission never depended on marks ---------------------------

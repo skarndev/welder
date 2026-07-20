@@ -222,12 +222,11 @@ struct rod {
         Mirrors what Python's own copy machinery does for a pure-Python object —
         state transfer, never `__init__`: an uninitialized shell of the
         instance's *dynamic* type (`type(self).__new__(type(self))`, so a Python
-        subclass copies as itself), the C++ payload copy-constructed in place by
-        re-running the registered copy `__init__` on the shell (for a subclass
-        shell pybind11 constructs the *alias* (trampoline) payload — which is why
-        the trampoline needs a copy-from-base constructor — so the copy keeps
-        dispatching virtuals into Python), then the instance `__dict__` carried
-        over. With @a memo (the `__deepcopy__` path) the fresh object is
+        subclass copies as itself), the C++ payload copy-constructed in place on
+        the shell (for a subclass shell the *alias* (trampoline) payload — which
+        is why the trampoline needs a copy-from-base constructor — so the copy
+        keeps dispatching virtuals into Python), then the instance `__dict__`
+        carried over. With @a memo (the `__deepcopy__` path) the fresh object is
         recorded under `id(self)` *before* the `__dict__` is deep-copied through
         it, so shared references dedup and reference cycles terminate, exactly
         per the `copy` module's contract. `__slots__`-declared state carries
@@ -246,7 +245,22 @@ struct rod {
         if (memo)
             (*memo)[py::int_(reinterpret_cast<std::uintptr_t>(self.ptr()))] =
                 out;
-        py::type::of<T>().attr("__init__")(out, self);
+        // Copy-construct the C++ payload into the fresh shell in place — the
+        // alias-aware work `py::init<const T&>` would do, done here so the copy
+        // needs no Python-visible `T(other)` constructor. A subclass shell
+        // (`Py_TYPE(out) != tinfo->type`) gets the trampoline so C++ virtual
+        // calls keep dispatching into the Python override; a plain instance
+        // gets T. init_instance then constructs the owning holder and registers
+        // the instance, exactly as pybind11's own constructor path finalizes.
+        namespace pd = py::detail;
+        const pd::type_info* tinfo{pd::get_type_info(typeid(T))};
+        auto* inst{reinterpret_cast<pd::instance*>(out.ptr())};
+        pd::value_and_holder v_h{inst->get_value_and_holder(tinfo)};
+        const T& src{py::cast<const T&>(self)};
+        v_h.value_ptr() = Py_TYPE(out.ptr()) != tinfo->type
+                              ? static_cast<T*>(new construction_type<T>(src))
+                              : new T(src);
+        tinfo->init_instance(inst, nullptr);
         if (py::hasattr(self, "__dict__")) {
             py::object d{self.attr("__dict__")};
             if (memo)
@@ -494,15 +508,16 @@ struct rod {
         @a Ctors, and the synthesized aggregate field constructor when
         @a Aggregate.
 
-        @a Copyable (the carriage-admitted copy constructor) becomes three
-        things: a Python-visible copy constructor (`T(other)`, the
-        `py::init<const T&>` that also serves as the in-place construction
-        vehicle) and the copy protocol — `__copy__` and `__deepcopy__(memo)`,
-        both **subclass-faithful** via @ref@ref _copy_instance — a Python subclass
+        @a Copyable (the carriage-admitted copy constructor) becomes the copy
+        protocol alone — `__copy__` and `__deepcopy__(memo)`, both
+        **subclass-faithful** via @ref _copy_instance — a Python subclass
         instance copies as its own type, `__dict__` and virtual dispatch intact,
         with the C++ payload duplicated by the copy constructor (whose
         deep/shallow distinction is its own: value members duplicate, a pointer
-        member copies as a pointer). The memo parameter is typed `object`, not
+        member copies as a pointer). It is deliberately NOT exposed as a
+        `T(other)` init overload: that C++-ism is unidiomatic in Python (copying
+        goes through the `copy` module) and would clash with a one-arg user
+        constructor. The memo parameter is typed `object`, not
         `dict` — a bare `dict` in the generated stub fails strict mypy
         (disallow_any_generics). @see _def_init @see _def_aggregate_init
         @see welder::rod */
@@ -512,8 +527,8 @@ struct rod {
             cls.def(py::init<>());
         if constexpr (Copyable) {
             // A trampolined type must keep the copy faithful for Python
-            // subclasses: pybind11 constructs the ALIAS payload on a subclass
-            // shell only if it is constructible from const T&.
+            // subclasses: _copy_instance constructs the ALIAS payload on a
+            // subclass shell only if it is constructible from const T&.
             static_assert(
                 std::is_constructible_v<construction_type<T>, const T&>,
                 "welder: this type's trampoline lacks a copy-from-base "
@@ -522,12 +537,10 @@ struct rod {
                 "Python. The WELDER_PY_TRAMPOLINE(TRAMP, BASE) macro declares "
                 "it; a hand-rolled trampoline needs 'Tramp(const Base&)' — or "
                 "mark::exclude the copy constructor.");
-            // Registered BEFORE the user constructors: overloads are tried in
-            // registration order, so a permissive user constructor (one taking
-            // a generic object, a variant embedding T, …) cannot intercept a
-            // T-instance argument — T(other) and the copy protocol always
-            // reach the C++ copy constructor.
-            cls.def(py::init<const T&>());
+            // The copy constructor is exposed ONLY as Python's copy protocol —
+            // `copy.copy`/`copy.deepcopy` — never as a `T(other)` init overload
+            // (that C++-ism is unidiomatic in Python, and would collide with a
+            // one-arg user constructor). _copy_instance owns the in-place copy.
             cls.def("__copy__", [](py::handle self) {
                 return _copy_instance<T>(self, nullptr);
             });
