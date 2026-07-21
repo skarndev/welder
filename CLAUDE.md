@@ -50,12 +50,17 @@ override their virtuals without the trampolines being hand-written (each overrid
 the base virtual's reflected types, so signatures match by construction — overloaded
 virtuals dispatch per-slot, covariant overrides fold to one slot, protected NVI hooks
 are covered; a C-variadic virtual with no `bind_flat` is a hard error); and
-**`welder::rods::opaque_containers::rod`** reflects the welded types, finds the scalar
-STL containers they use, and emits a **`.hpp` of `WELDER_OPAQUE` declarations + welded
-aliases** that bind them by reference — so the per-container boilerplate is not
-hand-written (a namespace-scope `type_caster` specialization is a compile-time artifact
-no runtime rod can emit; blanket over welded types, `by_value` opt-out, derived names).
-Further languages are designed-for but not yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
+**`welder::rods::opaque_containers::rod`** reflects the welded types, finds the STL
+containers they use (`std::vector<Entity>` of a welded class included, not just
+scalars), and emits a **`.hpp` of `WELDER_OPAQUE` declarations + welded aliases** that
+bind them by reference — so the per-container boilerplate is not hand-written (a
+namespace-scope `type_caster` specialization is a compile-time artifact no runtime rod
+can emit; blanket over welded types, `by_value` opt-out, derived names). Class-element
+containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
+Python rods opt in via a `reopen_class` hook): it registers every welded type's NAME,
+then binds the opaque containers, then fills members — so no container-typed
+member/signature ever spells a raw C++ name in a stub. Further languages are
+designed-for but not yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
 section): a *standalone* super-project of 9 CTest-asserted recipes that obtains welder
 via FetchContent — CI builds it against the checkout, so it doubles as the consumer-
 packaging test (details in `.claude/context/build-test-run.md`). For the

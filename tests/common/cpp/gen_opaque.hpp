@@ -25,9 +25,10 @@
 
 namespace gen_opaque {
 
-// A welded element type reached through a container in a function SIGNATURE. Its
-// container (std::vector<Reading>) has a welded-CLASS element, so the generator leaves
-// it BY VALUE (it opens scalar-element containers only) — proving that filter.
+// A welded ELEMENT type. Thanks to the driver's two-phase sweep (its name is
+// predeclared before the containers bind), std::vector<Reading> is now opened OPAQUE
+// by the generator — as a member, as an aggregate-NSDMI field, and as a function
+// return — with clean stubs (no raw C++ name).
 struct [[=welder::weld(welder::lang::py)]] Reading {
     double value{0.0};
 
@@ -37,6 +38,7 @@ struct [[=welder::weld(welder::lang::py)]] Reading {
 
 struct [[=welder::weld(welder::lang::py)]] Series {
     std::vector<double> points{};              // auto opaque -> VectorDouble (buffer)
+    std::vector<Reading> readings{};           // auto opaque -> VectorReading (class elem)
     // opt-out: stays a plain list[int], no WELDER_OPAQUE emitted for vector<int>
     [[=welder::rods::python::by_value]] std::vector<int> raw{};
 };

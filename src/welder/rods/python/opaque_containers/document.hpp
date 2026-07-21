@@ -7,6 +7,7 @@
 
 #include <welder/containers.hpp> // is_reference_container / container_kind_of
 #include <welder/naming.hpp>     // restyle / case_kind (name derivation)
+#include <welder/reflect.hpp>    // welded_for (element eligibility)
 
 /** @file
     The text-emitting core of welder's **opaque-container generator** rod: the
@@ -92,22 +93,39 @@ consteval bool scalar_leaf(std::meta::info t) {
            std::meta::template_of(t) == ^^std::basic_string;
 }
 
-/** Is container @a type eligible for the generator — are all its element/key/value
-    types *scalar* (fundamental or string)?
+/** Can the driver's PHASE 1 (name pre-registration) register @a t's name before
+    PHASE 2 binds the container that uses it — i.e. is @a t either a scalar leaf, or a
+    **top-level** welded class/enum (a `weld_namespace` sweep predeclares those names
+    first)?
 
-    The generator opens **scalar-element** containers only. Two reasons: (1) they are
-    the zero-copy case (`numpy` needs a scalar buffer), and (2) they are
-    *ordering-safe* — a scalar-element container has no welded-class element, so the
-    carriage's native-first pre-pass can register it ahead of every type that uses it
-    without a def-time-ordering artifact (a welded-class-element container would have
-    to interleave with its element class and its users, which generated aliases —
-    always emitted last — cannot). A `std::vector<Widget>` / nested
-    `std::map<K, std::vector<V>>` therefore stays by value; hand-write its alias to
-    open it opaque. @pre @a type is a reference container. */
+    A NESTED (class-scoped) welded type is bound inside its enclosing class's interior
+    in PHASE 3, after the containers, so it is NOT predeclared — a `vector<Outer::Inner>`
+    would spell `Inner`'s raw C++ name in the container's stub. A nested *container*
+    (`vector<vector<int>>`) is likewise unsafe (the inner container is a PHASE-2
+    binding, not a predeclared name). Both are excluded; hand-write their alias. */
+consteval bool element_ok(std::meta::info t) {
+    t = std::meta::dealias(t);
+    if (scalar_leaf(t))
+        return true;
+    if (is_reference_container(t)) // nested container — inner is not a predeclared name
+        return false;
+    if (std::meta::is_class_type(t) || std::meta::is_enum_type(t))
+        // top-level (namespace-scoped) welded type => predeclared in phase 1
+        // (is_namespace, not !is_class_type: is_class_type THROWS on a namespace)
+        return std::meta::is_namespace(std::meta::parent_of(t)) &&
+               ::welder::welded_for(t, lang::py);
+    return false;
+}
+
+/** Is container @a type eligible for the generator — will PHASE 1 register every
+    element/key/value type's name before PHASE 2 binds it (see @ref element_ok)? The
+    generator opens scalar-element AND welded-class/enum-element containers (the common
+    `std::vector<Entity>` case); only nested-in-class element types and nested
+    containers are left by value. @pre @a type is a reference container. */
 consteval bool opaque_eligible(std::meta::info type) {
     const auto args{std::meta::template_arguments_of(type)};
     for (std::size_t i{0}, n{value_arg_count(type)}; i < n; ++i)
-        if (!scalar_leaf(args[i]))
+        if (!element_ok(args[i]))
             return false;
     return true;
 }

@@ -88,6 +88,20 @@ concept caster_oracle = requires {
     { B::template has_native_caster<detail::any_type> } -> std::convertible_to<bool>;
 };
 
+/** Does rod @a B opt into the driver's **two-phase** namespace sweep — register every
+    welded type's NAME, bind the opaque containers that use them, then fill members?
+
+    True iff @a B declares the optional `reopen_class` hook (retrieve an
+    already-registered class as a fillable handle). The Python runtime rods do, so a
+    container-typed member/signature never spells a raw C++ name in a generated stub (a
+    def-time-ordering artifact); the Lua runtime rods and the text-emitting rods do not,
+    and keep the single-pass sweep. Shape-probed with @ref welder::detail::any_type, like
+    @ref caster_oracle. @tparam B the rod type. */
+template <class B>
+concept two_phase_rod = requires(typename B::module_type& m, const char* s) {
+    B::template reopen_class<detail::any_type>(m, s);
+};
+
 /** The contract a **rod** (a welder backend, `welder::rods::…::rod`) must satisfy
     to plug into the generic driver.
 
@@ -174,6 +188,17 @@ concept caster_oracle = requires {
     template <class T>
       static void finish_nested_class(module_type&, auto& outer_cls, auto& cls,
                                       const char* name);
+    // OPTIONAL (welder::two_phase_rod): retrieve an ALREADY-registered class as a
+    // fillable handle. Declaring it opts the rod into the driver's two-phase
+    // namespace sweep — register every type NAME, bind the opaque containers that
+    // use them, then fill members — so a container-typed member/signature never
+    // spells a raw C++ name in a stub. class_handle_type<T> is the return; the
+    // nested form retrieves from the enclosing class handle.
+    template <class T>
+      static class_handle_type<T> reopen_class(module_type& scope, const char* name);
+    template <class T>
+      static class_handle_type<T> reopen_nested_class(module_type&, auto& outer,
+                                                      const char* name);
     template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
       static void add_constructors(auto& cls);  // the whole participating set;
         // Copyable = the admitted copy constructor (never an init overload —

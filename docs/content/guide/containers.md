@@ -136,13 +136,20 @@ Every scalar-element container becomes opaque automatically. Two controls:
 - **Names are derived** from the type: `std::vector<int>` → `VectorInt`,
   `std::map<std::string,int>` → `MapStringInt`.
 
-!!! note "Scalar elements only"
+Containers of **welded classes** work too — `std::vector<Entity>` where `Entity` is a
+welded type is opened opaque, with clean stubs and live mutation, even when it is an
+aggregate field or a function return. `weld_namespace` registers every welded type's
+name *before* it binds any container or member, so no forward reference is ever spelled
+as a raw C++ name (this "declare all names first" ordering also applies to hand-written
+opaque aliases and to ordinary bindings).
 
-    The generator opens containers whose element/key/value types are scalars or
-    strings — the zero-copy case, and the one it can order safely. A
-    `std::vector<Widget>` (welded-class element) or a nested
-    `std::map<K, std::vector<V>>` is left by value; hand-write its `WELDER_OPAQUE` +
-    alias (declared before the types that use it) if you want it opaque.
+!!! note "What the generator still leaves by value"
+
+    Two element shapes aren't opened automatically: a **nested-in-a-class** welded type
+    (`std::vector<Outer::Inner>` — its name is registered inside `Outer`'s body, too
+    late), and a **nested container** (`std::map<K, std::vector<V>>`). Hand-write their
+    `WELDER_OPAQUE` + alias if you want them opaque. Element types welded in a *different*
+    `weld_namespace` also need that namespace welded first (the usual ordering).
 
 ## Scope & the trade-off
 

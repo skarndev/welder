@@ -789,20 +789,25 @@ reveals `FloatVector`, NOT `list[float]` — the type-level tell). numpy is a te
 (pyproject.toml dev group); pybind11-stubgen's bind_vector/bind_map stubs need a
 scoped `no-untyped-def`/`type-arg` mypy relaxation (`*.opaque`), like the enum ones.
 
-**Ordering (the container-first pre-pass).** `bind_namespace` binds
-*native-element* container aliases (scalar/string element/key/value) in a PRE-PASS
-before anything else (`carriage.hpp`, guarded `rod_binds_containers<B>` +
-`container_elements_native<B, type>()` — the latter in containers.hpp, checks each
-value arg via `B::has_native_caster`). Reason: an opaque-container **aggregate NSDMI
-field**'s default is converted to a Python object at the field-ctor's *def* time, which
-needs the container class already registered — so a scalar container a later class uses
-must bind first (makes the sweep order-independent, e.g. a generated alias header
-included AFTER the classes). Restricted to native-element containers on purpose: a
-`std::vector<Welded>` bound ahead of its element would spell the element's raw C++ name
-in the container's docstrings/stubs (a pybind11 def-time artifact — stubgen HARD-errors
-on it), so welded-class-element containers stay in declaration order (main loop, after
-the element). The main loop's container branch binds those non-native ones; native ones
-were done in the pre-pass (skipped there).
+**Ordering (the two-phase sweep).** `bind_namespace` binds in THREE phases for a rod
+that declares a `reopen_class` hook (`welder::two_phase_rod<B>` — concepts.hpp; the
+Python runtime rods; Lua/text rods keep the single-pass walk). PHASE 1 predeclares
+every welded class NAME (`predeclare_type` = `make_class_of` create + discard — the
+handle lives in `scope.attr(name)`) and fully binds enums (name-safe anywhere). PHASE 2
+binds EVERY opaque container alias (names now registered → clean stubs; and a container
+an aggregate NSDMI field defaults to is registered before that field's synthesized ctor
+converts the default). PHASE 3 is the main walk = `fill_type` = `reopen_class` (retrieve
+the predeclared handle via `reinterpret_borrow`/`nb::borrow` of `scope.attr(name)`) +
+`bind_class_interior`; enums + containers skipped (done above). Why: an opaque-container
+element type or container-typed signature bound before its type's NAME is registered
+makes the framework spell the raw C++ name in a docstring (a def-time artifact stubgen
+HARD-errors on). Proven on both rods (create handle → bind container → fill via retrieved
+handle). `reopen_class`/`reopen_nested_class` return `class_handle_type<T>` (baseless +
+trampoline — bases matter only at registration, already done). The `weld_type` direct
+route and every non-two-phase rod are UNCHANGED (`bind_type` untouched; the two new
+functions are separate). Residuals (still declaration-order / single-pass): NESTED-in-
+class types (bound in phase 3 inside their outer, not predeclared) and cross-`weld_namespace`
+elements. `container_elements_native` (the old native-only pre-pass gate) was removed.
 
 **The generator (`welder::rods::opaque_containers::rod`).** A build-time text-emitting
 rod — the exact model of trampolines/luacats — that removes the hand-written
@@ -821,10 +826,12 @@ rods); `has_native_caster = true` (permissive gate, like trampolines). Model = B
 over welded types (all scalar containers) + `by_value` opt-out + DERIVED names
 (`vector<int>`→`VectorInt`; `::welder::naming::restyle(…, pascal)`). Type spelling =
 `display_string_of(dealias(type))` (valid C++, infra args dropped, `std::string` →
-`std::__cxx11::basic_string<char>`). **SCALAR-element containers only** (`opaque_eligible`
-= all value args fundamental/`basic_string`): they are the zero-copy case AND the
-ordering-safe case (always fit the native-first pre-pass); a `vector<Welded>` / nested
-container is left by value (documented; hand-write it). CMake:
+`std::__cxx11::basic_string<char>`). **Scalar OR top-level-welded-class/enum elements**
+(`opaque_eligible`/`element_ok`: every value arg is fundamental/`basic_string`, OR a
+namespace-scoped welded class/enum — `is_namespace(parent_of)` NOT `!is_class_type`,
+which THROWS on a namespace — predeclared in phase 1): so `vector<Entity>` IS opened now
+(the two-phase sweep registers `Entity`'s name first). Left by value: nested-in-class
+element types and nested containers (`map<K, vector<V>>`) — hand-write those. CMake:
 `welder::opaque_containers` INTERFACE target (`src/welder/rods/CMakeLists.txt`) +
 `welder_generate_opaque_containers()` (`cmake/WelderOpaqueContainers.cmake`, mirrors
 WelderTrampolines) + top-CMakeLists `include()` — NOT shipped to find_package (parity

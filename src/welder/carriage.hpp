@@ -1243,6 +1243,49 @@ struct basic_carriage {
         return cls;
     }
 
+    /** Phase 1 of the two-phase sweep: register @a T's NAME only (create the class
+        handle via `make_class_of`, then discard it — it lives in `scope.attr(name)`),
+        WITHOUT filling its interior. Run for every welded class before any opaque
+        container or member signature is bound, so the framework never spells @a T's
+        raw C++ name in a docstring (a def-time-ordering artifact stubgen rejects).
+        The handle is retrieved and filled later by @ref fill_type. Only rods that
+        opt into the two-phase sweep (`welder::two_phase_rod`) reach this; @a Decl and
+        the gates mirror `bind_type`. @see bind_namespace */
+    template <rod B, class T, class Style = naming::none,
+              std::meta::info Decl = std::meta::info{}>
+    static void predeclare_type(typename B::module_type& m,
+                                const char* name = nullptr) {
+        constexpr lang L{B::language};
+        static_assert(!std::meta::is_union_type(std::meta::dealias(^^T)),
+                      "welder: unions cannot be welded (see bind_type).");
+        static_assert(Decl != std::meta::info{} || Resolution::participates(^^T, L),
+                      "welder: predeclare_type<T>: T is not welded for this "
+                      "backend's language.");
+        const char* cls_name{
+            welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
+        constexpr auto bases{Resolution::template native_bases<^^T, L>()};
+        // Create + register (name, bases, trampoline); the returned handle is
+        // discarded — fill_type retrieves it by name in phase 3.
+        make_class_of<B, T, (Decl == std::meta::info{} ? ^^T : Decl), bases>(
+            m, cls_name, welder::doc_of<^^T>());
+    }
+
+    /** Phase 3 of the two-phase sweep: RETRIEVE @a T's predeclared handle (via the
+        rod's `reopen_class`) and fill its interior — nested types, constructors,
+        members, methods, operators — exactly as `bind_type`'s tail does. Runs after
+        phase 1 (all names) and phase 2 (all opaque containers), so every
+        container-typed member/signature resolves to a registered Python name.
+        @see predeclare_type @see bind_namespace */
+    template <rod B, class T, class Style = naming::none,
+              std::meta::info Decl = std::meta::info{}>
+    static void fill_type(typename B::module_type& m, const char* name = nullptr) {
+        constexpr lang L{B::language};
+        const char* cls_name{
+            welder::name_of_or<^^T, L, Style, ent_kind::class_>(name)};
+        auto cls{B::template reopen_class<T>(m, cls_name)};
+        bind_class_interior<B, T, Style>(m, cls);
+    }
+
     /** Register free function @a Fn — with its participating overload siblings —
         as a module-level function of @a m.
 
@@ -1352,45 +1395,64 @@ struct basic_carriage {
         // walk, finalized by close_module after it.
         auto session{B::open_module(m)};
 
-        // Container-first pre-pass: bind *native-element* reference-container
-        // aliases (opaque std::vector / std::map / std::unordered_map whose
-        // element/key/value types are all native — scalars, strings) BEFORE
-        // anything else in the namespace. They are leaf registrations a later class
-        // may depend on at *def* time — e.g. an opaque-container aggregate field's
-        // NSDMI default is converted to a Python object when the field constructor
-        // is registered, which needs the container class already registered.
-        // Binding them up front makes the sweep order-independent (so a generated
-        // alias header included *after* the classes still works). The pre-pass is
-        // limited to native-element containers on purpose: a std::vector<Welded>
-        // bound ahead of its welded element would make the framework spell that
-        // element's raw C++ name in the container's docstrings/stubs, so it instead
-        // binds in declaration order (after the element) in the main loop below.
-        // Only rods that support containers run this; the main loop carries the
-        // not-supported diagnostic.
-        if constexpr (welder::rod_binds_containers<B>) {
+        // --- Two-phase sweep (opt-in rods: welder::two_phase_rod) ---------------
+        // A rod that can RE-OPEN a class (the Python rods) binds a namespace in three
+        // phases, so an opaque-container element type or a container-typed signature
+        // is never bound before that type's NAME is registered — otherwise the
+        // framework spells the raw C++ name in a docstring (a def-time-ordering
+        // artifact stubgen rejects). PHASE 1 predeclares every welded class NAME
+        // (create the handle, discard — fill_type retrieves it later) and fully binds
+        // enums (they reference nothing, so they are name-safe anywhere). PHASE 2
+        // binds every opaque container alias (all element names are now registered →
+        // clean stubs; and a container an aggregate field defaults to is registered
+        // before that field's synthesized constructor converts the default). The main
+        // walk below is then PHASE 3 (fill): it RE-OPENS each class and fills its
+        // members, with all containers already registered. A non-two-phase rod skips
+        // both pre-passes; the main walk binds each class whole in one pass, as before.
+        if constexpr (welder::two_phase_rod<B>) {
+            // Phase 1 — predeclare class NAMES + fully bind enums.
             template for (constexpr auto mem :
                           std::define_static_array(std::meta::members_of(Ns, ctx))) {
-                // Nested if constexpr: container_elements_native reads the type's
-                // template arguments, so it must only be instantiated once
-                // is_reference_container has established `mem` IS a container.
                 if constexpr (std::meta::is_type_alias(mem) &&
-                              welder::names_template_specialization(mem) &&
-                              welder::is_reference_container(
-                                  std::meta::dealias(mem))) {
-                    if constexpr (welder::container_elements_native<
-                                      B, std::meta::dealias(mem)>() &&
-                                  Resolution::alias_participates(mem, L, pol, Ns)) {
-                        // Gate the element / key / value types (the alias is a
-                        // listed wrapper, so assert_bindable recurses exactly those).
-                        welder::assert_bindable<B, typename [:mem:], L,
-                                                Resolution>();
-                        B::template bind_container<typename [:mem:], Style>(
+                              welder::names_template_specialization(mem)) {
+                    if constexpr (Resolution::alias_participates(mem, L, pol, Ns) &&
+                                  !welder::is_reference_container(
+                                      std::meta::dealias(mem)))
+                        predeclare_type<B, typename [:mem:], Style, mem>(
                             m, detail::alias_bound_name<mem, L, Style>());
+                } else if constexpr (std::meta::is_type(mem) &&
+                                     std::meta::is_class_type(mem)) {
+                    if constexpr (Resolution::member_participates(mem, L, pol, Ns))
+                        predeclare_type<B, typename [:mem:], Style>(m, nullptr);
+                } else if constexpr (std::meta::is_type(mem) &&
+                                     std::meta::is_enum_type(mem)) {
+                    if constexpr (Resolution::member_participates(mem, L, pol, Ns))
+                        bind_enum<B, typename [:mem:], Style>(m, nullptr);
+                }
+            }
+            // Phase 2 — bind every opaque container alias (names registered above).
+            if constexpr (welder::rod_binds_containers<B>) {
+                template for (constexpr auto mem : std::define_static_array(
+                                  std::meta::members_of(Ns, ctx))) {
+                    if constexpr (std::meta::is_type_alias(mem) &&
+                                  welder::names_template_specialization(mem) &&
+                                  welder::is_reference_container(
+                                      std::meta::dealias(mem))) {
+                        if constexpr (Resolution::alias_participates(mem, L, pol,
+                                                                    Ns)) {
+                            welder::assert_bindable<B, typename [:mem:], L,
+                                                    Resolution>();
+                            B::template bind_container<typename [:mem:], Style>(
+                                m, detail::alias_bound_name<mem, L, Style>());
+                        }
                     }
                 }
             }
         }
 
+        // The main walk. For a two-phase rod this is PHASE 3 (fill): classes RE-OPEN,
+        // enums and containers are skipped (bound above). For any other rod it is the
+        // single-pass sweep (each class bound whole).
         template for (constexpr auto mem :
                       std::define_static_array(std::meta::members_of(Ns, ctx))) {
             // The alias branch must come first: type predicates (is_class_type)
@@ -1429,18 +1491,12 @@ struct basic_carriage {
                                 "feature (the Lua rods bind containers by reference "
                                 "structurally, needing no opaque alias). Drop the "
                                 "alias for this backend.");
-                            // A NATIVE-element container was already bound in the
-                            // container-first pre-pass above; only a welded-class-
-                            // element container (kept in declaration order, so its
-                            // element registers first — clean stubs) binds here.
-                            if constexpr (welder::rod_binds_containers<B> &&
-                                          !welder::container_elements_native<
-                                              B, std::meta::dealias(mem)>()) {
-                                welder::assert_bindable<B, typename [:mem:], L,
-                                                        Resolution>();
-                                B::template bind_container<typename [:mem:], Style>(
-                                    m, detail::alias_bound_name<mem, L, Style>());
-                            }
+                            // Containers are bound in PHASE 2 above (a two-phase rod);
+                            // a non-two-phase rod that reaches here already tripped the
+                            // static_assert. Nothing to bind in this walk.
+                        } else if constexpr (welder::two_phase_rod<B>) {
+                            fill_type<B, typename [:mem:], Style, mem>(
+                                m, detail::alias_bound_name<mem, L, Style>());
                         } else {
                             bind_type<B, typename [:mem:], Style, mem>(
                                 m, detail::alias_bound_name<mem, L, Style>());
@@ -1462,10 +1518,19 @@ struct basic_carriage {
                 }
             } else if constexpr (std::meta::is_type(mem) &&
                                  std::meta::is_class_type(mem)) {
-                if constexpr (Resolution::member_participates(mem, L, pol, Ns))
-                    bind_type<B, typename [:mem:], Style>(m, nullptr);
+                // PHASE 3 fill (two-phase) reopens the predeclared class; a single-
+                // pass rod binds it whole here.
+                if constexpr (Resolution::member_participates(mem, L, pol, Ns)) {
+                    if constexpr (welder::two_phase_rod<B>)
+                        fill_type<B, typename [:mem:], Style>(m, nullptr);
+                    else
+                        bind_type<B, typename [:mem:], Style>(m, nullptr);
+                }
             } else if constexpr (std::meta::is_type(mem) && std::meta::is_enum_type(mem)) {
-                if constexpr (Resolution::member_participates(mem, L, pol, Ns))
+                // Enums are fully bound in PHASE 1 for a two-phase rod (name-safe
+                // anywhere), so they are skipped here; a single-pass rod binds them now.
+                if constexpr (!welder::two_phase_rod<B> &&
+                              Resolution::member_participates(mem, L, pol, Ns))
                     bind_enum<B, typename [:mem:], Style>(m, nullptr);
             } else if constexpr (std::meta::is_type(mem) &&
                                  std::meta::is_union_type(mem)) {

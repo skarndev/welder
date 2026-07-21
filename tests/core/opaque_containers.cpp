@@ -33,11 +33,20 @@ static_assert(eq(oc::container_spelling(^^std::vector<int>), "std::vector<int>")
 static_assert(eq(oc::container_spelling(^^std::map<std::string, int>),
                  "std::map<std::__cxx11::basic_string<char>, int>"));
 
-// --- scalar-eligibility filter (welded-class-element containers are left by value) ---
+// --- eligibility filter: scalar OR top-level welded class/enum elements ------
 static_assert(oc::opaque_eligible(^^std::vector<int>));
 static_assert(oc::opaque_eligible(^^std::map<std::string, double>));
-struct Widget {};
-static_assert(!oc::opaque_eligible(^^std::vector<Widget>));            // class element
-static_assert(!oc::opaque_eligible(^^std::map<std::string, std::vector<int>>)); // nested
+// a top-level WELDED class element is eligible (its name is predeclared in phase 1)
+struct [[=welder::weld(welder::lang::py)]] Elem { int v{0}; };
+static_assert(oc::opaque_eligible(^^std::vector<Elem>));
+static_assert(oc::opaque_eligible(^^std::map<int, Elem>));
+// a non-welded class element is NOT (the container's gate would reject it anyway)
+struct Plain {};
+static_assert(!oc::opaque_eligible(^^std::vector<Plain>));
+// a nested-in-class welded type is NOT predeclared -> left by value
+struct [[=welder::weld(welder::lang::py)]] Host { struct [[=welder::weld(welder::lang::py)]] Inner {}; };
+static_assert(!oc::opaque_eligible(^^std::vector<Host::Inner>));
+// a nested CONTAINER element is unsafe (inner is a phase-2 binding, not a name)
+static_assert(!oc::opaque_eligible(^^std::map<std::string, std::vector<int>>));
 
 } // namespace

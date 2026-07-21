@@ -24,13 +24,12 @@ def go(mod: ModuleType) -> ModuleType:
 
 
 def test_generated_aliases_exist(go: ModuleType) -> None:
-    # the generator derived this name from the scalar-element container it found
+    # the generator derived these names from the containers it found
     assert hasattr(go, "VectorDouble")
+    # a welded-CLASS element container is opened too (two-phase name pre-registration)
+    assert hasattr(go, "VectorReading")
     # vector<int> was opted out with by_value, so no wrapper was generated for it
     assert not hasattr(go, "VectorInt")
-    # vector<Reading> has a welded-class element, so the generator leaves it by value
-    # (scalar-element containers only) — no wrapper generated
-    assert not hasattr(go, "VectorReading")
 
 
 def test_member_is_opaque_and_writes_through(go: ModuleType) -> None:
@@ -51,11 +50,22 @@ def test_by_value_member_stays_a_list(go: ModuleType) -> None:
     assert s.raw == [1, 2, 3]
 
 
-def test_class_element_container_stays_by_value(go: ModuleType) -> None:
-    # vector<Reading> (welded-class element) is NOT opened opaque by the generator —
-    # it stays the by-value list[Reading] the framework caster produces.
+def test_class_element_container_member_writes_through(go: ModuleType) -> None:
+    # vector<Reading> (welded-class element) is opened OPAQUE — a member is the bound
+    # wrapper, and appends write through to the C++ vector (aggregate-NSDMI field).
+    s = go.Series()
+    assert isinstance(s.readings, go.VectorReading)
+    assert not isinstance(s.readings, list)
+    s.readings.append(go.Reading(1.0))
+    s.readings.append(go.Reading(2.0))
+    assert len(s.readings) == 2
+    assert s.readings[1].value == pytest.approx(2.0)
+
+
+def test_class_element_container_from_a_signature(go: ModuleType) -> None:
+    # a vector<Reading>-returning function returns the opaque wrapper, not a list
     readings = go.take(3)
-    assert isinstance(readings, list)
+    assert isinstance(readings, go.VectorReading)
     assert len(readings) == 3
     assert [r.value for r in readings] == pytest.approx([0.0, 1.0, 2.0])
     assert all(isinstance(r, go.Reading) for r in readings)

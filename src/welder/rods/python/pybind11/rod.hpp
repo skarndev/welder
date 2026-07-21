@@ -869,6 +869,29 @@ struct rod {
         std::declval<module_type&>(), nullptr, nullptr, std::index_sequence<>{}));
     template <class E> using enum_handle_type = enum_handle<E>;
 
+    /** Retrieve the ALREADY-registered class @a T as a fillable handle — the
+        two-phase binding hook (`welder::caster_oracle`-adjacent, optional). The
+        driver's name-pre-registration phase creates the `py::class_<T,…>` (so
+        `scope.attr(name)` is it); `reinterpret_borrow` re-wraps that object as the
+        same handle type `make_class` yields, so subsequent `add_*` calls target the
+        same registered type. This lets the driver register every type's NAME (and
+        the opaque containers that use them) BEFORE filling any member, so a
+        container-typed member/signature never spells a raw C++ name in a docstring
+        (a def-time-ordering artifact stubgen rejects). Declaring this hook is a
+        rod's opt-in to the driver's two-phase namespace sweep. @see welder::rod */
+    template <class T>
+    static class_handle_type<T> reopen_class(module_type& scope, const char* name) {
+        return py::reinterpret_borrow<class_handle_type<T>>(scope.attr(name));
+    }
+
+    /** The nested-scope form of @ref reopen_class: retrieve @a T from its enclosing
+        type's class handle (`outer.attr(name)`) rather than the module. @see welder::rod */
+    template <class T>
+    static class_handle_type<T> reopen_nested_class(module_type&, auto& outer,
+                                                    const char* name) {
+        return py::reinterpret_borrow<class_handle_type<T>>(outer.attr(name));
+    }
+
     /** Assemble @a ed — the enum summary plus its documented enumerators — into the
         enum's class docstring under this rod's `DocStyle`: the summary, then an
         Attributes section listing each enumerator's `doc`. An enum has no

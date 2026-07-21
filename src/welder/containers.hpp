@@ -123,47 +123,4 @@ concept rod_binds_containers =
         B::template bind_container<std::vector<int>>(m, s);
     };
 
-namespace detail {
-/** The first @a N template arguments of @a Type as a splice-ready `std::array` —
-    mirrors `bindable.hpp`'s `leading_args` (a returned array, so no `constexpr`
-    holds the `operator new`-backed vector `template_arguments_of` yields). */
-template <std::meta::info Type, std::size_t N>
-consteval std::array<std::meta::info, N> value_args() {
-    std::array<std::meta::info, N> out{};
-    std::size_t i{0};
-    for (std::meta::info a : std::meta::template_arguments_of(Type)) {
-        if (i == N)
-            break;
-        out[i++] = a;
-    }
-    return out;
-}
-
-/** Do all the value args in @a Args convert natively under @a B? */
-template <class B, auto Args, std::size_t... I>
-consteval bool args_native(std::index_sequence<I...>) {
-    return (B::template has_native_caster<typename [:Args[I]:]> && ...);
-}
-} // namespace detail
-
-/** Are @a Type's element/key/value types all **native** to rod @a B (scalars,
-    strings — nothing that needs its own class registration)?
-
-    Drives the carriage's *container-first* pre-pass: a container welded before the
-    classes that use it must have its element types already registerable-free,
-    otherwise binding it ahead of a welded-class element would make the framework
-    spell that element's raw C++ name in the container's method docstrings/stubs (a
-    def-time-ordering artifact). Native-element containers (`std::vector<int>`,
-    `std::map<std::string,int>`) have no such element, so they bind first safely;
-    a `std::vector<Welded>` instead binds in declaration order, after its element.
-    @tparam B    the rod (a @ref caster_oracle).
-    @tparam Type the container specialization. @pre @ref is_reference_container. */
-template <class B, std::meta::info Type>
-consteval bool container_elements_native() {
-    constexpr std::size_t n{container_kind_of(Type) == container_kind::map ? 2u
-                                                                           : 1u};
-    constexpr auto args{detail::value_args<Type, n>()};
-    return detail::args_native<B, args>(std::make_index_sequence<n>{});
-}
-
 } // namespace welder

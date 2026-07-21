@@ -519,6 +519,28 @@ struct rod {
     using class_handle_type = decltype(make_class<T, std::array<std::meta::info, 0>{}>(
         std::declval<module_type&>(), nullptr, nullptr, std::index_sequence<>{}));
 
+    /** Retrieve the ALREADY-registered class @a T as a fillable handle — the
+        two-phase binding hook (optional; declaring it opts the rod into the driver's
+        two-phase namespace sweep). The name-pre-registration phase creates the
+        `nb::class_<T,…>` (so `scope.attr(name)` is it); `nb::borrow` re-wraps that
+        object as the same handle type `make_class` yields, so subsequent `add_*`
+        calls target the same registered type. This lets the driver register every
+        type's NAME (and the opaque containers using them) BEFORE filling any member,
+        so a container-typed member/signature never spells a raw C++ name in a
+        docstring/stub. @see welder::rod */
+    template <class T>
+    static class_handle_type<T> reopen_class(module_type& scope, const char* name) {
+        return nb::borrow<class_handle_type<T>>(scope.attr(name));
+    }
+
+    /** The nested-scope form of @ref reopen_class: retrieve @a T from its enclosing
+        type's class handle (`outer.attr(name)`). @see welder::rod */
+    template <class T>
+    static class_handle_type<T> reopen_nested_class(module_type&, auto& outer,
+                                                    const char* name) {
+        return nb::borrow<class_handle_type<T>>(outer.attr(name));
+    }
+
     /** Bind @a T's whole constructor set (a chained-def framework just loops it):
         the default constructor when @a HasDefault, an `nb::init<…>` per member of
         @a Ctors, and the synthesized aggregate field constructor when
