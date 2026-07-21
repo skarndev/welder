@@ -89,6 +89,61 @@ a[0] = 7                 # writes straight into the C++ vector
 work the same way. This is the safe, idiomatic route to the raw pointer — a NumPy view
 tracks reallocation on the next `asarray`, where a stored raw address would dangle.
 
+## Generating the boilerplate
+
+Writing `WELDER_OPAQUE(T)` + a welded alias for every container type is repetitive —
+and, because the two straddle different scopes, a single macro can't collapse them. So
+welder ships a **generator** that writes them for you, the same build-time,
+reflection-driven model as the [trampoline generator](inheritance.md#generating-trampolines-automatically):
+it reflects your welded types, finds every scalar-element container they use, and emits
+a `.hpp` of the `WELDER_OPAQUE` declarations + aliases. You include that header and
+never hand-write the boilerplate.
+
+Point the CMake helper at a one-line generator TU:
+
+```cpp
+// app_opaque_gen.cpp
+#include <welder/vocabulary.hpp>
+#include <welder/rods/python/opaque_containers/module.hpp>
+#include "app_types.hpp"                 // your welded types
+WELDER_OPAQUE_CONTAINERS_MAIN(app)       // emit the header for namespace `app`
+```
+
+```cmake
+welder_generate_opaque_containers(app_opaque
+  SOURCES app_opaque_gen.cpp
+  OUTPUT  ${CMAKE_CURRENT_BINARY_DIR}/app.opaque.hpp)
+# add_dependencies(your_module app_opaque) and put the OUTPUT dir on its include path
+```
+
+Then in the binding TU, include the generated header after your types and the backend
+rod, before the module — the runtime path is unchanged:
+
+```cpp
+#include "app_types.hpp"
+#include <welder/rods/python/pybind11/rod.hpp>
+#include "app.opaque.hpp"                // GENERATED: WELDER_OPAQUE + aliases
+PYBIND11_MODULE(app, m) {
+    welder::welder<welder::rods::pybind11::rod<>>::weld_namespace<^^app>(m);
+}
+```
+
+Every scalar-element container becomes opaque automatically. Two controls:
+
+- **Opt a container out** with `[[=welder::rods::python::by_value]]` on a data member —
+  its type keeps by-value (copy) binding. Because opaqueness is per-type, a `by_value`
+  anywhere excludes that whole container type.
+- **Names are derived** from the type: `std::vector<int>` → `VectorInt`,
+  `std::map<std::string,int>` → `MapStringInt`.
+
+!!! note "Scalar elements only"
+
+    The generator opens containers whose element/key/value types are scalars or
+    strings — the zero-copy case, and the one it can order safely. A
+    `std::vector<Widget>` (welded-class element) or a nested
+    `std::map<K, std::vector<V>>` is left by value; hand-write its `WELDER_OPAQUE` +
+    alias (declared before the types that use it) if you want it opaque.
+
 ## Scope & the trade-off
 
 - **Supported containers** are exactly those the frameworks ship an opaque binder for:

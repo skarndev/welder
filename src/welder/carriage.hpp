@@ -1352,6 +1352,45 @@ struct basic_carriage {
         // walk, finalized by close_module after it.
         auto session{B::open_module(m)};
 
+        // Container-first pre-pass: bind *native-element* reference-container
+        // aliases (opaque std::vector / std::map / std::unordered_map whose
+        // element/key/value types are all native — scalars, strings) BEFORE
+        // anything else in the namespace. They are leaf registrations a later class
+        // may depend on at *def* time — e.g. an opaque-container aggregate field's
+        // NSDMI default is converted to a Python object when the field constructor
+        // is registered, which needs the container class already registered.
+        // Binding them up front makes the sweep order-independent (so a generated
+        // alias header included *after* the classes still works). The pre-pass is
+        // limited to native-element containers on purpose: a std::vector<Welded>
+        // bound ahead of its welded element would make the framework spell that
+        // element's raw C++ name in the container's docstrings/stubs, so it instead
+        // binds in declaration order (after the element) in the main loop below.
+        // Only rods that support containers run this; the main loop carries the
+        // not-supported diagnostic.
+        if constexpr (welder::rod_binds_containers<B>) {
+            template for (constexpr auto mem :
+                          std::define_static_array(std::meta::members_of(Ns, ctx))) {
+                // Nested if constexpr: container_elements_native reads the type's
+                // template arguments, so it must only be instantiated once
+                // is_reference_container has established `mem` IS a container.
+                if constexpr (std::meta::is_type_alias(mem) &&
+                              welder::names_template_specialization(mem) &&
+                              welder::is_reference_container(
+                                  std::meta::dealias(mem))) {
+                    if constexpr (welder::container_elements_native<
+                                      B, std::meta::dealias(mem)>() &&
+                                  Resolution::alias_participates(mem, L, pol, Ns)) {
+                        // Gate the element / key / value types (the alias is a
+                        // listed wrapper, so assert_bindable recurses exactly those).
+                        welder::assert_bindable<B, typename [:mem:], L,
+                                                Resolution>();
+                        B::template bind_container<typename [:mem:], Style>(
+                            m, detail::alias_bound_name<mem, L, Style>());
+                    }
+                }
+            }
+        }
+
         template for (constexpr auto mem :
                       std::define_static_array(std::meta::members_of(Ns, ctx))) {
             // The alias branch must come first: type predicates (is_class_type)
@@ -1375,7 +1414,7 @@ struct basic_carriage {
                             "welded under exactly one name");
                         if constexpr (welder::is_reference_container(
                                           std::meta::dealias(mem))) {
-                            // A welded alias to std::vector / std::deque / std::map /
+                            // A welded alias to std::vector / std::map /
                             // std::unordered_map opts the container into *opaque,
                             // reference-semantic* binding (bind_vector / bind_map)
                             // instead of the copy caster — see containers.hpp. Only
@@ -1385,15 +1424,18 @@ struct basic_carriage {
                             static_assert(
                                 welder::rod_binds_containers<B>,
                                 "welder: this alias welds an STL container "
-                                "(std::vector/std::deque/std::map/std::unordered_map) "
-                                "for opaque, reference-semantic binding — a Python-rod "
+                                "(std::vector/std::map/std::unordered_map) for "
+                                "opaque, reference-semantic binding — a Python-rod "
                                 "feature (the Lua rods bind containers by reference "
                                 "structurally, needing no opaque alias). Drop the "
                                 "alias for this backend.");
-                            if constexpr (welder::rod_binds_containers<B>) {
-                                // Gate the element / key / value types (the alias
-                                // is a listed wrapper, so assert_bindable recurses
-                                // exactly those) under this carriage's resolution.
+                            // A NATIVE-element container was already bound in the
+                            // container-first pre-pass above; only a welded-class-
+                            // element container (kept in declaration order, so its
+                            // element registers first — clean stubs) binds here.
+                            if constexpr (welder::rod_binds_containers<B> &&
+                                          !welder::container_elements_native<
+                                              B, std::meta::dealias(mem)>()) {
                                 welder::assert_bindable<B, typename [:mem:], L,
                                                         Resolution>();
                                 B::template bind_container<typename [:mem:], Style>(

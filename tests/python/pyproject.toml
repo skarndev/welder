@@ -66,5 +66,5 @@ disable_error_code = ["misc", "no-untyped-def"]
 # them fully typed, so its stubs pass strict), not welder's — relax just those two
 # codes, and only on this module, so the rest of the stub gate stays strict.
 [[tool.mypy.overrides]]
-module = ["*.opaque"]
+module = ["*.opaque", "*.gen_opaque"]
 disable_error_code = ["no-untyped-def", "type-arg"]

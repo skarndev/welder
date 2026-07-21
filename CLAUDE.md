@@ -40,7 +40,7 @@ two **Python** (**pybind11**, **nanobind**) and two **Lua** (**sol2**,
 **LuaBridge3**) — all sharing the same core and the *same* backend-neutral C++ test
 cases, which each rod binds and asserts (pytest for Python, busted `.lua` specs for
 Lua) as a cross-rod consistency check. The two Lua rods run the *same* busted specs
-(selected by `WELDER_TEST_LUA_MODULE`). Two more are *build-time* text-emitting rods
+(selected by `WELDER_TEST_LUA_MODULE`). Three more are *build-time* text-emitting rods
 over the same driver: **`welder::rods::luacats::rod`** reflects the welded Lua types and
 emits a **LuaCATS (`---@meta`) stub file** (the Lua analogue of the Python `.pyi` stubs,
 carrying the docstrings Lua has no runtime slot for); **`welder::rods::trampolines::rod`**
@@ -49,8 +49,13 @@ backend-neutral pybind11/nanobind trampoline subclasses** — so a Python subcla
 override their virtuals without the trampolines being hand-written (each override splices
 the base virtual's reflected types, so signatures match by construction — overloaded
 virtuals dispatch per-slot, covariant overrides fold to one slot, protected NVI hooks
-are covered; a C-variadic virtual with no `bind_flat` is a hard error). Further languages are designed-for but not
-yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
+are covered; a C-variadic virtual with no `bind_flat` is a hard error); and
+**`welder::rods::opaque_containers::rod`** reflects the welded types, finds the scalar
+STL containers they use, and emits a **`.hpp` of `WELDER_OPAQUE` declarations + welded
+aliases** that bind them by reference — so the per-container boilerplate is not
+hand-written (a namespace-scope `type_caster` specialization is a compile-time artifact
+no runtime rod can emit; blanket over welded types, `by_value` opt-out, derived names).
+Further languages are designed-for but not yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
 section): a *standalone* super-project of 9 CTest-asserted recipes that obtains welder
 via FetchContent — CI builds it against the checkout, so it doubles as the consumer-
 packaging test (details in `.claude/context/build-test-run.md`). For the
@@ -165,8 +170,10 @@ scalar `std::vector` exposes `data()` zero-copy to numpy (pybind11 `buffer_proto
 nanobind `nb::ndarray`). Requires `WELDER_OPAQUE(T)` (each Python rod's
 `PYBIND11_MAKE_OPAQUE`/`NB_MAKE_OPAQUE`) at namespace scope; Python-only (a container
 alias for a Lua rod is a designed `static_assert` — the Lua runtimes are reference-
-semantic structurally). Details: `.claude/context/binding-features.md`
-"Opaque, reference-semantic containers" + `docs/content/guide/containers.md`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
+semantic structurally). The `WELDER_OPAQUE` + alias boilerplate can be **auto-emitted**
+by the build-time `welder::rods::opaque_containers::rod` (above). Details:
+`.claude/context/binding-features.md` "Opaque, reference-semantic containers" +
+`docs/content/guide/containers.md`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
 exclude/include spec is the sentinel for "all languages". The lang value space
 is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
 user languages from 16–31 for out-of-tree rods (locked by

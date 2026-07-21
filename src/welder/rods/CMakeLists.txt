@@ -231,3 +231,16 @@ target_link_libraries(welder_luacats INTERFACE welder_headers)
 add_library(welder_trampolines INTERFACE)
 add_library(welder::trampolines ALIAS welder_trampolines)
 target_link_libraries(welder_trampolines INTERFACE welder_headers)
+
+# --- welder::opaque_containers : opaque-container generator rod ----------
+# A text-emitting rod (same driver, same model as the trampoline / LuaCATS rods)
+# that reflects the welded types, finds the STL containers they use, and writes a
+# .hpp of WELDER_OPAQUE(...) declarations + welded aliases binding them by reference
+# — so the user need not hand-write that per-container boilerplate. Backend-neutral
+# (it emits the neutral WELDER_OPAQUE macro), so one generated header serves both
+# Python rods; pure reflection + text, so this is an unconditional INTERFACE target
+# over the core. Generate a header with welder_generate_opaque_containers() (see
+# cmake/WelderOpaqueContainers.cmake).
+add_library(welder_opaque_containers INTERFACE)
+add_library(welder::opaque_containers ALIAS welder_opaque_containers)
+target_link_libraries(welder_opaque_containers INTERFACE welder_headers)

@@ -40,6 +40,9 @@ function(welder_add_nanobind_test_module tgt)
   # The generated trampoline header (welder::rods::trampolines), shared with pybind11.
   target_include_directories(${tgt} PRIVATE ${WELDER_GEN_TRAMPOLINES_DIR})
   add_dependencies(${tgt} ${WELDER_GEN_TRAMPOLINES_TARGET})
+  # The generated opaque-container header (welder::rods::opaque_containers), shared too.
+  target_include_directories(${tgt} PRIVATE ${WELDER_GEN_OPAQUE_DIR})
+  add_dependencies(${tgt} ${WELDER_GEN_OPAQUE_TARGET})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
   target_link_libraries(${tgt} PRIVATE welder::headers welder::nanobind welder_warnings)

@@ -91,6 +91,10 @@
 #include "copying.hpp"
 #include "stl.hpp"
 #include "opaque.hpp"
+#include "gen_opaque.hpp"
+#include "gen_opaque.opaque.hpp" // GENERATED (welder::rods::opaque_containers): the
+                                 // WELDER_OPAQUE decls + aliases for gen_opaque's
+                                 // containers — must follow gen_opaque.hpp + the rod.
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_pybind11
@@ -123,4 +127,5 @@ PYBIND11_MODULE(WELDER_TEST_MODNAME, m) {
     register_copying(m);     // <-> test_copying.py (__copy__/__deepcopy__ via the copy ctor)
     register_stl(m);         // <-> test_stl.py (STL-container conversions; typed in test_types.mypy-testing)
     register_opaque(m);      // <-> test_opaque.py (opaque, reference-semantic containers)
+    register_gen_opaque(m);  // <-> test_gen_opaque.py (generator-emitted opaque containers)
 }

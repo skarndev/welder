@@ -163,6 +163,16 @@ add_test(NAME compile.containers
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_containers --config $<CONFIG>)
 
+# Opaque-container generator text logic (welder/rods/python/opaque_containers): the
+# derived names, C++ spellings, and scalar-eligibility filter. static_asserts;
+# compile-to-pass. (Backend-neutral — the generator depends on neither Python rod.)
+add_library(welder_oc_gen_text OBJECT EXCLUDE_FROM_ALL core/opaque_containers.cpp)
+target_compile_features(welder_oc_gen_text PRIVATE cxx_std_26)
+target_link_libraries(welder_oc_gen_text PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.opaque_containers
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_oc_gen_text --config $<CONFIG>)
+
 # Aggregate NSDMI-default selection (compile-only): the consteval selectors
 # behind the synthesized field constructor's optional suffix —
 # aggregate_required_arity (Lua per-arity overloads; an NSDMI before a required

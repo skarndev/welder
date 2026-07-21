@@ -789,6 +789,57 @@ reveals `FloatVector`, NOT `list[float]` — the type-level tell). numpy is a te
 (pyproject.toml dev group); pybind11-stubgen's bind_vector/bind_map stubs need a
 scoped `no-untyped-def`/`type-arg` mypy relaxation (`*.opaque`), like the enum ones.
 
+**Ordering (the container-first pre-pass).** `bind_namespace` binds
+*native-element* container aliases (scalar/string element/key/value) in a PRE-PASS
+before anything else (`carriage.hpp`, guarded `rod_binds_containers<B>` +
+`container_elements_native<B, type>()` — the latter in containers.hpp, checks each
+value arg via `B::has_native_caster`). Reason: an opaque-container **aggregate NSDMI
+field**'s default is converted to a Python object at the field-ctor's *def* time, which
+needs the container class already registered — so a scalar container a later class uses
+must bind first (makes the sweep order-independent, e.g. a generated alias header
+included AFTER the classes). Restricted to native-element containers on purpose: a
+`std::vector<Welded>` bound ahead of its element would spell the element's raw C++ name
+in the container's docstrings/stubs (a pybind11 def-time artifact — stubgen HARD-errors
+on it), so welded-class-element containers stay in declaration order (main loop, after
+the element). The main loop's container branch binds those non-native ones; native ones
+were done in the pre-pass (skipped there).
+
+**The generator (`welder::rods::opaque_containers::rod`).** A build-time text-emitting
+rod — the exact model of trampolines/luacats — that removes the hand-written
+`WELDER_OPAQUE` + alias boilerplate: it reflects the welded types, finds the scalar
+containers they use, and emits a `.hpp` of the declarations + aliases. Rationale: a
+namespace-scope `type_caster` specialization is a COMPILE-TIME artifact a runtime rod
+can't emit (same wall trampolines hit), and it straddles two scopes (global
+`WELDER_OPAQUE` + in-namespace alias) a single macro can't bridge — a generated *file*
+places each correctly. Files: `src/welder/rods/python/opaque_containers/`
+(`document.hpp` = collector + `derive_name`/`container_spelling`/`opaque_eligible`;
+`rod.hpp` = the rod, collecting hooks + `generate<Ns>`; `module.hpp` =
+`WELDER_OPAQUE_CONTAINERS_MAIN`; `marks.hpp` = the `by_value` opt-out
+(`welder::rods::python::marked_by_value`, mirrors `bound_flat`)). Backend-neutral
+(emits the neutral `WELDER_OPAQUE` + `weld(py)` aliases — one header serves both Python
+rods); `has_native_caster = true` (permissive gate, like trampolines). Model = BLANKET
+over welded types (all scalar containers) + `by_value` opt-out + DERIVED names
+(`vector<int>`→`VectorInt`; `::welder::naming::restyle(…, pascal)`). Type spelling =
+`display_string_of(dealias(type))` (valid C++, infra args dropped, `std::string` →
+`std::__cxx11::basic_string<char>`). **SCALAR-element containers only** (`opaque_eligible`
+= all value args fundamental/`basic_string`): they are the zero-copy case AND the
+ordering-safe case (always fit the native-first pre-pass); a `vector<Welded>` / nested
+container is left by value (documented; hand-write it). CMake:
+`welder::opaque_containers` INTERFACE target (`src/welder/rods/CMakeLists.txt`) +
+`welder_generate_opaque_containers()` (`cmake/WelderOpaqueContainers.cmake`, mirrors
+WelderTrampolines) + top-CMakeLists `include()` — NOT shipped to find_package (parity
+with trampolines). Tests: `tests/common/cpp/gen_opaque.hpp` (Python-only; element types
+disjoint from stl.hpp/opaque.hpp — the module-wide MAKE_OPAQUE mustn't clobber them;
+register hook `#ifdef WELDER_TEST_MODULE_T`-guarded so the generator TU reflects but
+doesn't bind) + `tests/python/gen_opaque_gen.cpp` (the generator TU, wired in
+tests/python/CMakeLists.txt exactly like gen_trampolines, header #included in both
+bindings.cpp) + `test_gen_opaque.py` (both rods) + `tests/core/opaque_containers.cpp`
+(compile-lock for derive_name/spelling/eligibility — covers MAPS, which the runtime
+group omits: pybind11-stubgen mis-qualifies bind_map view types across submodules
+`gen_opaque` vs `opaque`, a name-defined stub break). `*.gen_opaque` shares the opaque
+mypy relaxation. Known limitation: a `vector<Welded>` used as an aggregate NSDMI field
+can't be auto-generated (topological order the pre-pass can't give) — `by_value` it.
+
 ## Naming conventions & `weld_as`
 Two pieces, both rod-agnostic (they live in the core / driver, so every rod gets
 them for free):

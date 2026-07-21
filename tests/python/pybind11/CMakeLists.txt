@@ -22,6 +22,9 @@ function(welder_add_pybind11_test_module tgt)
   # parent tests/python build dir; depend on its generation and put it on the path.
   target_include_directories(${tgt} PRIVATE ${WELDER_GEN_TRAMPOLINES_DIR})
   add_dependencies(${tgt} ${WELDER_GEN_TRAMPOLINES_TARGET})
+  # Likewise the generated opaque-container header (welder::rods::opaque_containers).
+  target_include_directories(${tgt} PRIVATE ${WELDER_GEN_OPAQUE_DIR})
+  add_dependencies(${tgt} ${WELDER_GEN_OPAQUE_TARGET})
   target_compile_features(${tgt} PRIVATE cxx_std_26)
   target_compile_definitions(${tgt} PRIVATE WELDER_TEST_MODNAME=${tgt})
   target_link_libraries(${tgt} PRIVATE welder::headers welder::pybind11 welder_warnings)
