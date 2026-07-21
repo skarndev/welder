@@ -8,6 +8,7 @@
 #include <welder/bind_traits.hpp> // what-binds selection layer
 #include <welder/bindable.hpp>    // bindability gate + caster_oracle
 #include <welder/concepts.hpp>    // the welder::rod contract
+#include <welder/containers.hpp>  // is_reference_container / rod_binds_containers
 #include <welder/doc.hpp>         // doc_of (class / namespace docstrings)
 #include <welder/naming.hpp>      // naming::none + name_of (weld_as + name styling)
 #include <welder/reflect.hpp>     // welded_for / policy_of / member_bound
@@ -1372,8 +1373,36 @@ struct basic_carriage {
                             "welder: two aliases in this namespace weld the SAME "
                             "template specialization — each specialization may be "
                             "welded under exactly one name");
-                        bind_type<B, typename [:mem:], Style, mem>(
-                            m, detail::alias_bound_name<mem, L, Style>());
+                        if constexpr (welder::is_reference_container(
+                                          std::meta::dealias(mem))) {
+                            // A welded alias to std::vector / std::deque / std::map /
+                            // std::unordered_map opts the container into *opaque,
+                            // reference-semantic* binding (bind_vector / bind_map)
+                            // instead of the copy caster — see containers.hpp. Only
+                            // the Python rods carry the hook; the Lua runtimes give
+                            // containers structural reference semantics already, so
+                            // welding such an alias for them is a designed error.
+                            static_assert(
+                                welder::rod_binds_containers<B>,
+                                "welder: this alias welds an STL container "
+                                "(std::vector/std::deque/std::map/std::unordered_map) "
+                                "for opaque, reference-semantic binding — a Python-rod "
+                                "feature (the Lua rods bind containers by reference "
+                                "structurally, needing no opaque alias). Drop the "
+                                "alias for this backend.");
+                            if constexpr (welder::rod_binds_containers<B>) {
+                                // Gate the element / key / value types (the alias
+                                // is a listed wrapper, so assert_bindable recurses
+                                // exactly those) under this carriage's resolution.
+                                welder::assert_bindable<B, typename [:mem:], L,
+                                                        Resolution>();
+                                B::template bind_container<typename [:mem:], Style>(
+                                    m, detail::alias_bound_name<mem, L, Style>());
+                            }
+                        } else {
+                            bind_type<B, typename [:mem:], Style, mem>(
+                                m, detail::alias_bound_name<mem, L, Style>());
+                        }
                     }
                 } else {
                     // An alias to a plain (non-template) type: binding it would

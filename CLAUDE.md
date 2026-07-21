@@ -155,7 +155,18 @@ Box<int>;`): the sweep enumerates the alias (never the specialization), which
 supplies both the C++ spelling (for text-emitting rods) and the target name; only
 `weld`/`weld_as` may sit on the alias (taking precedence over the template's — the
 alias `weld` is the third-party-template opt-in); duplicate aliases of one
-specialization and aliases to welded non-template types are hard errors. A `lang` is a bit in an `unsigned` mask; mask `0` on an
+specialization and aliases to welded non-template types are hard errors. A welded
+alias whose target is a **reference-semantic STL container** (`std::vector`,
+`std::map`, `std::unordered_map` — `src/welder/containers.hpp`) is instead routed to
+the Python rods' `bind_container` hook (`py::bind_vector`/`bind_map`,
+`nb::bind_vector`/`bind_map`), binding the container **opaque / by reference** rather
+than the default `<pybind11/stl.h>` copy: `obj.v.append(x)` writes through, and a
+scalar `std::vector` exposes `data()` zero-copy to numpy (pybind11 `buffer_protocol`,
+nanobind `nb::ndarray`). Requires `WELDER_OPAQUE(T)` (each Python rod's
+`PYBIND11_MAKE_OPAQUE`/`NB_MAKE_OPAQUE`) at namespace scope; Python-only (a container
+alias for a Lua rod is a designed `static_assert` — the Lua runtimes are reference-
+semantic structurally). Details: `.claude/context/binding-features.md`
+"Opaque, reference-semantic containers" + `docs/content/guide/containers.md`. A `lang` is a bit in an `unsigned` mask; mask `0` on an
 exclude/include spec is the sentinel for "all languages". The lang value space
 is **open**: bits 0–15 are welder's, `welder::user_lang<Slot>` (lang.hpp) mints
 user languages from 16–31 for out-of-tree rods (locked by

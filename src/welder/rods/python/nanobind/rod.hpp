@@ -48,6 +48,23 @@
 #include <welder/doc.hpp>        // function_docstring
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>            // nb::ndarray (zero-copy numpy views)
+#include <nanobind/stl/bind_vector.h>    // nb::bind_vector (opaque sequences)
+#include <nanobind/stl/bind_map.h>       // nb::bind_map (opaque maps)
+
+#include <welder/containers.hpp>         // container_kind_of (bind_vector vs bind_map)
+
+/** Declare a container type **opaque** so nanobind binds it by reference (via
+    `weld`-an-alias + `bind_vector`/`bind_map`) instead of copy-converting it through
+    `<nanobind/stl/…>`. A thin, backend-neutral spelling of `NB_MAKE_OPAQUE`; place
+    it at namespace scope, before the module. (nanobind also hard-errors at compile
+    time if a container is `bind_vector`-bound while its stl caster is included without
+    this — the error names `NB_MAKE_OPAQUE` as the fix.) In a translation unit with
+    more than one Python rod, use the framework-native macros directly (this resolves
+    to whichever rod header was included first). @see welder/containers.hpp */
+#ifndef WELDER_OPAQUE
+#define WELDER_OPAQUE(...) NB_MAKE_OPAQUE(__VA_ARGS__)
+#endif
 
 namespace welder::inline v0::rods::nanobind {
 
@@ -905,6 +922,48 @@ struct rod {
     /** Create a submodule named @a name under @a m. @see welder::rod */
     static module_type add_submodule(module_type& m, const char* name) {
         return m.def_submodule(name);
+    }
+
+    /** Bind STL @a Container **opaquely** — by reference, with live mutation — under
+        @a name, the driver's route for a welded container alias (see
+        `<welder/containers.hpp>`).
+
+        A sequence (`std::vector`/`std::deque`) becomes an `nb::bind_vector` class:
+        `append` (=`push_back`), `__getitem__`/`__setitem__`, slicing, `__len__`,
+        `__iter__` — mutation writes through to the C++ object (a `def_rw` member of
+        it hands out a live reference). nanobind has no buffer protocol, so for a
+        **scalar** element type (arithmetic, not `bool`) the class gains an
+        `__array__` returning an `nb::ndarray` **zero-copy** view of `data()` (kept
+        alive to the container), so `numpy.asarray(v)` sees the live buffer. A map
+        (`std::map`/`std::unordered_map`) becomes an `nb::bind_map` class.
+
+        The container must be declared opaque (`WELDER_OPAQUE(Container)`) at
+        namespace scope — nanobind otherwise hard-errors when the stl caster for it is
+        also visible (or silently copy-converts it). @see welder::rod */
+    template <class Container, class Style = ::welder::naming::none>
+    static void bind_container(module_type& m, const char* name) {
+        if constexpr (::welder::container_kind_of(^^Container) ==
+                      ::welder::container_kind::sequence) {
+            auto cls{nb::bind_vector<Container>(m, name)};
+            using Elem = typename Container::value_type;
+            if constexpr (::welder::container_is_contiguous(^^Container) &&
+                          std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
+                // numpy's __array__ protocol: numpy 2.x calls it with dtype/copy
+                // (positional or keyword); accept and ignore both and always hand
+                // back a live view — copy=True is honored by numpy copying the view.
+                cls.def(
+                    "__array__",
+                    [](Container& v, nb::handle, nb::handle) {
+                        return nb::ndarray<nb::numpy, Elem, nb::ndim<1>,
+                                           nb::c_contig>(v.data(), {v.size()},
+                                                        nb::find(&v));
+                    },
+                    nb::arg("dtype") = nb::none(),
+                    nb::arg("copy") = nb::none());
+            }
+        } else {
+            nb::bind_map<Container>(m, name);
+        }
     }
 
     /** Close the session: apply any accumulated live properties. @see welder::rod */

@@ -17,6 +17,9 @@ dev = [
     "mypy>=1.13",
     "pytest-mypy-testing>=0.1",
     "pybind11-stubgen",
+    # numpy exercises the zero-copy buffer/ndarray view of an opaque scalar
+    # vector (test_opaque.py); absent, that one assertion importorskips.
+    "numpy>=2",
     # for tools/welder_doxygen_filter.py (the doxyfilter tests run it with
     # this venv's interpreter)
     "lark>=1.2",
@@ -53,3 +56,15 @@ files = ["conftest.py", "test_*.py"]
 [[tool.mypy.overrides]]
 module = ["*.enums", "*.nested", "*.templates", "*.documented"]
 disable_error_code = ["misc", "no-untyped-def"]
+
+# The opaque-container group (opaque.hpp) binds via pybind11's bind_vector/bind_map,
+# whose pybind11-stubgen output carries a few tool-intrinsic patterns strict mypy
+# flags: an untyped `__buffer__(self, flags)` (`no-untyped-def`) and bare generics
+# in the framework-generated methods — `collections.abc.Iterable` on the iterable
+# constructors, and `ItemsView`/`KeysView`/`ValuesView` on a bind_map's views
+# (`type-arg`). These are the frameworks' own stub shapes (nanobind's stubgen emits
+# them fully typed, so its stubs pass strict), not welder's — relax just those two
+# codes, and only on this module, so the rest of the stub gate stays strict.
+[[tool.mypy.overrides]]
+module = ["*.opaque"]
+disable_error_code = ["no-untyped-def", "type-arg"]

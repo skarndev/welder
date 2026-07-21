@@ -153,6 +153,16 @@ add_test(NAME compile.weld_alias
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_weld_alias --config $<CONFIG>)
 
+# Reference-semantic container table & predicates (welder/containers.hpp): the
+# supported set (vector + map/unordered_map), their binder kind, contiguity for the
+# buffer/ndarray path, and the excluded containers. static_asserts; compile-to-pass.
+add_library(welder_containers OBJECT EXCLUDE_FROM_ALL core/containers.cpp)
+target_compile_features(welder_containers PRIVATE cxx_std_26)
+target_link_libraries(welder_containers PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.containers
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_containers --config $<CONFIG>)
+
 # Aggregate NSDMI-default selection (compile-only): the consteval selectors
 # behind the synthesized field constructor's optional suffix —
 # aggregate_required_arity (Lua per-arity overloads; an NSDMI before a required

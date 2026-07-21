@@ -121,6 +121,7 @@ nav:
       - Binding a type: guide/binding-types.md
       - Properties: guide/properties.md
       - Binding templates: guide/templates.md
+      - Containers by reference: guide/containers.md
       - Enums: guide/enums.md
       - Inheritance: guide/inheritance.md
       - Namespaces & modules: guide/namespaces-modules.md

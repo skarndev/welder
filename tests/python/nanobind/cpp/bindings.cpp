@@ -55,6 +55,11 @@
 // The one module-handle op the shared register_* helpers need; the Lua backend,
 // whose handle is a sol::table with no def_submodule, defines it differently.
 #define WELDER_TEST_SUBMODULE(m, name) (m).def_submodule(name)
+// The opaque-container declaration for opaque.hpp (WELDER_OPAQUE is this rod's
+// NB_MAKE_OPAQUE). Must expand at namespace scope, before the module — it disables
+// the stl/*.h catch-all caster for exactly those container types, so they bind by
+// reference while the by-value stl.hpp group's OTHER containers keep converting.
+#define WELDER_TEST_MAKE_OPAQUE(...) WELDER_OPAQUE(__VA_ARGS__)
 // Chaining seams (chaining.hpp): hand-written nanobind registrations on the
 // handles weld_type / weld_function return.
 #define WELDER_TEST_CHAIN_CLASS_EXTRA(cls) \
@@ -93,6 +98,7 @@
 #include "unions.hpp"
 #include "copying.hpp"
 #include "stl.hpp"
+#include "opaque.hpp"
 
 #ifndef WELDER_TEST_MODNAME
 #  define WELDER_TEST_MODNAME welder_test_nanobind
@@ -124,4 +130,5 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     register_unions(m);      // <-> test_unions.py (union escape hatches + std::variant)
     register_copying(m);     // <-> test_copying.py (__copy__/__deepcopy__ via the copy ctor)
     register_stl(m);         // <-> test_stl.py (STL-container conversions; typed in test_types.mypy-testing)
+    register_opaque(m);      // <-> test_opaque.py (opaque, reference-semantic containers)
 }

@@ -110,3 +110,20 @@ def mypy_test_container_members_read_concrete_and_write_wide() -> None:
     b.ints = [1, 2]
     b.ranks = {"gold": 1}
     b.discount = None
+
+
+# --- opaque, reference-semantic containers (C++ side: opaque.hpp) -------------
+# The counterpart to the by-value cases above: an opaque container member types as
+# the BOUND WRAPPER class, not list[T]/dict[K, V]. That is the whole type-level
+# tell that it binds by reference (a live IntVector, not a fresh list snapshot).
+
+
+@pytest.mark.mypy_testing
+def mypy_test_opaque_member_is_the_wrapper_not_a_list() -> None:
+    from welder_test import opaque
+
+    # a std::vector<float> member -> the bound FloatVector, NOT list[float]
+    reveal_type(opaque.Signal().samples)  # R: welder_test.opaque.FloatVector
+    reveal_type(opaque.sum_samples(opaque.Signal()))  # R: float
+    # element access is typed by the wrapper's __getitem__
+    reveal_type(opaque.FloatVector()[0])  # R: float

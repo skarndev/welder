@@ -42,6 +42,19 @@
 
 #include <pybind11/pybind11.h>
 #include <pybind11/native_enum.h> // py::native_enum (stdlib enum binding)
+#include <pybind11/stl_bind.h>    // py::bind_vector / py::bind_map (opaque containers)
+
+#include <welder/containers.hpp>  // container_kind_of (bind_vector vs bind_map)
+
+/** Declare a container type **opaque** so pybind11 binds it by reference (via
+    `weld`-an-alias + `bind_vector`/`bind_map`) instead of copy-converting it through
+    `<pybind11/stl.h>`. A thin, backend-neutral spelling of `PYBIND11_MAKE_OPAQUE`;
+    place it at namespace scope, before the module. In a translation unit that
+    includes more than one Python rod, use the framework-native macros directly (this
+    resolves to whichever rod header was included first). @see welder/containers.hpp */
+#ifndef WELDER_OPAQUE
+#define WELDER_OPAQUE(...) PYBIND11_MAKE_OPAQUE(__VA_ARGS__)
+#endif
 
 namespace welder::inline v0::rods::pybind11 {
 
@@ -975,6 +988,38 @@ struct rod {
     /** Create a submodule named @a name under @a m. @see welder::rod */
     static module_type add_submodule(module_type& m, const char* name) {
         return m.def_submodule(name);
+    }
+
+    /** Bind STL @a Container **opaquely** — by reference, with live mutation — under
+        @a name, the driver's route for a welded container alias (see
+        `<welder/containers.hpp>`).
+
+        A sequence (`std::vector`/`std::deque`) becomes a `py::bind_vector` class:
+        `append` (=`push_back`), `__getitem__`/`__setitem__`, slicing, `extend`,
+        `pop`, `__len__`, `__iter__` — mutation writes through to the C++ object (a
+        `def_readwrite` member of it hands out a live reference, so `obj.v.append(x)`
+        persists). For a **scalar** element type (arithmetic, not `bool`) the class
+        also carries `py::buffer_protocol()`, so `numpy.asarray(v)` / `memoryview(v)`
+        / `ctypes.*.from_buffer(v)` view the raw `data()` **zero-copy**. A map
+        (`std::map`/`std::unordered_map`) becomes a `py::bind_map` class.
+
+        The container must be declared opaque (`WELDER_OPAQUE(Container)`) at
+        namespace scope, or pybind11's copy caster still wins for it. @see welder::rod */
+    template <class Container, class Style = ::welder::naming::none>
+    static void bind_container(module_type& m, const char* name) {
+        if constexpr (::welder::container_kind_of(^^Container) ==
+                      ::welder::container_kind::sequence) {
+            using Elem = typename Container::value_type;
+            if constexpr (::welder::container_is_contiguous(^^Container) &&
+                          std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>)
+                // Contiguous scalar buffer: expose the buffer protocol so
+                // numpy/memoryview/ctypes view data() zero-copy.
+                py::bind_vector<Container>(m, name, py::buffer_protocol());
+            else
+                py::bind_vector<Container>(m, name);
+        } else {
+            py::bind_map<Container>(m, name);
+        }
     }
 
     /** Close the session: apply any accumulated live properties. @see welder::rod */

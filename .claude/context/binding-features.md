@@ -747,6 +747,48 @@ gen_trampolines.hpp / overridable.hpp; luacats golden (stubdemo.Pair); compile
 locks tests/core/weld_alias.cpp + trampoline_slots.cpp (alias render); neg:
 tests/python/pybind11/cpp/neg/alias_{forbidden_mark,plain_welded,duplicate}.cpp.
 
+**Opaque, reference-semantic containers (the alias route, specialized).** By
+default a `std::vector<T>`/`std::map<K,V>` crosses to Python by COPY (pybind11
+`<pybind11/stl.h>` / nanobind `<nanobind/stl/…>`): every read snapshots to a
+`list`/`dict`, mutation never reaches C++. Welding a namespace-scope alias to the
+container instead binds it OPAQUE (by reference): `using IntVector
+[[=welder::weld(lang::py)]] = std::vector<int>;` — the exact template-instantiation
+alias mechanism above, but the carriage routes it to the rod's `bind_container`
+hook (`py::bind_vector`/`bind_map`, `nb::bind_vector`/`bind_map`) instead of
+`bind_type`. Mutation writes through (a `def_readwrite`/`def_rw` member hands out a
+live reference, so `obj.v.append(x)` persists — NO change to `add_field`), `append`
+= `push_back`, plus slicing/`__getitem__`/`__len__`; a scalar `std::vector` also
+exposes `data()` ZERO-COPY (pybind11 `py::buffer_protocol()` → `numpy.asarray`/
+`memoryview`/`ctypes.from_buffer`; nanobind has no buffer protocol so `bind_container`
+adds an `__array__` returning an `nb::ndarray` view, kept alive via `nb::find(&v)`).
+**Scope** = exactly the frameworks' opaque binders: `bind_vector` → `std::vector`
+(pybind11's `bind_vector` calls `.reserve()`/`.data()`, so `std::deque` does NOT
+qualify — dropped); `bind_map` → `std::map`/`std::unordered_map`. The table +
+predicates (`is_reference_container`, `container_kind_of`, `container_is_contiguous`)
++ the `rod_binds_containers<B>` detector live in **`src/welder/containers.hpp`**;
+the carriage branch is in `bind_namespace`'s alias dispatch (`carriage.hpp`, right
+before the `bind_type` call — `is_reference_container(dealias(mem))` → gate the
+element/key/value via `assert_bindable<B, container, L, Resolution>()` then
+`B::bind_container`). A REQUIRED opaque declaration (`WELDER_OPAQUE(T)` = each Python
+rod's `PYBIND11_MAKE_OPAQUE`/`NB_MAKE_OPAQUE`, `#ifndef`-guarded) at namespace scope
+selects the opaque caster (per-TYPE on BOTH frameworks — nanobind's `NB_MAKE_OPAQUE`
+coexists with an included stl caster; without it nanobind hard-errors at compile
+time naming the fix, pybind11 silently copies). Two-backend asymmetries, both
+probe-verified: nanobind numpy = `nb::ndarray` (no buffer protocol); nanobind's
+`bind_vector.__getitem__` returns a class element by COPY where pybind11 returns a
+reference (a framework detail — the spec tests container-level mutation, which is
+consistent, not element-handle mutation). **Python-only** — a container alias welded
+for a Lua rod hits a `static_assert` ("Python-rod feature"; `rod_binds_containers`
+is false), since the Lua runtimes give containers reference semantics structurally.
+Gate: UNCHANGED — the wrapper recursion in `bindable.hpp` still yields bindable-via-
+element, so container-typed members keep passing regardless of opaqueness. Tests:
+tests/common/cpp/opaque.hpp (Python-only group, like stl.hpp; element/key types kept
+DISJOINT from stl.hpp's by-value ones so opaqueness doesn't clobber that group in the
+same TU) ↔ test_opaque.py + the opaque cases in test_types.mypy-testing (`Signal.samples`
+reveals `FloatVector`, NOT `list[float]` — the type-level tell). numpy is a test dep
+(pyproject.toml dev group); pybind11-stubgen's bind_vector/bind_map stubs need a
+scoped `no-untyped-def`/`type-arg` mypy relaxation (`*.opaque`), like the enum ones.
+
 ## Naming conventions & `weld_as`
 Two pieces, both rod-agnostic (they live in the core / driver, so every rod gets
 them for free):
