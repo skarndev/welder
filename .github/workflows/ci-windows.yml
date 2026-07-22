@@ -49,6 +49,7 @@ jobs:
             mingw-w64-ucrt-x86_64-python-pip
             mingw-w64-ucrt-x86_64-python-pytest
             mingw-w64-ucrt-x86_64-mypy
+            mingw-w64-ucrt-x86_64-python-numpy
             mingw-w64-ucrt-x86_64-python-lark-parser
 
       - name: Toolchain versions
@@ -60,8 +61,10 @@ jobs:
 
       - name: Prepare Python test deps
         # uv can't manage the mingw python ("Unknown operating system: mingw_..."),
-        # so install the test deps into it directly. pytest/mypy/lark come from
-        # pacman above (no source builds); pip adds only the two pure-Python extras.
+        # so install the test deps into it directly. pytest/mypy/lark/numpy come
+        # from pacman above (no source builds — numpy has no mingw pip wheel, and
+        # the opaque-container stubs reference numpy.typing so the stubcheck needs
+        # it resolvable); pip adds only the two pure-Python extras.
         # (mypy is pacman's 1.19.x — the pinned mypy 2.x can't build here, its Rust
         # build dep has no mingw wheel; the type-level cases that need 2.x's exact
         # reveal_type spelling are turned off below via WELDER_TEST_TYPINGCASES.)
