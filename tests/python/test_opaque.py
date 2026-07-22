@@ -75,14 +75,41 @@ def test_vector_of_welded_class(op: ModuleType) -> None:
     pts.append(op.Point2D(5.0, 6.0))
     assert len(pts) == 2
     assert isinstance(pts[0], op.Point2D)
-    # element read-back (whether the framework hands out a reference or a copy on
-    # __getitem__ is a bind_vector detail that differs across the rods; the
-    # container-level protocol below is what welder guarantees)
     assert pts[0].x == pytest.approx(3.0)
     assert pts[1].y == pytest.approx(6.0)
     # a class element has no scalar buffer protocol (memoryview needs one)
     with pytest.raises((TypeError, BufferError)):
         memoryview(pts)
+
+
+def test_vector_element_access_is_a_live_reference(op: ModuleType) -> None:
+    # __getitem__ / __iter__ over a welded-class element hand out a LIVE reference
+    # aliasing the C++ element, not a snapshot copy — so in-place mutation persists.
+    pts = op.PointList()
+    pts.append(op.Point2D(3.0, 4.0))
+    pts.append(op.Point2D(5.0, 6.0))
+
+    # mutate through __getitem__; a fresh read sees the write (a copy would drop it)
+    pts[0].x = 30.0
+    assert pts[0].x == pytest.approx(30.0)
+    # and C++ sees it too — the write reached the container's storage
+    assert op.point_x_at(pts, 0) == pytest.approx(30.0)
+
+    # mutate through iteration as well
+    for p in pts:
+        p.y = 99.0
+    assert [p.y for p in pts] == pytest.approx([99.0, 99.0])
+    assert op.point_x_at(pts, 1) == pytest.approx(5.0)  # x untouched
+
+
+def test_scalar_vector_element_is_a_copy(op: ModuleType) -> None:
+    # A scalar element is returned by value (a copy) — there is nothing to alias,
+    # and rebinding via __setitem__ is the write path (exercised elsewhere).
+    v = op.FloatVector()
+    v.append(1.0)
+    x = v[0]
+    assert x == pytest.approx(1.0)
+    assert isinstance(x, float)
 
 
 # --- numpy structured view of a POD-struct-element vector (numpy-free) --------
@@ -135,3 +162,13 @@ def test_unordered_map(op: ModuleType) -> None:
     assert h["a"] == 1
     assert len(h) == 2
     assert "a" in h and "z" not in h
+
+
+def test_map_value_access_is_a_live_reference(op: ModuleType) -> None:
+    # bind_map's __getitem__ over a welded-class value hands out a LIVE reference,
+    # so `m[k].x = v` writes through to the C++ mapped object (a copy would drop it).
+    m = op.PointMap()
+    m[1] = op.Point2D(3.0, 4.0)
+    m[1].x = 30.0
+    assert m[1].x == pytest.approx(30.0)
+    assert op.mapped_point_x(m, 1) == pytest.approx(30.0)  # reached C++ storage

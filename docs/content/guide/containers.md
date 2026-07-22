@@ -82,6 +82,23 @@ len(h.bins)            # 2 — h.bins IS the C++ vector, not a copy
 `std::map` / `std::unordered_map` become a mutable mapping (`__getitem__`/`__setitem__`,
 `__contains__`, `keys`/`values`/`items`, iteration over keys).
 
+When the element (or a map's value) is a **welded class**, element access is *also* a
+reference — `__getitem__` and iteration hand back a live view aliasing the C++ element,
+so in-place mutation through it persists:
+
+```python
+mesh = app.Mesh()
+mesh.verts.append(app.Vertex(1.0, 2.0))
+mesh.verts[0].x = 9.0     # writes through — verts[0] IS the C++ element
+mesh.verts[0].x           # 9.0
+for v in mesh.verts:      # iteration yields live references too
+    v.y = 0.0
+```
+
+A **scalar** element (`float`, `int`, …) is returned by value — there is nothing to
+alias — so rebind it with `v[i] = x` (the container itself still mutates in place). This
+holds identically on both Python rods (pybind11 and nanobind).
+
 ### Keep it appendable, forbid reassignment
 
 A container member is bound read/write by default, so `h.bins = SomeVector()` rebinds

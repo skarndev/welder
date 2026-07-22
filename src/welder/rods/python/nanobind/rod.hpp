@@ -960,11 +960,16 @@ struct rod {
         A sequence (`std::vector`/`std::deque`) becomes an `nb::bind_vector` class:
         `append` (=`push_back`), `__getitem__`/`__setitem__`, slicing, `__len__`,
         `__iter__` — mutation writes through to the C++ object (a `def_rw` member of
-        it hands out a live reference). nanobind has no buffer protocol, so for a
+        it hands out a live reference). For a welded-class element, `__getitem__` /
+        `__iter__` themselves hand out a **live reference** aliasing the C++ element
+        (`rv_policy::reference_internal`, kept alive to the container), so
+        `v[i].field = x` writes through; a scalar element is returned by value (a
+        copy). nanobind has no buffer protocol, so for a
         **scalar** element type (arithmetic, not `bool`) the class gains an
         `__array__` returning an `nb::ndarray` **zero-copy** view of `data()` (kept
         alive to the container), so `numpy.asarray(v)` sees the live buffer. A map
-        (`std::map`/`std::unordered_map`) becomes an `nb::bind_map` class.
+        (`std::map`/`std::unordered_map`) becomes an `nb::bind_map` class whose
+        `__getitem__` likewise hands out a live reference to the mapped value.
 
         The container must be declared opaque (`WELDER_OPAQUE(Container)`) at
         namespace scope — nanobind otherwise hard-errors when the stl caster for it is
@@ -973,7 +978,15 @@ struct rod {
     static void bind_container(module_type& m, const char* name) {
         if constexpr (::welder::container_kind_of(^^Container) ==
                       ::welder::container_kind::sequence) {
-            auto cls{nb::bind_vector<Container>(m, name)};
+            // reference_internal (not nanobind's automatic_reference default,
+            // which downgrades an lvalue-reference return to a *copy*) so
+            // __getitem__/__iter__ hand out a live reference aliasing the C++
+            // element — v[i].field = x writes through, matching pybind11's own
+            // bind_vector default. A scalar element ignores the policy and casts
+            // by value (a copy, as intended).
+            auto cls{
+                nb::bind_vector<Container, nb::rv_policy::reference_internal>(
+                    m, name)};
             using Elem = typename Container::value_type;
             if constexpr (::welder::container_is_contiguous(^^Container) &&
                           std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
@@ -996,7 +1009,10 @@ struct rod {
                 _array_interface<Container, Elem>(cls);
             }
         } else {
-            nb::bind_map<Container>(m, name);
+            // reference_internal for __getitem__ (see the sequence branch): the
+            // mapped value is handed out as a live reference, so m[k].field = x
+            // writes through — a copy for a scalar value type.
+            nb::bind_map<Container, nb::rv_policy::reference_internal>(m, name);
         }
     }
 

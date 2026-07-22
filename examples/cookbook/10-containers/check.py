@@ -21,6 +21,12 @@ def main() -> None:
     assert scene.actor_count(s) == 2  # C++ sees the appended entities
     assert s.actors[0].name == "hero"
 
+    # Element access is a LIVE reference for a welded-class element: mutating
+    # s.actors[0] in place writes through to the C++ vector (a fresh read sees it —
+    # a copy would have dropped the write).
+    s.actors[0].health = 55.0
+    assert s.actors[0].health == 55.0
+
     s.weights.append(1.5)
     s.weights.append(2.5)
     assert scene.total_weight(s) == 4.0  # writes reached C++

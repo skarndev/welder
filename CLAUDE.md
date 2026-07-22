@@ -174,7 +174,12 @@ alias whose target is a **reference-semantic STL container** (`std::vector`,
 `std::map`, `std::unordered_map` — `src/welder/containers.hpp`) is instead routed to
 the Python rods' `bind_container` hook (`py::bind_vector`/`bind_map`,
 `nb::bind_vector`/`bind_map`), binding the container **opaque / by reference** rather
-than the default `<pybind11/stl.h>` copy: `obj.v.append(x)` writes through, and a
+than the default `<pybind11/stl.h>` copy: `obj.v.append(x)` writes through, and for a
+welded-class element/value `__getitem__`/`__iter__` hand out a **live reference** (not a
+copy) aliasing the C++ element so `v[i].field = x` persists (pybind11 `bind_vector`/
+`bind_map` default `reference_internal`; the nanobind rod passes
+`nb::rv_policy::reference_internal` explicitly — its `automatic_reference` default would
+copy — a scalar element casts by value regardless). A
 `std::vector` of scalars or **POD structs** exposes `data()` zero-copy to numpy — a
 scalar vector via the buffer protocol (pybind11) / `nb::ndarray` (nanobind), a
 POD-struct vector via a reflected, numpy-free `__array_interface__` (a STRUCTURED

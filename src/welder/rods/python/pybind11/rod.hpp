@@ -1028,10 +1028,15 @@ struct rod {
         `append` (=`push_back`), `__getitem__`/`__setitem__`, slicing, `extend`,
         `pop`, `__len__`, `__iter__` — mutation writes through to the C++ object (a
         `def_readwrite` member of it hands out a live reference, so `obj.v.append(x)`
-        persists). For a **scalar** element type (arithmetic, not `bool`) the class
-        also carries `py::buffer_protocol()`, so `numpy.asarray(v)` / `memoryview(v)`
-        / `ctypes.*.from_buffer(v)` view the raw `data()` **zero-copy**. A map
-        (`std::map`/`std::unordered_map`) becomes a `py::bind_map` class.
+        persists). For a welded-class element, `__getitem__` / `__iter__` themselves
+        hand out a **live reference** aliasing the C++ element (pybind11's own
+        `return_value_policy::reference_internal`), so `v[i].field = x` writes
+        through; a scalar element is returned by value (a copy). For a **scalar**
+        element type (arithmetic, not `bool`) the class also carries
+        `py::buffer_protocol()`, so `numpy.asarray(v)` / `memoryview(v)` /
+        `ctypes.*.from_buffer(v)` view the raw `data()` **zero-copy**. A map
+        (`std::map`/`std::unordered_map`) becomes a `py::bind_map` class whose
+        `__getitem__` likewise hands out a live reference to the mapped value.
 
         The container must be declared opaque (`WELDER_OPAQUE(Container)`) at
         namespace scope, or pybind11's copy caster still wins for it. @see welder::rod */

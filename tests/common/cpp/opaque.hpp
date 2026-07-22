@@ -14,6 +14,7 @@
 // structurally (userdata), so they need no opaque alias and do not include this group.
 //
 // #included by bindings.cpp after the welder vocabulary + the active Python backend.
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <string>
@@ -39,6 +40,7 @@ WELDER_TEST_MAKE_OPAQUE(std::vector<float>)
 WELDER_TEST_MAKE_OPAQUE(std::vector<opaque::Point2D>)
 WELDER_TEST_MAKE_OPAQUE(std::map<int, std::string>)
 WELDER_TEST_MAKE_OPAQUE(std::unordered_map<std::string, int>)
+WELDER_TEST_MAKE_OPAQUE(std::map<int, opaque::Point2D>)
 
 namespace opaque {
 
@@ -54,6 +56,9 @@ using PointList  [[=welder::weld(welder::lang::py)]] = std::vector<Point2D>;
 // --- bind_map containers -----------------------------------------------------
 using IntStrMap  [[=welder::weld(welder::lang::py)]] = std::map<int, std::string>;
 using StrIntHash [[=welder::weld(welder::lang::py)]] = std::unordered_map<std::string, int>;
+// A map whose VALUE is a welded class: __getitem__ must hand out a live reference
+// (not a copy), so `m[k].x = v` writes through to the C++ mapped object.
+using PointMap   [[=welder::weld(welder::lang::py)]] = std::map<int, Point2D>;
 
 // A host whose opaque-vector member proves REFERENCE semantics: appending / assigning
 // from Python writes through to the C++ object (the copy caster would snapshot).
@@ -85,6 +90,19 @@ double sum_locked(const Signal& s) {
     for (float x : s.locked)
         total += static_cast<double>(x);
     return total;
+}
+
+// Read a welded-class element's field back from C++ AFTER Python has mutated it via
+// element access (`pts[i].x = v`) — proves the mutation reached the C++ container's
+// storage, not a throwaway __getitem__ copy. A live reference is what makes it stick.
+[[=welder::weld(welder::lang::py)]]
+double point_x_at(const PointList& pts, std::size_t i) {
+    return pts.at(i).x;
+}
+
+[[=welder::weld(welder::lang::py)]]
+double mapped_point_x(const PointMap& m, int key) {
+    return m.at(key).x;
 }
 
 } // namespace opaque

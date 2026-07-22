@@ -777,7 +777,15 @@ alias mechanism above, but the carriage routes it to the rod's `bind_container`
 hook (`py::bind_vector`/`bind_map`, `nb::bind_vector`/`bind_map`) instead of
 `bind_type`. Mutation writes through (a `def_readwrite`/`def_rw` member hands out a
 live reference, so `obj.v.append(x)` persists — NO change to `add_field`), `append`
-= `push_back`, plus slicing/`__getitem__`/`__len__`; a scalar `std::vector` also
+= `push_back`, plus slicing/`__getitem__`/`__len__`. **Element access itself is a
+reference for a welded-class element/value**: `__getitem__`/`__iter__` hand out a live
+view aliasing the C++ element (`v[i].field = x` writes through). pybind11's
+`bind_vector`/`bind_map` already default `__getitem__` to `reference_internal`; nanobind
+defaults to `rv_policy::automatic_reference`, which downgrades an lvalue-reference return
+to a COPY — so the nanobind `bind_container` passes `nb::rv_policy::reference_internal`
+explicitly (`bind_vector<C, reference_internal>` / `bind_map<C, reference_internal>`) to
+match. A scalar element ignores the policy and casts by value (a copy, as intended).
+A scalar `std::vector` also
 exposes `data()` ZERO-COPY (pybind11 `py::buffer_protocol()` → `numpy.asarray`/
 `memoryview`/`ctypes.from_buffer`; nanobind has no buffer protocol so `bind_container`
 adds an `__array__` returning an `nb::ndarray` view, kept alive via `nb::find(&v)`).
