@@ -61,6 +61,52 @@ static_assert(eq(oc::sanitize_ident("a::b<c>{1, 2}"), "a_b_c_1_2"));   // collap
 static_assert(eq(oc::sanitize_ident("123abc"), "_123abc"));           // leading digit
 static_assert(eq(oc::sanitize_ident("<<>>"), "T"));                   // all junk -> T
 
+// --- collision-free qualified names (part a) ---------------------------------
+// A namespaced element is qualified by its namespace path (std dropped), so two
+// same-named types in different namespaces derive DISTINCT names.
+namespace geo {
+struct [[=welder::weld(welder::lang::py)]] Point { double x, y; };
+}
+namespace physics {
+struct [[=welder::weld(welder::lang::py)]] Point { double p, q; };
+}
+static_assert(eq(oc::qualified_ident(^^geo::Point), "GeoPoint"));
+static_assert(eq(oc::qualified_ident(^^physics::Point), "PhysicsPoint"));
+static_assert(eq(oc::derive_name(^^std::vector<geo::Point>), "VectorGeoPoint"));
+static_assert(eq(oc::derive_name(^^std::vector<physics::Point>), "VectorPhysicsPoint"));
+// the two no longer collide (bare "VectorPoint" for both, pre-fix)
+static_assert(oc::derive_name(^^std::vector<geo::Point>) !=
+              oc::derive_name(^^std::vector<physics::Point>));
+// enclosing classes qualify too (a nested type reads Outer.Inner-style)
+struct Outer { struct Inner {}; };
+static_assert(eq(oc::qualified_ident(^^Outer::Inner), "OuterInner"));
+// std / fundamentals stay clean (std namespace + global are dropped)
+static_assert(eq(oc::qualified_ident(^^int), "Int"));
+static_assert(eq(oc::derive_name(^^std::map<geo::Point, int>), "MapGeoPointInt"));
+
+// --- custom naming hook on the name style (part b) ---------------------------
+// A style may override the derived name via an optional transform_opaque_container
+// hook receiving (enclosing, container, member); a style without it falls through to
+// derive_name. The hook's result is sanitized like the default.
+struct Bag {
+    std::vector<geo::Point> pts;
+};
+struct my_style : welder::naming::none {
+    static consteval std::string transform_opaque_container(std::meta::info /*encl*/,
+                                                            std::meta::info /*cont*/,
+                                                            std::meta::info member) {
+        return "My" + std::string{std::meta::identifier_of(member)};
+    }
+};
+// default style: opaque_name == the collision-free derive_name
+static_assert(eq(oc::opaque_name<welder::naming::none, ^^Bag,
+                                 ^^std::vector<geo::Point>, ^^Bag::pts>(),
+                 "VectorGeoPoint"));
+// custom style: the hook wins, keyed off the member reflection (member id is "pts")
+static_assert(eq(oc::opaque_name<my_style, ^^Bag, ^^std::vector<geo::Point>,
+                                 ^^Bag::pts>(),
+                 "Mypts"));
+
 // --- C++ spellings (allocator/comparator dropped; std::string is __cxx11 form) ---
 static_assert(eq(oc::container_spelling(^^std::vector<int>), "std::vector<int>"));
 static_assert(eq(oc::container_spelling(^^std::map<std::string, int>),

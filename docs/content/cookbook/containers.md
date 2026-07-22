@@ -43,9 +43,10 @@ namespace `scene` and writes the opaque declarations + aliases:
 WELDER_OPAQUE_CONTAINERS_MAIN(scene)
 ```
 
-It emits `scene.opaque.hpp` — one `WELDER_OPAQUE(...)` + `using VectorVertex … = …` per
-container (a `by_value` member is skipped; names are derived from the type). No NumPy,
-no pybind11 here: pure reflection to text.
+It emits `scene.opaque.hpp` — one `WELDER_OPAQUE(...)` + `using VectorSceneVertex … = …`
+per container (a `by_value` member is skipped; names are derived from the type and are
+collision-free — a welded element carries its namespace path, `scene::Vertex` →
+`VectorSceneVertex`). No NumPy, no pybind11 here: pure reflection to text.
 
 **The wiring** (`CMakeLists.txt`) — `welder_generate_opaque_containers()` builds the
 generator, runs it into `scene.opaque.hpp`, and the binding TU compiles the result:
@@ -71,8 +72,8 @@ weld the namespace. That is the whole file:
 
 ## What the check asserts
 
-- The generator produced an opaque wrapper per container — `VectorVertex`,
-  `VectorEntity`, `VectorDouble` — with no hand-written boilerplate.
+- The generator produced an opaque wrapper per container — `VectorSceneVertex`,
+  `VectorSceneEntity`, `VectorDouble` — with no hand-written boilerplate.
 - **Reference semantics:** a Python `append` reaches C++ (round-trip helpers
   `total_weight` / `actor_count` read the appended values back).
 - The `by_value` member stays a plain `list[int]`.

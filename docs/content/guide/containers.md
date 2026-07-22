@@ -178,8 +178,40 @@ Every scalar-element container becomes opaque automatically. Two controls:
 - **Opt a container out** with `[[=welder::rods::python::by_value]]` on a data member —
   its type keeps by-value (copy) binding. Because opaqueness is per-type, a `by_value`
   anywhere excludes that whole container type.
-- **Names are derived** from the type: `std::vector<int>` → `VectorInt`,
-  `std::map<std::string,int>` → `MapStringInt`.
+- **Names are derived** from the type, and are **collision-free**: `std::vector<int>` →
+  `VectorInt`, `std::map<std::string,int>` → `MapStringInt`. A welded element carries its
+  **namespace and enclosing-class path** so two same-named types never collide —
+  `std::vector<geometry::Point>` → `VectorGeometryPoint`, `std::vector<physics::Point>` →
+  `VectorPhysicsPoint` (the `std` namespace is dropped, so the container prefix stays
+  clean).
+
+### Custom opaque-container names
+
+If you want shorter or house-style names — e.g. `PointVector` instead of the qualified
+`VectorGeometryPoint`, or names that key off the member — give your
+[name style](naming.md) an optional `transform_opaque_container` hook. The generator
+calls it for every opaque wrapper, passing the **enclosing class**, the **container
+type**, and the **member** the wrapper was generated for; a style without the hook falls
+straight through to the derived name:
+
+```cpp
+struct my_style : welder::naming::none {
+    // (enclosing class, container type, the member it was found on) -> wrapper name
+    static consteval std::string transform_opaque_container(
+        std::meta::info /*enclosing*/, std::meta::info container,
+        std::meta::info /*member*/) {
+        // name a vector<T> as "TList" using the element's own identifier
+        const auto args{std::meta::template_arguments_of(std::meta::dealias(container))};
+        return std::string{std::meta::identifier_of(args[0])} + "List";
+    }
+};
+// in the generator TU, swap the main macro for the styled form:
+//   WELDER_OPAQUE_CONTAINERS_MAIN_STYLED(app, my_style)
+```
+
+The result is always run through the identifier-legalizer, so a hook can never emit an
+invalid alias name. Because opaque wrappers are deduped per container type (module-wide),
+the hook is honoured at each container's first use site.
 
 Containers of **welded classes** work too — `std::vector<Entity>` where `Entity` is a
 welded type is opened opaque, with clean stubs and live mutation, even when it is an

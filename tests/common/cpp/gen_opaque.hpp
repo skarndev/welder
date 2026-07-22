@@ -47,9 +47,11 @@ struct [[=welder::weld(welder::lang::py)]] Layer {
 using Layer0 [[=welder::weld(welder::lang::py)]] = Layer<0>;
 
 struct [[=welder::weld(welder::lang::py)]] Series {
+    // names are collision-free QUALIFIED: a scalar stays short (VectorDouble), a welded
+    // element carries its namespace (gen_opaque::Reading -> VectorGenOpaqueReading).
     std::vector<double> points{};              // auto opaque -> VectorDouble (buffer)
-    std::vector<Reading> readings{};           // auto opaque -> VectorReading (class elem)
-    std::vector<Layer<0>> tiers{};             // NTTP-template element -> VectorLayer0
+    std::vector<Reading> readings{};           // auto opaque -> VectorGenOpaqueReading
+    std::vector<Layer<0>> tiers{};             // NTTP-template elem -> VectorGenOpaqueLayer0
     // opt-out: stays a plain list[int], no WELDER_OPAQUE emitted for vector<int>
     [[=welder::rods::python::by_value]] std::vector<int> raw{};
 };

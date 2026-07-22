@@ -69,19 +69,68 @@ consteval std::string sanitize_ident(std::string s) {
     return out;
 }
 
-/** A readable, **valid** PascalCase identifier for container/element @a arg — the
-    template name plus each argument's name, recursing — `vector<int>` → `VectorInt`,
-    `map<string,int>` → `MapStringInt`, nested `map<string,vector<int>>` →
-    `MapStringVectorInt`. `std::string` folds to `String`; a scalar / plain welded class
-    uses its (PascalCased) identifier.
+/** The **collision-free** qualified identifier of @a entity: its own identifier (or,
+    for an unnameable entity, its `display_string_of`) prefixed by every enclosing named
+    namespace *and enclosing class*, each PascalCased and concatenated — so a type is
+    named uniquely across namespaces (`geometry::Point` → `GeometryPoint`,
+    `physics::Point` → `PhysicsPoint`, never a colliding bare `Point`).
+
+    The global namespace, an **anonymous** namespace, the `std` namespace, and an
+    implementation-reserved (`__`-prefixed, e.g. `std::__cxx11`) inline namespace each
+    contribute nothing — so a `std::` container/element still reads clean
+    (`std::vector` → `Vector`, `std::string` folds to `String` before this is reached).
+    This is what makes two same-named types in different namespaces derive *distinct*
+    opaque-wrapper names without a `weld_as` (the render-time `#error` in @ref
+    document::render remains only as a last-resort backstop). Reuses
+    `::welder::naming::restyle`. */
+consteval std::string qualified_ident(std::meta::info entity) {
+    auto keep = [](std::meta::info p) {
+        if (!std::meta::has_identifier(p))
+            return false; // anonymous namespace: nothing to spell
+        const std::string id{std::meta::identifier_of(p)};
+        if (id == "std")
+            return false; // std::vector<int> should read VectorInt, not StdVectorInt
+        return !(id.size() >= 2 && id[0] == '_' && id[1] == '_'); // __cxx11, __1, …
+    };
+    std::vector<std::string> parts{};
+    parts.push_back(::welder::naming::restyle(
+        std::meta::has_identifier(entity)
+            ? std::string{std::meta::identifier_of(entity)}
+            : std::string{std::meta::display_string_of(entity)},
+        ::welder::naming::case_kind::pascal));
+    // Walk enclosing scopes. A fundamental type (int, double) has no parent —
+    // `parent_of` THROWS there, so gate every step on `has_parent`.
+    for (std::meta::info e{entity};
+         std::meta::has_parent(e) && std::meta::parent_of(e) != ^^::;) {
+        e = std::meta::parent_of(e);
+        if (!(std::meta::is_namespace(e) ||
+              (std::meta::is_type(e) && std::meta::is_class_type(e))))
+            break; // a function/block scope etc. — stop qualifying
+        if (keep(e))
+            parts.push_back(::welder::naming::restyle(
+                std::string{std::meta::identifier_of(e)},
+                ::welder::naming::case_kind::pascal));
+    }
+    std::string out{};
+    for (auto it{parts.rbegin()}; it != parts.rend(); ++it)
+        out += *it;
+    return out;
+}
+
+/** A readable, **valid**, collision-free PascalCase identifier for container/element
+    @a arg — the template name plus each argument's name, recursing — `vector<int>` →
+    `VectorInt`, `map<string,int>` → `MapStringInt`, nested `map<string,vector<int>>` →
+    `MapStringVectorInt`. `std::string` folds to `String`; a scalar / welded class or
+    enum uses its @ref qualified_ident (namespace- and enclosing-class-qualified, so
+    `geometry::Point` → `GeometryPoint`) — which is what keeps distinct types from
+    deriving the same name.
 
     A container element that is itself a **class-template specialization** (e.g.
     `WMOGroup<ClientVersion{3,3,5,12340}>`) recurses the SAME way — the template name
     plus each argument — so it never falls to `display_string_of`, which would keep
     `:: < > { } ,`. A **non-type (NTTP) argument** renders its value as a sanitized
     identifier token. The caller (@ref document::add_one) sanitizes the final string as
-    a safety net, so no input can yield a non-identifier. Reuses
-    `::welder::naming::restyle`. */
+    a safety net, so no input can yield a non-identifier. */
 consteval std::string derive_name(std::meta::info arg) {
     // A non-type (NTTP) template argument is a value, not a type — render its display
     // (e.g. `ClientVersion{3,3,5,12340}`); the caller's final sanitize legalizes it.
@@ -93,9 +142,7 @@ consteval std::string derive_name(std::meta::info arg) {
         std::meta::template_of(type) == ^^std::basic_string)
         return "String";
     if (::welder::is_reference_container(type)) {
-        std::string out{::welder::naming::restyle(
-            std::string{std::meta::identifier_of(std::meta::template_of(type))},
-            ::welder::naming::case_kind::pascal)};
+        std::string out{qualified_ident(std::meta::template_of(type))};
         const auto args{std::meta::template_arguments_of(type)};
         for (std::size_t i{0}, n{value_arg_count(type)}; i < n; ++i)
             out += derive_name(args[i]);
@@ -105,19 +152,57 @@ consteval std::string derive_name(std::meta::info arg) {
     // arguments (template name + each arg), so an NTTP / nested specialization reduces
     // to identifier tokens rather than a raw template-id spelling.
     if (std::meta::has_template_arguments(type)) {
-        std::string out{::welder::naming::restyle(
-            std::string{std::meta::identifier_of(std::meta::template_of(type))},
-            ::welder::naming::case_kind::pascal)};
+        std::string out{qualified_ident(std::meta::template_of(type))};
         for (const std::meta::info a : std::meta::template_arguments_of(type))
             out += derive_name(a);
         return out;
     }
-    // A plain type: its identifier (PascalCased), or its display for an unnameable one
-    // (the caller's final sanitize legalizes either).
-    const std::string id{std::meta::has_identifier(type)
-                             ? std::string{std::meta::identifier_of(type)}
-                             : std::string{std::meta::display_string_of(type)}};
-    return ::welder::naming::restyle(id, ::welder::naming::case_kind::pascal);
+    // A plain type: its qualified identifier (namespaces + enclosing classes), or its
+    // display for an unnameable one (the caller's final sanitize legalizes either).
+    return qualified_ident(type);
+}
+
+/** Does name style @a style_type (or any of its bases) declare the optional
+    `transform_opaque_container` hook? Detected by reflection rather than a
+    `requires`-expression because the hook is a `consteval` static member — an
+    immediate call cannot appear in the unevaluated operand of a `requires`, so a
+    concept check would silently miss it. */
+consteval bool has_opaque_hook(std::meta::info style_type) {
+    const std::meta::access_context ctx{std::meta::access_context::unprivileged()};
+    for (const std::meta::info m : std::meta::members_of(style_type, ctx))
+        if (std::meta::is_function(m) && std::meta::has_identifier(m) &&
+            std::meta::identifier_of(m) == "transform_opaque_container")
+            return true;
+    for (const std::meta::info b : std::meta::bases_of(style_type, ctx))
+        if (has_opaque_hook(std::meta::type_of(b)))
+            return true;
+    return false;
+}
+
+/** The opaque-wrapper name for container @a Container found on member/site @a Member
+    within @a Enclosing — the customization point behind the generator's naming.
+
+    By default this is the collision-free @ref derive_name of the container type. A name
+    style @a Style may **override** it by providing an (optional) hook
+    @code
+    static consteval std::string transform_opaque_container(
+        std::meta::info enclosing,   // the enclosing class (namespace for a free fn)
+        std::meta::info container,   // the container type being made opaque
+        std::meta::info member);     // the data member / callable it was found on
+    @endcode
+    — a style with no such hook (every stock @ref welder::naming style) falls straight
+    through to @ref derive_name. The result is run through @ref sanitize_ident either
+    way, so a hook can never yield a non-identifier. Because opaque wrappers are deduped
+    **per container type** (module-wide), the hook is honoured at the container's
+    first Style-aware use site; @a Enclosing / @a Member are that site's context. */
+template <class Style, std::meta::info Enclosing, std::meta::info Container,
+          std::meta::info Member>
+consteval std::string opaque_name() {
+    if constexpr (has_opaque_hook(^^Style))
+        return sanitize_ident(std::string{
+            Style::transform_opaque_container(Enclosing, Container, Member)});
+    else
+        return sanitize_ident(derive_name(Container));
 }
 
 /** The fully-qualified spelling of namespace @a ns for a `namespace X { … }` header
@@ -209,6 +294,13 @@ struct entry {
     std::string spelling; /**< e.g. `std::vector<int>`. */
     std::string name;     /**< e.g. `VectorInt`. */
     bool excluded;        /**< a `by_value` mark opted this container type out. */
+    bool styled;          /**< name came from a Style-aware site (a data member /
+                               method / free function / variable), so a custom
+                               `transform_opaque_container` could apply — as opposed to
+                               a constructor / operator / property accessor, whose
+                               carriage hook carries no name style. A Style-aware name
+                               refines an earlier unstyled one regardless of visit
+                               order. */
 };
 
 /** The accumulator threaded through the rod's emission hooks: the deduped set of
@@ -217,45 +309,60 @@ struct entry {
 struct document {
     std::vector<entry> entries{}; /**< Deduped by C++ spelling. */
 
-    /** Record container @a C (deduped by spelling; @a excluded OR-merged across use
-        sites — one `by_value` anywhere opts the whole type out, opaqueness being
-        module-wide). Rendered text is materialized to `const char*` and stored. */
-    template <std::meta::info C>
-    void add_one(bool excluded) {
+    /** Record container @a C found on member/site @a Site within @a Enclosing (deduped
+        by spelling; @a excluded OR-merged across use sites — one `by_value` anywhere
+        opts the whole type out, opaqueness being module-wide). The name is @ref
+        opaque_name (the default derivation, or @a Style's `transform_opaque_container`
+        override); @a styled_site records whether the carriage hook that reached here
+        carried a name style, so a later Style-aware visit refines the name a
+        constructor / operator / property visit could only give the default. */
+    template <std::meta::info C, class Style, std::meta::info Enclosing,
+              std::meta::info Site>
+    void add_one(bool excluded, bool styled_site) {
         const char* sp{std::define_static_string(container_spelling(C))};
-        // sanitize_ident is the safety net: derive_name's structural branches are
-        // already clean, but this guarantees a valid identifier for any input.
-        const char* nm{std::define_static_string(sanitize_ident(derive_name(C)))};
+        const char* nm{std::define_static_string(opaque_name<Style, Enclosing, C, Site>())};
         for (entry& e : entries)
             if (e.spelling == sp) {
                 e.excluded = e.excluded || excluded;
+                if (styled_site && !e.styled) { // a Style-aware name beats a default one
+                    e.name = nm;
+                    e.styled = true;
+                }
                 return;
             }
-        entries.push_back({std::string{sp}, std::string{nm}, excluded});
+        entries.push_back({std::string{sp}, std::string{nm}, excluded, styled_site});
     }
 
     /** Collect every reference container within surface type @a SurfaceType (a data
-        member / parameter / return type), tagging them @a excluded. */
-    template <std::meta::info SurfaceType>
-    void collect([[maybe_unused]] bool excluded) {
+        member / parameter / return type) found on member/site @a Site within
+        @a Enclosing, tagging them @a excluded and whether @a styled_site (see @ref
+        add_one). */
+    template <std::meta::info SurfaceType, class Style, std::meta::info Enclosing,
+              std::meta::info Site>
+    void collect([[maybe_unused]] bool excluded, [[maybe_unused]] bool styled_site) {
         // Unused when SurfaceType names no eligible container (the common case — the
         // template for below is then empty); [[maybe_unused]] keeps -Wunused quiet.
         template for (constexpr auto c :
                       std::define_static_array(containers_in<SurfaceType>()))
-            add_one<c>(excluded);
+            add_one<c, Style, Enclosing, Site>(excluded, styled_site);
     }
 
     /** Collect from callable @a Fn's parameter types and (unless a constructor) its
-        return type — never `by_value` (that mark lives on data members). */
-    template <std::meta::info Fn>
-    void collect_callable() {
+        return type — never `by_value` (that mark lives on data members). The enclosing
+        scope and site handed to the naming hook are `parent_of(Fn)` and @a Fn itself;
+        @a styled_site is `false` for a constructor / operator / property accessor
+        (whose carriage hook has no name style) and `true` for a method / free function. */
+    template <std::meta::info Fn, class Style>
+    void collect_callable(bool styled_site) {
         template for (constexpr auto p :
                       std::define_static_array(std::meta::parameters_of(Fn)))
-            collect<std::meta::type_of(p)>(false);
+            collect<std::meta::type_of(p), Style, std::meta::parent_of(Fn), Fn>(
+                false, styled_site);
         if constexpr (!std::meta::is_constructor(Fn)) {
             using R = [:std::meta::return_type_of(Fn):];
             if constexpr (!std::is_void_v<R>)
-                collect<std::meta::return_type_of(Fn)>(false);
+                collect<std::meta::return_type_of(Fn), Style, std::meta::parent_of(Fn),
+                        Fn>(false, styled_site);
         }
     }
 

@@ -24,20 +24,24 @@ def go(mod: ModuleType) -> ModuleType:
 
 
 def test_generated_aliases_exist(go: ModuleType) -> None:
-    # the generator derived these names from the containers it found
+    # the generator derived these names from the containers it found. Names are
+    # collision-free QUALIFIED: a scalar keeps its short name (VectorDouble), but a
+    # welded element carries its namespace path (gen_opaque::Reading -> GenOpaqueReading)
+    # so two same-named types in different namespaces never collide.
     assert hasattr(go, "VectorDouble")
-    # a welded-CLASS element container is opened too (two-phase name pre-registration)
-    assert hasattr(go, "VectorReading")
+    # a welded-CLASS element container is opened too (two-phase name pre-registration),
+    # named by its qualified path
+    assert hasattr(go, "VectorGenOpaqueReading")
     # a class-TEMPLATE element (Layer<0>, an NTTP arg) gets a valid derived name — this
     # used to be invalid C++ (a name with '<' '>' '::')
-    assert hasattr(go, "VectorLayer0")
+    assert hasattr(go, "VectorGenOpaqueLayer0")
     # vector<int> was opted out with by_value, so no wrapper was generated for it
     assert not hasattr(go, "VectorInt")
 
 
 def test_template_instantiation_element_binds_opaque(go: ModuleType) -> None:
     s = go.Series()
-    assert isinstance(s.tiers, go.VectorLayer0)  # opaque, not a list
+    assert isinstance(s.tiers, go.VectorGenOpaqueLayer0)  # opaque, not a list
     s.tiers.append(go.Layer0())
     s.tiers.append(go.Layer0())
     assert len(s.tiers) == 2  # append is push_back on the live C++ vector
@@ -65,7 +69,7 @@ def test_class_element_container_member_writes_through(go: ModuleType) -> None:
     # vector<Reading> (welded-class element) is opened OPAQUE — a member is the bound
     # wrapper, and appends write through to the C++ vector (aggregate-NSDMI field).
     s = go.Series()
-    assert isinstance(s.readings, go.VectorReading)
+    assert isinstance(s.readings, go.VectorGenOpaqueReading)
     assert not isinstance(s.readings, list)
     s.readings.append(go.Reading(1.0))
     s.readings.append(go.Reading(2.0))
@@ -76,7 +80,7 @@ def test_class_element_container_member_writes_through(go: ModuleType) -> None:
 def test_class_element_container_from_a_signature(go: ModuleType) -> None:
     # a vector<Reading>-returning function returns the opaque wrapper, not a list
     readings = go.take(3)
-    assert isinstance(readings, go.VectorReading)
+    assert isinstance(readings, go.VectorGenOpaqueReading)
     assert len(readings) == 3
     assert [r.value for r in readings] == pytest.approx([0.0, 1.0, 2.0])
     assert all(isinstance(r, go.Reading) for r in readings)

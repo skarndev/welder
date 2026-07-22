@@ -855,13 +855,33 @@ places each correctly. Files: `src/welder/rods/python/opaque_containers/`
 (emits the neutral `WELDER_OPAQUE` + `weld(py)` aliases — one header serves both Python
 rods); `has_native_caster = true` (permissive gate, like trampolines). Model = BLANKET
 over welded types (all scalar containers) + `by_value` opt-out + DERIVED names
-(`vector<int>`→`VectorInt`; `::welder::naming::restyle(…, pascal)`). `derive_name`
-RECURSES a non-container class-template-specialization element the same way it recurses
-containers — template name + each arg — so `vector<WMOGroup<ClientVersion{3,3,5,12340}>>`
-becomes `VectorWmoGroupClientVersion_3_3_5_12340`, NOT a garbage name keeping `< > :: { }`
-(the pre-fix bug); an NTTP (non-type) arg renders its `display_string_of`, and `add_one`
-runs `sanitize_ident` on the FINAL name (collapse non-`[A-Za-z0-9_]` runs, no leading
-digit) as the last-resort valid-identifier guarantee. Type spelling =
+(`vector<int>`→`VectorInt`). Names are **collision-free QUALIFIED**: `derive_name`'s
+plain-type/template-head branches call `qualified_ident`, which walks `parent_of` (guarded
+by `has_parent` — a fundamental type throws otherwise) prepending every enclosing named
+namespace + class, PascalCased, so `vector<geo::Point>`→`VectorGeoPoint` and
+`vector<physics::Point>`→`VectorPhysicsPoint` never collide. The `std` namespace, an
+anonymous namespace, and `__`-prefixed impl inline namespaces (`std::__cxx11`) are dropped
+so container prefixes stay clean (`Vector`/`Map`); the render-time `#error` remains only as
+a last-resort backstop. `derive_name` RECURSES a non-container class-template-specialization
+element the same way it recurses containers — template name + each arg — so
+`vector<WMOGroup<ClientVersion{3,3,5,12340}>>` becomes
+`VectorWmoGroupClientVersion_3_3_5_12340`, NOT a garbage name keeping `< > :: { }` (the
+pre-fix bug); an NTTP (non-type) arg renders its `display_string_of`, and the name is run
+through `sanitize_ident` (collapse non-`[A-Za-z0-9_]` runs, no leading digit) as the
+last-resort valid-identifier guarantee.
+**Custom naming hook:** a name style may override the derived name via an optional
+`static consteval std::string transform_opaque_container(info enclosing, info container,
+info member)` — `document.hpp` `opaque_name<Style, Enclosing, Container, Member>()` detects
+it by REFLECTION (`has_opaque_hook` over `members_of`+`bases_of`, NOT a `requires` — an
+immediate/consteval call can't sit in a `requires`'s unevaluated operand, so a concept
+check silently misses it) and falls through to `derive_name` when absent. The
+container/site/enclosing reach `add_one` as TEMPLATE params (must be compile-time constants
+for `define_static_string`): fields/methods/statics/free-fns/variables are Style-aware
+sites (the carriage passes `Style`); constructors/operators/property accessors carry NO
+style, so they collect with `naming::none` and an `entry.styled=false` flag — a later
+Style-aware visit REFINES the name regardless of sweep order (ctors are visited before
+fields). `WELDER_OPAQUE_CONTAINERS_MAIN_STYLED(ns, style)` (module.hpp) threads a custom
+style into `generate<Ns, Style>`; the plain macro passes `naming::none`. Type spelling =
 `display_string_of(dealias(type))` (valid C++, infra args dropped, `std::string` →
 `std::__cxx11::basic_string<char>`). **Scalar OR top-level-welded-class/enum elements**
 (`opaque_eligible`/`element_ok`: every value arg is fundamental/`basic_string`, OR a

@@ -6,10 +6,11 @@ import scene
 def main() -> None:
     s = scene.Scene()
 
-    # The generator emitted an opaque wrapper per container it found — derived names,
+    # The generator emitted an opaque wrapper per container it found — collision-free
+    # names (a welded element carries its namespace: scene::Vertex -> VectorSceneVertex),
     # no hand-written WELDER_OPAQUE or aliases in the project.
-    assert type(s.mesh).__name__ == "VectorVertex"
-    assert type(s.actors).__name__ == "VectorEntity"
+    assert type(s.mesh).__name__ == "VectorSceneVertex"
+    assert type(s.actors).__name__ == "VectorSceneEntity"
     assert type(s.weights).__name__ == "VectorDouble"
 
     # Reference semantics: a Python append is push_back on the SAME C++ vector — the

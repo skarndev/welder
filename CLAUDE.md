@@ -55,7 +55,10 @@ containers they use (`std::vector<Entity>` of a welded class included, not just
 scalars), and emits a **`.hpp` of `WELDER_OPAQUE` declarations + welded aliases** that
 bind them by reference — so the per-container boilerplate is not hand-written (a
 namespace-scope `type_caster` specialization is a compile-time artifact no runtime rod
-can emit; blanket over welded types, `by_value` opt-out, derived names). Class-element
+can emit; blanket over welded types, `by_value` opt-out, **collision-free
+namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint` — overridable
+per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
+the name style). Class-element
 containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
 Python rods opt in via a `reopen_class` hook): it registers every welded type's NAME,
 then binds the opaque containers, then fills members — so no container-typed

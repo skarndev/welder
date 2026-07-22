@@ -101,44 +101,49 @@ struct rod {
         return {m.doc};
     }
 
-    /** Collect from each participating constructor's parameter types. @see welder::rod */
+    /** Collect from each participating constructor's parameter types. The carriage's
+        `add_constructors` hook carries no name style, so these are unstyled sites (a
+        later data-member visit refines any custom name). @see welder::rod */
     template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(class_handle& cls) {
         template for (constexpr auto ctor : std::define_static_array(Ctors))
-            cls.doc->template collect_callable<ctor>();
+            cls.doc->template collect_callable<ctor, ::welder::naming::none>(false);
     }
 
     /** Collect the container(s) in data member @a Mem's type — excluded when @a Mem
-        carries `[[=welder::rods::python::by_value]]`. @see welder::rod */
+        carries `[[=welder::rods::python::by_value]]`. A Style-aware site: the naming
+        hook sees @a Mem and its class (`parent_of(Mem)`). @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_handle& cls) {
-        cls.doc->template collect<std::meta::type_of(Mem)>(
-            ::welder::rods::python::marked_by_value(Mem));
+        cls.doc->template collect<std::meta::type_of(Mem), Style,
+                                  std::meta::parent_of(Mem), Mem>(
+            ::welder::rods::python::marked_by_value(Mem), true);
     }
 
     /** Collect from the property accessor signatures (getter return, setter param).
+        The carriage's `add_property` hook carries no name style (unstyled site).
         @see welder::rod */
     template <class T, std::meta::info Getter, std::meta::info Setter>
     static void add_property(class_handle& cls, const char*) {
-        cls.doc->template collect_callable<Getter>();
+        cls.doc->template collect_callable<Getter, ::welder::naming::none>(false);
         if constexpr (Setter != std::meta::info{})
-            cls.doc->template collect_callable<Setter>();
+            cls.doc->template collect_callable<Setter, ::welder::naming::none>(false);
     }
 
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(class_handle& cls) {
         template for (constexpr auto fn : std::define_static_array(Fns))
-            cls.doc->template collect_callable<fn>();
+            cls.doc->template collect_callable<fn, Style>(true);
     }
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_static_method(class_handle& cls) {
         template for (constexpr auto fn : std::define_static_array(Fns))
-            cls.doc->template collect_callable<fn>();
+            cls.doc->template collect_callable<fn, Style>(true);
     }
     template <class T, auto Fns>
     static void add_operator(class_handle& cls) {
         template for (constexpr auto fn : std::define_static_array(Fns))
-            cls.doc->template collect_callable<fn>();
+            cls.doc->template collect_callable<fn, ::welder::naming::none>(false);
     }
     template <class T, auto Fns, auto Covered>
     static void add_comparisons(class_handle&) {} // spaceship operands are the anchor type
@@ -166,17 +171,20 @@ struct rod {
     static session open_module(module_type&) { return {}; }
     static void set_module_doc(module_type&, const char*) {}
 
-    /** Collect from a free function's overload group signatures. @see welder::rod */
+    /** Collect from a free function's overload group signatures (a Style-aware site).
+        @see welder::rod */
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* = nullptr) {
         template for (constexpr auto fn : std::define_static_array(Fns))
-            m.doc->template collect_callable<fn>();
+            m.doc->template collect_callable<fn, Style>(true);
     }
 
-    /** Collect the container(s) in a namespace variable's type. @see welder::rod */
+    /** Collect the container(s) in a namespace variable's type (a Style-aware site).
+        @see welder::rod */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&, const char* = nullptr) {
-        m.doc->template collect<std::meta::type_of(Var)>(false);
+        m.doc->template collect<std::meta::type_of(Var), Style,
+                                std::meta::parent_of(Var), Var>(false, true);
     }
 
     /** Recurse into a nested namespace, carrying the document through. @see welder::rod */
