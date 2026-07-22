@@ -108,7 +108,10 @@ consteval std::size_t ai_entry_count(std::meta::info E) {
     std::size_t n{0}, running{0};
     for (std::meta::info m : std::meta::nonstatic_data_members_of(
              E, std::meta::access_context::unchecked())) {
-        const std::size_t off{std::meta::offset_of(m).bytes};
+        // offset_of(m).bytes is std::ptrdiff_t (signed); a field offset is
+        // non-negative, so cast to size_t (avoids -Werror=narrowing/sign-conversion).
+        const std::size_t off{
+            static_cast<std::size_t>(std::meta::offset_of(m).bytes)};
         if (off > running)
             ++n; // interior padding
         ++n;     // the field
@@ -131,7 +134,10 @@ ai_descr() {
     std::size_t i{0}, running{0};
     for (std::meta::info m : std::meta::nonstatic_data_members_of(
              E, std::meta::access_context::unchecked())) {
-        const std::size_t off{std::meta::offset_of(m).bytes};
+        // offset_of(m).bytes is std::ptrdiff_t (signed); a field offset is
+        // non-negative, so cast to size_t (avoids -Werror=narrowing/sign-conversion).
+        const std::size_t off{
+            static_cast<std::size_t>(std::meta::offset_of(m).bytes)};
         if (off > running)
             out[i++] = {"", std::define_static_string("|V" +
                                                       ai_uint_string(off - running))};
