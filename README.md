@@ -41,6 +41,7 @@ same annotated type binds through any rod you weld it for:
 | Python | [pybind11] | extension module + `.pyi` typing stubs |
 | Python | [nanobind] | extension module + `.pyi` typing stubs |
 | Python | trampolines | build-time `.hpp` of virtual-override trampolines (serves both Python rods) |
+| Python | opaque-containers | build-time `.hpp` of `WELDER_OPAQUE` decls + aliases binding `std::vector`/`std::map` by reference (serves both Python rods) |
 | Lua | [sol2] | loadable module |
 | Lua | [LuaBridge3] | loadable module |
 | Lua | [LuaCATS] | build-time `---@meta` stub file |
@@ -267,7 +268,8 @@ Doxygen-generated C++ reference, rebuilt and published on every push. Highlights
 - [Binding a type](https://skarndev.github.io/welder/guide/binding-types/) ·
   [Enums](https://skarndev.github.io/welder/guide/enums/) ·
   [Inheritance](https://skarndev.github.io/welder/guide/inheritance/) ·
-  [Namespaces & modules](https://skarndev.github.io/welder/guide/namespaces-modules/)
+  [Namespaces & modules](https://skarndev.github.io/welder/guide/namespaces-modules/) ·
+  [Containers by reference](https://skarndev.github.io/welder/guide/containers/)
 - [Docstrings](https://skarndev.github.io/welder/guide/docstrings/) ·
   [Naming conventions](https://skarndev.github.io/welder/guide/naming/)
 - [The bindability gate](https://skarndev.github.io/welder/guide/bindability/) ·
