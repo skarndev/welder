@@ -217,6 +217,38 @@ consteval bool trusted_for(std::meta::info member, lang L) {
     return false;
 }
 
+/** Is data member @a member bound **read-only** for @a L by a `no_reassign` mark?
+
+    `no_reassign` forces the read-only binding on a mutable member (see
+    detail::no_reassign_spec) — the `const`-member binding, without the `const`. A
+    rod's `add_field` ORs this with the member's const-ness to choose the read-only
+    path, so an in-place mutation still writes through but a rebind is rejected.
+    @param member a reflection of the data member to test.
+    @param L      the target language.
+    @return `true` iff a `no_reassign` mark covers @a L (mask `0` covers all
+            languages). */
+consteval bool member_no_reassign(std::meta::info member, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(member, ^^detail::no_reassign_spec)) {
+        auto s{std::meta::extract<detail::no_reassign_spec>(a)};
+        if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
+            return true;
+    }
+    return false;
+}
+
+/** Does @a entity carry any `no_reassign` mark at all (any language)?
+
+    `no_reassign` shapes how a *nonstatic data member* binds (read-only), so it is
+    meaningless on anything else. The carriage uses this to diagnose the mark on a
+    function, a type, a static member, or a namespace-scope variable — a hard error
+    rather than a silent no-op, mirroring `has_accessor_mark`.
+    @param entity a reflection of the entity to test.
+    @return `true` iff a `no_reassign` mark is present. */
+consteval bool has_no_reassign_mark(std::meta::info entity) {
+    return !std::meta::annotations_of_with_type(entity, ^^detail::no_reassign_spec)
+                .empty();
+}
+
 /** Does @a member carry a `getter`/`setter` mark of @a role covering @a L?
 
     The stored @ref detail::accessor_spec is deliberately non-templated (see

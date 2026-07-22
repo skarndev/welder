@@ -542,25 +542,28 @@ struct rod {
 
     /** Bind data member @a Mem as a usertype property.
 
-        A mutable member becomes read/write; a const member is wrapped in
-        `sol::readonly` (its setter would not compile). Lua has no property
-        docstring, so a `[[=welder::doc]]` on the member is not surfaced at runtime
-        (it belongs in a generated stub). @see welder::rod */
+        A mutable member becomes read/write; a const member — or one marked
+        `[[=welder::mark::no_reassign]]` — is wrapped in `sol::readonly` (rebinding
+        the field errors; an in-place mutation of the referenced object still writes
+        through). Lua has no property docstring, so a `[[=welder::doc]]` on the member
+        is not surfaced at runtime (it belongs in a generated stub). @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& ut) {
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
+        constexpr bool read_only{std::meta::is_const_type(std::meta::type_of(Mem)) ||
+                                 ::welder::member_no_reassign(Mem, language)};
         if constexpr (!std::meta::is_public(Mem)) {
             // A protected member (admitted under policy::weld_protected) binds
             // as a sol::property over welder::detail::field_access — gcc-16
             // rejects the dependent `&[:Mem:]` for protected data (see
             // field_access).
             using fa = ::welder::detail::field_access<Mem>;
-            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+            if constexpr (read_only)
                 ut[name] = ::sol::readonly_property(&fa::get);
             else
                 ut[name] = ::sol::property(&fa::get, &fa::set);
-        } else if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+        } else if constexpr (read_only) {
             ut[name] = ::sol::readonly(&[:Mem:]);
         } else {
             ut[name] = &[:Mem:];

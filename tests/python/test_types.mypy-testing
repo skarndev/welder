@@ -125,5 +125,7 @@ def mypy_test_opaque_member_is_the_wrapper_not_a_list() -> None:
     # a std::vector<float> member -> the bound FloatVector, NOT list[float]
     reveal_type(opaque.Signal().samples)  # R: welder_test.opaque.FloatVector
     reveal_type(opaque.sum_samples(opaque.Signal()))  # R: float
+    # a no_reassign member types identically (read-only property, same wrapper)
+    reveal_type(opaque.Signal().locked)  # R: welder_test.opaque.FloatVector
     # element access is typed by the wrapper's __getitem__
     reveal_type(opaque.FloatVector()[0])  # R: float

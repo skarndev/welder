@@ -118,7 +118,7 @@ function stubdemo.Splash.new() end
 
 --- A polygon.
 ---@class stubdemo.Polygon
----@field corners stubdemo.Rect[] The corner points, as [x, y] pairs.
+---@field corners stubdemo.Rect[] The corner points, as [x, y] pairs. (read-only)
 ---@field name string? Optional name.
 ---@field anchors table<string, stubdemo.Rect> Named anchor points.
 stubdemo.Polygon = {}

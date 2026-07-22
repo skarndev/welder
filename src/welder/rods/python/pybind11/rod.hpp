@@ -579,8 +579,9 @@ struct rod {
 
         pybind11 data members are already Python properties (data descriptors on the
         class), so a `[[=welder::doc]]` on the member rides along as the property's
-        `__doc__` — and thus reaches `.pyi` stubs. A const member is read-only
-        (`def_readonly`); a mutable one is read/write (`def_readwrite`). The doc,
+        `__doc__` — and thus reaches `.pyi` stubs. A const member — or one marked
+        `[[=welder::mark::no_reassign]]` — is read-only (`def_readonly`); an
+        otherwise-mutable member is read/write (`def_readwrite`). The doc,
         when present, is passed as the property docstring. There is deliberately no
         setter docstring: a Python `property` surfaces only the getter's `__doc__`,
         so one would be pure overhead.
@@ -590,13 +591,19 @@ struct rod {
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
         constexpr const char* doc{::welder::doc_of<Mem>()};
+        // Read-only either because the member's type is const (def_readwrite's
+        // setter would not compile) or because a `no_reassign` mark forces it on
+        // an otherwise-mutable member (a whole-object rebind is rejected; in-place
+        // mutation still writes through the reference_internal getter).
+        constexpr bool read_only{std::meta::is_const_type(std::meta::type_of(Mem)) ||
+                                 ::welder::member_no_reassign(Mem, language)};
         if constexpr (!std::meta::is_public(Mem)) {
             // A protected member (admitted under policy::weld_protected) binds
             // as a property over welder::detail::field_access — gcc-16 rejects
             // the dependent `&[:Mem:]` for protected data (see field_access).
             // Same semantics as def_readwrite: reference_internal getter.
             using fa = ::welder::detail::field_access<Mem>;
-            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
+            if constexpr (read_only) {
                 if constexpr (doc)
                     cls.def_property_readonly(
                         name, &fa::get, py::return_value_policy::reference_internal,
@@ -614,8 +621,7 @@ struct rod {
                     cls.def_property(name, &fa::get, &fa::set,
                                      py::return_value_policy::reference_internal);
             }
-        } else if constexpr (std::meta::is_const_type(std::meta::type_of(Mem))) {
-            // const member: read-only (def_readwrite's setter would not compile).
+        } else if constexpr (read_only) {
             if constexpr (doc)
                 cls.def_readonly(name, &[:Mem:], doc);
             else

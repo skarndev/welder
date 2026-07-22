@@ -222,6 +222,47 @@ struct only_spec {
     }
 };
 
+// --- no_reassign: force a data member's read-only binding -------------------
+
+/** The stored form of a `no_reassign` mark: the languages a data member is bound
+    **read-only** for, independent of whether its C++ type is `const`.
+
+    welder decides a data member's target-language mutability from its const-ness —
+    a `const` member binds read-only, a mutable one read/write. `no_reassign` forces
+    the read-only *binding* on an otherwise-mutable member: the target language may
+    still mutate the object **in place** (a read-only binding hands out a live
+    reference, so `obj.items.append(x)` writes through to the C++ object) but cannot
+    **rebind** the attribute to a different object (`obj.items = [...]` is rejected).
+    It is exactly the binding a `const` member already gets — pybind11
+    `def_readonly`, nanobind `def_ro`, sol2 `sol::readonly`, LuaBridge3 a getter-only
+    `addProperty`, and a `(read-only)` note in the LuaCATS stub — asked for without
+    making the C++ member `const`. The motivating case is a mutable STL container
+    member (`std::vector<Entity>`): keep it appendable while forbidding a whole-list
+    reassignment (which for an opaque container would otherwise need an ugly mangled
+    type).
+
+    Usable bare (all languages) or called with languages to scope it, like
+    exclude_spec:
+    @code
+    [[=welder::mark::no_reassign]]                    // read-only everywhere
+    [[=welder::mark::no_reassign(welder::lang::py)]]  // read-only in Python only
+    @endcode
+    Repeated annotations union their languages. A no-op on an already-`const` member
+    (which is read-only regardless).
+*/
+struct no_reassign_spec {
+    unsigned mask = 0; /**< The languages to bind read-only for; `0` == all languages. */
+
+    /** Scope the read-only binding to specific languages.
+        @tparam Ls the language enum types (deduced).
+        @param ls  the languages to bind the member read-only for.
+        @return a scoped no_reassign_spec. */
+    template <class... Ls>
+    consteval no_reassign_spec operator()(Ls... ls) const {
+        return no_reassign_spec{lang_mask(ls...)};
+    }
+};
+
 // --- trust_bindable: vouch that a type is representable outside welder's view --
 
 /** The stored form of a `trust_bindable` member mark.
@@ -528,6 +569,7 @@ namespace mark {
 inline constexpr detail::exclude_spec exclude{};               /**< @see welder::detail::exclude_spec */
 inline constexpr detail::include_spec include{};               /**< @see welder::detail::include_spec */
 inline constexpr detail::only_spec only{};                     /**< @see welder::detail::only_spec — must be called with ≥ 1 language */
+inline constexpr detail::no_reassign_spec no_reassign{};       /**< @see welder::detail::no_reassign_spec */
 inline constexpr detail::trust_bindable_spec trust_bindable{}; /**< @see welder::detail::trust_bindable_spec */
 } // namespace mark
 

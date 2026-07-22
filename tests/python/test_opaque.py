@@ -99,6 +99,24 @@ def test_pod_struct_numpy_structured_view(op: ModuleType) -> None:
     assert pts[1].x == pytest.approx(99.0)
 
 
+# --- no_reassign: read-only binding, in-place mutation still writes through ----
+def test_no_reassign_member(op: ModuleType) -> None:
+    s = op.Signal()
+    # The read-only binding still hands out a live reference: append/__setitem__
+    # write straight through to the C++ vector.
+    s.locked.append(3.0)
+    s.locked.append(4.0)
+    assert op.sum_locked(s) == pytest.approx(7.0)
+    s.locked[0] = 10.0
+    assert op.sum_locked(s) == pytest.approx(14.0)
+    assert len(s.locked) == 2
+    # But rebinding the whole attribute is rejected (no setter descriptor).
+    with pytest.raises(AttributeError):
+        s.locked = op.FloatVector()
+    # The control member without the mark stays reassignable.
+    s.samples = op.FloatVector()  # no raise
+
+
 # --- bind_map: std::map / std::unordered_map ---------------------------------
 def test_ordered_map(op: ModuleType) -> None:
     m = op.IntStrMap()

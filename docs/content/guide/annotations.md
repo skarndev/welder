@@ -13,6 +13,7 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `mark::exclude(lang…)` | Exclude member from the listed languages only. |
 | `mark::include` / `mark::include(lang…)` | Opt a member in (meaningful under `opt_in`). |
 | `mark::only(lang…)` | The **complete** set of languages this member may bind for — closed-world counterpart of `exclude`; under `opt_in` it is also the opt-in. Always called with ≥ 1 language. |
+| `mark::no_reassign` / `…(lang…)` | Bind a **data member** read-only regardless of const-ness: mutate in place, but no whole-attribute rebind. See [Read-only without `const`](binding-types.md#read-only-without-const-markno_reassign). |
 | `mark::trust_bindable` / `…(lang…)` | Vouch that a member's type / callable signature is representable outside welder's view. |
 | `trust_bindable<T> = true` | Type-level form: trust `T` everywhere it appears. |
 | `getter` / `getter([lang…,] "name")` | Bind this const, parameterless member function as a **property read** — alone it makes a read-only property; under `opt_in` the mark is also the opt-in. See [Properties](properties.md). |

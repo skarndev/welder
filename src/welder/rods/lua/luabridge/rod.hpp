@@ -471,9 +471,10 @@ struct rod {
         }
     }
 
-    /** Bind data member @a Mem as a class property (read-only if const, else
-        read/write). Lua has no property docstring, so a `[[=welder::doc]]` on the
-        member is not surfaced at runtime (it belongs in a generated stub).
+    /** Bind data member @a Mem as a class property (read-only if const or marked
+        `[[=welder::mark::no_reassign]]`, else read/write). Lua has no property
+        docstring, so a `[[=welder::doc]]` on the member is not surfaced at runtime
+        (it belongs in a generated stub).
 
         The member pointer is `static_cast` to `Field T::*`: a flattened base member
         splices as `Field Base::*`, which LuaBridge3's `addProperty` template
@@ -485,6 +486,8 @@ struct rod {
         using T = _class_type<decltype(h)>;
         constexpr const char* name{
             ::welder::name_of<Mem, language, Style, ::welder::ent_kind::field>()};
+        constexpr bool read_only{std::meta::is_const_type(std::meta::type_of(Mem)) ||
+                                 ::welder::member_no_reassign(Mem, language)};
         auto cls{_open_class<T>(h.mod, h.name.c_str())};
         if constexpr (!std::meta::is_public(Mem)) {
             // A protected member (admitted under policy::weld_protected) binds
@@ -492,15 +495,15 @@ struct rod {
             // gcc-16 rejects the dependent `&[:Mem:]` for protected data (see
             // field_access).
             using fa = ::welder::detail::field_access<Mem>;
-            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+            if constexpr (read_only)
                 cls.addProperty(name, &fa::get);
             else
                 cls.addProperty(name, &fa::get, &fa::set);
         } else {
             using Field = typename [:std::meta::type_of(Mem):];
             constexpr Field T::* mp{&[:Mem:]};
-            if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
-                cls.addProperty(name, mp);      // read-only (const member)
+            if constexpr (read_only)
+                cls.addProperty(name, mp);      // read-only (const or no_reassign)
             else
                 cls.addProperty(name, mp, mp);  // read/write
         }

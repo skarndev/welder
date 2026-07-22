@@ -54,4 +54,13 @@ describe("methods", function()
     assert.are.equal(3, m.Frozen.new("up", 3).level)
     assert.has_error(function() f.level = 9 end)  -- const -> read-only
   end)
+
+  it("binds mark::no_reassign members read-only without const", function()
+    local a = m.Anchored.new()
+    assert.are.equal(7, a.pinned)                 -- NSDMI default, read works
+    a.writable = 5                                -- unmarked control: reassignable
+    assert.are.equal(5, a.writable)
+    assert.has_error(function() a.pinned = 99 end) -- no_reassign -> read-only
+    assert.are.equal(7, a.pinned)
+  end)
 end)

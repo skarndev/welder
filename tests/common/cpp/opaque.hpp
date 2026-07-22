@@ -59,14 +59,30 @@ using StrIntHash [[=welder::weld(welder::lang::py)]] = std::unordered_map<std::s
 // from Python writes through to the C++ object (the copy caster would snapshot).
 struct [[=welder::weld(welder::lang::py)]] Signal {
     std::vector<float> samples{};
+    // A `no_reassign` container member: still appendable/mutable IN PLACE (the
+    // read-only binding hands out a live reference, so `s.locked.append(x)` writes
+    // through), but rebinding the whole attribute — `s.locked = FloatVector()` —
+    // raises AttributeError, exactly as a const member would, WITHOUT making the C++
+    // member const (`samples`, above, is the reassignable control). This is the
+    // motivating case: keep an opaque container appendable while forbidding a
+    // whole-object assignment (which would otherwise expose an ugly mangled type).
+    [[=welder::mark::no_reassign]] std::vector<float> locked{};
 };
 
-// Round-trip helper: read the C++-side vector back after Python has mutated it, so a
+// Round-trip helpers: read a C++-side vector back after Python has mutated it, so a
 // test can assert the mutation actually reached C++ (not a throwaway copy).
 [[=welder::weld(welder::lang::py)]]
 double sum_samples(const Signal& s) {
     double total{0.0};
     for (float x : s.samples)
+        total += static_cast<double>(x);
+    return total;
+}
+
+[[=welder::weld(welder::lang::py)]]
+double sum_locked(const Signal& s) {
+    double total{0.0};
+    for (float x : s.locked)
         total += static_cast<double>(x);
     return total;
 }

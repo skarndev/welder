@@ -51,6 +51,55 @@ Point {
     print(p.x, p.y)   --> 3.0  4.0
     ```
 
+A `const` member binds **read-only** (rebinding the attribute is rejected); an
+otherwise-mutable member binds read/write.
+
+### Read-only without `const`: `mark::no_reassign`
+
+Sometimes you want a member the target language can *mutate in place* but not
+*reassign wholesale* — classically a mutable STL container: `scene.entities` should
+stay appendable, but `scene.entities = [...]` (rebinding the whole attribute) should
+be an error. Making the C++ member `const` would forbid the in-place mutation too, so
+that is the wrong tool.
+
+`[[=welder::mark::no_reassign]]` forces the read-only *binding* while leaving the C++
+member mutable:
+
+```cpp
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Scene {
+    [[=welder::mark::no_reassign]] std::vector<Entity> entities;
+};
+```
+
+The read-only binding still hands out a **live reference**, so in-place mutation
+writes straight through to the C++ object; only rebinding the attribute is rejected:
+
+=== ":simple-python: Python"
+
+    ```pycon
+    >>> s = Scene()
+    >>> s.entities.append(Entity())   # in-place mutation writes through
+    >>> s.entities = []               # AttributeError: can't set attribute
+    ```
+
+=== ":simple-lua: Lua"
+
+    ```lua
+    local s = Scene()
+    table.insert -- (via the bound container) mutates in place
+    s.entities = {}   --> error (read-only field)
+    ```
+
+It is exactly the binding a `const` member gets (pybind11 `def_readonly`, nanobind
+`def_ro`, sol2 `sol::readonly`, LuaBridge3 a getter-only `addProperty`, a
+`(read-only)` note in the [LuaCATS stub](stubs.md)) — asked for without the `const`.
+The mark is scopable per language (`mark::no_reassign(welder::lang::py)` — read-only
+in Python, read/write elsewhere) and is a no-op on an already-`const` member. It
+belongs on a **data member** only — placing it on a method, a free function, a type,
+or a global is a compile error, not a silent no-op. For the container case
+specifically, see [Containers](containers.md).
+
 Every bound member's type must pass the [bindability gate](bindability.md) — if the
 rod can't convert it to a meaningful value in the target language, you get a
 compile error naming the type, never a silent skip.

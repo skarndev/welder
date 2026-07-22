@@ -110,6 +110,19 @@ Frozen {
     const int level{1};
 };
 
+// `no_reassign` forces the read-only BINDING on an otherwise-mutable member: `pinned`
+// is a plain `int` in C++ (assignable, and the field ctor still sets it), but the
+// target language cannot rebind the attribute — exactly as if it were const, WITHOUT
+// making it const. `writable` is the reassignable control. The runtime analogue of
+// the luacats golden's `(read-only)` note.
+struct
+[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+Anchored {
+    Anchored() = default;
+    [[=welder::mark::no_reassign]] int pinned{7};
+    int writable{0};
+};
+
 } // namespace methods
 
 inline void register_methods(WELDER_TEST_MODULE_T& m) {

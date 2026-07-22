@@ -11,7 +11,27 @@ All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 Public data members (a mutable member read/write via `def_readwrite`; a **const**
 member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on
 const); a member's `[[=welder::doc]]` becomes its property `__doc__` (see
-`docs-and-doxygen.md`). Constructors (default + each PARTICIPATING public
+`docs-and-doxygen.md`). **`[[=welder::mark::no_reassign]]`** forces the read-only
+binding on an *otherwise-mutable* member — the const-member path without the const
+(motivating case: a mutable opaque container that should stay appendable but reject a
+whole-attribute rebind). It's a per-language mask spec (`no_reassign_spec`, mirrors
+`exclude_spec`), read by `reflect.hpp` `member_no_reassign(mem, L)`; every rod's
+`add_field` ORs it with `is_const_type(...)` into a local `read_only` (both the public
+and the `weld_protected` `field_access` branches) — pybind11 `def_readonly` /
+`def_property_readonly`, nanobind `def_ro` / `def_prop_ro`, sol2 `sol::readonly` /
+`readonly_property`, LuaBridge3 getter-only `addProperty`, luacats `(read-only)` note.
+In-place mutation still writes through (the read-only binding hands out a
+reference_internal getter); only rebinding is rejected. A no-op on an already-const
+member, but a **hard error on anything but a nonstatic data member** (a method,
+constructor, static member, nested type, free function, global, or the welded type
+itself): `reflect.hpp` `has_no_reassign_mark(entity)` drives static_asserts at every
+choke point — the class-member sweep (`bind_members`, a members_of loop after the
+data-member loop), the namespace walk (blanket check atop the main loop), and the
+manual `bind_function` / `bind_variable` / `bind_type` / `bind_enum` entry points.
+Locked by opaque.hpp `Signal::locked` ↔ test_opaque.py `test_no_reassign_member` +
+mypy-testing reveal, methods.hpp `Anchored` ↔ test_methods.py / methods_spec.lua
+`no_reassign` cases, the luacats golden's `Polygon.corners` `(read-only)` field, and
+negcompile.no_reassign_on_method / no_reassign_on_function. Constructors (default + each PARTICIPATING public
 non-copy/move ctor → `pybind11::init<...>`; plus, for a baseless **aggregate**,
 a synthesized field constructor that brace-inits it, giving Python `T(f0, f1, …)`
 — only when every field binds, since aggregate init is positional/all-or-nothing);

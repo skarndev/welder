@@ -523,6 +523,24 @@ struct basic_carriage {
             }
         }
 
+        // `no_reassign` forces a data member's read-only binding — it shapes an
+        // attribute, so it is meaningless on a method, a constructor, a static
+        // member, or a nested type. Reject it there rather than silently ignore it.
+        // The kind guard runs FIRST so `&&` short-circuits before
+        // has_no_reassign_mark (annotations_of throws on a member template, which
+        // members_of can yield); a nonstatic data member is excluded explicitly.
+        template for (constexpr auto mem :
+                      std::define_static_array(std::meta::members_of(Src, ctx))) {
+            static_assert(
+                !((std::meta::is_type(mem) || std::meta::is_function(mem) ||
+                   std::meta::is_variable(mem)) &&
+                  !std::meta::is_nonstatic_data_member(mem) &&
+                  welder::has_no_reassign_mark(mem)),
+                "welder: [[=welder::mark::no_reassign]] applies to a nonstatic data "
+                "member only — it forces that member's read-only binding, which has "
+                "no meaning on a method, constructor, static member, or nested type");
+        }
+
         // Methods are emitted as whole OVERLOAD GROUPS: the walk fires on each
         // group's first participating overload (the leader), gathers the
         // resolution-admitted set, gates every member, and hands the group to
@@ -1129,6 +1147,10 @@ struct basic_carriage {
         static_assert(Resolution::participates(^^E, L),
                       "welder: weld_type<E>: enum E is not welded for this backend's "
                       "language; annotate it with [[=welder::weld(...)]]");
+        static_assert(!welder::has_no_reassign_mark(std::meta::dealias(^^E)),
+                      "welder: weld_type<E>: enum E carries "
+                      "[[=welder::mark::no_reassign]], but that forces a DATA "
+                      "MEMBER's read-only binding — it has no meaning on an enum");
         const char* enum_name{
             welder::name_of_or<^^E, L, Style, ent_kind::enum_>(name)};
         const auto docs{collect_enum_docs<B, E, Style>()};
@@ -1214,6 +1236,11 @@ struct basic_carriage {
             "safe accessor functions on an enclosing type. To hand-register it "
             "with the backend yourself, vouch for the uses via "
             "welder::trust_bindable.");
+        static_assert(!welder::has_no_reassign_mark(std::meta::dealias(^^T)),
+                      "welder: weld_type<T>: T carries "
+                      "[[=welder::mark::no_reassign]], but that forces a DATA "
+                      "MEMBER's read-only binding — put it on a data member of T, "
+                      "not on the type");
         // Decl is the *declaring* entity when it differs from ^^T: the namespace-
         // scope alias through which a class-template specialization was welded
         // (bind_namespace's alias branch, which has already resolved participation
@@ -1316,6 +1343,10 @@ struct basic_carriage {
                       "welder: weld_function<Fn>: Fn carries a getter/setter "
                       "mark, but properties are a class surface — the marks "
                       "apply to member functions only");
+        static_assert(!welder::has_no_reassign_mark(Fn),
+                      "welder: weld_function<Fn>: Fn carries "
+                      "[[=welder::mark::no_reassign]], but that forces a DATA "
+                      "MEMBER's read-only binding — it has no meaning on a function");
         constexpr auto grp{detail::manual_function_group<Resolution, Fn, L>()};
         template for (constexpr auto member : std::define_static_array(grp)) {
             welder::assert_callable_bindable<B, member, L, Resolution>();
@@ -1345,6 +1376,11 @@ struct basic_carriage {
         constexpr lang L{B::language};
         static_assert(std::meta::is_variable(Var),
                       "welder: weld_variable<Var>: Var must reflect a namespace "
+                      "variable");
+        static_assert(!welder::has_no_reassign_mark(Var),
+                      "welder: weld_variable<Var>: Var carries "
+                      "[[=welder::mark::no_reassign]], but that forces a DATA "
+                      "MEMBER's read-only binding — it has no meaning on a global "
                       "variable");
         static_assert(Resolution::participates(Var, L),
                       "welder: weld_variable<Var>: Var is not welded for this "
@@ -1455,6 +1491,19 @@ struct basic_carriage {
         // single-pass sweep (each class bound whole).
         template for (constexpr auto mem :
                       std::define_static_array(std::meta::members_of(Ns, ctx))) {
+            // `no_reassign` is a data-member mark; nothing at namespace scope (a
+            // function, a type, an alias, a global variable, a nested namespace) is
+            // one, so the mark is always misplaced here — diagnosed, not ignored.
+            // The kind guard runs FIRST so `&&` short-circuits before
+            // has_no_reassign_mark (annotations_of throws on a template, which
+            // members_of can yield).
+            static_assert(
+                !((std::meta::is_type(mem) || std::meta::is_function(mem) ||
+                   std::meta::is_variable(mem) || std::meta::is_namespace(mem)) &&
+                  welder::has_no_reassign_mark(mem)),
+                "welder: [[=welder::mark::no_reassign]] sits on a namespace-scope "
+                "entity, but it forces a DATA MEMBER's read-only binding — it has no "
+                "meaning on a function, type, or global variable");
             // The alias branch must come first: type predicates (is_class_type)
             // look through an alias, so the class branch below would swallow it.
             if constexpr (std::meta::is_type_alias(mem)) {

@@ -154,7 +154,10 @@ Splash {
 /// A polygon holding vertices and per-vertex labels.
 struct [[=welder::weld(welder::lang::lua)]] [[=welder::doc("A polygon.")]]
 Polygon {
+    // no_reassign: the container stays mutable in place but the field cannot be
+    // rebound -> a `(read-only)` note, like a const member gets (without const).
     [[=welder::doc("The corner points, as [x, y] pairs.")]]
+    [[=welder::mark::no_reassign]]
     std::vector<Box> corners;
     [[=welder::doc("Optional name.")]] std::optional<std::string> name;
     [[=welder::doc("Named anchor points.")]] std::map<std::string, Box> anchors;

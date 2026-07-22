@@ -271,8 +271,9 @@ struct rod {
         }
     }
 
-    /** Emit a `---@field` line for data member @a Mem (const → a `(read-only)`
-        note, since LuaCATS has no const modifier). @see welder::rod */
+    /** Emit a `---@field` line for data member @a Mem (const, or a
+        `[[=welder::mark::no_reassign]]` mark → a `(read-only)` note, since LuaCATS
+        has no const modifier). @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         w.fields += "---@field ";
@@ -281,10 +282,12 @@ struct rod {
         w.fields += lua_type(std::meta::type_of(Mem));
         std::string d{one_line(::welder::doc_of<Mem>())};
         // LuaCATS has no read-only/const field modifier (an open feature request on
-        // lua-language-server), so a const member's immutability — which the sol2
-        // runtime backend enforces with sol::readonly — is surfaced as a description
-        // note rather than an (unrecognized) tag.
-        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)))
+        // lua-language-server), so a member's immutability — a const member, or one
+        // marked `no_reassign`, which the sol2 runtime backend enforces with
+        // sol::readonly — is surfaced as a description note rather than an
+        // (unrecognized) tag.
+        if constexpr (std::meta::is_const_type(std::meta::type_of(Mem)) ||
+                      ::welder::member_no_reassign(Mem, language))
             d = d.empty() ? "(read-only)" : d + " (read-only)";
         if (!d.empty())
             w.fields += ' ' + d;

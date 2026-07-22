@@ -123,3 +123,15 @@ def test_const_member_aggregate(meth: ModuleType) -> None:
     assert meth.Frozen("up", 3).level == 3
     with pytest.raises(AttributeError):
         f.level = 9
+
+
+def test_no_reassign_member(meth: ModuleType) -> None:
+    # `pinned` is a mutable `int` in C++, forced read-only by mark::no_reassign:
+    # reading works, rebinding raises, and the unmarked `writable` control still sets.
+    a = meth.Anchored()
+    assert (a.pinned, a.writable) == (7, 0)
+    a.writable = 5
+    assert a.writable == 5
+    with pytest.raises(AttributeError):
+        a.pinned = 99
+    assert a.pinned == 7

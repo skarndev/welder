@@ -82,6 +82,25 @@ len(h.bins)            # 2 — h.bins IS the C++ vector, not a copy
 `std::map` / `std::unordered_map` become a mutable mapping (`__getitem__`/`__setitem__`,
 `__contains__`, `keys`/`values`/`items`, iteration over keys).
 
+### Keep it appendable, forbid reassignment
+
+A container member is bound read/write by default, so `h.bins = SomeVector()` rebinds
+the whole attribute — and the value it accepts is the opaque wrapper type, whose
+spelling is deliberately not something you want in a public surface. If the member
+should stay mutable but never be reassigned, mark it
+[`[[=welder::mark::no_reassign]]`](binding-types.md#read-only-without-const-markno_reassign):
+
+```cpp
+struct [[=welder::weld(welder::lang::py)]]
+Histogram {
+    [[=welder::mark::no_reassign]] std::vector<int> bins;
+};
+```
+
+`h.bins.append(10)` still writes through (the read-only binding hands out a live
+reference), but `h.bins = [...]` now raises — the same read-only binding a `const`
+member gets, without freezing the container itself.
+
 ### Zero-copy NumPy / ctypes
 
 When a `std::vector`'s element type is a **scalar** (an arithmetic type, not `bool`),
