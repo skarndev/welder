@@ -121,10 +121,12 @@ question and derives everything else itself.
     reused verbatim. The nanobind rod is nearly a copy of the pybind11 one
     (same class-handle model, sharing the Python docstring styles); the two Lua
     rods implement the same primitives against their frameworks. And a rod
-    doesn't have to emit *bindings*: the build-time **luacats** and
-    **trampolines** rods drive the very same carriage but write text — a LuaCATS
-    `---@meta` stub, or the Python virtual-override trampoline header. See the
-    [Languages](backends/index.md) section for each rod.
+    doesn't have to emit *bindings*: the build-time **luacats**,
+    **trampolines**, and **opaque-containers** rods drive the very same carriage
+    but write text — a LuaCATS `---@meta` stub, the Python virtual-override
+    trampoline header, or the `WELDER_OPAQUE` declarations that bind Python
+    containers by reference. See the [Languages](backends/index.md) section for
+    each rod.
 
 ## Name & doc styles
 

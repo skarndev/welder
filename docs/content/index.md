@@ -360,6 +360,7 @@ weld it once.
     welder targets **C++26 and newer only**, and today **gcc-16 is the only
     compiler** that implements P2996 + P3394. Four runtime rods — **pybind11** and
     **nanobind** (Python), **sol2** and **LuaBridge3** (Lua) — are verified
-    end-to-end against the *same* shared C++ cases, plus two build-time rods
-    (the **LuaCATS** stub and the Python **trampoline** generators). Further
-    languages are designed-for but not yet implemented.
+    end-to-end against the *same* shared C++ cases, plus three build-time rods
+    (the **LuaCATS** stub, the Python **trampoline**, and the Python
+    **opaque-container** generators). Further languages are designed-for but not
+    yet implemented.

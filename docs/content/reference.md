@@ -30,7 +30,7 @@ docs come through, and themed to match this site.
 | The **pybind11 rod** | `rods/python/pybind11/rod.hpp` (`welder::rods::pybind11::rod<>`) |
 | The **nanobind rod** | `rods/python/nanobind/rod.hpp` (`welder::rods::nanobind::rod<>`) |
 | The **Lua rods** | `rods/lua/sol2/rod.hpp` (`welder::rods::sol2::rod`) / `rods/lua/luabridge/rod.hpp` (`welder::rods::luabridge::rod`) |
-| The **build-time rods** | `rods/lua/luacats/rod.hpp` (the `---@meta` stub emitter) / `rods/python/trampolines/rod.hpp` (the trampoline generator) |
+| The **build-time rods** | `rods/lua/luacats/rod.hpp` (the `---@meta` stub emitter) / `rods/python/trampolines/rod.hpp` (the trampoline generator) / `rods/python/opaque_containers/rod.hpp` (the opaque-container generator) |
 | The shared **Python docstring styles** | `rods/python/doc_style.hpp` (`welder::rods::python::google_style`) |
 | The **name styles** | `naming.hpp` (`welder::naming::snake_case`, …) / `rods/python/naming.hpp` (`welder::rods::python::pep8`) |
 | Internal helpers (`detail/`) | included — `EXTRACT_PRIVATE` / `INTERNAL_DOCS` are on |

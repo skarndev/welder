@@ -3,8 +3,9 @@
 welder binds your annotated C++ to **Python** and **Lua** today. The piece that
 turns welder's reflection into a given framework's real registration calls is a
 **rod** (a welding rod) — Python has two (pybind11 and nanobind), Lua has two
-(sol2 and LuaBridge3), plus two build-time rods: one writes a Lua editor stub,
-one generates the Python virtual-override trampolines. The
+(sol2 and LuaBridge3), plus three build-time rods: one writes a Lua editor stub,
+one generates the Python virtual-override trampolines, and one generates the
+declarations that bind Python containers by reference. The
 [guide](../guide/index.md) is deliberately rod-agnostic — the annotations, the
 resolution rule, inheritance, and the bindability gate are all shared core. This
 section covers what changes *per rod*: the exact `weld_type` call, the framework it
@@ -23,15 +24,19 @@ point `welder::welder<Rod>`:
 | **luabridge** | `welder::rods::luabridge::rod` | Lua | [LuaBridge3](https://github.com/kunitoki/LuaBridge3) | `luaopen_<name>` |
 | **luacats** | `welder::rods::luacats::rod` | *(build-time)* | LuaCATS `---@meta` stub | — |
 | **trampolines** | `welder::rods::trampolines::rod` | *(build-time)* | Python trampoline `.hpp` (pybind11 & nanobind) | — |
+| **opaque-containers** | `welder::rods::opaque_containers::rod` | *(build-time)* | Python `WELDER_OPAQUE` + alias `.hpp` (pybind11 & nanobind) | — |
 
 The first four are **runtime** rods: each emits registration code so an
-importable/`require`-able module exists at run time. The last two are
+importable/`require`-able module exists at run time. The last three are
 **build-time** rods over the same driver: `welder::rods::luacats::rod` walks the
 welded Lua types and writes a [LuaCATS stub file](lua.md#stubs-luacats) instead of
 runtime code (the Lua analogue of Python's `.pyi` stubs);
 `welder::rods::trampolines::rod` walks the welded *virtual* Python types and
 [generates their trampoline subclasses](../guide/inheritance.md#generating-trampolines-automatically)
-as a backend-neutral header that either Python rod compiles.
+as a backend-neutral header that either Python rod compiles; and
+`welder::rods::opaque_containers::rod` walks the welded types and generates the
+`WELDER_OPAQUE` declarations + aliases that bind their `std::vector`/`std::map`
+members [by reference](../guide/containers.md) (again, one header for both Python rods).
 
 All of them plug into the *same* core:
 `welder::welder<Rod>::weld_type<T>(m)`, `weld_namespace<^^ns>(m)`, and the

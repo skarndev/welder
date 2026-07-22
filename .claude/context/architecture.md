@@ -50,6 +50,11 @@ src/welder/
       trampolines/rod.hpp      trampoline-GENERATOR rod: text-emitting welder::rod (welder::rods::trampolines::rod) over the SAME driver; emits ready-to-compile pybind11/nanobind trampoline subclasses for welded virtual types (only make_class emits; other hooks no-op); whole-header generate<^^Ns>(os)
       trampolines/module.hpp   the WELDER_TRAMPOLINES_MAIN generator-main() macro; include only for a trampoline-generator TU
       trampolines/document.hpp the emission core: render_trampoline (splices each virtual's reflected return/param types + WELDER_PY_OVERRIDE) + render_registration (trampoline_for spec) + the document; is_c_variadic hard-error (no P2996 ellipsis query)
+      array_interface.hpp   shared by both Python rods: the numpy __array_interface__ descriptor for an opaque std::vector of a POD struct — numpy_typestr (C++ arithmetic → typestr), pod_array_eligible<E>, ai_descr<^^E> (a std::array of define_static_string (name,typestr) pairs, with |V<n> void PADDING entries), ai_typestr. bind_container attaches the property; numpy-free (a plain attr)
+      opaque_containers/rod.hpp      opaque-container GENERATOR rod: text-emitting welder::rod (welder::rods::opaque_containers::rod) over the SAME driver; collects the reference containers welded types use and emits WELDER_OPAQUE decls + welded aliases (has_native_caster=true permissive gate; whole-header generate<^^Ns>(os))
+      opaque_containers/document.hpp the collector + emission core: derive_name / container_spelling (display_string_of) / element_ok / opaque_eligible + the document (deduped, sorted, #error on a name collision)
+      opaque_containers/module.hpp   the WELDER_OPAQUE_CONTAINERS_MAIN generator-main() macro
+      opaque_containers/marks.hpp    the by_value opt-out mark (welder::rods::python::by_value / marked_by_value), a light include for a user's type header (mirrors bind_flat)
     lua/
       metamethods.hpp       C++-operator → Lua metamethod NAME map shared by BOTH runtime Lua rods — welder::rods::lua::lua_metamethod_name (the asymmetric set: no __ne/__gt/__ge; ^→__bxor; 5.3-gated bitwise). sol2 pairs each name with its sol::meta_function slot; luabridge registers by the name string directly.
       sol2/rod.hpp          sol2 Lua rod: struct welder::rods::sol2::rod (emission primitives + protected _ helpers: constructor-set gathering, welded-base closure, overload registration), against sol2's API (module_type = sol::table; usertype/new_usertype; enums as name→value tables)
@@ -69,6 +74,7 @@ cmake/
   WelderLuaBridgeModule.cmake  welder_luabridge_add_module() — same, for the LuaBridge3 rod (links welder::luabridge)
   WelderLuaCATSStub.cmake      welder_luacats_generate_stub() — build a generator exe (welder::luacats) + run it → <name>.lua (ALL target)
   WelderTrampolines.cmake      welder_generate_trampolines() — build a generator exe (welder::trampolines) + run it → <name>.trampolines.hpp (ALL target); the Python trampoline analogue of the LuaCATS stub helper
+  WelderOpaqueContainers.cmake welder_generate_opaque_containers() — build a generator exe (welder::opaque_containers) + run it → <name>.opaque.hpp (ALL target); the opaque-container analogue of the trampoline helper
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
