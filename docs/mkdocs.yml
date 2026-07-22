@@ -145,6 +145,7 @@ nav:
       - 07 One library, two languages: cookbook/multilang.md
       - 08 Tack welding: cookbook/tack-welding.md
       - 09 Custom traversal: cookbook/custom-traversal.md
+      - 10 Containers by reference: cookbook/containers.md
   - Languages:
       - backends/index.md
       - Python (pybind11 & nanobind): backends/python.md

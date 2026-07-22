@@ -28,6 +28,9 @@ loads the module and proves what bound.
 -   **[09 — Custom traversal](custom-traversal.md)** — subclass the tack
     resolution to honor a library's privacy convention: prune `detail`
     namespaces and `_underscore` internals.
+-   **[10 — Containers by reference](containers.md)** — bind `std::vector`
+    members opaquely (live mutation, zero-copy NumPy for scalars and POD
+    structs), with the generator emitting the boilerplate.
 
 </div>
 

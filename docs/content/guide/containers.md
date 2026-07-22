@@ -15,6 +15,13 @@ container **opaquely** — *by reference* — so mutation writes through, `push_
 shows up as `append`, and a vector of scalars or POD structs exposes its raw buffer to
 NumPy **zero-copy** (scalars as a typed array, POD structs as a structured one).
 
+!!! example "In the cookbook"
+
+    [Recipe 10 — Containers by reference](../cookbook/containers.md) is this page as a
+    runnable module: the generator emits the boilerplate, a `vector<Entity>` of a
+    welded class binds by reference, and a POD `vector<Vertex>` round-trips through a
+    structured NumPy array.
+
 !!! note "Python only"
 
     This is a Python-rod feature. The Lua runtimes (sol2, LuaBridge3) already give

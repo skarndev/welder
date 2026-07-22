@@ -38,3 +38,4 @@ preinstalled beyond gcc-16, CMake/Ninja, Python and (optionally) Lua.
 | `07-multilang` | one header → Python (nanobind) + Lua (sol2 **and** LuaBridge3, same checks): name styles, per-language `weld_as`, `mark::only` language flavors, `.pyi` + LuaCATS stubs |
 | `08-tack-welding` | greedily binding an unannotated third-party library (`tack_welding_carriage`) |
 | `09-custom-traversal` | a bespoke resolution: tack welding that prunes `detail` namespaces + `_underscore` internals |
+| `10-containers` | opaque, reference-semantic `std::vector` members via the generator: live mutation, `by_value` opt-out, zero-copy NumPy (scalars + POD-struct structured arrays) |
