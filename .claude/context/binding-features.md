@@ -835,7 +835,13 @@ places each correctly. Files: `src/welder/rods/python/opaque_containers/`
 (emits the neutral `WELDER_OPAQUE` + `weld(py)` aliases — one header serves both Python
 rods); `has_native_caster = true` (permissive gate, like trampolines). Model = BLANKET
 over welded types (all scalar containers) + `by_value` opt-out + DERIVED names
-(`vector<int>`→`VectorInt`; `::welder::naming::restyle(…, pascal)`). Type spelling =
+(`vector<int>`→`VectorInt`; `::welder::naming::restyle(…, pascal)`). `derive_name`
+RECURSES a non-container class-template-specialization element the same way it recurses
+containers — template name + each arg — so `vector<WMOGroup<ClientVersion{3,3,5,12340}>>`
+becomes `VectorWmoGroupClientVersion_3_3_5_12340`, NOT a garbage name keeping `< > :: { }`
+(the pre-fix bug); an NTTP (non-type) arg renders its `display_string_of`, and `add_one`
+runs `sanitize_ident` on the FINAL name (collapse non-`[A-Za-z0-9_]` runs, no leading
+digit) as the last-resort valid-identifier guarantee. Type spelling =
 `display_string_of(dealias(type))` (valid C++, infra args dropped, `std::string` →
 `std::__cxx11::basic_string<char>`). **Scalar OR top-level-welded-class/enum elements**
 (`opaque_eligible`/`element_ok`: every value arg is fundamental/`basic_string`, OR a

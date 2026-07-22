@@ -43,14 +43,51 @@ consteval std::size_t value_arg_count(std::meta::info type) {
     return ::welder::container_kind_of(type) == ::welder::container_kind::map ? 2u : 1u;
 }
 
-/** A readable PascalCase identifier for container @a type: the template name plus
-    each value argument's name, recursing — `vector<int>` → `VectorInt`,
-    `map<string,int>` → `MapStringInt`, `unordered_map<int,double>` →
-    `UnorderedMapIntDouble`, nested `map<string,vector<int>>` → `MapStringVectorInt`.
-    `std::string` folds to `String`; a scalar / welded class uses its (PascalCased)
-    identifier. Reuses `::welder::naming::restyle`. */
-consteval std::string derive_name(std::meta::info type) {
-    type = std::meta::dealias(type);
+/** Reduce @a s to a valid C++ identifier: keep `[A-Za-z0-9_]`, collapse every other
+    run to a single `_` (dropping leading/trailing ones), and prefix `_` if it would
+    start with a digit. The generator's last-resort guarantee that no input — however
+    exotic its `display_string_of` — can produce an uncompilable alias name. */
+consteval std::string sanitize_ident(std::string s) {
+    std::string out{};
+    bool pending_sep{false};
+    for (char c : s) {
+        const bool ok{(c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+                      (c >= '0' && c <= '9') || c == '_'};
+        if (ok) {
+            if (pending_sep && !out.empty())
+                out += '_';
+            out += c;
+            pending_sep = false;
+        } else {
+            pending_sep = true; // collapse a run of non-identifier chars into one '_'
+        }
+    }
+    if (out.empty())
+        out = "T";
+    if (out[0] >= '0' && out[0] <= '9')
+        out.insert(out.begin(), '_');
+    return out;
+}
+
+/** A readable, **valid** PascalCase identifier for container/element @a arg — the
+    template name plus each argument's name, recursing — `vector<int>` → `VectorInt`,
+    `map<string,int>` → `MapStringInt`, nested `map<string,vector<int>>` →
+    `MapStringVectorInt`. `std::string` folds to `String`; a scalar / plain welded class
+    uses its (PascalCased) identifier.
+
+    A container element that is itself a **class-template specialization** (e.g.
+    `WMOGroup<ClientVersion{3,3,5,12340}>`) recurses the SAME way — the template name
+    plus each argument — so it never falls to `display_string_of`, which would keep
+    `:: < > { } ,`. A **non-type (NTTP) argument** renders its value as a sanitized
+    identifier token. The caller (@ref document::add_one) sanitizes the final string as
+    a safety net, so no input can yield a non-identifier. Reuses
+    `::welder::naming::restyle`. */
+consteval std::string derive_name(std::meta::info arg) {
+    // A non-type (NTTP) template argument is a value, not a type — render its display
+    // (e.g. `ClientVersion{3,3,5,12340}`); the caller's final sanitize legalizes it.
+    if (!std::meta::is_type(arg))
+        return std::string{std::meta::display_string_of(arg)};
+    const std::meta::info type{std::meta::dealias(arg)};
     // std::string (and wstring, …) is basic_string<Char, …> — fold to a clean word.
     if (std::meta::has_template_arguments(type) &&
         std::meta::template_of(type) == ^^std::basic_string)
@@ -64,6 +101,19 @@ consteval std::string derive_name(std::meta::info type) {
             out += derive_name(args[i]);
         return out;
     }
+    // Any OTHER class-template specialization: recurse structurally over ALL its
+    // arguments (template name + each arg), so an NTTP / nested specialization reduces
+    // to identifier tokens rather than a raw template-id spelling.
+    if (std::meta::has_template_arguments(type)) {
+        std::string out{::welder::naming::restyle(
+            std::string{std::meta::identifier_of(std::meta::template_of(type))},
+            ::welder::naming::case_kind::pascal)};
+        for (const std::meta::info a : std::meta::template_arguments_of(type))
+            out += derive_name(a);
+        return out;
+    }
+    // A plain type: its identifier (PascalCased), or its display for an unnameable one
+    // (the caller's final sanitize legalizes either).
     const std::string id{std::meta::has_identifier(type)
                              ? std::string{std::meta::identifier_of(type)}
                              : std::string{std::meta::display_string_of(type)}};
@@ -173,7 +223,9 @@ struct document {
     template <std::meta::info C>
     void add_one(bool excluded) {
         const char* sp{std::define_static_string(container_spelling(C))};
-        const char* nm{std::define_static_string(derive_name(C))};
+        // sanitize_ident is the safety net: derive_name's structural branches are
+        // already clean, but this guarantees a valid identifier for any input.
+        const char* nm{std::define_static_string(sanitize_ident(derive_name(C)))};
         for (entry& e : entries)
             if (e.spelling == sp) {
                 e.excluded = e.excluded || excluded;

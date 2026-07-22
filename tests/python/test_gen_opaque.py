@@ -28,8 +28,19 @@ def test_generated_aliases_exist(go: ModuleType) -> None:
     assert hasattr(go, "VectorDouble")
     # a welded-CLASS element container is opened too (two-phase name pre-registration)
     assert hasattr(go, "VectorReading")
+    # a class-TEMPLATE element (Layer<0>, an NTTP arg) gets a valid derived name — this
+    # used to be invalid C++ (a name with '<' '>' '::')
+    assert hasattr(go, "VectorLayer0")
     # vector<int> was opted out with by_value, so no wrapper was generated for it
     assert not hasattr(go, "VectorInt")
+
+
+def test_template_instantiation_element_binds_opaque(go: ModuleType) -> None:
+    s = go.Series()
+    assert isinstance(s.tiers, go.VectorLayer0)  # opaque, not a list
+    s.tiers.append(go.Layer0())
+    s.tiers.append(go.Layer0())
+    assert len(s.tiers) == 2  # append is push_back on the live C++ vector
 
 
 def test_member_is_opaque_and_writes_through(go: ModuleType) -> None:

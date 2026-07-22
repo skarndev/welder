@@ -36,9 +36,20 @@ struct [[=welder::weld(welder::lang::py)]] Reading {
     Reading(double v) : value{v} {}
 };
 
+// A welded class TEMPLATE, its instantiation welded (and named) through an alias — a
+// std::vector of it exercises derive_name for a class-template-specialization element
+// with an NTTP argument. This used to produce an INVALID alias name (keeping `< > ::`);
+// it must now be a valid identifier (VectorLayer0) and bind.
+template <int N>
+struct [[=welder::weld(welder::lang::py)]] Layer {
+    int depth{N};
+};
+using Layer0 [[=welder::weld(welder::lang::py)]] = Layer<0>;
+
 struct [[=welder::weld(welder::lang::py)]] Series {
     std::vector<double> points{};              // auto opaque -> VectorDouble (buffer)
     std::vector<Reading> readings{};           // auto opaque -> VectorReading (class elem)
+    std::vector<Layer<0>> tiers{};             // NTTP-template element -> VectorLayer0
     // opt-out: stays a plain list[int], no WELDER_OPAQUE emitted for vector<int>
     [[=welder::rods::python::by_value]] std::vector<int> raw{};
 };

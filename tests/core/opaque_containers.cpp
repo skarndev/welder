@@ -30,6 +30,37 @@ static_assert(eq(oc::derive_name(^^std::unordered_map<int, double>),
                  "UnorderedMapIntDouble"));
 static_assert(eq(oc::derive_name(^^std::vector<std::string>), "VectorString"));
 
+// --- names for class-template-specialization elements (NTTP args) ------------
+// These previously fell to display_string_of and produced INVALID C++ (a name with
+// '::' '<' '>' '{' '}' ','); they must now be valid readable identifiers. The final
+// add_one sanitize is the guarantee, so assert on sanitize_ident(derive_name(...)).
+template <int N> struct Cell {};
+static_assert(eq(oc::sanitize_ident(oc::derive_name(^^std::vector<Cell<1>>)),
+                 "VectorCell1"));
+static_assert(eq(oc::sanitize_ident(oc::derive_name(^^std::map<int, Cell<7>>)),
+                 "MapIntCell7"));
+struct Ver { int a, b, c, d; };            // structural -> usable as an NTTP
+template <Ver V> struct Grp {};
+// exact spelling of the value part is compiler-specific; assert it is a valid, unique
+// identifier (no non-identifier char, no leading digit) — the safety-net contract.
+consteval bool valid_ident(std::string s) {
+    if (s.empty() || (s[0] >= '0' && s[0] <= '9'))
+        return false;
+    for (char c : s)
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+              (c >= '0' && c <= '9') || c == '_'))
+            return false;
+    return true;
+}
+static_assert(valid_ident(
+    oc::sanitize_ident(oc::derive_name(^^std::vector<Grp<Ver{3, 3, 5, 12340}>>))));
+
+// --- sanitize_ident: the last-resort identifier guarantee --------------------
+static_assert(eq(oc::sanitize_ident("VectorInt"), "VectorInt"));       // clean pass-through
+static_assert(eq(oc::sanitize_ident("a::b<c>{1, 2}"), "a_b_c_1_2"));   // collapse runs
+static_assert(eq(oc::sanitize_ident("123abc"), "_123abc"));           // leading digit
+static_assert(eq(oc::sanitize_ident("<<>>"), "T"));                   // all junk -> T
+
 // --- C++ spellings (allocator/comparator dropped; std::string is __cxx11 form) ---
 static_assert(eq(oc::container_spelling(^^std::vector<int>), "std::vector<int>"));
 static_assert(eq(oc::container_spelling(^^std::map<std::string, int>),
