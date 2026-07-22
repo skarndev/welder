@@ -69,3 +69,17 @@ def test_class_element_container_from_a_signature(go: ModuleType) -> None:
     assert len(readings) == 3
     assert [r.value for r in readings] == pytest.approx([0.0, 1.0, 2.0])
     assert all(isinstance(r, go.Reading) for r in readings)
+
+
+def test_pod_element_gets_numpy_structured_view(go: ModuleType) -> None:
+    # Reading { double value; } is a POD struct, so its opaque vector also exposes a
+    # numpy-free structured array view (via __array_interface__).
+    np = pytest.importorskip("numpy")
+    s = go.Series()
+    s.readings.append(go.Reading(1.5))
+    s.readings.append(go.Reading(2.5))
+    a = np.asarray(s.readings)
+    assert a.dtype.names == ("value",)
+    assert not a.flags["OWNDATA"]  # zero-copy
+    a[0]["value"] = 9.0  # write through
+    assert s.readings[0].value == pytest.approx(9.0)

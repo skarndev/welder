@@ -45,6 +45,7 @@
 #include <pybind11/stl_bind.h>    // py::bind_vector / py::bind_map (opaque containers)
 
 #include <welder/containers.hpp>  // container_kind_of (bind_vector vs bind_map)
+#include <welder/rods/python/array_interface.hpp> // numpy __array_interface__ for POD vectors
 
 /** Declare a container type **opaque** so pybind11 binds it by reference (via
     `weld`-an-alias + `bind_vector`/`bind_map`) instead of copy-converting it through
@@ -1034,16 +1035,50 @@ struct rod {
                       ::welder::container_kind::sequence) {
             using Elem = typename Container::value_type;
             if constexpr (::welder::container_is_contiguous(^^Container) &&
-                          std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>)
+                          std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
                 // Contiguous scalar buffer: expose the buffer protocol so
                 // numpy/memoryview/ctypes view data() zero-copy.
                 py::bind_vector<Container>(m, name, py::buffer_protocol());
-            else
+            } else if constexpr (::welder::container_is_contiguous(^^Container) &&
+                                 ::welder::rods::python::pod_array_eligible<Elem>()) {
+                // Contiguous POD-struct buffer: no scalar dtype, so expose the numpy
+                // array-interface protocol (a structured, zero-copy, numpy-free view).
+                auto cls{py::bind_vector<Container>(m, name)};
+                _array_interface<Container, Elem>(cls);
+            } else {
                 py::bind_vector<Container>(m, name);
+            }
         } else {
             py::bind_map<Container>(m, name);
         }
     }
+
+  protected:
+    /** Give the opaque `std::vector<Elem>` class @a cls a `__array_interface__`
+        property — the numpy array-interface dict (`numpy.asarray(v)` reads it),
+        yielding a **structured, zero-copy, writable** view of `data()`. numpy-free
+        (a plain Python attribute); the field `descr` is reflected from @a Elem's POD
+        layout (@ref welder::rods::python::ai_descr). @tparam Elem the POD element. */
+    template <class Container, class Elem, class Cls>
+    static void _array_interface(Cls& cls) {
+        namespace pyai = ::welder::rods::python;
+        cls.def_property_readonly("__array_interface__", [](Container& v) {
+            static constexpr auto d{pyai::ai_descr<^^Elem>()};
+            py::list descr{};
+            for (auto [nm, ts] : d)
+                descr.append(py::make_tuple(nm, ts));
+            py::dict out{};
+            out["shape"] = py::make_tuple(v.size());
+            out["typestr"] = pyai::ai_typestr<Elem>();
+            out["descr"] = descr;
+            out["data"] = py::make_tuple(
+                reinterpret_cast<std::uintptr_t>(v.data()), false);
+            out["version"] = 3;
+            return out;
+        });
+    }
+
+  public:
 
     /** Close the session: apply any accumulated live properties. @see welder::rod */
     static void close_module(module_type& m, py::dict& live) {

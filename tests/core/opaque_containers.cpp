@@ -10,9 +10,11 @@
 #include <vector>
 
 #include <welder/vocabulary.hpp>
+#include <welder/rods/python/array_interface.hpp>
 #include <welder/rods/python/opaque_containers/document.hpp>
 
 namespace oc = welder::rods::opaque_containers;
+namespace ai = welder::rods::python;
 
 namespace {
 
@@ -48,5 +50,25 @@ struct [[=welder::weld(welder::lang::py)]] Host { struct [[=welder::weld(welder:
 static_assert(!oc::opaque_eligible(^^std::vector<Host::Inner>));
 // a nested CONTAINER element is unsafe (inner is a phase-2 binding, not a name)
 static_assert(!oc::opaque_eligible(^^std::map<std::string, std::vector<int>>));
+
+// --- numpy array-interface: C++->typestr map + POD-struct eligibility --------
+static_assert(eq(ai::numpy_typestr(^^float), "<f4"));
+static_assert(eq(ai::numpy_typestr(^^double), "<f8"));
+static_assert(eq(ai::numpy_typestr(^^bool), "|b1"));
+static_assert(eq(ai::numpy_typestr(^^int), "<i4"));
+static_assert(eq(ai::numpy_typestr(^^unsigned char), "|u1"));
+static_assert(eq(ai::numpy_typestr(^^long long), "<i8"));
+static_assert(eq(ai::numpy_typestr(^^long double), ""));    // no portable dtype
+static_assert(eq(ai::numpy_typestr(^^std::string), ""));    // non-arithmetic
+struct Vec3 { float x, y, z; };
+static_assert(ai::pod_array_eligible<Vec3>());              // POD of arithmetic fields
+static_assert(ai::ai_entry_count(^^Vec3) == 3);            // packed: 3 fields, no pad
+struct Padded { double d; int i; };                        // {double@0, int@8}, size 16
+static_assert(ai::ai_entry_count(^^Padded) == 3);          // d, i, trailing pad(4)
+static_assert(!ai::pod_array_eligible<double>());          // a scalar is not a class
+struct HasStr { double x; std::string s; };
+static_assert(!ai::pod_array_eligible<HasStr>());          // non-arithmetic field
+struct HasPtr { double x; int* p; };
+static_assert(!ai::pod_array_eligible<HasPtr>());          // pointer field (not numpy)
 
 } // namespace

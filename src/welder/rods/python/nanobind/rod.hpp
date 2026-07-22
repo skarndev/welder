@@ -53,6 +53,7 @@
 #include <nanobind/stl/bind_map.h>       // nb::bind_map (opaque maps)
 
 #include <welder/containers.hpp>         // container_kind_of (bind_vector vs bind_map)
+#include <welder/rods/python/array_interface.hpp> // numpy __array_interface__ for POD vectors
 
 /** Declare a container type **opaque** so nanobind binds it by reference (via
     `weld`-an-alias + `bind_vector`/`bind_map`) instead of copy-converting it through
@@ -982,10 +983,39 @@ struct rod {
                     },
                     nb::arg("dtype") = nb::none(),
                     nb::arg("copy") = nb::none());
+            } else if constexpr (::welder::container_is_contiguous(^^Container) &&
+                                 ::welder::rods::python::pod_array_eligible<Elem>()) {
+                // Contiguous POD-struct element: expose the numpy array-interface
+                // protocol (structured, zero-copy, numpy-free view of data()).
+                _array_interface<Container, Elem>(cls);
             }
         } else {
             nb::bind_map<Container>(m, name);
         }
+    }
+
+    /** Give the opaque `std::vector<Elem>` class @a cls a `__array_interface__`
+        property — the numpy array-interface dict (`numpy.asarray(v)` reads it),
+        a **structured, zero-copy, writable** view of `data()`, numpy-free (a plain
+        Python attribute); the field `descr` is reflected from @a Elem's POD layout
+        (@ref welder::rods::python::ai_descr). */
+    template <class Container, class Elem, class Cls>
+    static void _array_interface(Cls& cls) {
+        namespace pyai = ::welder::rods::python;
+        cls.def_prop_ro("__array_interface__", [](Container& v) {
+            static constexpr auto d{pyai::ai_descr<^^Elem>()};
+            nb::list descr{};
+            for (auto [nm, ts] : d)
+                descr.append(nb::make_tuple(nm, ts));
+            nb::dict out{};
+            out["shape"] = nb::make_tuple(v.size());
+            out["typestr"] = pyai::ai_typestr<Elem>();
+            out["descr"] = descr;
+            out["data"] = nb::make_tuple(
+                reinterpret_cast<std::uintptr_t>(v.data()), false);
+            out["version"] = 3;
+            return out;
+        });
     }
 
     /** Close the session: apply any accumulated live properties. @see welder::rod */

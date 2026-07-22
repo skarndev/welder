@@ -12,7 +12,8 @@ obj.values.append(1)  # mutates the throwaway copy — the C++ vector is unchang
 
 For a dynamic container that is rarely what you want. welder can instead bind a
 container **opaquely** — *by reference* — so mutation writes through, `push_back`
-shows up as `append`, and a scalar vector exposes its raw buffer to NumPy **zero-copy**.
+shows up as `append`, and a vector of scalars or POD structs exposes its raw buffer to
+NumPy **zero-copy** (scalars as a typed array, POD structs as a structured one).
 
 !!! note "Python only"
 
@@ -88,6 +89,24 @@ a[0] = 7                 # writes straight into the C++ vector
 `memoryview(h.bins)` and `ctypes` (`(ctypes.c_int * len(h.bins)).from_buffer(h.bins)`)
 work the same way. This is the safe, idiomatic route to the raw pointer — a NumPy view
 tracks reallocation on the next `asarray`, where a stored raw address would dangle.
+
+#### POD structs → structured arrays
+
+A `std::vector` of a **plain-old-data struct** (trivially-copyable, standard-layout,
+all-arithmetic fields — `struct Vec3 { float x, y, z; }`) is exposed as a NumPy
+**structured** array, again zero-copy and writable:
+
+```python
+a = np.asarray(mesh.vertices)   # dtype [('x','<f4'),('y','<f4'),('z','<f4')], a view
+a[0]['x'] = 1.5                 # writes straight into the C++ struct
+```
+
+welder reflects the struct's fields (names, types, offsets — padding included) and
+serves NumPy the layout through the `__array_interface__` protocol — a plain attribute,
+so this needs **no NumPy at build or import time**, and works identically on both Python
+rods. It fires automatically for any POD-struct element; a type with a vtable (a
+virtual/overridable type), a `std::string`, or a pointer isn't trivially copyable, so it
+simply gets no array view (there's no meaningful one).
 
 ## Generating the boilerplate
 

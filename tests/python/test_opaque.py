@@ -68,7 +68,7 @@ def test_numpy_zero_copy(op: ModuleType) -> None:
     assert s.samples[0] == pytest.approx(7.0)
 
 
-# --- bind_vector with a welded CLASS element (no buffer view) -----------------
+# --- bind_vector with a welded CLASS element ---------------------------------
 def test_vector_of_welded_class(op: ModuleType) -> None:
     pts = op.PointList()
     pts.append(op.Point2D(3.0, 4.0))
@@ -80,9 +80,23 @@ def test_vector_of_welded_class(op: ModuleType) -> None:
     # container-level protocol below is what welder guarantees)
     assert pts[0].x == pytest.approx(3.0)
     assert pts[1].y == pytest.approx(6.0)
-    # a non-arithmetic element type carries no buffer protocol
+    # a class element has no scalar buffer protocol (memoryview needs one)
     with pytest.raises((TypeError, BufferError)):
         memoryview(pts)
+
+
+# --- numpy structured view of a POD-struct-element vector (numpy-free) --------
+def test_pod_struct_numpy_structured_view(op: ModuleType) -> None:
+    np = pytest.importorskip("numpy")
+    pts = op.PointList()  # Point2D { double x, y; } — a POD struct
+    pts.append(op.Point2D(1.0, 2.0))
+    pts.append(op.Point2D(3.0, 4.0))
+    a = np.asarray(pts)  # reads __array_interface__ — no numpy at build/import
+    assert a.dtype.names == ("x", "y")  # reflected structured dtype
+    assert not a.flags["OWNDATA"]  # zero-copy view
+    assert a[0]["x"] == pytest.approx(1.0) and a[1]["y"] == pytest.approx(4.0)
+    a[1]["x"] = 99.0  # writes through the shared buffer
+    assert pts[1].x == pytest.approx(99.0)
 
 
 # --- bind_map: std::map / std::unordered_map ---------------------------------

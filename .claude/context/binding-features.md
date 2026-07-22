@@ -761,6 +761,17 @@ live reference, so `obj.v.append(x)` persists — NO change to `add_field`), `ap
 exposes `data()` ZERO-COPY (pybind11 `py::buffer_protocol()` → `numpy.asarray`/
 `memoryview`/`ctypes.from_buffer`; nanobind has no buffer protocol so `bind_container`
 adds an `__array__` returning an `nb::ndarray` view, kept alive via `nb::find(&v)`).
+A `std::vector` of a **POD struct** (trivially-copyable + standard-layout +
+all-arithmetic fields) instead gets a `__array_interface__` property →
+`numpy.asarray(v)` is a STRUCTURED, zero-copy, writable array. numpy-free (a plain
+Python attr — NOT `PYBIND11_NUMPY_DTYPE`, which needs `<pybind11/numpy.h>` and does not
+compile under gcc-16 reflection) and identical on both rods. The field `descr` (name +
+numpy typestr, with `|V<n>` void PADDING entries for interior/trailing gaps) is
+reflected from the struct (`src/welder/rods/python/array_interface.hpp`: `numpy_typestr`,
+`pod_array_eligible<E>`, `ai_descr<^^E>` — a `std::array` of `define_static_string`
+`(name,typestr)` pairs, iterated at runtime; `offset_of(m).bytes`/`size_of` give the
+layout). Fires automatically for any opaque POD-struct vector (hand-written or
+generated) — vtable'd/string/pointer types are not trivially copyable, so no view.
 **Scope** = exactly the frameworks' opaque binders: `bind_vector` → `std::vector`
 (pybind11's `bind_vector` calls `.reserve()`/`.data()`, so `std::deque` does NOT
 qualify — dropped); `bind_map` → `std::map`/`std::unordered_map`. The table +

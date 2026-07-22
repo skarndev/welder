@@ -171,8 +171,10 @@ alias whose target is a **reference-semantic STL container** (`std::vector`,
 the Python rods' `bind_container` hook (`py::bind_vector`/`bind_map`,
 `nb::bind_vector`/`bind_map`), binding the container **opaque / by reference** rather
 than the default `<pybind11/stl.h>` copy: `obj.v.append(x)` writes through, and a
-scalar `std::vector` exposes `data()` zero-copy to numpy (pybind11 `buffer_protocol`,
-nanobind `nb::ndarray`). Requires `WELDER_OPAQUE(T)` (each Python rod's
+`std::vector` of scalars or **POD structs** exposes `data()` zero-copy to numpy — a
+scalar vector via the buffer protocol (pybind11) / `nb::ndarray` (nanobind), a
+POD-struct vector via a reflected, numpy-free `__array_interface__` (a STRUCTURED
+array; `src/welder/rods/python/array_interface.hpp`). Requires `WELDER_OPAQUE(T)` (each Python rod's
 `PYBIND11_MAKE_OPAQUE`/`NB_MAKE_OPAQUE`) at namespace scope; Python-only (a container
 alias for a Lua rod is a designed `static_assert` — the Lua runtimes are reference-
 semantic structurally). The `WELDER_OPAQUE` + alias boilerplate can be **auto-emitted**
