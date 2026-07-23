@@ -118,9 +118,9 @@ once.
 - **No codegen step.** The bindings *are* the compile. welder reads reflection +
   annotations in-process — no `.i` files, no generator to run, no parser to keep in
   sync with your headers.
-- **A tiny vocabulary.** `weld`, `policy`, `mark`, `doc`, `returns`, `tparam`,
-  `weld_as`. Say what binds and to which languages; welder resolves the rest at
-  compile time.
+- **A tiny vocabulary.** `weld`, `policy`, `mark`, `getter`/`setter`, `doc`,
+  `returns`, `tparam`, `weld_as`, `return_policy`, `keep_alive`. Say what binds and
+  to which languages; welder resolves the rest at compile time.
 - **One annotation, several audiences.** A `doc` becomes the Python `__doc__`, the
   Lua LuaCATS stub, *and* — via a Doxygen filter — the C++ reference. Write it once.
 - **Idiomatic names per language.** An injectable name-style transformer coerces
@@ -141,18 +141,14 @@ lowest-common-denominator API.
 - **gcc-16 only** today — the sole compiler implementing P2996 + P3394. The C++20
   `import welder;` wrapper is deferred until the gcc-16 reflection/modules
   conflicts are fixed ([why](https://skarndev.github.io/welder/header-only/)).
-- **Member operators** bind; free (non-member) operators don't yet.
-- **Properties** (getter/setter pairs) are designed-for, not yet implemented.
-- No per-function **ownership / return-value-policy control** yet — exclude such a
-  member and hand-bind it beside welder (welder composes with manual binding code).
+- **Some operators stay unmapped:** hidden friends are invisible to P2996 (move
+  them to namespace scope or bind by hand), and compound assignment (`+=`), `&&`,
+  `||`, `++`, `--`, and `operator=` have no target-language slot.
 - Backend-inherited gaps: [nanobind] is single-base-only; [LuaBridge3] rejects
   virtual base classes (use [sol2] for virtual diamonds); [LuaCATS] stubs can't
   type comparison/subscript metamethods (they still work at runtime).
-
-Planned next, roughly in order: properties, free operators, richer
-ownership/lifetime annotations, and the module wrapper once toolchains allow.
-Further language rods are where the architecture invites community
-contributions — adding a language is one rod struct.
+- Further language rods are where the architecture invites community contributions — adding a
+runtime-registration language is one rod struct.
 
 ## Quick start
 
