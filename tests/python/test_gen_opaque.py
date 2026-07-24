@@ -58,6 +58,23 @@ def test_member_is_opaque_and_writes_through(go: ModuleType) -> None:
     assert go.sum_points(s) == pytest.approx(13.0)
 
 
+def test_nested_container_member_is_opaque_both_levels(go: ModuleType) -> None:
+    # vector<vector<double>>: the generator opened BOTH levels — the member is the
+    # outer wrapper and each row is a live inner wrapper, so mutation through either
+    # level reaches the C++ object.
+    s = go.Series()
+    assert hasattr(go, "VectorVectorDouble")
+    assert isinstance(s.grid, go.VectorVectorDouble)
+    s.grid.append(go.VectorDouble())
+    row = s.grid[0]
+    assert isinstance(row, go.VectorDouble)
+    row.append(2.0)
+    row.append(3.0)
+    assert go.sum_grid(s) == pytest.approx(5.0)  # reached the C++ rows
+    s.grid[0][0] = 10.0
+    assert go.sum_grid(s) == pytest.approx(13.0)
+
+
 def test_by_value_member_stays_a_list(go: ModuleType) -> None:
     s = go.Series()
     assert isinstance(s.raw, list)  # opted out of the generator -> plain list[int]

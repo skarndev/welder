@@ -52,6 +52,9 @@ struct [[=welder::weld(welder::lang::py)]] Series {
     std::vector<double> points{};              // auto opaque -> VectorDouble (buffer)
     std::vector<Reading> readings{};           // auto opaque -> VectorGenOpaqueReading
     std::vector<Layer<0>> tiers{};             // NTTP-template elem -> VectorGenOpaqueLayer0
+    // a NESTED container member: the generator opens BOTH levels opaque
+    // (VectorVectorDouble whose elements are live VectorDouble wrappers)
+    std::vector<std::vector<double>> grid{};
     // opt-out: stays a plain list[int], no WELDER_OPAQUE emitted for vector<int>
     [[=welder::rods::python::by_value]] std::vector<int> raw{};
 };
@@ -68,6 +71,17 @@ std::vector<Reading> take(int n) {
     for (int i{0}; i < n; ++i)
         out.emplace_back(static_cast<double>(i));
     return out;
+}
+
+// Round-trip helper for the nested member: read the C++-side rows back after
+// Python mutates them through the opaque wrappers.
+[[=welder::weld(welder::lang::py)]]
+double sum_grid(const Series& s) {
+    double total{0.0};
+    for (const std::vector<double>& row : s.grid)
+        for (double x : row)
+            total += x;
+    return total;
 }
 
 // Round-trip helper: read the C++-side vector back after Python mutates it.

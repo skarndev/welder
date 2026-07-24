@@ -228,22 +228,26 @@ consteval bool scalar_leaf(std::meta::info t) {
            std::meta::template_of(t) == ^^std::basic_string;
 }
 
-/** Can the driver's PHASE 1 (name pre-registration) register @a t's name before
-    PHASE 2 binds the container that uses it — i.e. is @a t either a scalar leaf, or a
-    **top-level** welded class/enum (a `weld_namespace` sweep predeclares those names
-    first)?
+consteval bool opaque_eligible(std::meta::info type);
+
+/** Can element/key/value type @a t appear inside an opaque container — i.e. will its
+    name exist when the container binds? True for a scalar leaf, a **top-level** welded
+    class/enum (a `weld_namespace` sweep predeclares those names in PHASE 1), and a
+    **nested container** that is itself eligible — the generator opens the inner
+    container too (see @ref collect_into) and renders its alias FIRST (see @ref
+    document::render), so `vector<vector<int>>` binds as a `VectorVectorInt` whose
+    elements are live `VectorInt` wrappers.
 
     A NESTED (class-scoped) welded type is bound inside its enclosing class's interior
     in PHASE 3, after the containers, so it is NOT predeclared — a `vector<Outer::Inner>`
-    would spell `Inner`'s raw C++ name in the container's stub. A nested *container*
-    (`vector<vector<int>>`) is likewise unsafe (the inner container is a PHASE-2
-    binding, not a predeclared name). Both are excluded; hand-write their alias. */
+    would spell `Inner`'s raw C++ name in the container's stub. It stays excluded;
+    hand-write its alias. */
 consteval bool element_ok(std::meta::info t) {
     t = std::meta::dealias(t);
     if (scalar_leaf(t))
         return true;
-    if (is_reference_container(t)) // nested container — inner is not a predeclared name
-        return false;
+    if (is_reference_container(t)) // nested container: opened opaque alongside the outer
+        return opaque_eligible(t);
     if (std::meta::is_class_type(t) || std::meta::is_enum_type(t))
         // top-level (namespace-scoped) welded type => predeclared in phase 1
         // (is_namespace, not !is_class_type: is_class_type THROWS on a namespace)
@@ -252,11 +256,11 @@ consteval bool element_ok(std::meta::info t) {
     return false;
 }
 
-/** Is container @a type eligible for the generator — will PHASE 1 register every
-    element/key/value type's name before PHASE 2 binds it (see @ref element_ok)? The
-    generator opens scalar-element AND welded-class/enum-element containers (the common
-    `std::vector<Entity>` case); only nested-in-class element types and nested
-    containers are left by value. @pre @a type is a reference container. */
+/** Is container @a type eligible for the generator — will every element/key/value
+    type's name exist when it binds (see @ref element_ok)? The generator opens
+    scalar-element, welded-class/enum-element AND nested-container-element containers
+    (recursively — the whole nesting chain must be eligible); only nested-in-class
+    element types are left by value. @pre @a type is a reference container. */
 consteval bool opaque_eligible(std::meta::info type) {
     const auto args{std::meta::template_arguments_of(type)};
     for (std::size_t i{0}, n{value_arg_count(type)}; i < n; ++i)
@@ -265,15 +269,36 @@ consteval bool opaque_eligible(std::meta::info type) {
     return true;
 }
 
+/** How deeply container @a type nests further reference containers: 1 for
+    `vector<int>`, 2 for `vector<vector<int>>`, … Non-containers are 0. Drives the
+    render order — an inner container's alias must weld before the outer that names
+    it. */
+consteval std::size_t container_depth(std::meta::info type) {
+    const std::meta::info u{std::meta::dealias(type)};
+    if (!::welder::is_reference_container(u))
+        return 0;
+    std::size_t inner{0};
+    const auto args{std::meta::template_arguments_of(u)};
+    for (std::size_t i{0}, n{value_arg_count(u)}; i < n; ++i)
+        inner = std::max(inner, container_depth(args[i]));
+    return 1 + inner;
+}
+
 /** Append @a type's directly-named reference container when it is one and eligible
-    (see @ref opaque_eligible). cv/ref-stripped like the bindability gate; non-eligible
-    (welded-class-element or nested) containers, and non-container wrappers
-    (`optional`, `pair`), are left by value.
+    (see @ref opaque_eligible), then recurse into its element/key/value types — a
+    nested container is opened opaque alongside the outer (the outer's binding hands
+    out live references to it, so both must exist). cv/ref-stripped like the
+    bindability gate; non-eligible (nested-in-class-element) containers, and
+    non-container wrappers (`optional`, `pair`), are left by value.
     @param out the accumulator. @param type a surface (member/param/return) type. */
 consteval void collect_into(std::vector<std::meta::info>& out, std::meta::info type) {
     const std::meta::info u{std::meta::dealias(std::meta::remove_cvref(type))};
-    if (::welder::is_reference_container(u) && opaque_eligible(u))
+    if (::welder::is_reference_container(u) && opaque_eligible(u)) {
         out.push_back(u);
+        const auto args{std::meta::template_arguments_of(u)};
+        for (std::size_t i{0}, n{value_arg_count(u)}; i < n; ++i)
+            collect_into(out, args[i]);
+    }
 }
 
 /** The reference containers within surface type @a Type (a splice-ready static list
@@ -301,6 +326,10 @@ struct entry {
                                carriage hook carries no name style. A Style-aware name
                                refines an earlier unstyled one regardless of visit
                                order. */
+    std::size_t depth;    /**< container nesting depth (see @ref container_depth);
+                               shallower aliases render (and therefore weld) first, so
+                               an outer container's binding finds its inner wrapper
+                               already registered. */
 };
 
 /** The accumulator threaded through the rod's emission hooks: the deduped set of
@@ -321,6 +350,7 @@ struct document {
     void add_one(bool excluded, bool styled_site) {
         const char* sp{std::define_static_string(container_spelling(C))};
         const char* nm{std::define_static_string(opaque_name<Style, Enclosing, C, Site>())};
+        constexpr std::size_t depth{container_depth(C)};
         for (entry& e : entries)
             if (e.spelling == sp) {
                 e.excluded = e.excluded || excluded;
@@ -330,7 +360,7 @@ struct document {
                 }
                 return;
             }
-        entries.push_back({std::string{sp}, std::string{nm}, excluded, styled_site});
+        entries.push_back({std::string{sp}, std::string{nm}, excluded, styled_site, depth});
     }
 
     /** Collect every reference container within surface type @a SurfaceType (a data
@@ -367,13 +397,16 @@ struct document {
     }
 
     /** The finished, self-contained header text — `WELDER_OPAQUE(...)` at global
-        scope, the welded aliases inside `namespace @a ns`, entries sorted by name so
-        the output is deterministic. Two distinct container types deriving the same
-        name emit an `#error` (this generator version cannot rename them). */
+        scope, the welded aliases inside `namespace @a ns`, entries sorted by nesting
+        depth then name so the output is deterministic AND an inner container's alias
+        welds before the outer that hands out references to it. Two distinct container
+        types deriving the same name emit an `#error` (this generator version cannot
+        rename them). */
     std::string render(const std::string& ns) const {
         std::vector<entry> es{entries};
-        std::sort(es.begin(), es.end(),
-                  [](const entry& a, const entry& b) { return a.name < b.name; });
+        std::sort(es.begin(), es.end(), [](const entry& a, const entry& b) {
+            return a.name < b.name; // name-major first: the collision scan below
+        });
         for (std::size_t i{1}; i < es.size(); ++i)
             if (!es[i].excluded && !es[i - 1].excluded &&
                 es[i].name == es[i - 1].name &&
@@ -383,6 +416,9 @@ struct document {
                        es[i].name + "' (" + es[i - 1].spelling + " vs " +
                        es[i].spelling +
                        "); this generator cannot rename them automatically.\n";
+        std::sort(es.begin(), es.end(), [](const entry& a, const entry& b) {
+            return a.depth != b.depth ? a.depth < b.depth : a.name < b.name;
+        });
         std::string out{};
         out += "#pragma once\n";
         out += "// AUTO-GENERATED by welder (welder::rods::opaque_containers). Do not edit.\n";

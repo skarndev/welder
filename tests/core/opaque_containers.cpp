@@ -125,8 +125,18 @@ static_assert(!oc::opaque_eligible(^^std::vector<Plain>));
 // a nested-in-class welded type is NOT predeclared -> left by value
 struct [[=welder::weld(welder::lang::py)]] Host { struct [[=welder::weld(welder::lang::py)]] Inner {}; };
 static_assert(!oc::opaque_eligible(^^std::vector<Host::Inner>));
-// a nested CONTAINER element is unsafe (inner is a phase-2 binding, not a name)
-static_assert(!oc::opaque_eligible(^^std::map<std::string, std::vector<int>>));
+// a nested CONTAINER element is eligible when the inner is — the generator opens
+// the whole chain opaque (inner aliases render first)
+static_assert(oc::opaque_eligible(^^std::vector<std::vector<int>>));
+static_assert(oc::opaque_eligible(^^std::map<std::string, std::vector<int>>));
+static_assert(eq(oc::derive_name(^^std::vector<std::vector<int>>), "VectorVectorInt"));
+// ...but a chain broken by an ineligible inner element stays by value
+static_assert(!oc::opaque_eligible(^^std::vector<std::vector<Plain>>));
+// nesting depth drives the render (=weld) order: inner before outer
+static_assert(oc::container_depth(^^std::vector<int>) == 1);
+static_assert(oc::container_depth(^^std::vector<std::vector<int>>) == 2);
+static_assert(oc::container_depth(^^std::map<std::string, std::vector<int>>) == 2);
+static_assert(oc::container_depth(^^int) == 0);
 
 // --- numpy array-interface: C++->typestr map + POD-struct eligibility --------
 static_assert(eq(ai::numpy_typestr(^^float), "<f4"));
