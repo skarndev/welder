@@ -123,6 +123,45 @@ Anchored {
     int writable{0};
 };
 
+// --- welded-class NSDMI defaults bind LAZILY (shutdown-leak regression) ------
+// A defaultable field whose type is itself a welded class must NOT be stored
+// as a Python default object in the synthesized constructor's function record:
+// bound-class instances are not GC-traversable in nanobind (a plain instance
+// is not a GC object, so its implicit type reference is invisible), and a
+// CHAIN of such defaults becomes an uncollectable cycle reported as leaked
+// types/instances at interpreter shutdown. The Python rods therefore bind
+// such parameters as `Optional[F] = None` (signature `...`) and materialize
+// the NSDMI value in C++ when the argument is omitted or None. The chain
+// below nests welded defaults three deep — exactly the shape that leaked.
+// Python-only: the lazy spelling is a Python-rod concern.
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Corner {
+    float x{0.0F};
+};
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Span {
+    Corner lo{};
+    Corner hi{};
+};
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Region {
+    Span span{};
+    float pad{1.5F};
+};
+
+struct
+[[=welder::weld(welder::lang::py)]]
+Plot {
+    std::string title;
+    Region region{};
+};
+
 } // namespace methods
 
 inline void register_methods(WELDER_TEST_MODULE_T& m) {

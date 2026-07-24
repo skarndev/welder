@@ -135,3 +135,61 @@ def test_no_reassign_member(meth: ModuleType) -> None:
     with pytest.raises(AttributeError):
         a.pinned = 99
     assert a.pinned == 7
+
+
+# --- welded-class NSDMI defaults bind lazily (shutdown-leak regression) ------
+# A welded-class default is NOT stored as a Python object in the function
+# record (nanobind cannot GC-traverse bound instances, so nested default
+# chains leak at shutdown). The parameter binds `Optional[F] = None` and the
+# C++ side materializes the NSDMI value.
+def test_lazy_default_omission_materializes_nsdmi(meth: ModuleType) -> None:
+    p = meth.Plot("scatter")
+    assert p.title == "scatter"
+    assert (p.region.span.lo.x, p.region.span.hi.x) == (0.0, 0.0)
+    assert p.region.pad == 1.5
+
+
+def test_lazy_default_explicit_none_means_default(meth: ModuleType) -> None:
+    p = meth.Plot("scatter", None)
+    assert (p.region.span.lo.x, p.region.pad) == (0.0, 1.5)
+
+
+def test_lazy_default_explicit_value_applies(meth: ModuleType) -> None:
+    region = meth.Region(meth.Span(meth.Corner(1.0), meth.Corner(2.0)), 3.0)
+    p = meth.Plot("scatter", region)
+    assert (p.region.span.lo.x, p.region.span.hi.x) == (1.0, 2.0)
+    assert p.region.pad == 3.0
+
+
+def test_lazy_default_keyword_skips_earlier_lazy(meth: ModuleType) -> None:
+    # `span` (lazy) is skipped by keyword; the native `pad` default after a
+    # lazy field still binds as a real Python default.
+    r = meth.Region(pad=9.0)
+    assert (r.span.lo.x, r.pad) == (0.0, 9.0)
+    s = meth.Span(hi=meth.Corner(5.0))
+    assert (s.lo.x, s.hi.x) == (0.0, 5.0)
+
+
+def test_lazy_default_shutdown_reports_no_leaks(mod: ModuleType) -> None:
+    # Import the module in a fresh interpreter and let it exit: a rod that
+    # stores bound-class defaults in function records makes nanobind print
+    # "nanobind: leaked N types!" here. Trivially green under pybind11 (which
+    # prints no such report) — the semantics tests above cover both backends.
+    import os
+    import pathlib
+    import subprocess
+    import sys
+
+    assert mod.__file__ is not None
+    env = dict(os.environ)
+    moddir = str(pathlib.Path(mod.__file__).parent)
+    env["PYTHONPATH"] = moddir + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.run(
+        [sys.executable, "-c", f"import {mod.__name__}"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "leaked" not in proc.stderr, proc.stderr

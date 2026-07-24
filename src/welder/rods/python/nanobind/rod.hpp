@@ -50,6 +50,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>            // nb::ndarray (zero-copy numpy views)
 #include <nanobind/stl/bind_vector.h>    // nb::bind_vector (opaque sequences)
+#include <nanobind/stl/optional.h>       // lazy NSDMI defaults (Optional[F] = None)
 #include <nanobind/stl/bind_map.h>       // nb::bind_map (opaque maps)
 
 #include <welder/containers.hpp>         // container_kind_of (bind_vector vs bind_map)
@@ -287,31 +288,82 @@ struct rod {
         return out;
     }
 
-    /** The `nb::arg` for field @a I of aggregate @a T: named after the field and,
-        for the defaultable NSDMI suffix (see
-        @ref welder::detail::aggregate_defaults_from), carrying the field's NSDMI
-        value — read off the value-initialized @a probe — as a real keyword
-        default, so Python may omit it or skip past it by keyword.
+    /** Whether field @a I of aggregate @a T binds its NSDMI default LAZILY:
+        true for a defaultable field whose type needs class/enum registration.
+        Such a default must NOT live in the function record as a Python
+        object — a bound-class default holds its type through an edge the
+        garbage collector cannot traverse (a plain nanobind instance is not a
+        GC object, so its implicit type reference is invisible), and CHAINS
+        of such defaults (Sequence{Bounds{Box{Vector}}}) become uncollectable
+        cycles that nanobind reports as leaked types/instances at interpreter
+        shutdown (see nanobind's refleaks documentation). The synthesized
+        constructor takes std::optional<F> = None instead and materializes
+        the NSDMI value in C++ when the argument is omitted. */
+    template <class T, std::size_t I>
+    static consteval bool _lazy_default() {
+        if constexpr (I >= ::welder::detail::aggregate_defaults_from<T>()) {
+            using field_type = std::remove_const_t<
+                typename [:std::meta::type_of(::welder::detail::aggregate_fields<T>()[I]):]>;
+            return !has_native_caster<field_type>;
+        } else {
+            return false;
+        }
+    }
+
+    /** The synthesized field constructor's parameter type for field @a I of
+        @a T: the field type itself, or std::optional of it for a lazy
+        default (see @ref _lazy_default). */
+    template <class T, std::size_t I>
+    using _init_param = std::conditional_t<
+        _lazy_default<T, I>(),
+        std::optional<std::remove_const_t<
+            typename [:std::meta::type_of(::welder::detail::aggregate_fields<T>()[I]):]>>,
+        std::remove_const_t<
+            typename [:std::meta::type_of(::welder::detail::aggregate_fields<T>()[I]):]>>;
+
+    /** The value brace-initializing field @a I of @a T from constructor
+        argument @a arg: the argument itself for a plain parameter; for a
+        lazy-default optional, the engaged value or — when disengaged — the
+        field's NSDMI value read off a fresh `T{}`. Yielding VALUES (rather
+        than assigning into an NSDMI-initialized instance) keeps aggregate
+        semantics intact for const-qualified members. */
+    template <class T, std::size_t I>
+    static auto _init_value(_init_param<T, I>&& arg) {
+        if constexpr (_lazy_default<T, I>()) {
+            constexpr auto field =
+                ::welder::detail::aggregate_fields<T>()[I];
+            if (arg)
+                return typename _init_param<T, I>::value_type{std::move(*arg)};
+            return typename _init_param<T, I>::value_type{T{}.[:field:]};
+        } else {
+            return std::move(arg);
+        }
+    }
+
+    /** The `nb::arg` for field @a I of aggregate @a T: named after the field
+        and, for the defaultable NSDMI suffix (see
+        @ref welder::detail::aggregate_defaults_from), carrying the field's
+        NSDMI value — read off the value-initialized @a probe — as a real
+        keyword default, so Python may omit it or skip past it by keyword.
+        A LAZY default (registration-needed type, @ref _lazy_default) binds
+        `= None` with an `...` signature instead — no Python default object
+        exists, the C++ side materializes the NSDMI value.
         @tparam T the aggregate type.
         @tparam I the field index.
         @param probe a value-initialized instance supplying the default values
-                     (unused for a required field). */
+                     (unused for a required or lazy-default field). */
     template <class T, std::size_t I>
     static auto _aggregate_arg([[maybe_unused]] const T& probe) {
         static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         constexpr const char* name{
             std::define_static_string(std::meta::identifier_of(fields[I]))};
-        if constexpr (I >= ::welder::detail::aggregate_defaults_from<T>()) {
-            using field_type = std::remove_const_t<
-                typename [:std::meta::type_of(fields[I]):]>;
-            if constexpr (has_native_caster<field_type>)
-                return nb::arg(name) = probe.[:fields[I]:];
-            else
-                // A registration-needed default (a welded class/enum instance)
-                // has no expression-shaped repr — signatures and stubs would
-                // carry "<X object at 0x…>". The runtime default stays; the
-                // signature spells it `...`.
-                return (nb::arg(name).sig("...") = probe.[:fields[I]:]);
+        if constexpr (_lazy_default<T, I>()) {
+            // A registration-needed default (a welded class/enum instance)
+            // has no expression-shaped repr anyway — the signature spells it
+            // `...`; None (or omission) selects the NSDMI value in C++.
+            return (nb::arg(name).sig("...") = nb::none());
+        } else if constexpr (I >= ::welder::detail::aggregate_defaults_from<T>()) {
+            return nb::arg(name) = probe.[:fields[I]:];
         } else {
             return nb::arg(name);
         }
@@ -321,12 +373,11 @@ struct rod {
 
         nanobind builds a custom constructor by binding an `__init__` whose first
         parameter is a pointer to the (uninitialized) instance; the body
-        placement-news the aggregate from the field values. Emits
-        `def("__init__", [](T* self, F0 f0, …) { new (self) T{f0, …}; },
-        nb::arg("f0"), …)` so Python can build it from field values (`T(f0, f1)`).
+        placement-news the aggregate and assigns the provided field values.
         Fields in the NSDMI suffix become keyword parameters with real defaults
-        (@ref _aggregate_arg), matching the C++ omission semantics of aggregate
-        init.
+        (@ref _aggregate_arg) — except registration-needed ones, which bind
+        `Optional[F] = None` and default in C++ (@ref _lazy_default), so no
+        bound-class instance ever lives in the function record.
         @tparam T the aggregate type.
         @tparam I the field index pack.
         @param cls the class handle.
@@ -337,12 +388,13 @@ struct rod {
         if constexpr (::welder::detail::aggregate_defaults_from<T>() <
                       fields.size()) {
             // The probe exists only when a default is extractable
-            // (aggregate_defaults_from guarantees T{} is well-formed then).
+            // (aggregate_defaults_from guarantees T{} is well-formed then) —
+            // and T{} in the lambda body reuses the same guarantee.
             const T probe{};
             cls.def(
                 "__init__",
-                [](T* self, typename [:std::meta::type_of(fields[I]):]... args) {
-                    new (self) T{std::move(args)...};
+                [](T* self, _init_param<T, I>... args) {
+                    new (self) T{_init_value<T, I>(std::move(args))...};
                 },
                 _aggregate_arg<T, I>(probe)...);
         } else {
