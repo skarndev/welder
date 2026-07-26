@@ -50,12 +50,12 @@ struct [[=welder::weld(welder::lang::py)]] Layer {
 using Layer0 [[=welder::weld(welder::lang::py)]] = Layer<0>;
 
 // A welded element type carrying fixed-size std::array members — and itself the
-// element of an opaque std::vector below. This is the wowlib shape (a WDL heightmap:
-// std::vector<TileHeights> whose TileHeights::outer/inner are int16 arrays): the
-// generator must reach the arrays THROUGH the vector element and open them opaque, so
-// h.tiles[t].outer[i] = v writes through and numpy.asarray(h.tiles[t].outer) is a
-// zero-copy int16 view. The two extents differ (289 = 17x17, 256 = 16x16), so their
-// derived wrapper names (ArrayShortIntx289 / ArrayShortIntx256) do not collide.
+// element of an opaque std::vector below. This is the common binary-format shape (a
+// variable-length list of fixed-layout records, each holding fixed-size sample/height
+// grids): the generator must reach the arrays THROUGH the vector element and open them
+// opaque, so t.tiles[i].outer[j] = v writes through and numpy.asarray(t.tiles[i].outer)
+// is a zero-copy int16 view. The two extents differ (289 and 256), so their derived
+// wrapper names (ArrayShortIntx289 / ArrayShortIntx256) do not collide.
 struct [[=welder::weld(welder::lang::py)]] Tile {
     std::array<std::int16_t, 289> outer{}; // -> ArrayShortIntx289 (int16 numpy view)
     std::array<std::int16_t, 256> inner{}; // -> ArrayShortIntx256
@@ -83,7 +83,7 @@ struct [[=welder::weld(welder::lang::py)]] Series {
     // a fixed-size std::array member: opened opaque by reference (ArrayDoublex3), with
     // a zero-copy numpy view; whole assignment from a length-3 sequence still works.
     std::array<double, 3> origin{};
-    // a std::vector whose ELEMENT carries std::array members (the wowlib chain).
+    // a std::vector whose ELEMENT carries std::array members (the record-list chain).
     std::vector<Tile> tiles{};
     // opt-out: stays a plain list[int], no WELDER_OPAQUE emitted for vector<int>
     [[=welder::rods::python::by_value]] std::vector<int> raw{};
@@ -130,7 +130,7 @@ double origin_at(const Series& s, std::size_t i) {
     return s.origin.at(i);
 }
 
-// Round-trip helper for the wowlib chain: read a heightmap cell back from C++ after
+// Round-trip helper for the record-list chain: read an array cell back from C++ after
 // Python mutates it via s.tiles[t].outer[i] = v — proving the whole reference chain
 // (opaque vector element -> array member -> array element) writes through to storage.
 [[=welder::weld(welder::lang::py)]]

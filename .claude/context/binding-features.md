@@ -890,8 +890,8 @@ anonymous namespace, and `__`-prefixed impl inline namespaces (`std::__cxx11`) a
 so container prefixes stay clean (`Vector`/`Map`); the render-time `#error` remains only as
 a last-resort backstop. `derive_name` RECURSES a non-container class-template-specialization
 element the same way it recurses containers — template name + each arg — so
-`vector<WMOGroup<ClientVersion{3,3,5,12340}>>` becomes
-`VectorWmoGroupClientVersion_3_3_5_12340`, NOT a garbage name keeping `< > :: { }` (the
+`vector<Grid<Extent{2,3,4,5}>>` becomes
+`VectorGridExtent_2_3_4_5`, NOT a garbage name keeping `< > :: { }` (the
 pre-fix bug); an NTTP (non-type) arg renders its `display_string_of`, and the name is run
 through `sanitize_ident` (collapse non-`[A-Za-z0-9_]` runs, no leading digit) as the
 last-resort valid-identifier guarantee. A **`std::array<T, N>`** is special-cased in

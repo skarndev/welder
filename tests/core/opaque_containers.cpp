@@ -35,8 +35,8 @@ static_assert(eq(oc::derive_name(^^std::vector<std::string>), "VectorString"));
 // --- fixed-size std::array: element + extent (an NTTP), collision-free ---------
 // A std::array carries its extent so two arrays of the same element but different N
 // derive DISTINCT names; the `x` separator keeps a digit-ending element (Vec3) apart
-// from the extent. std::int16_t dealiases to `short int` -> "ShortInt" (the consumer's
-// transform_opaque_container hook is how wowlib gets the tidier "ArrayInt16x289").
+// from the extent. std::int16_t dealiases to `short int` -> "ShortInt" (a consumer's
+// transform_opaque_container hook can override this to a tidier "ArrayInt16x289").
 static_assert(eq(oc::derive_name(^^std::array<std::int16_t, 289>), "ArrayShortIntx289"));
 static_assert(eq(oc::derive_name(^^std::array<std::int16_t, 16>), "ArrayShortIntx16"));
 static_assert(eq(oc::derive_name(^^std::array<double, 4>), "ArrayDoublex4"));
@@ -74,7 +74,7 @@ consteval bool valid_ident(std::string s) {
     return true;
 }
 static_assert(valid_ident(
-    oc::sanitize_ident(oc::derive_name(^^std::vector<Grp<Ver{3, 3, 5, 12340}>>))));
+    oc::sanitize_ident(oc::derive_name(^^std::vector<Grp<Ver{1, 2, 3, 4}>>))));
 
 // --- sanitize_ident: the last-resort identifier guarantee --------------------
 static_assert(eq(oc::sanitize_ident("VectorInt"), "VectorInt"));       // clean pass-through

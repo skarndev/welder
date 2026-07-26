@@ -145,14 +145,14 @@ consteval std::string decimal_string(std::size_t n) {
     rendered directly rather than recursed as an element.
 
     A container element that is itself a **class-template specialization** (e.g.
-    `WMOGroup<ClientVersion{3,3,5,12340}>`) recurses the SAME way — the template name
-    plus each argument — so it never falls to `display_string_of`, which would keep
+    `Grid<Extent{2,3,4,5}>`) recurses the SAME way — the template name plus each
+    argument — so it never falls to `display_string_of`, which would keep
     `:: < > { } ,`. A **non-type (NTTP) argument** renders its value as a sanitized
     identifier token. The caller (@ref document::add_one) sanitizes the final string as
     a safety net, so no input can yield a non-identifier. */
 consteval std::string derive_name(std::meta::info arg) {
     // A non-type (NTTP) template argument is a value, not a type — render its display
-    // (e.g. `ClientVersion{3,3,5,12340}`); the caller's final sanitize legalizes it.
+    // (e.g. `Extent{2,3,4,5}`); the caller's final sanitize legalizes it.
     if (!std::meta::is_type(arg))
         return std::string{std::meta::display_string_of(arg)};
     const std::meta::info type{std::meta::dealias(arg)};

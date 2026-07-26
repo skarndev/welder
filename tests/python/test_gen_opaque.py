@@ -229,8 +229,8 @@ def test_array_scalar_numpy_zero_copy(go: ModuleType) -> None:
 
 
 def test_vector_of_array_bearing_struct_writes_through(go: ModuleType) -> None:
-    # The wowlib chain: an opaque std::vector whose element (Tile) has std::array
-    # members. h.tiles[t].outer[i] = v must persist through the whole reference chain
+    # The record-list chain: an opaque std::vector whose element (Tile) has std::array
+    # members. s.tiles[t].outer[i] = v must persist through the whole reference chain
     # (live vector element -> live array member -> array element).
     s = go.Series()
     s.tiles.append(go.Tile())
