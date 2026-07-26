@@ -103,6 +103,34 @@ def test_class_element_container_from_a_signature(go: ModuleType) -> None:
     assert all(isinstance(r, go.Reading) for r in readings)
 
 
+def test_new_default_constructs_a_class_element_and_writes_through(go: ModuleType) -> None:
+    # new() grows the C++ vector by a default-constructed element and hands back a
+    # LIVE reference to it — no need to import the element type to construct one.
+    s = go.Series()
+    e = s.readings.new()
+    assert isinstance(e, go.Reading)
+    assert e.value == pytest.approx(0.0)  # default-constructed (NSDMI value{0.0})
+    assert len(s.readings) == 1
+    e.value = 7.0  # mutation writes through the live reference
+    assert s.readings[0].value == pytest.approx(7.0)
+
+
+def test_new_on_template_instantiation_element(go: ModuleType) -> None:
+    # works for a class-template-specialization element (Layer<0>) too
+    s = go.Series()
+    layer = s.tiers.new()
+    assert isinstance(layer, go.Layer0)
+    assert layer.depth == 0
+    assert len(s.tiers) == 1
+
+
+def test_new_absent_on_scalar_element_container(go: ModuleType) -> None:
+    # scalars would come back by value (a dead copy), a footgun — new() is omitted;
+    # append(value) is the scalar path.
+    s = go.Series()
+    assert not hasattr(s.points, "new")
+
+
 def test_pod_element_gets_numpy_structured_view(go: ModuleType) -> None:
     # Reading { double value; } is a POD struct, so its opaque vector also exposes a
     # numpy-free structured array view (via __array_interface__).

@@ -1100,8 +1100,10 @@ struct rod {
                 // array-interface protocol (a structured, zero-copy, numpy-free view).
                 auto cls{py::bind_vector<Container>(m, name)};
                 _array_interface<Container, Elem>(cls);
+                _def_new<Container, Elem>(cls);
             } else {
-                py::bind_vector<Container>(m, name);
+                auto cls{py::bind_vector<Container>(m, name)};
+                _def_new<Container, Elem>(cls);
             }
         } else {
             py::bind_map<Container>(m, name);
@@ -1109,6 +1111,25 @@ struct rod {
     }
 
   protected:
+    /** Give the opaque `std::vector<Elem>` class @a cls a `new()` method that
+        default-constructs an element in place at the back and returns a **live
+        reference** to it (`reference_internal`, kept alive to the container) — so
+        generic Python code can grow a container of welded structs without importing
+        the element type just to construct one (`e = v.new(); e.field = x`). Class
+        elements only (guarded here): a scalar would come back by value (a dead copy),
+        a footgun, so it's omitted — use `append(value)`. Standard bind_vector caveat:
+        a later append/clear may reallocate and invalidate the reference. */
+    template <class Container, class Elem, class Cls>
+    static void _def_new(Cls& cls) {
+        if constexpr (std::is_class_v<Elem> &&
+                      std::is_default_constructible_v<Elem>)
+            cls.def(
+                "new", [](Container& v) -> Elem& { return v.emplace_back(); },
+                py::return_value_policy::reference_internal,
+                "Default-construct a new element in place at the end and return a "
+                "live reference to it.");
+    }
+
     /** Give the opaque `std::vector<Elem>` class @a cls a `__array_interface__`
         property — the numpy array-interface dict (`numpy.asarray(v)` reads it),
         yielding a **structured, zero-copy, writable** view of `data()`. numpy-free

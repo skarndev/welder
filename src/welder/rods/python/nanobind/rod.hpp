@@ -1040,6 +1040,23 @@ struct rod {
                 nb::bind_vector<Container, nb::rv_policy::reference_internal>(
                     m, name)};
             using Elem = typename Container::value_type;
+            // `new()`: default-construct an element in place at the back and hand
+            // back a **live reference** to it (reference_internal, kept alive to the
+            // container) — so generic Python code can grow a container of welded
+            // structs without importing the element type just to construct one
+            // (`e = v.new(); e.field = x`). Class elements only: a scalar would be
+            // returned by value (a dead copy, mutations lost), which is a footgun, so
+            // it's omitted there — use `append(value)`. Standard bind_vector caveat:
+            // a later append/clear may reallocate and invalidate the reference.
+            if constexpr (std::is_class_v<Elem> &&
+                          std::is_default_constructible_v<Elem>) {
+                cls.def(
+                    "new",
+                    [](Container& v) -> Elem& { return v.emplace_back(); },
+                    nb::rv_policy::reference_internal,
+                    "Default-construct a new element in place at the end and return "
+                    "a live reference to it.");
+            }
             if constexpr (::welder::container_is_contiguous(^^Container) &&
                           std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
                 // numpy's __array__ protocol: numpy 2.x calls it with dtype/copy
