@@ -798,12 +798,26 @@ numpy typestr, with `|V<n>` void PADDING entries for interior/trailing gaps) is
 reflected from the struct (`src/welder/rods/python/array_interface.hpp`: `numpy_typestr`,
 `pod_array_eligible<E>`, `ai_descr<^^E>` — a `std::array` of `define_static_string`
 `(name,typestr)` pairs, iterated at runtime; `offset_of(m).bytes`/`size_of` give the
-layout). Fires automatically for any opaque POD-struct vector (hand-written or
+layout). Fires automatically for any opaque POD-struct vector/array (hand-written or
 generated) — vtable'd/string/pointer types are not trivially copyable, so no view.
-**Scope** = exactly the frameworks' opaque binders: `bind_vector` → `std::vector`
-(pybind11's `bind_vector` calls `.reserve()`/`.data()`, so `std::deque` does NOT
-qualify — dropped); `bind_map` → `std::map`/`std::unordered_map`. The table +
-predicates (`is_reference_container`, `container_kind_of`, `container_is_contiguous`)
+**`std::array<T, N>` (`container_kind::fixed_sequence`)** is the exception welder
+SYNTHESIZES: neither framework ships a `bind_array`, so each rod's `bind_container`
+hand-writes the vector protocol MINUS the size-changing ops (`_bind_array`): a
+`class_<std::array<T,N>>` with a constant `__len__` (`std::tuple_size_v`), integer
+`__getitem__`/`__setitem__` (negative-wrap + `IndexError` via `_wrap_index`, element
+handed out `reference_internal` so `a[i].field = x` writes through — scalar by value),
+`__iter__`, and the SAME scalar-buffer / POD-`__array_interface__` NumPy view as a
+vector (`container_is_contiguous` now covers `std::array` too; shared via the nanobind
+rod's `_numpy_view`). NO `append`/`insert`/`pop`/`resize`. Whole-attribute assignment
+survives opaqueness: a length-checked `__init__`/`init` from a Python sequence
+(`nb::iterable` / `py::sequence`) is registered as an implicit conversion
+(`implicitly_convertible`), so `def_rw`/`def_readwrite` still accepts `obj.arr = [...]`
+(wrong length → `ValueError`; only integer subscripts bound, so a slice assignment →
+`TypeError`). abi3-clean (same primitives as `bind_vector`). **Scope** = `bind_vector` →
+`std::vector` (pybind11's `bind_vector` calls `.reserve()`/`.data()`, so `std::deque`
+does NOT qualify — dropped); `bind_map` → `std::map`/`std::unordered_map`; the
+hand-written array wrapper → `std::array`. The table + predicates
+(`is_reference_container`, `container_kind_of`, `container_is_contiguous`)
 + the `rod_binds_containers<B>` detector live in **`src/welder/containers.hpp`**;
 the carriage branch is in `bind_namespace`'s alias dispatch (`carriage.hpp`, right
 before the `bind_type` call — `is_reference_container(dealias(mem))` → gate the
@@ -850,8 +864,12 @@ elements. `container_elements_native` (the old native-only pre-pass gate) was re
 
 **The generator (`welder::rods::opaque_containers::rod`).** A build-time text-emitting
 rod — the exact model of trampolines/luacats — that removes the hand-written
-`WELDER_OPAQUE` + alias boilerplate: it reflects the welded types, finds the scalar
-containers they use, and emits a `.hpp` of the declarations + aliases. Rationale: a
+`WELDER_OPAQUE` + alias boilerplate: it reflects the welded types, finds the reference
+containers they use (vectors, maps AND fixed-size `std::array`s — the latter reached
+transitively: a direct member, a member of a struct that is itself an opaque vector's
+element, or a member inherited from a non-welded trait base, all via the driver's
+base-flattening `add_field`), and emits a `.hpp` of the declarations + aliases.
+Rationale: a
 namespace-scope `type_caster` specialization is a COMPILE-TIME artifact a runtime rod
 can't emit (same wall trampolines hit), and it straddles two scopes (global
 `WELDER_OPAQUE` + in-namespace alias) a single macro can't bridge — a generated *file*
@@ -876,7 +894,13 @@ element the same way it recurses containers — template name + each arg — so
 `VectorWmoGroupClientVersion_3_3_5_12340`, NOT a garbage name keeping `< > :: { }` (the
 pre-fix bug); an NTTP (non-type) arg renders its `display_string_of`, and the name is run
 through `sanitize_ident` (collapse non-`[A-Za-z0-9_]` runs, no leading digit) as the
-last-resort valid-identifier guarantee.
+last-resort valid-identifier guarantee. A **`std::array<T, N>`** is special-cased in
+`derive_name`: `Array` + element name + `x` + the extent (read as a value via
+`std::meta::extract<std::size_t>` of the 2nd template arg, NOT recursed as a type) →
+`array<short,289>`→`ArrayShortIntx289`, `array<Vec3,16>`→`ArrayVec3x16` — the extent keeps
+same-element/different-`N` arrays apart and the `x` separates a digit-ending element from
+the extent. `value_arg_count`/`collect_into`/`opaque_eligible` treat the array like any
+sequence (1 value arg = the element); the generated header adds `#include <array>`.
 **Custom naming hook:** a name style may override the derived name via an optional
 `static consteval std::string transform_opaque_container(info enclosing, info container,
 info member)` — `document.hpp` `opaque_name<Style, Enclosing, Container, Member>()` detects

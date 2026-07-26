@@ -1,9 +1,9 @@
 # Containers by reference
 
-By default a `std::vector<T>` or `std::map<K, V>` crosses into Python by **copy**.
-pybind11's `<pybind11/stl.h>` (nanobind's `<nanobind/stl/…>` headers) convert it to a
-`list`/`dict` on every access — so reading a container member *snapshots* it, and
-mutating the snapshot never reaches C++:
+By default a `std::vector<T>`, `std::array<T, N>` or `std::map<K, V>` crosses into
+Python by **copy**. pybind11's `<pybind11/stl.h>` (nanobind's `<nanobind/stl/…>`
+headers) convert it to a `list`/`dict` on every access — so reading a container member
+*snapshots* it, and mutating the snapshot never reaches C++:
 
 ```python
 obj.values          # a fresh list[int], copied from the C++ vector
@@ -80,7 +80,13 @@ len(h.bins)            # 2 — h.bins IS the C++ vector, not a copy
 `std::vector` gains the full mutable-sequence protocol — `append`, `extend`, `insert`,
 `pop`, `__getitem__`/`__setitem__`, slicing, `__len__`, `__iter__`, `__contains__`;
 `std::map` / `std::unordered_map` become a mutable mapping (`__getitem__`/`__setitem__`,
-`__contains__`, `keys`/`values`/`items`, iteration over keys).
+`__contains__`, `keys`/`values`/`items`, iteration over keys). A **fixed-size
+`std::array<T, N>`** gets the sequence protocol *minus the size-changing ops* — no
+`append`/`insert`/`pop`/`resize` — with a constant `__len__` of `N`;
+`__getitem__`/`__setitem__` (integer index, negative wrap-around), `__iter__`, and the
+NumPy view below all behave exactly like the vector's. Whole-attribute assignment from
+a length-`N` sequence still works (`obj.arr = [...]`) — a wrong length raises
+`ValueError`, and a length-changing slice assignment raises `TypeError`.
 
 When the element (or a map's value) is a **welded class**, element access is *also* a
 reference — `__getitem__` and iteration hand back a live view aliasing the C++ element,
@@ -120,8 +126,9 @@ member gets, without freezing the container itself.
 
 ### Zero-copy NumPy / ctypes
 
-When a `std::vector`'s element type is a **scalar** (an arithmetic type, not `bool`),
-the bound class also exposes its contiguous `data()` buffer with no copy:
+When a contiguous sequence's element type is a **scalar** (an arithmetic type, not
+`bool`) — a `std::vector` **or** a `std::array` — the bound class also exposes its
+contiguous `data()` buffer with no copy:
 
 ```python
 import numpy as np
@@ -135,9 +142,9 @@ tracks reallocation on the next `asarray`, where a stored raw address would dang
 
 #### POD structs → structured arrays
 
-A `std::vector` of a **plain-old-data struct** (trivially-copyable, standard-layout,
-all-arithmetic fields — `struct Vec3 { float x, y, z; }`) is exposed as a NumPy
-**structured** array, again zero-copy and writable:
+A `std::vector` or `std::array` of a **plain-old-data struct** (trivially-copyable,
+standard-layout, all-arithmetic fields — `struct Vec3 { float x, y, z; }`) is exposed as
+a NumPy **structured** array, again zero-copy and writable:
 
 ```python
 a = np.asarray(mesh.vertices)   # dtype [('x','<f4'),('y','<f4'),('z','<f4')], a view
@@ -157,9 +164,9 @@ Writing `WELDER_OPAQUE(T)` + a welded alias for every container type is repetiti
 and, because the two straddle different scopes, a single macro can't collapse them. So
 welder ships a **generator** that writes them for you, the same build-time,
 reflection-driven model as the [trampoline generator](inheritance.md#generating-trampolines-automatically):
-it reflects your welded types, finds every scalar-element container they use, and emits
-a `.hpp` of the `WELDER_OPAQUE` declarations + aliases. You include that header and
-never hand-write the boilerplate.
+it reflects your welded types, finds every reference container they use (vectors, maps
+and fixed-size `std::array`s alike), and emits a `.hpp` of the `WELDER_OPAQUE`
+declarations + aliases. You include that header and never hand-write the boilerplate.
 
 Point the CMake helper at a one-line generator TU:
 
@@ -190,17 +197,22 @@ PYBIND11_MODULE(app, m) {
 }
 ```
 
-Every scalar-element container becomes opaque automatically. Two controls:
+Every reference container becomes opaque automatically — including a `std::array<T, N>`
+reached transitively (a direct member, an element of an opaque `std::vector<Tile>` whose
+`Tile` has array members, or a member inherited from a non-welded trait base). Two
+controls:
 
 - **Opt a container out** with `[[=welder::rods::python::by_value]]` on a data member —
   its type keeps by-value (copy) binding. Because opaqueness is per-type, a `by_value`
   anywhere excludes that whole container type.
 - **Names are derived** from the type, and are **collision-free**: `std::vector<int>` →
-  `VectorInt`, `std::map<std::string,int>` → `MapStringInt`. A welded element carries its
-  **namespace and enclosing-class path** so two same-named types never collide —
-  `std::vector<geometry::Point>` → `VectorGeometryPoint`, `std::vector<physics::Point>` →
-  `VectorPhysicsPoint` (the `std` namespace is dropped, so the container prefix stays
-  clean).
+  `VectorInt`, `std::map<std::string,int>` → `MapStringInt`, and a fixed-size
+  `std::array<short, 289>` → `ArrayShortIntx289` (element then extent, `x`-separated, so
+  two arrays of the same element but different `N` never collide). A welded element
+  carries its **namespace and enclosing-class path** so two same-named types never
+  collide — `std::vector<geometry::Point>` → `VectorGeometryPoint`,
+  `std::vector<physics::Point>` → `VectorPhysicsPoint` (the `std` namespace is dropped,
+  so the container prefix stays clean).
 
 ### Custom opaque-container names
 
@@ -247,9 +259,10 @@ opaque aliases and to ordinary bindings).
 
 ## Scope & the trade-off
 
-- **Supported containers** are exactly those the frameworks ship an opaque binder for:
-  `std::vector` (sequence, via `bind_vector`) and `std::map` / `std::unordered_map`
-  (mapping, via `bind_map`). `std::deque`, `std::list`, the sets and the `multi*`
+- **Supported containers** are `std::vector` (sequence, via `bind_vector`), `std::map` /
+  `std::unordered_map` (mapping, via `bind_map`), and `std::array<T, N>` (a fixed-size
+  sequence — neither framework ships a `bind_array`, so welder synthesizes the protocol
+  minus the size-changing ops). `std::deque`, `std::list`, the sets and the `multi*`
   containers have no ready opaque binder and are not supported.
 - **Opaqueness is per-type and module-wide.** `WELDER_OPAQUE(std::vector<int>)` makes
   *every* `std::vector<int>` in the module opaque — you cannot have one member copy and

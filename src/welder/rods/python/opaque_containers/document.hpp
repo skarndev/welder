@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <meta>
 #include <string>
@@ -117,6 +118,17 @@ consteval std::string qualified_ident(std::meta::info entity) {
     return out;
 }
 
+/** Decimal render of @a n (constexpr `std::to_string` is unavailable on gcc-16) — the
+    extent token an `std::array` derived name carries (see @ref derive_name). */
+consteval std::string decimal_string(std::size_t n) {
+    if (n == 0)
+        return "0";
+    std::string s{};
+    for (; n; n /= 10)
+        s.insert(s.begin(), char('0' + n % 10));
+    return s;
+}
+
 /** A readable, **valid**, collision-free PascalCase identifier for container/element
     @a arg — the template name plus each argument's name, recursing — `vector<int>` →
     `VectorInt`, `map<string,int>` → `MapStringInt`, nested `map<string,vector<int>>` →
@@ -124,6 +136,13 @@ consteval std::string qualified_ident(std::meta::info entity) {
     enum uses its @ref qualified_ident (namespace- and enclosing-class-qualified, so
     `geometry::Point` → `GeometryPoint`) — which is what keeps distinct types from
     deriving the same name.
+
+    A **fixed-size** `std::array<T, N>` is named element-then-extent with an `x`
+    separator — `std::array<short, 289>` → `ArrayShortx289`, `std::array<Vec3, 16>` →
+    `ArrayVec3x16` — so two arrays of the same element but different extents never
+    collide (and the `x` keeps a digit-ending element name, e.g. `Vec3`, distinct from
+    the extent). The `N` argument is a non-type value, not a type, so it is read and
+    rendered directly rather than recursed as an element.
 
     A container element that is itself a **class-template specialization** (e.g.
     `WMOGroup<ClientVersion{3,3,5,12340}>`) recurses the SAME way — the template name
@@ -142,8 +161,13 @@ consteval std::string derive_name(std::meta::info arg) {
         std::meta::template_of(type) == ^^std::basic_string)
         return "String";
     if (::welder::is_reference_container(type)) {
-        std::string out{qualified_ident(std::meta::template_of(type))};
         const auto args{std::meta::template_arguments_of(type)};
+        // A fixed-size array names its element then its extent (Array{Elem}x{N}); the
+        // extent is a non-type argument (a value), read directly, not recursed.
+        if (std::meta::template_of(type) == ^^std::array)
+            return "Array" + derive_name(args[0]) + "x" +
+                   decimal_string(std::meta::extract<std::size_t>(args[1]));
+        std::string out{qualified_ident(std::meta::template_of(type))};
         for (std::size_t i{0}, n{value_arg_count(type)}; i < n; ++i)
             out += derive_name(args[i]);
         return out;
@@ -425,7 +449,7 @@ struct document {
         out += "//\n";
         out += "// Include AFTER your welded type headers and the active backend's\n";
         out += "// <welder/rods/python/{pybind11,nanobind}/rod.hpp>, before the module.\n";
-        out += "#include <map>\n#include <string>\n#include <unordered_map>\n#include <vector>\n\n";
+        out += "#include <array>\n#include <map>\n#include <string>\n#include <unordered_map>\n#include <vector>\n\n";
         for (const entry& e : es)
             if (!e.excluded)
                 out += "WELDER_OPAQUE(" + e.spelling + ")\n";

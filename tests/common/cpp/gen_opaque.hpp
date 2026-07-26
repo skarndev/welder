@@ -18,6 +18,9 @@
 // as stl.hpp uses it.)
 //
 // Python-only, like stl.hpp/opaque.hpp. #included after the welder vocabulary + backend.
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -46,6 +49,28 @@ struct [[=welder::weld(welder::lang::py)]] Layer {
 };
 using Layer0 [[=welder::weld(welder::lang::py)]] = Layer<0>;
 
+// A welded element type carrying fixed-size std::array members — and itself the
+// element of an opaque std::vector below. This is the wowlib shape (a WDL heightmap:
+// std::vector<TileHeights> whose TileHeights::outer/inner are int16 arrays): the
+// generator must reach the arrays THROUGH the vector element and open them opaque, so
+// h.tiles[t].outer[i] = v writes through and numpy.asarray(h.tiles[t].outer) is a
+// zero-copy int16 view. The two extents differ (289 = 17x17, 256 = 16x16), so their
+// derived wrapper names (ArrayShortIntx289 / ArrayShortIntx256) do not collide.
+struct [[=welder::weld(welder::lang::py)]] Tile {
+    std::array<std::int16_t, 289> outer{}; // -> ArrayShortIntx289 (int16 numpy view)
+    std::array<std::int16_t, 256> inner{}; // -> ArrayShortIntx256
+};
+
+// A non-welded "trait" base: welder flattens its members into the welded derived, so
+// the generator must collect this inherited std::array too (reachability through a
+// non-welded base, not just direct members / vector elements).
+struct Corners {
+    std::array<float, 4> corners{}; // -> ArrayFloatx4 (float numpy view)
+};
+struct [[=welder::weld(welder::lang::py)]] Patch : Corners {
+    int id{0};
+};
+
 struct [[=welder::weld(welder::lang::py)]] Series {
     // names are collision-free QUALIFIED: a scalar stays short (VectorDouble), a welded
     // element carries its namespace (gen_opaque::Reading -> VectorGenOpaqueReading).
@@ -55,6 +80,11 @@ struct [[=welder::weld(welder::lang::py)]] Series {
     // a NESTED container member: the generator opens BOTH levels opaque
     // (VectorVectorDouble whose elements are live VectorDouble wrappers)
     std::vector<std::vector<double>> grid{};
+    // a fixed-size std::array member: opened opaque by reference (ArrayDoublex3), with
+    // a zero-copy numpy view; whole assignment from a length-3 sequence still works.
+    std::array<double, 3> origin{};
+    // a std::vector whose ELEMENT carries std::array members (the wowlib chain).
+    std::vector<Tile> tiles{};
     // opt-out: stays a plain list[int], no WELDER_OPAQUE emitted for vector<int>
     [[=welder::rods::python::by_value]] std::vector<int> raw{};
 };
@@ -91,6 +121,21 @@ double sum_points(const Series& s) {
     for (double x : s.points)
         total += x;
     return total;
+}
+
+// Round-trip helper for the std::array member: read the C++ value back after Python
+// mutates it through the fixed-size wrapper (origin[i] = x).
+[[=welder::weld(welder::lang::py)]]
+double origin_at(const Series& s, std::size_t i) {
+    return s.origin.at(i);
+}
+
+// Round-trip helper for the wowlib chain: read a heightmap cell back from C++ after
+// Python mutates it via s.tiles[t].outer[i] = v — proving the whole reference chain
+// (opaque vector element -> array member -> array element) writes through to storage.
+[[=welder::weld(welder::lang::py)]]
+int tile_outer_at(const Series& s, std::size_t t, std::size_t i) {
+    return s.tiles.at(t).outer.at(i);
 }
 
 } // namespace gen_opaque

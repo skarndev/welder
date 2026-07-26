@@ -163,6 +163,107 @@ def test_reserve_keeps_element_references_valid_across_growth(go: ModuleType) ->
     assert len(s.readings) == 8
 
 
+def test_generated_array_aliases_exist(go: ModuleType) -> None:
+    # std::array members are opened opaque too, named element-then-extent with an `x`
+    # separator so two arrays of the same element but different N never collide.
+    assert hasattr(go, "ArrayDoublex3")  # Series.origin -> std::array<double, 3>
+    assert hasattr(go, "ArrayShortIntx289")  # Tile.outer  -> std::array<int16, 289>
+    assert hasattr(go, "ArrayShortIntx256")  # Tile.inner  -> std::array<int16, 256>
+    assert hasattr(go, "ArrayFloatx4")  # inherited Corners.corners (non-welded base)
+
+
+def test_array_member_is_opaque_and_writes_through(go: ModuleType) -> None:
+    s = go.Series()
+    assert isinstance(s.origin, go.ArrayDoublex3)
+    assert not isinstance(s.origin, list)
+    assert len(s.origin) == 3  # fixed length
+    s.origin[0] = 10.0
+    s.origin[2] = 30.0
+    assert go.origin_at(s, 0) == pytest.approx(10.0)  # reached the C++ array
+    assert go.origin_at(s, 2) == pytest.approx(30.0)
+    assert list(s.origin) == pytest.approx([10.0, 0.0, 30.0])  # iteration
+
+
+def test_array_negative_index_and_bounds(go: ModuleType) -> None:
+    s = go.Series()
+    s.origin[-1] = 9.0  # negative index wraps
+    assert go.origin_at(s, 2) == pytest.approx(9.0)
+    with pytest.raises(IndexError):
+        _ = s.origin[3]
+    with pytest.raises(IndexError):
+        s.origin[3] = 1.0
+
+
+def test_array_whole_assignment_from_sequence(go: ModuleType) -> None:
+    # The working idiom must survive opaqueness: rebinding the attribute from a
+    # length-N sequence still works (an implicit conversion behind def_rw).
+    s = go.Series()
+    s.origin = [1.0, 2.0, 3.0]
+    assert go.origin_at(s, 1) == pytest.approx(2.0)
+    s.origin = (4.0, 5.0, 6.0)  # any iterable of the right length
+    assert go.origin_at(s, 2) == pytest.approx(6.0)
+    # a wrong length is rejected, not silently truncated/padded
+    with pytest.raises((ValueError, TypeError)):
+        s.origin = [1.0, 2.0]
+    with pytest.raises((ValueError, TypeError)):
+        s.origin = [1.0, 2.0, 3.0, 4.0]
+
+
+def test_array_has_no_size_changing_ops(go: ModuleType) -> None:
+    s = go.Series()
+    assert not hasattr(s.origin, "append")
+    assert not hasattr(s.origin, "resize")
+    assert not hasattr(s.origin, "clear")
+
+
+def test_array_scalar_numpy_zero_copy(go: ModuleType) -> None:
+    np = pytest.importorskip("numpy")
+    s = go.Series()
+    s.origin = [1.0, 2.0, 3.0]
+    a = np.asarray(s.origin)
+    assert a.dtype == np.float64
+    assert a.shape == (3,)
+    assert not a.flags["OWNDATA"]  # a view, not a copy
+    a[1] = 7.0  # write through the shared buffer
+    assert go.origin_at(s, 1) == pytest.approx(7.0)
+
+
+def test_vector_of_array_bearing_struct_writes_through(go: ModuleType) -> None:
+    # The wowlib chain: an opaque std::vector whose element (Tile) has std::array
+    # members. h.tiles[t].outer[i] = v must persist through the whole reference chain
+    # (live vector element -> live array member -> array element).
+    s = go.Series()
+    s.tiles.append(go.Tile())
+    assert isinstance(s.tiles[0].outer, go.ArrayShortIntx289)
+    assert len(s.tiles[0].outer) == 289
+    s.tiles[0].outer[0] = 1234
+    s.tiles[0].outer[288] = -5
+    assert go.tile_outer_at(s, 0, 0) == 1234  # reached C++ storage
+    assert go.tile_outer_at(s, 0, 288) == -5
+
+
+def test_array_of_int16_is_zero_copy_numpy(go: ModuleType) -> None:
+    np = pytest.importorskip("numpy")
+    s = go.Series()
+    s.tiles.append(go.Tile())
+    a = np.asarray(s.tiles[0].outer)
+    assert a.dtype == np.int16
+    assert a.shape == (289,)
+    assert not a.flags["OWNDATA"]  # zero-copy int16 view
+    a[0] = 1234
+    assert go.tile_outer_at(s, 0, 0) == 1234
+
+
+def test_inherited_trait_base_array_is_opaque(go: ModuleType) -> None:
+    # Corners is NOT welded; its std::array member is flattened into Patch, and the
+    # generator collected it there — so Patch.corners binds opaque too.
+    p = go.Patch()
+    assert isinstance(p.corners, go.ArrayFloatx4)
+    assert len(p.corners) == 4
+    p.corners = [1.0, 2.0, 3.0, 4.0]
+    assert list(p.corners) == pytest.approx([1.0, 2.0, 3.0, 4.0])
+
+
 def test_pod_element_gets_numpy_structured_view(go: ModuleType) -> None:
     # Reading { double value; } is a POD struct, so its opaque vector also exposes a
     # numpy-free structured array view (via __array_interface__).

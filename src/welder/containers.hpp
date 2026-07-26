@@ -41,8 +41,12 @@ namespace welder::inline v0 {
 
 /** Which opaque binder a reference-bound container uses. */
 enum class container_kind : unsigned char {
-    sequence, /**< A `bind_vector` container: `std::vector`. */
-    map,      /**< A `bind_map` container: `std::map`, `std::unordered_map`. */
+    sequence,       /**< A `bind_vector` container: `std::vector`. */
+    map,            /**< A `bind_map` container: `std::map`, `std::unordered_map`. */
+    fixed_sequence, /**< A **fixed-size** sequence: `std::array<T, N>`. Bound by
+                         reference through a hand-written wrapper (neither framework
+                         ships a `bind_array`) — the vector protocol minus the
+                         size-changing ops (`append`/`resize`). @see rod::bind_container */
 };
 
 namespace detail {
@@ -58,10 +62,18 @@ struct container_spec {
     / `bind_map` support. Add a row only when both Python frameworks ship a binder for
     it (a deque/set/list/multimap would need welder to *synthesize* the Python
     protocol — pybind11's `bind_vector` alone already rejects `std::deque`, which lacks
-    `.reserve()`). */
-consteval std::array<container_spec, 3> reference_containers() {
+    `.reserve()`).
+
+    `std::array<T, N>` is the exception that welder *does* synthesize: neither framework
+    ships a `bind_array`, but a fixed-size contiguous sequence is small and its protocol
+    is the vector's minus the size-changing ops, so the rods hand-write it (@ref
+    container_kind::fixed_sequence). It binds by reference like a vector — element
+    write-through, a zero-copy NumPy view for arithmetic/POD elements — with `append`/
+    `resize` absent and a length-changing whole assignment rejected. */
+consteval std::array<container_spec, 4> reference_containers() {
     return {{
         {^^std::vector, container_kind::sequence},
+        {^^std::array, container_kind::fixed_sequence},
         {^^std::map, container_kind::map},
         {^^std::unordered_map, container_kind::map},
     }};
@@ -100,15 +112,18 @@ consteval container_kind container_kind_of(std::meta::info type) {
     reachable via `.data()`, so a scalar element type can be exposed zero-copy through
     the buffer protocol / an `nb::ndarray` view?
 
-    Among the reference containers only `std::vector` qualifies; the maps are not
-    sequences. The buffer/ndarray path is gated on this **and** an arithmetic
-    (non-`bool`) element type. (Kept as its own predicate — rather than folding into
-    `container_kind` — so a future segmented/opaque sequence stays bindable by
-    reference while correctly getting no buffer view.)
+    Among the reference containers `std::vector` and `std::array` qualify (both store
+    their elements in one block reachable via `.data()`); the maps are not sequences.
+    The buffer/ndarray path is gated on this **and** an arithmetic (non-`bool`) or POD
+    element type. (Kept as its own predicate — rather than folding into `container_kind`
+    — so a future segmented/opaque sequence stays bindable by reference while correctly
+    getting no buffer view.)
     @param type a reflection of the container specialization. */
 consteval bool container_is_contiguous(std::meta::info type) {
-    return std::meta::has_template_arguments(type) &&
-           std::meta::template_of(type) == ^^std::vector;
+    if (!std::meta::has_template_arguments(type))
+        return false;
+    const std::meta::info tmpl{std::meta::template_of(type)};
+    return tmpl == ^^std::vector || tmpl == ^^std::array;
 }
 
 /** Does rod @a B implement the optional `bind_container` hook (i.e. can it bind

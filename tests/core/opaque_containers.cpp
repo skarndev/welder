@@ -4,6 +4,8 @@
 // target IS the test (tests/CMakeLists.txt: compile.opaque_containers). Covers maps,
 // which the runtime gen_opaque group deliberately omits (pybind11-stubgen mis-qualifies
 // bind_map view types across submodules; see tests/common/cpp/gen_opaque.hpp).
+#include <array>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -29,6 +31,25 @@ static_assert(eq(oc::derive_name(^^std::map<std::string, double>), "MapStringDou
 static_assert(eq(oc::derive_name(^^std::unordered_map<int, double>),
                  "UnorderedMapIntDouble"));
 static_assert(eq(oc::derive_name(^^std::vector<std::string>), "VectorString"));
+
+// --- fixed-size std::array: element + extent (an NTTP), collision-free ---------
+// A std::array carries its extent so two arrays of the same element but different N
+// derive DISTINCT names; the `x` separator keeps a digit-ending element (Vec3) apart
+// from the extent. std::int16_t dealiases to `short int` -> "ShortInt" (the consumer's
+// transform_opaque_container hook is how wowlib gets the tidier "ArrayInt16x289").
+static_assert(eq(oc::derive_name(^^std::array<std::int16_t, 289>), "ArrayShortIntx289"));
+static_assert(eq(oc::derive_name(^^std::array<std::int16_t, 16>), "ArrayShortIntx16"));
+static_assert(eq(oc::derive_name(^^std::array<double, 4>), "ArrayDoublex4"));
+static_assert(oc::derive_name(^^std::array<std::int16_t, 289>) !=
+              oc::derive_name(^^std::array<std::int16_t, 16>));  // extents disambiguate
+// a welded-CLASS element qualifies by namespace, like the vector case
+struct [[=welder::weld(welder::lang::py)]] Px { int v{0}; };
+static_assert(eq(oc::derive_name(^^std::array<Px, 3>), "ArrayPxx3"));
+// std::array is a reference container of the fixed_sequence kind, and contiguous
+static_assert(welder::is_reference_container(^^std::array<int, 4>));
+static_assert(welder::container_kind_of(^^std::array<int, 4>) ==
+              welder::container_kind::fixed_sequence);
+static_assert(welder::container_is_contiguous(^^std::array<int, 4>));
 
 // --- names for class-template-specialization elements (NTTP args) ------------
 // These previously fell to display_string_of and produced INVALID C++ (a name with
@@ -132,6 +153,16 @@ static_assert(oc::opaque_eligible(^^std::map<std::string, std::vector<int>>));
 static_assert(eq(oc::derive_name(^^std::vector<std::vector<int>>), "VectorVectorInt"));
 // ...but a chain broken by an ineligible inner element stays by value
 static_assert(!oc::opaque_eligible(^^std::vector<std::vector<Plain>>));
+// a std::array is eligible on scalar / welded-class / nested-container elements, like
+// a vector; its C++ spelling round-trips (display form keeps the extent)
+static_assert(oc::opaque_eligible(^^std::array<int, 4>));
+static_assert(oc::opaque_eligible(^^std::array<Elem, 3>));
+static_assert(!oc::opaque_eligible(^^std::array<Plain, 3>));
+static_assert(oc::opaque_eligible(^^std::array<std::vector<int>, 2>));  // nested chain
+static_assert(eq(oc::container_spelling(^^std::array<short, 289>),
+                 "std::array<short int, 289>"));
+static_assert(oc::container_depth(^^std::array<int, 4>) == 1);
+static_assert(oc::container_depth(^^std::array<std::vector<int>, 2>) == 2);
 // nesting depth drives the render (=weld) order: inner before outer
 static_assert(oc::container_depth(^^std::vector<int>) == 1);
 static_assert(oc::container_depth(^^std::vector<std::vector<int>>) == 2);

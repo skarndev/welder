@@ -26,6 +26,8 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h> // std::string members / return values
 #include <nanobind/stl/vector.h> // std::vector<Handmade2> in trust.hpp; stl.hpp
+#include <nanobind/stl/array.h>  // std::array copy caster — SUPPRESSED per-type by the
+                                 // generated NB_MAKE_OPAQUE for gen_opaque's arrays
 #include <nanobind/stl/variant.h> // std::variant in unions.hpp (the blessed path)
 #include <nanobind/stl/map.h>      // std::map in stl.hpp
 #include <nanobind/stl/optional.h> // std::optional in stl.hpp

@@ -1028,8 +1028,9 @@ struct rod {
         also visible (or silently copy-converts it). @see welder::rod */
     template <class Container, class Style = ::welder::naming::none>
     static void bind_container(module_type& m, const char* name) {
-        if constexpr (::welder::container_kind_of(^^Container) ==
-                      ::welder::container_kind::sequence) {
+        constexpr ::welder::container_kind kind{
+            ::welder::container_kind_of(^^Container)};
+        if constexpr (kind == ::welder::container_kind::sequence) {
             // reference_internal (not nanobind's automatic_reference default,
             // which downgrades an lvalue-reference return to a *copy*) so
             // __getitem__/__iter__ hand out a live reference aliasing the C++
@@ -1079,32 +1080,130 @@ struct rod {
                     "Default-construct a new element in place at the end and return "
                     "a live reference to it.");
             }
-            if constexpr (::welder::container_is_contiguous(^^Container) &&
-                          std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
-                // numpy's __array__ protocol: numpy 2.x calls it with dtype/copy
-                // (positional or keyword); accept and ignore both and always hand
-                // back a live view — copy=True is honored by numpy copying the view.
-                cls.def(
-                    "__array__",
-                    [](Container& v, nb::handle, nb::handle) {
-                        return nb::ndarray<nb::numpy, Elem, nb::ndim<1>,
-                                           nb::c_contig>(v.data(), {v.size()},
-                                                        nb::find(&v));
-                    },
-                    nb::arg("dtype") = nb::none(),
-                    nb::arg("copy") = nb::none());
-            } else if constexpr (::welder::container_is_contiguous(^^Container) &&
-                                 ::welder::rods::python::pod_array_eligible<Elem>()) {
-                // Contiguous POD-struct element: expose the numpy array-interface
-                // protocol (structured, zero-copy, numpy-free view of data()).
-                _array_interface<Container, Elem>(cls);
-            }
+            _numpy_view<Container>(cls);
+        } else if constexpr (kind == ::welder::container_kind::fixed_sequence) {
+            // std::array has no nb::bind_array; hand-write the vector protocol
+            // minus the size-changing ops.
+            _bind_array<Container>(m, name);
         } else {
             // reference_internal for __getitem__ (see the sequence branch): the
             // mapped value is handed out as a live reference, so m[k].field = x
             // writes through — a copy for a scalar value type.
             nb::bind_map<Container, nb::rv_policy::reference_internal>(m, name);
         }
+    }
+
+    /** Bind fixed-size sequence @a Container (`std::array<T, N>`) **opaquely** — by
+        reference, with element write-through — under @a name.
+
+        Neither framework ships a `bind_array`, so this hand-writes the `bind_vector`
+        surface **minus the size-changing ops**: `__len__` (the constant `N`),
+        `__getitem__` / `__setitem__` (a welded-class element handed out as a live
+        `reference_internal` alias so `a[i].field = x` writes through; a scalar
+        returned by value), `__iter__`, and the same zero-copy NumPy view as a scalar/
+        POD vector (@ref _numpy_view). There is deliberately **no** `append`/`insert`/
+        `pop`/`extend`/`clear` (a fixed array cannot resize). Whole-attribute
+        assignment from a length-`N` sequence still works: a `__init__` from any
+        iterable (length checked — a wrong length raises `ValueError`) is registered as
+        an implicit conversion, so `obj.arr = [...]` rebinds through `def_rw`. A
+        length-changing slice assignment is rejected — only integer indices are bound,
+        so a `slice` subscript raises `TypeError`. @see welder::rod */
+    template <class Container>
+    static void _bind_array(module_type& m, const char* name) {
+        using Elem = typename Container::value_type;
+        constexpr std::size_t N{std::tuple_size_v<Container>};
+        constexpr nb::rv_policy P{nb::rv_policy::reference_internal};
+        auto cls{nb::class_<Container>(m, name)};
+        cls.def(nb::init<>(), "Default constructor")
+            .def(nb::init<const Container&>(), "Copy constructor")
+            .def("__len__", [](const Container&) { return N; })
+            .def("__bool__", [](const Container&) { return N != 0; })
+            .def(
+                "__iter__",
+                [](Container& a) {
+                    return nb::make_iterator<P>(nb::type<Container>(), "Iterator",
+                                                a.begin(), a.end());
+                },
+                nb::keep_alive<0, 1>())
+            .def(
+                "__getitem__",
+                [](Container& a, Py_ssize_t i) -> Elem& {
+                    return a[_wrap_index(i, N)];
+                },
+                P)
+            .def("__setitem__", [](Container& a, Py_ssize_t i, const Elem& v) {
+                a[_wrap_index(i, N)] = v;
+            });
+        // Whole-attribute assignment: construct from a length-N iterable, registered
+        // as an implicit conversion so `def_rw`'s setter accepts a plain list/tuple.
+        cls.def(
+            "__init__",
+            [](Container* self, nb::typed<nb::iterable, Elem> seq) {
+                // Mirror bind_vector's exception safety: destruct the in-place object
+                // if the fill fails (a wrong length, an element that won't cast), so a
+                // welded-class element leaves no default-constructed leftovers behind.
+                Container* a{new (self) Container{}};
+                try {
+                    std::size_t i{0};
+                    for (nb::handle h : seq) {
+                        if (i >= N)
+                            throw nb::value_error(
+                                "expected a sequence of the array's fixed length");
+                        (*a)[i++] = nb::cast<Elem>(h);
+                    }
+                    if (i != N)
+                        throw nb::value_error(
+                            "expected a sequence of the array's fixed length");
+                } catch (...) {
+                    a->~Container();
+                    throw;
+                }
+            },
+            "Construct from a length-N iterable");
+        nb::implicitly_convertible<nb::iterable, Container>();
+        _numpy_view<Container>(cls);
+    }
+
+    /** Give contiguous sequence class @a cls the zero-copy NumPy view its element type
+        supports: an `__array__` returning a live `nb::ndarray` for an arithmetic
+        (non-`bool`) element, or the structured `__array_interface__` dict for a POD
+        struct element (@ref _array_interface). A non-contiguous / non-viewable element
+        gets neither. Shared by the `std::vector` and `std::array` paths (both expose
+        `.data()`/`.size()`). @tparam Container the contiguous sequence. */
+    template <class Container, class Cls>
+    static void _numpy_view(Cls& cls) {
+        using Elem = typename Container::value_type;
+        if constexpr (::welder::container_is_contiguous(^^Container) &&
+                      std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
+            // numpy's __array__ protocol: numpy 2.x calls it with dtype/copy
+            // (positional or keyword); accept and ignore both and always hand
+            // back a live view — copy=True is honored by numpy copying the view.
+            cls.def(
+                "__array__",
+                [](Container& v, nb::handle, nb::handle) {
+                    return nb::ndarray<nb::numpy, Elem, nb::ndim<1>, nb::c_contig>(
+                        v.data(), {v.size()}, nb::find(&v));
+                },
+                nb::arg("dtype") = nb::none(), nb::arg("copy") = nb::none());
+        } else if constexpr (::welder::container_is_contiguous(^^Container) &&
+                             ::welder::rods::python::pod_array_eligible<Elem>()) {
+            // Contiguous POD-struct element: expose the numpy array-interface
+            // protocol (structured, zero-copy, numpy-free view of data()).
+            _array_interface<Container, Elem>(cls);
+        }
+    }
+
+    /** Normalize a Python index @a i (allowing one level of negative wrap-around)
+        against length @a n, raising `IndexError` when out of range — the fixed-array
+        `__getitem__`/`__setitem__` bounds check (the `bind_vector` `wrap` analogue,
+        reproduced here so the array path does not lean on a framework-internal
+        symbol). */
+    static std::size_t _wrap_index(Py_ssize_t i, std::size_t n) {
+        if (i < 0)
+            i += static_cast<Py_ssize_t>(n);
+        if (i < 0 || static_cast<std::size_t>(i) >= n)
+            throw nb::index_error("array index out of range");
+        return static_cast<std::size_t>(i);
     }
 
     /** Give the opaque `std::vector<Elem>` class @a cls a `__array_interface__`

@@ -52,11 +52,14 @@ virtuals dispatch per-slot, covariant overrides fold to one slot, protected NVI 
 are covered; a C-variadic virtual with no `bind_flat` is a hard error); and
 **`welder::rods::opaque_containers::rod`** reflects the welded types, finds the STL
 containers they use (`std::vector<Entity>` of a welded class included, not just
-scalars), and emits a **`.hpp` of `WELDER_OPAQUE` declarations + welded aliases** that
+scalars; and **fixed-size `std::array<T, N>` members**, reached transitively — direct,
+through an opaque vector's element struct, or inherited from a non-welded trait base),
+and emits a **`.hpp` of `WELDER_OPAQUE` declarations + welded aliases** that
 bind them by reference — so the per-container boilerplate is not hand-written (a
 namespace-scope `type_caster` specialization is a compile-time artifact no runtime rod
 can emit; blanket over welded types, `by_value` opt-out, **collision-free
-namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint` — overridable
+namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint`,
+`array<short,289>`→`ArrayShortIntx289` (element + `x` + extent) — overridable
 per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
 the name style). Class-element
 containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
@@ -171,18 +174,25 @@ supplies both the C++ spelling (for text-emitting rods) and the target name; onl
 alias `weld` is the third-party-template opt-in); duplicate aliases of one
 specialization and aliases to welded non-template types are hard errors. A welded
 alias whose target is a **reference-semantic STL container** (`std::vector`,
-`std::map`, `std::unordered_map` — `src/welder/containers.hpp`) is instead routed to
+`std::map`, `std::unordered_map`, or a fixed-size `std::array<T, N>` —
+`src/welder/containers.hpp`) is instead routed to
 the Python rods' `bind_container` hook (`py::bind_vector`/`bind_map`,
-`nb::bind_vector`/`bind_map`), binding the container **opaque / by reference** rather
+`nb::bind_vector`/`bind_map`, or the rods' hand-written array wrapper), binding the
+container **opaque / by reference** rather
 than the default `<pybind11/stl.h>` copy: `obj.v.append(x)` writes through, and for a
 welded-class element/value `__getitem__`/`__iter__` hand out a **live reference** (not a
 copy) aliasing the C++ element so `v[i].field = x` persists (pybind11 `bind_vector`/
 `bind_map` default `reference_internal`; the nanobind rod passes
 `nb::rv_policy::reference_internal` explicitly — its `automatic_reference` default would
-copy — a scalar element casts by value regardless). A
-`std::vector` of scalars or **POD structs** exposes `data()` zero-copy to numpy — a
-scalar vector via the buffer protocol (pybind11) / `nb::ndarray` (nanobind), a
-POD-struct vector via a reflected, numpy-free `__array_interface__` (a STRUCTURED
+copy — a scalar element casts by value regardless). **`std::array<T, N>`** has no
+framework `bind_array`, so each rod synthesizes the vector protocol **minus the
+size-changing ops** (constant `__len__`, integer `__getitem__`/`__setitem__` with
+live-reference elements, `__iter__`, NumPy view; NO `append`/`resize`); a length-`N`
+sequence still rebinds the whole attribute via an implicit conversion (`obj.arr = [...]`,
+wrong length → `ValueError`). A
+`std::vector`/`std::array` of scalars or **POD structs** exposes `data()` zero-copy to numpy — a
+scalar sequence via the buffer protocol (pybind11) / `nb::ndarray` (nanobind), a
+POD-struct sequence via a reflected, numpy-free `__array_interface__` (a STRUCTURED
 array; `src/welder/rods/python/array_interface.hpp`). Requires `WELDER_OPAQUE(T)` (each Python rod's
 `PYBIND11_MAKE_OPAQUE`/`NB_MAKE_OPAQUE`) at namespace scope; Python-only (a container
 alias for a Lua rod is a designed `static_assert` — the Lua runtimes are reference-

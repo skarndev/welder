@@ -1086,8 +1086,9 @@ struct rod {
         namespace scope, or pybind11's copy caster still wins for it. @see welder::rod */
     template <class Container, class Style = ::welder::naming::none>
     static void bind_container(module_type& m, const char* name) {
-        if constexpr (::welder::container_kind_of(^^Container) ==
-                      ::welder::container_kind::sequence) {
+        constexpr ::welder::container_kind kind{
+            ::welder::container_kind_of(^^Container)};
+        if constexpr (kind == ::welder::container_kind::sequence) {
             using Elem = typename Container::value_type;
             if constexpr (::welder::container_is_contiguous(^^Container) &&
                           std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
@@ -1109,9 +1110,96 @@ struct rod {
                 _def_sizing<Container, Elem>(cls);
                 _def_new<Container, Elem>(cls);
             }
+        } else if constexpr (kind == ::welder::container_kind::fixed_sequence) {
+            // std::array has no py::bind_array; hand-write the vector protocol minus
+            // the size-changing ops.
+            _bind_array<Container>(m, name);
         } else {
             py::bind_map<Container>(m, name);
         }
+    }
+
+    /** Bind fixed-size sequence @a Container (`std::array<T, N>`) **opaquely** — by
+        reference, with element write-through — under @a name.
+
+        pybind11 ships no `bind_array`, so this hand-writes the `bind_vector` surface
+        **minus the size-changing ops**: `__len__` (the constant `N`), `__getitem__` /
+        `__setitem__` (a welded-class element handed out as a live
+        `return_value_policy::reference_internal` alias so `a[i].field = x` writes
+        through; a scalar returned by value), `__iter__`, and the same zero-copy view as
+        a scalar/POD vector — the buffer protocol for an arithmetic element (so
+        `numpy.asarray(a)` / `memoryview(a)` see `data()`), the `__array_interface__`
+        dict for a POD-struct element (@ref _array_interface). There is deliberately
+        **no** `append`/`insert`/`pop`/`extend`/`clear`. Whole-attribute assignment from
+        a length-`N` sequence still works: a `py::init` from any sequence (length
+        checked — a wrong length raises `ValueError`) is registered as an implicit
+        conversion, so `obj.arr = [...]` rebinds through `def_readwrite`. Only integer
+        subscripts are bound, so a length-changing slice assignment raises `TypeError`.
+        @see welder::rod */
+    template <class Container>
+    static void _bind_array(module_type& m, const char* name) {
+        using Elem = typename Container::value_type;
+        constexpr std::size_t N{std::tuple_size_v<Container>};
+        constexpr bool scalar{std::is_arithmetic_v<Elem> &&
+                              !std::is_same_v<Elem, bool>};
+        auto cls{[&] {
+            if constexpr (scalar)
+                return py::class_<Container>(m, name, py::buffer_protocol());
+            else
+                return py::class_<Container>(m, name);
+        }()};
+        cls.def(py::init<>());
+        cls.def(py::init<const Container&>());
+        // Construct from a length-N sequence, registered as an implicit conversion so
+        // `def_readwrite`'s setter accepts a plain list/tuple (`obj.arr = [...]`).
+        cls.def(py::init([](const py::sequence& seq) {
+            if (py::len(seq) != N)
+                throw py::value_error(
+                    "expected a sequence of the array's fixed length");
+            Container a{};
+            std::size_t i{0};
+            for (py::handle h : seq)
+                a[i++] = h.cast<Elem>();
+            return a;
+        }));
+        py::implicitly_convertible<py::sequence, Container>();
+        cls.def("__len__", [](const Container&) { return N; });
+        cls.def(
+            "__getitem__",
+            [](Container& a, py::ssize_t i) -> Elem& {
+                return a[_wrap_index(i, N)];
+            },
+            py::return_value_policy::reference_internal);
+        cls.def("__setitem__", [](Container& a, py::ssize_t i, const Elem& v) {
+            a[_wrap_index(i, N)] = v;
+        });
+        cls.def(
+            "__iter__",
+            [](Container& a) { return py::make_iterator(a.begin(), a.end()); },
+            py::keep_alive<0, 1>());
+        if constexpr (scalar) {
+            // The buffer protocol: a 1-D contiguous view of data() (numpy/memoryview).
+            cls.def_buffer([](Container& a) -> py::buffer_info {
+                return py::buffer_info(a.data(),
+                                       static_cast<py::ssize_t>(sizeof(Elem)),
+                                       py::format_descriptor<Elem>::format(), 1,
+                                       {a.size()}, {sizeof(Elem)});
+            });
+        } else if constexpr (::welder::rods::python::pod_array_eligible<Elem>()) {
+            // Contiguous POD-struct element: structured, zero-copy numpy view.
+            _array_interface<Container, Elem>(cls);
+        }
+    }
+
+    /** Normalize a Python index @a i (allowing one level of negative wrap-around)
+        against length @a n, raising `IndexError` when out of range — the fixed-array
+        `__getitem__`/`__setitem__` bounds check. */
+    static std::size_t _wrap_index(py::ssize_t i, std::size_t n) {
+        if (i < 0)
+            i += static_cast<py::ssize_t>(n);
+        if (i < 0 || static_cast<std::size_t>(i) >= n)
+            throw py::index_error("array index out of range");
+        return static_cast<std::size_t>(i);
     }
 
   protected:
