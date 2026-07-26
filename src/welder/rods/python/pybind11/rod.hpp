@@ -1093,16 +1093,20 @@ struct rod {
                           std::is_arithmetic_v<Elem> && !std::is_same_v<Elem, bool>) {
                 // Contiguous scalar buffer: expose the buffer protocol so
                 // numpy/memoryview/ctypes view data() zero-copy.
-                py::bind_vector<Container>(m, name, py::buffer_protocol());
+                auto cls{py::bind_vector<Container>(m, name, py::buffer_protocol())};
+                _def_sizing<Container, Elem>(cls);
+                _def_new<Container, Elem>(cls);
             } else if constexpr (::welder::container_is_contiguous(^^Container) &&
                                  ::welder::rods::python::pod_array_eligible<Elem>()) {
                 // Contiguous POD-struct buffer: no scalar dtype, so expose the numpy
                 // array-interface protocol (a structured, zero-copy, numpy-free view).
                 auto cls{py::bind_vector<Container>(m, name)};
                 _array_interface<Container, Elem>(cls);
+                _def_sizing<Container, Elem>(cls);
                 _def_new<Container, Elem>(cls);
             } else {
                 auto cls{py::bind_vector<Container>(m, name)};
+                _def_sizing<Container, Elem>(cls);
                 _def_new<Container, Elem>(cls);
             }
         } else {
@@ -1111,6 +1115,30 @@ struct rod {
     }
 
   protected:
+    /** Give the opaque sequence class @a cls the `reserve(n)` / `resize(n)` sizing
+        methods (which `bind_vector` does not provide). `reserve` pre-grows capacity
+        so a following run of `append`/`new` neither reallocates nor invalidates
+        references — the efficient bulk-populate path; it is defined only where the
+        container has `reserve` (`std::vector`; `std::deque` has none). `resize` grows
+        or shrinks to exactly @a n, value-initializing new tail elements, and is
+        defined only where the element is default-constructible (the requires-clause
+        gates it). */
+    template <class Container, class Elem, class Cls>
+    static void _def_sizing(Cls& cls) {
+        using Size = typename Container::size_type;
+        if constexpr (requires(Container& c, Size n) { c.reserve(n); })
+            cls.def(
+                "reserve", [](Container& v, Size n) { v.reserve(n); }, py::arg("n"),
+                "Pre-allocate capacity for at least n elements (no-op if capacity "
+                "already exceeds n). Prevents reallocation — and reference "
+                "invalidation — across a following run of append()/new().");
+        if constexpr (requires(Container& c, Size n) { c.resize(n); })
+            cls.def(
+                "resize", [](Container& v, Size n) { v.resize(n); }, py::arg("n"),
+                "Resize to exactly n elements, value-initializing any new tail "
+                "elements. Shrinking or reallocating invalidates references.");
+    }
+
     /** Give the opaque `std::vector<Elem>` class @a cls a `new()` method that
         default-constructs an element in place at the back and returns a **live
         reference** to it (`reference_internal`, kept alive to the container) — so

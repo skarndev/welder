@@ -131,6 +131,38 @@ def test_new_absent_on_scalar_element_container(go: ModuleType) -> None:
     assert not hasattr(s.points, "new")
 
 
+def test_resize_value_initializes_new_elements(go: ModuleType) -> None:
+    # resize(n) grows to exactly n, value-initializing the new tail (Reading.value{0.0})
+    s = go.Series()
+    s.readings.resize(3)
+    assert len(s.readings) == 3
+    assert [r.value for r in s.readings] == pytest.approx([0.0, 0.0, 0.0])
+    # ...and shrinks
+    s.readings.resize(1)
+    assert len(s.readings) == 1
+
+
+def test_resize_on_scalar_container(go: ModuleType) -> None:
+    # scalars get resize too (value-initialized to 0.0) — reserve/resize are not
+    # gated to class elements, unlike new().
+    s = go.Series()
+    s.points.resize(2)
+    assert list(s.points) == pytest.approx([0.0, 0.0])
+
+
+def test_reserve_keeps_element_references_valid_across_growth(go: ModuleType) -> None:
+    # reserve(n) pre-grows capacity so a run of new() does not reallocate — the
+    # reference from an earlier new() stays valid (writes through) across the run.
+    s = go.Series()
+    s.readings.reserve(8)
+    first = s.readings.new()
+    for _ in range(7):  # stays within reserved capacity: no reallocation
+        s.readings.new()
+    first.value = 42.0  # still aliases readings[0] — no realloc happened
+    assert s.readings[0].value == pytest.approx(42.0)
+    assert len(s.readings) == 8
+
+
 def test_pod_element_gets_numpy_structured_view(go: ModuleType) -> None:
     # Reading { double value; } is a POD struct, so its opaque vector also exposes a
     # numpy-free structured array view (via __array_interface__).

@@ -1040,6 +1040,28 @@ struct rod {
                 nb::bind_vector<Container, nb::rv_policy::reference_internal>(
                     m, name)};
             using Elem = typename Container::value_type;
+            using Size = typename Container::size_type;
+            // `reserve(n)`: pre-grow capacity so a following run of append()/new()
+            // does not reallocate — the efficient way to bulk-populate, and the way
+            // to keep element references valid across that run (no reallocation ⇒ no
+            // move). Only where the container actually has reserve (std::vector;
+            // std::deque has none).
+            if constexpr (requires(Container& c, Size n) { c.reserve(n); })
+                cls.def(
+                    "reserve", [](Container& v, Size n) { v.reserve(n); },
+                    nb::arg("n"),
+                    "Pre-allocate capacity for at least n elements (no-op if capacity "
+                    "already exceeds n). Prevents reallocation — and reference "
+                    "invalidation — across a following run of append()/new().");
+            // `resize(n)`: grow/shrink to exactly n elements, value-initializing any
+            // new tail elements — allocate-then-fill-by-index bulk population. Needs a
+            // default-constructible element (the requires-expression gates it).
+            if constexpr (requires(Container& c, Size n) { c.resize(n); })
+                cls.def(
+                    "resize", [](Container& v, Size n) { v.resize(n); },
+                    nb::arg("n"),
+                    "Resize to exactly n elements, value-initializing any new tail "
+                    "elements. Shrinking or reallocating invalidates references.");
             // `new()`: default-construct an element in place at the back and hand
             // back a **live reference** to it (reference_internal, kept alive to the
             // container) — so generic Python code can grow a container of welded
