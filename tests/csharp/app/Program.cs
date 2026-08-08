@@ -203,6 +203,31 @@ using (var owner = new retpolicy.Owner())
     }
 }
 
+// --- value-marshalled containers ------------------------------------------------
+
+using (var bk = new Basket())
+{
+    Check(bk.Nums.Length == 3 && bk.Nums[2] == 3, "vector<int> field -> int[] copy");
+    bk.Nums = new[] { 5, 6 };
+    Check(bk.Total(new[] { 1 }) == 12, "vector<int> param + field set");
+    Check(bk.Find(6) == 1 && bk.Find(9) == null, "optional<int> return");
+    Check(bk.Label == null, "optional<string> field (empty)");
+    bk.Label = "tag";
+    Check(bk.Label == "tag", "optional<string> field set/get");
+    var t = bk.Triple();
+    Check(t.Length == 3 && Math.Abs(t[1] - 2.5) < 1e-12, "array<double,3> return");
+    bk.SetTriple(new[] { 1.0, 2.0, 3.0 });
+    Check(Math.Abs(bk.TripSum() - 6.0) < 1e-12, "array<double,3> param");
+    try { bk.SetTriple(new[] { 1.0 }); Check(false, "wrong array length must throw"); }
+    catch (ArgumentException)
+        { Check(true, "array extent mismatch -> ArgumentException"); }
+}
+using (var mp = Global.MaybePoint(true)!)
+    Check(mp.X == 3, "optional<welded> some (owned copy)");
+Check(Global.MaybePoint(false) == null, "optional<welded> none -> null");
+Check(Global.MaybeLevel(true) == Level.High && Global.MaybeLevel(false) == null,
+      "optional<enum>");
+
 // --- directors: C# subclasses overriding C++ virtuals --------------------------
 
 using (var sh = new Shape())

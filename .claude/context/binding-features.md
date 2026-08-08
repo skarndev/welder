@@ -69,6 +69,18 @@ pointer-returning slots (unsupported shape → static_assert naming bind_flat).
 Shared overridable.hpp: Animal/Bird/Robot welded for cs (Shape/Plant/Tree
 stay py-only); the Py* trampolines compile under neutral stub macros in
 shared_seam.hpp.
+Value containers (Phase 6a): classify's class arm now recurses — optional<leaf>
+→ marshal_kind::optional_ (by-value welder_opt_wire: has + i/f/s/p payload
+fields; C# T?), vector/array<scalar|enum> → seq_value (welder_seq_wire buffer+
+len; returns malloc a copy the C# side Buffer.MemoryCopy's + welder_free's,
+params PIN the managed array via `fixed` — call_pieces.pin_open/needs_unsafe,
+wrapper/property emitted `unsafe`); std::array params length-checked
+(invalid_argument). vector<bool> excluded (bitset). Setters/params share ONE
+conversion source (append_one_param reused by add_field/add_property/
+add_variable setters). Classify's handle arm is now STRICT: only
+welded_for(cs) classes are handles — a gate-trusted third-party class or
+unlisted container is a designed diagnostic (was a silent void* before 6a).
+Director slots stay leaf-kind-only.
 NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
 generation):
 virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference

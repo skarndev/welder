@@ -25,6 +25,25 @@ namespace csharp_cases
         }
     }
 
+    /// <summary>The by-value wire of an optional with a leaf payload.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WelderOptWire
+    {
+        public byte Has;
+        public long I;
+        public double F;
+        public IntPtr S;
+        public IntPtr P;
+    }
+
+    /// <summary>The by-value wire of a scalar/enum sequence (buffer + length).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WelderSeqWire
+    {
+        public IntPtr Data;
+        public long Len;
+    }
+
     internal static class WelderInterop
     {
         internal static void ThrowIfError(in WelderError err)
@@ -122,6 +141,20 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Dog_clone(DogHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Dog_m_bark_0(DogHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_f_age_of_0(AnimalHandle a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_clone(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_Basket_get_nums(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_nums(BasketHandle self, WelderSeqWire v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_Basket_get_label(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_label(BasketHandle self, WelderOptWire v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_Basket_m_find_0(BasketHandle self, int a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial long welder_csharp_cases_Basket_m_total_0(BasketHandle self, WelderSeqWire a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_Basket_m_triple_0(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_m_set_triple_0(BasketHandle self, WelderSeqWire a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial double welder_csharp_cases_Basket_m_trip_sum_0(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_f_maybe_point_0([MarshalAs(UnmanagedType.U1)] bool a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_f_maybe_level_0([MarshalAs(UnmanagedType.U1)] bool a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_init(IntPtr release, IntPtr s0, IntPtr s1);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_bind(IntPtr self, IntPtr ctx, ulong mask);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_destroy(IntPtr self);
@@ -208,7 +241,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Point_set_x(_h_Point, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Point_set_x(_h_Point, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -223,7 +256,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Point_set_y(_h_Point, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Point_set_y(_h_Point, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -302,7 +335,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Point_pset_Depth(_h_Point, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Point_pset_Depth(_h_Point, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -387,7 +420,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Size_set_width(_h_Size, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Size_set_width(_h_Size, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -402,7 +435,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Size_set_height(_h_Size, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Size_set_height(_h_Size, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -539,7 +572,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Segment_set_start(_h_Segment, value._h_Point, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Segment_set_start(_h_Segment, @value._h_Point, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -556,7 +589,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Segment_set_end(_h_Segment, value._h_Point, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Segment_set_end(_h_Segment, @value._h_Point, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -625,7 +658,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Animal_set_age(_h_Animal, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Animal_set_age(_h_Animal, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -688,7 +721,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Legged_set_legs(_h_Legged, value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_Legged_set_legs(_h_Legged, @value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -750,6 +783,133 @@ namespace csharp_cases
         }
 
         public override void Dispose() { _h_Dog.Dispose(); base.Dispose(); }
+    }
+
+    internal sealed class BasketHandle : SafeHandle
+    {
+        internal BasketHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Basket_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Basket : IDisposable
+    {
+        internal BasketHandle _h_Basket;
+        internal object? __owner;
+        internal bool __isDirector;
+        internal Basket(IntPtr handle, bool owns) { _h_Basket = new BasketHandle(handle, owns); }
+
+        private static IntPtr __New_default()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Basket_new_default(out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public Basket() : this(__New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Basket Clone()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Basket_clone(_h_Basket, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Basket(__r, true);
+        }
+
+        public unsafe int[] Nums
+        {
+            get
+            {
+                var __r = NativeMethods.welder_csharp_cases_Basket_get_nums(_h_Basket, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                var __out = new int[__r.Len];
+                if (__r.Len != 0)
+                {
+                    fixed (int* __d = __out)
+                        Buffer.MemoryCopy((void*)__r.Data, __d, __r.Len * sizeof(int), __r.Len * sizeof(int));
+                }
+                if (__r.Data != IntPtr.Zero) NativeMethods.welder_free(__r.Data);
+                return __out;
+            }
+            set
+            {
+                fixed (int* __pin0 = @value) {
+                NativeMethods.welder_csharp_cases_Basket_set_nums(_h_Basket, new WelderSeqWire { Data = (IntPtr)__pin0, Len = @value.Length }, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                }
+            }
+        }
+
+        public string? Label
+        {
+            get
+            {
+                var __r = NativeMethods.welder_csharp_cases_Basket_get_label(_h_Basket, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                if (__r.Has == 0) return null;
+                IntPtr __s = __r.S;
+                try { return Marshal.PtrToStringUTF8(__s) ?? ""; }
+                finally { NativeMethods.welder_free(__s); }
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Basket_set_label(_h_Basket, @value is null ? default : new WelderOptWire { Has = 1, S = NativeMethods.welder_dup_utf8(@value) }, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+            }
+        }
+
+        public int? Find(int v)
+        {
+            var __r = NativeMethods.welder_csharp_cases_Basket_m_find_0(_h_Basket, v, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r.Has != 0 ? (int?)unchecked((int)__r.I) : null;
+        }
+
+        public unsafe long Total(int[] extra)
+        {
+            fixed (int* __pin0 = extra) {
+            var __r = NativeMethods.welder_csharp_cases_Basket_m_total_0(_h_Basket, new WelderSeqWire { Data = (IntPtr)__pin0, Len = extra.Length }, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+            }
+        }
+
+        public unsafe double[] Triple()
+        {
+            var __r = NativeMethods.welder_csharp_cases_Basket_m_triple_0(_h_Basket, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            var __out = new double[__r.Len];
+            if (__r.Len != 0)
+            {
+                fixed (double* __d = __out)
+                    Buffer.MemoryCopy((void*)__r.Data, __d, __r.Len * sizeof(double), __r.Len * sizeof(double));
+            }
+            if (__r.Data != IntPtr.Zero) NativeMethods.welder_free(__r.Data);
+            return __out;
+        }
+
+        public unsafe void SetTriple(double[] a)
+        {
+            fixed (double* __pin0 = a) {
+            NativeMethods.welder_csharp_cases_Basket_m_set_triple_0(_h_Basket, new WelderSeqWire { Data = (IntPtr)__pin0, Len = a.Length }, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            }
+        }
+
+        public double TripSum()
+        {
+            var __r = NativeMethods.welder_csharp_cases_Basket_m_trip_sum_0(_h_Basket, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+
+        public virtual void Dispose() => _h_Basket.Dispose();
     }
 
     internal sealed class ShapeHandle : SafeHandle
@@ -941,7 +1101,7 @@ namespace csharp_cases
             }
             set
             {
-                NativeMethods.welder_csharp_cases_v_answer_set(value, out WelderError __e);
+                NativeMethods.welder_csharp_cases_v_answer_set(@value, out WelderError __e);
                 WelderInterop.ThrowIfError(in __e);
             }
         }
@@ -961,6 +1121,20 @@ namespace csharp_cases
             var __r = NativeMethods.welder_csharp_cases_f_age_of_0(a._h_Animal, out WelderError __e);
             WelderInterop.ThrowIfError(in __e);
             return __r;
+        }
+
+        public static Point? MaybePoint(bool give)
+        {
+            var __r = NativeMethods.welder_csharp_cases_f_maybe_point_0(give, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r.Has != 0 ? new Point(__r.P, true) : null;
+        }
+
+        public static Level? MaybeLevel(bool give)
+        {
+            var __r = NativeMethods.welder_csharp_cases_f_maybe_level_0(give, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r.Has != 0 ? (Level?)(Level)__r.I : null;
         }
 
         public static string DescribeShape(Shape s)

@@ -168,6 +168,8 @@ WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 | welded class (`T*` return, default or `rv::take_ownership`) | adopted `void*` | the wrapper (owning), or `null` |
 | welded class return under `rv::reference` / `reference_internal` | the object's address | a non-owning **view** |
 | non-const welded-class **field** | the member's address | a live view (writes go through) |
+| `std::optional` of a leaf kind | by-value `welder_opt_wire` struct | `T?` |
+| `std::vector`/`std::array` of scalars/enums | by-value `welder_seq_wire` (copy; params pin the managed array) | `T[]` |
 
 ## Ownership and views
 
@@ -190,7 +192,12 @@ A pointer return may be C# `null` (the wrapper type is `T?`); `keep_alive` is
 documented-ignored (as on the Lua rods) — the owner-reference mechanism covers
 the common case.
 
-What the [bindability gate](bindability.md) admits but this phase cannot yet
-marshal — STL containers — fails **loudly at generation time** with a designed
+Value-family containers cross by **copy** (like the Python rods' default
+`<pybind11/stl.h>` behavior): an `optional` with a leaf payload maps to `T?`,
+a scalar/enum `vector`/`array` to `T[]` (an `std::array` parameter of the
+wrong length throws `ArgumentException`). What the
+[bindability gate](bindability.md) admits but this phase cannot yet marshal —
+containers of welded classes, maps, smart pointers, `variant`, nested
+wrappers — fails **loudly at generation time** with a designed
 diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
 silently-corrupting `void*`. Those families land in the following phases.

@@ -5,6 +5,8 @@
 #include <exception>
 #include <functional>
 #include <meta>
+#include <new>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -53,6 +55,26 @@
 struct welder_error {
     std::int32_t code;
     char* message;
+};
+
+/** The by-value wire form of a `std::optional` with a LEAF payload: `has` plus
+    the payload in the kind-matching field (ints/bools/enums in `i`, floats in
+    `f`, a malloc'd UTF-8 buffer in `s`, an object pointer in `p`). Mirrored
+    managed-side as the blittable `WelderOptWire`. */
+struct welder_opt_wire {
+    std::uint8_t has;
+    std::int64_t i;
+    double f;
+    const char* s;
+    void* p;
+};
+
+/** The by-value wire form of a scalar/enum sequence: an element-typed buffer +
+    length. Returns malloc the buffer (freed managed-side via `welder_free`);
+    parameters point at the managed array, pinned for the call. */
+struct welder_seq_wire {
+    void* data;
+    std::int64_t len;
 };
 
 namespace welder::inline v0::rods::csharp::shim {
@@ -176,6 +198,40 @@ constexpr decltype(auto) to_cpp(auto&& w) {
             return static_cast<const char*>(w); // char* param passes through
         else
             return Bare{w ? w : ""}; // std::string / std::string_view
+    } else if constexpr (k == marshal_kind::optional_) {
+        using Opt = [:bare(P):];
+        using Pay = [:std::meta::remove_cvref(optional_payload(bare(P))):];
+        constexpr marshal_kind pk{classify(optional_payload(bare(P)))};
+        if (!w.has)
+            return Opt{};
+        if constexpr (pk == marshal_kind::utf8_string) {
+            Opt o{Pay{w.s ? w.s : ""}};
+            std::free(const_cast<char*>(w.s)); // param-direction buffer is ours
+            return o;
+        } else if constexpr (pk == marshal_kind::handle) {
+            using Bare = [:bare(optional_payload(bare(P))):];
+            return Opt{*reinterpret_cast<Bare*>(w.p)}; // borrowed: copy in
+        } else if constexpr (type_trait(^^std::is_floating_point_v,
+                                        ^^Pay)) {
+            return Opt{static_cast<Pay>(w.f)};
+        } else {
+            return Opt{static_cast<Pay>(w.i)};
+        }
+    } else if constexpr (k == marshal_kind::seq_value) {
+        using Seq = [:bare(P):];
+        using E = [:std::meta::remove_cvref(sequence_element(bare(P))):];
+        const E* d{static_cast<const E*>(w.data)};
+        if constexpr (is_fixed_sequence(bare(P))) {
+            Seq a{};
+            if (static_cast<std::size_t>(w.len) != a.size())
+                throw std::invalid_argument{
+                    "welder: sequence length does not match std::array extent"};
+            for (std::size_t i{0}; i < a.size(); ++i)
+                a[i] = d[i];
+            return a;
+        } else {
+            return Seq(d, d + w.len);
+        }
     } else { // scalar / boolean
         using V = [:bare(P):];
         return static_cast<V>(w);
@@ -196,6 +252,10 @@ consteval std::meta::info wire_return_type() {
         return std::meta::underlying_type(bare(R));
     else if constexpr (k == marshal_kind::handle)
         return ^^void*;
+    else if constexpr (k == marshal_kind::optional_)
+        return ^^welder_opt_wire;
+    else if constexpr (k == marshal_kind::seq_value)
+        return ^^welder_seq_wire;
     else // scalar / boolean
         return bare(R);
 }
@@ -250,6 +310,35 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
                     return static_cast<void*>(new Bare(f()));
                 }
             }
+        } else if constexpr (k == marshal_kind::optional_) {
+            using Pay = [:std::meta::remove_cvref(optional_payload(bare(R))):];
+            constexpr marshal_kind pk{classify(optional_payload(bare(R)))};
+            const auto o{f()}; // materialize (may be a reference return)
+            welder_opt_wire w{};
+            if (o.has_value()) {
+                w.has = 1;
+                if constexpr (pk == marshal_kind::utf8_string)
+                    w.s = dup(std::string_view{*o}); // managed side frees
+                else if constexpr (pk == marshal_kind::handle) {
+                    using Bare = [:bare(optional_payload(bare(R))):];
+                    w.p = new Bare(*o); // an OWNED copy managed-side
+                } else if constexpr (type_trait(^^std::is_floating_point_v,
+                                                ^^Pay))
+                    w.f = static_cast<double>(*o);
+                else
+                    w.i = static_cast<std::int64_t>(*o);
+            }
+            return w;
+        } else if constexpr (k == marshal_kind::seq_value) {
+            using E = [:std::meta::remove_cvref(sequence_element(bare(R))):];
+            const auto seq{f()}; // materialize
+            welder_seq_wire w{};
+            w.len = static_cast<std::int64_t>(seq.size());
+            E* buf{static_cast<E*>(std::malloc(sizeof(E) * seq.size()))};
+            for (std::size_t i{0}; i < seq.size(); ++i)
+                buf[i] = seq[i];
+            w.data = buf; // managed side copies + welder_free's
+            return w;
         } else if constexpr (k == marshal_kind::enum_) {
             return static_cast<Wire>(f());
         } else { // scalar / boolean

@@ -1,6 +1,8 @@
 #pragma once
+#include <array>    // ^^std::array (the value-sequence family)
 #include <cstddef>
 #include <meta>
+#include <optional> // ^^std::optional
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -237,9 +239,39 @@ enum class marshal_kind {
     utf8_string, /**< `std::string` / `std::string_view` / `char*` — UTF-8. */
     enum_,       /**< A welded enum: crosses as its underlying value (`enum : <u>`). */
     handle,      /**< A welded class: crosses as an opaque `void*`/`IntPtr`. */
-    unsupported  /**< Not yet representable (containers, …) — see
-                      @ref require_marshallable. */
+    optional_,   /**< `std::optional` of a leaf kind: crosses by value as the
+                      fixed `welder_opt_wire` struct ⇄ C# `T?`. */
+    seq_value,   /**< `std::vector`/`std::array` of scalar/enum elements:
+                      crosses by VALUE (a copy) as `welder_seq_wire` ⇄ `T[]`. */
+    unsupported  /**< Not yet representable — see @ref require_marshallable. */
 };
+
+/** Is @a type (dealias'd) a specialization of class template @a tmpl? */
+consteval bool is_specialization_of(std::meta::info type, std::meta::info tmpl) {
+    return std::meta::has_template_arguments(type) &&
+           std::meta::template_of(type) == tmpl;
+}
+
+/** `std::optional<P>`'s payload type. */
+consteval std::meta::info optional_payload(std::meta::info type) {
+    return std::meta::template_arguments_of(type)[0];
+}
+
+/** A `std::vector`/`std::array` sequence's element type. */
+consteval std::meta::info sequence_element(std::meta::info type) {
+    return std::meta::template_arguments_of(type)[0];
+}
+
+/** Whether @a type is the fixed-size sequence (`std::array`). */
+consteval bool is_fixed_sequence(std::meta::info type) {
+    return is_specialization_of(type, ^^std::array);
+}
+
+/** `std::array<T, N>`'s extent N. */
+consteval std::size_t fixed_extent(std::meta::info type) {
+    return std::meta::extract<std::size_t>(
+        std::meta::template_arguments_of(type)[1]);
+}
 
 /** Evaluate a standard unary type-trait variable template on the type @a t. */
 consteval bool type_trait(std::meta::info trait_var, std::meta::info t) {
@@ -281,8 +313,32 @@ consteval marshal_kind classify(std::meta::info type) {
         return marshal_kind::enum_;
     if (m::is_arithmetic_type(w))
         return marshal_kind::scalar;
-    if (m::is_class_type(w))
-        return marshal_kind::handle;
+    if (m::is_class_type(w)) {
+        // The value-marshalled container family (a LEAF payload only — deeper
+        // nesting stays unsupported until it earns a wire representation).
+        if (is_specialization_of(w, ^^std::optional)) {
+            const marshal_kind pk{classify(optional_payload(w))};
+            return (pk == marshal_kind::scalar || pk == marshal_kind::boolean ||
+                    pk == marshal_kind::enum_ ||
+                    pk == marshal_kind::utf8_string ||
+                    pk == marshal_kind::handle)
+                       ? marshal_kind::optional_
+                       : marshal_kind::unsupported;
+        }
+        if (is_specialization_of(w, ^^std::vector) ||
+            is_specialization_of(w, ^^std::array)) {
+            const marshal_kind ek{classify(sequence_element(w))};
+            // NOT bool: std::vector<bool> is a bitset, not contiguous bools.
+            return (ek == marshal_kind::scalar || ek == marshal_kind::enum_)
+                       ? marshal_kind::seq_value
+                       : marshal_kind::unsupported;
+        }
+        // Only a class this rod REGISTERS can cross as a handle; any other
+        // class (a gate-trusted third-party type, an unlisted container) is a
+        // designed diagnostic, never a silently-mistyped void*.
+        return ::welder::welded_for(w, lang::cs) ? marshal_kind::handle
+                                                 : marshal_kind::unsupported;
+    }
     return marshal_kind::unsupported;
 }
 

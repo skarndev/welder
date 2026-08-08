@@ -94,16 +94,21 @@ consteval std::size_t director_slot_index(std::meta::info type,
     marshallable, and the return void / scalar / bool / enum / `std::string`
     by value / welded class by value. */
 consteval bool director_slot_supported(std::meta::info slot) {
+    const auto leaf = [](marshal_kind k) {
+        return k == marshal_kind::scalar || k == marshal_kind::boolean ||
+               k == marshal_kind::enum_ || k == marshal_kind::utf8_string ||
+               k == marshal_kind::handle;
+    };
     const std::meta::info R{std::meta::return_type_of(slot)};
     const marshal_kind rk{classify(R)};
-    if (rk == marshal_kind::unsupported)
-        return false;
+    if (rk != marshal_kind::void_ && !leaf(rk))
+        return false; // the value-container wires have no director arms yet
     if ((rk == marshal_kind::handle || rk == marshal_kind::utf8_string) &&
         (is_pointer_flavor(R) ||
          type_trait(^^std::is_reference_v, R)))
         return false;
     for (auto p : std::meta::parameters_of(slot))
-        if (classify(std::meta::type_of(p)) == marshal_kind::unsupported)
+        if (!leaf(classify(std::meta::type_of(p))))
             return false;
     return true;
 }

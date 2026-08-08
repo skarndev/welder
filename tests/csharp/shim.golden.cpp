@@ -186,6 +186,34 @@ const char* welder_csharp_cases_Dog_m_bark_0(void* self, welder_error* err) { re
 
 std::int32_t welder_csharp_cases_f_age_of_0(void* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "age_of", 0)>(err, a0); }
 
+void welder_csharp_cases_Basket_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Basket>(self); }
+
+void* welder_csharp_cases_Basket_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Basket>(err); }
+
+void* welder_csharp_cases_Basket_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Basket>(self, err); }
+
+welder_seq_wire welder_csharp_cases_Basket_get_nums(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "nums")>(self, err); }
+
+void welder_csharp_cases_Basket_set_nums(void* self, welder_seq_wire v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "nums")>(self, err, v); }
+
+welder_opt_wire welder_csharp_cases_Basket_get_label(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "label")>(self, err); }
+
+void welder_csharp_cases_Basket_set_label(void* self, welder_opt_wire v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "label")>(self, err, v); }
+
+welder_opt_wire welder_csharp_cases_Basket_m_find_0(void* self, std::int32_t a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Basket, wcs::named_member(^^::csharp_cases::Basket, "find", 0)>(self, err, a0); }
+
+std::int64_t welder_csharp_cases_Basket_m_total_0(void* self, welder_seq_wire a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Basket, wcs::named_member(^^::csharp_cases::Basket, "total", 0)>(self, err, a0); }
+
+welder_seq_wire welder_csharp_cases_Basket_m_triple_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Basket, wcs::named_member(^^::csharp_cases::Basket, "triple", 0)>(self, err); }
+
+void welder_csharp_cases_Basket_m_set_triple_0(void* self, welder_seq_wire a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Basket, wcs::named_member(^^::csharp_cases::Basket, "set_triple", 0)>(self, err, a0); }
+
+double welder_csharp_cases_Basket_m_trip_sum_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Basket, wcs::named_member(^^::csharp_cases::Basket, "trip_sum", 0)>(self, err); }
+
+welder_opt_wire welder_csharp_cases_f_maybe_point_0(bool a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "maybe_point", 0)>(err, a0); }
+
+welder_opt_wire welder_csharp_cases_f_maybe_level_0(bool a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "maybe_level", 0)>(err, a0); }
+
 void welder_csharp_cases_Shape_dir_init(void* release, void* s0, void* s1) {
     __wcs_dir_csharp_cases_Shape::__wcs_tbl.release = reinterpret_cast<void (*)(void*)>(release);
     __wcs_dir_csharp_cases_Shape::__wcs_tbl.s0 = reinterpret_cast<const char* (*)(void*, welder_error*)>(s0);

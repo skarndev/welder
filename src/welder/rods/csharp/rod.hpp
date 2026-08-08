@@ -105,6 +105,8 @@ consteval const char* shim_wire_spelling(std::meta::info type, bool is_return) {
         case marshal_kind::utf8_string: return is_return ? "const char*"
                                                          : "const char*";
         case marshal_kind::enum_:       return enum_wire_spell(type).c_abi;
+        case marshal_kind::optional_:   return "welder_opt_wire";
+        case marshal_kind::seq_value:   return "welder_seq_wire";
         default:                        return "void*"; // handle
     }
 }
@@ -181,6 +183,10 @@ std::string pinvoke_type(bool is_return) {
         return is_return ? "IntPtr" : "string";
     else if constexpr (k == marshal_kind::enum_)
         return type_ref<bare(Type)>();
+    else if constexpr (k == marshal_kind::optional_)
+        return "WelderOptWire";
+    else if constexpr (k == marshal_kind::seq_value)
+        return "WelderSeqWire";
     else // handle
         return is_return ? std::string{"IntPtr"}
                          : type_ref<bare(Type)>() + "Handle";
@@ -196,7 +202,28 @@ std::string public_type() {
         return s;
     } else if constexpr (k == marshal_kind::boolean) return "bool";
     else if constexpr (k == marshal_kind::utf8_string) return "string";
-    else
+    else if constexpr (k == marshal_kind::optional_) {
+        constexpr marshal_kind pk{classify(optional_payload(bare(Type)))};
+        if constexpr (pk == marshal_kind::scalar) {
+            constexpr const char* c{
+                scalar_spell(optional_payload(bare(Type))).cs};
+            return std::string{c} + "?";
+        } else if constexpr (pk == marshal_kind::boolean)
+            return "bool?";
+        else if constexpr (pk == marshal_kind::utf8_string)
+            return "string?";
+        else // enum_ / handle: nullable of the referenced type
+            return type_ref<bare(optional_payload(bare(Type)))>() + "?";
+    } else if constexpr (k == marshal_kind::seq_value) {
+        if constexpr (classify(sequence_element(bare(Type))) ==
+                      marshal_kind::enum_)
+            return type_ref<bare(sequence_element(bare(Type)))>() + "[]";
+        else {
+            constexpr const char* c{
+                scalar_spell(sequence_element(bare(Type))).cs};
+            return std::string{c} + "[]";
+        }
+    } else
         return type_ref<bare(Type)>(); // enum_ / handle
 }
 
@@ -252,6 +279,58 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
                    "(__r, true);\n";
         }
         return out;
+    } else if constexpr (k == marshal_kind::optional_) {
+        constexpr marshal_kind pk{classify(optional_payload(bare(R)))};
+        std::string out{ind + "var __r = " + pc + ";\n" + check};
+        if constexpr (pk == marshal_kind::utf8_string) {
+            out += ind + "if (__r.Has == 0) return null;\n";
+            out += ind + "IntPtr __s = __r.S;\n";
+            out += ind + "try { return Marshal.PtrToStringUTF8(__s) ?? \"\"; }\n";
+            out += ind + "finally { NativeMethods.welder_free(__s); }\n";
+        } else if constexpr (pk == marshal_kind::handle) {
+            out += ind + "return __r.Has != 0 ? new " +
+                   type_ref<bare(optional_payload(bare(R)))>() +
+                   "(__r.P, true) : null;\n";
+        } else if constexpr (pk == marshal_kind::boolean) {
+            out += ind + "return __r.Has != 0 ? (bool?)(__r.I != 0) : null;\n";
+        } else if constexpr (pk == marshal_kind::enum_) {
+            out += ind + "return __r.Has != 0 ? (" +
+                   type_ref<bare(optional_payload(bare(R)))>() + "?)(" +
+                   type_ref<bare(optional_payload(bare(R)))>() +
+                   ")__r.I : null;\n";
+        } else if constexpr (type_trait(^^std::is_floating_point_v,
+                                        bare(optional_payload(bare(R))))) {
+            constexpr const char* c{
+                scalar_spell(optional_payload(bare(R))).cs};
+            out += ind + "return __r.Has != 0 ? (" + std::string{c} +
+                   "?)unchecked((" + c + ")__r.F) : null;\n";
+        } else {
+            constexpr const char* c{
+                scalar_spell(optional_payload(bare(R))).cs};
+            out += ind + "return __r.Has != 0 ? (" + std::string{c} +
+                   "?)unchecked((" + c + ")__r.I) : null;\n";
+        }
+        return out;
+    } else if constexpr (k == marshal_kind::seq_value) {
+        std::string ecs{};
+        if constexpr (classify(sequence_element(bare(R))) ==
+                      marshal_kind::enum_)
+            ecs = type_ref<bare(sequence_element(bare(R)))>();
+        else {
+            constexpr const char* c{scalar_spell(sequence_element(bare(R))).cs};
+            ecs = c;
+        }
+        std::string out{ind + "var __r = " + pc + ";\n" + check};
+        out += ind + "var __out = new " + ecs + "[__r.Len];\n";
+        out += ind + "if (__r.Len != 0)\n" + ind + "{\n";
+        out += ind + "    fixed (" + ecs + "* __d = __out)\n";
+        out += ind + "        Buffer.MemoryCopy((void*)__r.Data, __d, __r.Len * "
+               "sizeof(" + ecs + "), __r.Len * sizeof(" + ecs + "));\n";
+        out += ind + "}\n";
+        out += ind + "if (__r.Data != IntPtr.Zero) "
+               "NativeMethods.welder_free(__r.Data);\n";
+        out += ind + "return __out;\n";
+        return out;
     } else {
         return ind + "var __r = " + pc + ";\n" + check + ind + "return __r;\n";
     }
@@ -277,6 +356,8 @@ struct call_pieces {
     std::string wrapper_args{};   /**< the wrapper→P/Invoke argument expressions. */
     std::string param_names{};    /**< `\x1f`-joined C# names (XML `<param>` keys). */
     bool has_string{false};       /**< any UTF-8 string ⇒ the Utf8 attribute variant. */
+    std::string pin_open{};       /**< `fixed (...)` prefixes pinning array params. */
+    bool needs_unsafe{false};     /**< pinning / raw copies ⇒ an `unsafe` wrapper. */
 };
 
 /** Append one parameter (C++ type @a PT, position @a j, C# name @a csname) to
@@ -306,7 +387,45 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
         // The param's STATIC type picks its own level's handle field — for a
         // derived instance passed as a base that is the correctly-upcast one.
         cp.wrapper_args += name + "._h_" + type_ref<bare(PT)>();
-    else
+    else if constexpr (classify(PT) == marshal_kind::optional_) {
+        constexpr marshal_kind pk{classify(optional_payload(bare(PT)))};
+        if constexpr (pk == marshal_kind::utf8_string)
+            cp.wrapper_args += name +
+                               " is null ? default : new WelderOptWire { Has = "
+                               "1, S = NativeMethods.welder_dup_utf8(" +
+                               name + ") }";
+        else if constexpr (pk == marshal_kind::handle)
+            cp.wrapper_args += name +
+                               " is null ? default : new WelderOptWire { Has = "
+                               "1, P = " + name + "._h_" +
+                               type_ref<bare(optional_payload(bare(PT)))>() +
+                               ".DangerousGetHandle() }";
+        else if constexpr (pk == marshal_kind::boolean)
+            cp.wrapper_args += name + ".HasValue ? new WelderOptWire { Has = 1, "
+                               "I = " + name + ".Value ? 1 : 0 } : default";
+        else if constexpr (type_trait(^^std::is_floating_point_v,
+                                      bare(optional_payload(bare(PT)))))
+            cp.wrapper_args += name + ".HasValue ? new WelderOptWire { Has = 1, "
+                               "F = (double)" + name + ".Value } : default";
+        else // integral scalar / enum
+            cp.wrapper_args += name + ".HasValue ? new WelderOptWire { Has = 1, "
+                               "I = (long)" + name + ".Value } : default";
+    } else if constexpr (classify(PT) == marshal_kind::seq_value) {
+        const std::string pin{"__pin" + i};
+        std::string ecs{};
+        if constexpr (classify(sequence_element(bare(PT))) ==
+                      marshal_kind::enum_)
+            ecs = type_ref<bare(sequence_element(bare(PT)))>();
+        else {
+            constexpr const char* c{
+                scalar_spell(sequence_element(bare(PT))).cs};
+            ecs = c;
+        }
+        cp.pin_open += "fixed (" + ecs + "* " + pin + " = " + name + ") ";
+        cp.needs_unsafe = true;
+        cp.wrapper_args += "new WelderSeqWire { Data = (IntPtr)" + pin +
+                           ", Len = " + name + ".Length }";
+    } else
         cp.wrapper_args += name;
     cp.param_names += name + '\x1f';
     if constexpr (classify(PT) == marshal_kind::utf8_string)
@@ -452,13 +571,21 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
     call_args += "out WelderError __e";
     const std::string pc{"NativeMethods." + sym + "(" + call_args + ")"};
     emit_callable_docs<Fn>(wrapper_out, indent, cp);
-    wrapper_out += indent + "public " + (HasSelf ? "" : "static ") +
+    constexpr bool ret_unsafe{classify(std::meta::return_type_of(Fn)) ==
+                              marshal_kind::seq_value};
+    const bool is_unsafe{cp.needs_unsafe || ret_unsafe};
+    wrapper_out += indent + "public " + (is_unsafe ? "unsafe " : "") +
+                   (HasSelf ? "" : "static ") +
                    public_return_type<std::meta::return_type_of(Fn), Style>() +
                    " " + wrapper_name + "(" + cp.wrapper_params + ")\n" + indent +
                    "{\n";
+    if (!cp.pin_open.empty())
+        wrapper_out += indent + "    " + cp.pin_open + "{\n";
     wrapper_out += wrapper_return_body<std::meta::return_type_of(Fn), Style,
                                        ::welder::return_policy_of(Fn, lang::cs)>(
         pc, indent + "    ", HasSelf ? "this" : "");
+    if (!cp.pin_open.empty())
+        wrapper_out += indent + "    }\n";
     wrapper_out += indent + "}\n\n";
 }
 
@@ -486,14 +613,19 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
     // works identically for roots and derived classes. The static helper
     // exists because a chained `this(...)` argument cannot use `out var`.
     const std::string helper{"__New" + sym.substr(sym.rfind("_new") + 4)};
-    w.members += "        private static IntPtr " + helper + "(" +
-                 cp.wrapper_params + ")\n        {\n"
+    w.members += "        private static " +
+                 std::string{cp.needs_unsafe ? "unsafe " : ""} + "IntPtr " +
+                 helper + "(" + cp.wrapper_params + ")\n        {\n" +
+                 (cp.pin_open.empty() ? "" : "            " + cp.pin_open +
+                                             "{\n") +
                  "            IntPtr __r = NativeMethods." + sym + "(" +
                  (cp.wrapper_args.empty() ? std::string{}
                                           : cp.wrapper_args + ", ") +
                  "out WelderError __e);\n"
                  "            WelderInterop.ThrowIfError(in __e);\n"
-                 "            return __r;\n        }\n";
+                 "            return __r;\n" +
+                 (cp.pin_open.empty() ? "" : "            }\n") +
+                 "        }\n";
     // Re-list the wrapper parameter NAMES for the chained call.
     std::string names{};
     for (const std::string& n : split_param_names(cp.param_names)) {
@@ -700,7 +832,6 @@ struct rod {
                                  ::welder::member_no_reassign(Mem, language)};
         constexpr bool is_str{classify(MT) == marshal_kind::utf8_string};
         constexpr bool is_bool{classify(MT) == marshal_kind::boolean};
-        constexpr bool is_handle{classify(MT) == marshal_kind::handle};
 
         // getter thunk + P/Invoke
         w.doc->record_symbol(getsym);
@@ -730,11 +861,17 @@ struct rod {
                               " v, out WelderError err);\n";
         }
 
-        // property
+        // property (the setter's value conversion reuses the parameter
+        // machinery — one conversion source for params, setters, operands)
+        call_pieces vcp{};
+        append_one_param<std::meta::type_of(Mem), Style>(vcp, 0, "value");
         const std::string pname{
             ::welder::name_of<Mem, lang::cs, Style, ::welder::ent_kind::field>()};
         emit_doc_comment(w.members, "        ", ::welder::doc_of<Mem>());
+        constexpr bool unsafe_prop{classify(std::meta::type_of(Mem)) ==
+                                   marshal_kind::seq_value};
         w.members += "        public " +
+                     std::string{unsafe_prop ? "unsafe " : ""} +
                      public_type<std::meta::type_of(Mem), Style>() + " " + pname +
                      "\n        {\n            get\n            {\n";
         w.members += wrapper_return_body<std::meta::type_of(Mem), Style,
@@ -745,14 +882,16 @@ struct rod {
             "                ", "this");
         w.members += "            }\n";
         if constexpr (!read_only) {
-            std::string vexpr{"value"};
-            if constexpr (is_handle)
-                vexpr += "._h_" + type_ref<bare(std::meta::type_of(Mem))>();
-            w.members += "            set\n            {\n"
+            w.members += "            set\n            {\n" +
+                         (vcp.pin_open.empty()
+                              ? std::string{}
+                              : "                " + vcp.pin_open + "{\n") +
                          "                NativeMethods." + setsym + "(" +
-                         w.handle_field + ", " + vexpr +
+                         w.handle_field + ", " + vcp.wrapper_args +
                          ", out WelderError __e);\n"
-                         "                WelderInterop.ThrowIfError(in __e);\n"
+                         "                WelderInterop.ThrowIfError(in __e);\n" +
+                         (vcp.pin_open.empty() ? std::string{}
+                                               : "                }\n") +
                          "            }\n";
         }
         w.members += "        }\n\n";
@@ -823,7 +962,6 @@ struct rod {
                            anchor + ", " + slookup + ">(self, err, v); }\n\n";
             constexpr bool p_is_bool{classify(PT) == marshal_kind::boolean};
             constexpr bool p_is_str{classify(PT) == marshal_kind::utf8_string};
-            constexpr bool p_is_handle{classify(PT) == marshal_kind::handle};
             w.doc->pinvoke += "        " + import_attr(p_is_str) +
                               " internal static partial void " + setsym +
                               "(" + w.cs_name + "Handle self, " +
@@ -831,14 +969,19 @@ struct rod {
                               pinvoke_type<first_param_type(Setter),
                                            ::welder::naming::none>(false) +
                               " v, out WelderError err);\n";
-            std::string vexpr{"value"};
-            if constexpr (p_is_handle)
-                vexpr += "._h_" + type_ref<bare(first_param_type(Setter))>();
-            w.members += "            set\n            {\n"
+            call_pieces vcp{};
+            append_one_param<first_param_type(Setter), ::welder::naming::none>(
+                vcp, 0, "value");
+            w.members += "            set\n            {\n" +
+                         (vcp.pin_open.empty()
+                              ? std::string{}
+                              : "                " + vcp.pin_open + "{\n") +
                          "                NativeMethods." + setsym + "(" +
-                         w.handle_field + ", " + vexpr +
+                         w.handle_field + ", " + vcp.wrapper_args +
                          ", out WelderError __e);\n"
-                         "                WelderInterop.ThrowIfError(in __e);\n"
+                         "                WelderInterop.ThrowIfError(in __e);\n" +
+                         (vcp.pin_open.empty() ? std::string{}
+                                               : "                }\n") +
                          "            }\n";
         }
         w.members += "        }\n\n";
@@ -1792,7 +1935,6 @@ struct rod {
         constexpr bool read_only{std::meta::is_const_type(VT)};
         constexpr bool is_str{classify(VT) == marshal_kind::utf8_string};
         constexpr bool is_bool{classify(VT) == marshal_kind::boolean};
-        constexpr bool is_handle{classify(VT) == marshal_kind::handle};
         std::string& body{m.doc->static_body(m.cs_class)};
 
         m.doc->record_symbol(base + "_get");
@@ -1819,21 +1961,28 @@ struct rod {
             ::welder::name_of_or<Var, lang::cs, Style,
                                  ::welder::ent_kind::variable>(name)};
         emit_doc_comment(body, "        ", ::welder::doc_of<Var>());
-        body += "        public static " + public_type<std::meta::type_of(Var), Style>() + " " +
-                vname +
+        constexpr bool unsafe_var{classify(std::meta::type_of(Var)) ==
+                                  marshal_kind::seq_value};
+        body += "        public static " +
+                std::string{unsafe_var ? "unsafe " : ""} +
+                public_type<std::meta::type_of(Var), Style>() + " " + vname +
                 "\n        {\n            get\n            {\n";
         body += wrapper_return_body<std::meta::type_of(Var), Style>(
             "NativeMethods." + base + "_get(out WelderError __e)",
             "                ");
         body += "            }\n";
         if constexpr (!read_only) {
-            std::string vexpr{"value"};
-            if constexpr (is_handle)
-                vexpr += "._h_" + type_ref<bare(std::meta::type_of(Var))>();
-            body += "            set\n            {\n"
-                    "                NativeMethods." + base + "_set(" + vexpr +
-                    ", out WelderError __e);\n"
-                    "                WelderInterop.ThrowIfError(in __e);\n"
+            call_pieces vcp{};
+            append_one_param<std::meta::type_of(Var), Style>(vcp, 0, "value");
+            body += "            set\n            {\n" +
+                    (vcp.pin_open.empty()
+                         ? std::string{}
+                         : "                " + vcp.pin_open + "{\n") +
+                    "                NativeMethods." + base + "_set(" +
+                    vcp.wrapper_args + ", out WelderError __e);\n"
+                    "                WelderInterop.ThrowIfError(in __e);\n" +
+                    (vcp.pin_open.empty() ? std::string{}
+                                          : "                }\n") +
                     "            }\n";
         }
         body += "        }\n\n";

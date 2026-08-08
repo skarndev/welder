@@ -10,9 +10,12 @@
 //
 // #included by gen.cpp (the WELDER_CSHARP_MAIN generator) after the welder
 // vocabulary, and by the generated shim.cpp (which re-runs the same reflection).
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <vector>
 #include <welder/vocabulary.hpp>
 
 namespace csharp_cases {
@@ -168,6 +171,51 @@ struct [[=welder::weld(welder::lang::cs)]] Dog : Animal, Legged {
 
 [[=welder::weld(welder::lang::cs)]]
 inline std::int32_t age_of(const Animal& a) { return a.age; }
+
+// --- value-marshalled containers (optional / scalar sequences) -----------------
+
+struct [[=welder::weld(welder::lang::cs)]] Basket {
+    Basket() = default;
+    std::vector<std::int32_t> nums{1, 2, 3};  // -> int[] copy property
+    std::optional<std::string> label{};       // -> string? property
+    std::optional<std::int32_t> find(std::int32_t v) const {
+        for (std::size_t i{0}; i < nums.size(); ++i)
+            if (nums[i] == v)
+                return static_cast<std::int32_t>(i);
+        return std::nullopt;
+    }
+    std::int64_t total(const std::vector<std::int32_t>& extra) const {
+        std::int64_t t{0};
+        for (auto n : nums)
+            t += n;
+        for (auto n : extra)
+            t += n;
+        return t;
+    }
+    std::array<double, 3> triple() const { return {1.5, 2.5, 3.0}; }
+    void set_triple(const std::array<double, 3>& a) { trip_ = a; }
+    double trip_sum() const {
+        double s{0};
+        for (double d : trip_)
+            s += d;
+        return s;
+    }
+
+  private:
+    std::array<double, 3> trip_{};
+};
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::optional<Point> maybe_point(bool give) {
+    if (give)
+        return Point{3, 4};
+    return std::nullopt;
+}
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::optional<Level> maybe_level(bool give) {
+    return give ? std::optional<Level>{Level::High} : std::nullopt;
+}
 
 // --- virtuals / directors (C# subclasses overriding C++ virtuals) --------------
 
