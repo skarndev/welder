@@ -60,6 +60,7 @@
 #include <welder/rods/csharp/document.hpp> // the two-stream document + writers
 #include <welder/rods/csharp/type_map.hpp> // classify / spellings / lookup layer
 #include <welder/rods/csharp/naming.hpp>   // the dotnet name style
+#include <welder/rods/csharp/operators.hpp> // the C++-operator -> C# map + lookups
 
 namespace welder::inline v0::rods::csharp {
 
@@ -149,6 +150,19 @@ inline std::string cs_escape(std::string id) {
     switches a string between its `in` (`string`) and `out` (`IntPtr`,
     caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
     subclass (premature-collection safety on the call), a return as `IntPtr`. */
+/** A welded class/enum REFERENCE as a render-time placeholder: the final C#
+    name is reconciled from the document's rename map at render() (filled by
+    make_class/make_enum), so reference spelling never depends on declaration
+    order or on a Style reaching the hook (add_operator has none). */
+template <std::meta::info Bare>
+std::string type_ref() {
+    return std::string{"\x01"} + cpp_name_v<Bare> + "\x02";
+}
+
+/** The managed type the P/Invoke declaration uses for @a Type. @a is_return
+    switches a string between its `in` (`string`) and `out` (`IntPtr`,
+    caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
+    subclass (premature-collection safety on the call), a return as `IntPtr`. */
 template <std::meta::info Type, class Style>
 std::string pinvoke_type(bool is_return) {
     constexpr marshal_kind k{classify(Type)};
@@ -160,13 +174,10 @@ std::string pinvoke_type(bool is_return) {
     else if constexpr (k == marshal_kind::utf8_string)
         return is_return ? "IntPtr" : "string";
     else if constexpr (k == marshal_kind::enum_)
-        return std::string{styled_v<bare(Type), Style, ::welder::ent_kind::enum_>};
+        return type_ref<bare(Type)>();
     else // handle
-        return is_return
-                   ? std::string{"IntPtr"}
-                   : std::string{
-                         styled_v<bare(Type), Style, ::welder::ent_kind::class_>} +
-                         "Handle";
+        return is_return ? std::string{"IntPtr"}
+                         : type_ref<bare(Type)>() + "Handle";
 }
 
 /** The public C# type the wrapper API exposes for @a Type. */
@@ -179,10 +190,8 @@ std::string public_type() {
         return s;
     } else if constexpr (k == marshal_kind::boolean) return "bool";
     else if constexpr (k == marshal_kind::utf8_string) return "string";
-    else if constexpr (k == marshal_kind::enum_)
-        return std::string{styled_v<bare(Type), Style, ::welder::ent_kind::enum_>};
     else
-        return std::string{styled_v<bare(Type), Style, ::welder::ent_kind::class_>};
+        return type_ref<bare(Type)>(); // enum_ / handle
 }
 
 /** The public C# RETURN type: like @ref public_type, plus the `?` nullable
@@ -491,11 +500,11 @@ struct rod {
     template <class T>
     static constexpr bool has_native_caster = is_native_dotnet<std::remove_cvref_t<T>>;
 
-    /** Operators are deferred until the operator phase: returning `nullptr`
-        disables operator binding (the driver's eligibility gate), like an
-        unmapped operator elsewhere. */
-    static consteval const char* special_method_name(std::meta::info) {
-        return nullptr;
+    /** The CLS metadata name (`op_Addition`, …) for a mapped operator, or
+        `nullptr` for the unmapped ones (assignment, compound assignment,
+        `++`/`--`, dereference, …) — the driver's eligibility gate. */
+    static consteval const char* special_method_name(std::meta::info op_fn) {
+        return cs_operator(op_fn).cls_name;
     }
 
     // --- class binding ------------------------------------------------------
@@ -523,6 +532,15 @@ struct rod {
         w.cs_name = name;
         w.doc_text = doc ? doc : "";
         w.cpp_qualified = cpp_name_v<Decl>;
+        // References to T anywhere (params, returns, fields, operators) are
+        // emitted as placeholders over the RAW spelling; register the final
+        // name for the render-time reconciliation. The reference spelling is
+        // ^^T's own (what type_ref emits), which for an alias-welded
+        // specialization differs from Decl's — record both.
+        m.doc->record_type_name(cpp_name_v<Decl>, name);
+        if constexpr (std::meta::has_identifier(^^T))
+            if (std::string{cpp_name_v<^^T>} != cpp_name_v<Decl>)
+                m.doc->record_type_name(cpp_name_v<^^T>, name);
         w.sym_prefix = std::string{"welder_"} + upath_v<Decl>;
         w.destroy_symbol = w.sym_prefix + "_destroy";
         // The destructor thunk + its P/Invoke (the SafeHandle's release path).
@@ -786,19 +804,324 @@ struct rod {
         }
     }
 
-    /** Operator slots are deferred until the operator phase (gated off by
-        @ref special_method_name returning `nullptr`). */
+    /** Emit operator slot group @a Fns — member and anchored free entries
+        mixed, each with its own indexed symbol. Arithmetic/bitwise/unary map
+        to `public static` C# operators (a reflected free entry — @a T on the
+        right — emits with its declared operand order, which C# permits as
+        long as one operand is the class); comparisons route through the class
+        writer's pairing ledger (see `document.hpp`); `operator[]` becomes a
+        get-only indexer; `operator()` an `Invoke` method. */
     template <class T, auto Fns>
-    static void add_operator(class_writer&) {}
+    static void add_operator(class_writer& w) {
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _emit_operator<T, fn>(w);
+        }
+    }
 
-    /** Comparison synthesis is deferred until the operator phase. */
+    /** Synthesize the C# relational operators from `operator<=>` group @a Fns:
+        one wire thunk per overload collapses the ordering to an int
+        (`shim::compare` evaluates `l <=> r` through C++'s own rewriting rules,
+        heterogeneous operands included), and the four relational operators
+        derive from it — minus the slots an explicit participating operator
+        already @a Covered. A heterogeneous overload also emits the reversed
+        operand order (C++'s rewritten `5 < obj` works, so C#'s should). `==`
+        is never synthesized (mirroring C++: only `operator==` rewrites it —
+        a defaulted spaceship's implicit `==` arrives via the operator path). */
     template <class T, auto Fns, auto Covered>
-    static void add_comparisons(class_writer&) {}
+    static void add_comparisons(class_writer& w) {
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _emit_comparison_set<T, fn, Covered>(w);
+        }
+    }
 
-    /** The ostream stringifier (`ToString()`) is deferred until the operator
-        phase. */
+    /** Bind the swept free ostream inserter @a Fn as `ToString()` (via
+        @ref welder::detail::stringify, dup'd across the wire). */
     template <class T, std::meta::info Fn>
-    static void add_stringifier(class_writer&) {}
+    static void add_stringifier(class_writer& w) {
+        const std::string sym{w.sym_prefix + "_str"};
+        w.doc->record_symbol(sym);
+        constexpr std::size_t k{index_of_operator(Fn)};
+        static constexpr const char* opid{std::define_static_string(
+            operator_enum_ident(std::meta::operator_of(Fn)))};
+        w.doc->shim += "const char* " + sym +
+                       "(void* self, welder_error* err) { return "
+                       "wcs::shim::stringify_text<^^" + w.cpp_qualified +
+                       ", wcs::named_operator(^^" +
+                       std::string{cpp_name_v<std::meta::parent_of(Fn)>} +
+                       ", std::meta::operators::" + opid + ", false, " +
+                       std::to_string(k) + ")>(self, err); }\n\n";
+        w.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
+                          "IntPtr " + sym + "(" + w.cs_name +
+                          "Handle self, out WelderError err);\n";
+        w.members += "        public override string ToString()\n        {\n";
+        w.members += wrapper_return_body<^^std::string, ::welder::naming::none>(
+            "NativeMethods." + sym + "(_handle, out WelderError __e)",
+            "            ");
+        w.members += "        }\n\n";
+    }
+
+  protected:
+    /** The `wcs::named_operator(...)` lookup text for operator @a Fn. */
+    template <std::meta::info Fn>
+    static std::string _operator_lookup() {
+        static constexpr const char* opid{std::define_static_string(
+            operator_enum_ident(std::meta::operator_of(Fn)))};
+        constexpr bool u{::welder::detail::is_unary_operator(Fn)};
+        constexpr std::size_t k{index_of_operator(Fn)};
+        return std::string{"wcs::named_operator(^^"} +
+               cpp_name_v<std::meta::parent_of(Fn)> +
+               ", std::meta::operators::" + opid + (u ? ", true, " : ", false, ") +
+               std::to_string(k) + ")";
+    }
+
+    /** The `_op_<token>_<u|b>_<k>` symbol suffix for operator @a Fn. */
+    template <std::meta::info Fn>
+    static std::string _operator_sym(const class_writer& w) {
+        static constexpr const char* opid{std::define_static_string(
+            operator_enum_ident(std::meta::operator_of(Fn)))};
+        constexpr bool u{::welder::detail::is_unary_operator(Fn)};
+        constexpr std::size_t k{index_of_operator(Fn)};
+        // strip the "op_" prefix for the symbol leaf
+        return w.sym_prefix + "_op_" + (opid + 3) + (u ? "_u_" : "_b_") +
+               std::to_string(k);
+    }
+
+    /** Emit one operator overload @a Fn of welded type @a T. */
+    template <class T, std::meta::info Fn>
+    static void _emit_operator(class_writer& w) {
+        constexpr cs_op_info oi{cs_operator(Fn)};
+        static_assert(oi.kind != cs_op_kind::none,
+                      "welder: unmapped operator reached add_operator");
+        ::welder::validate_return_policy<Fn, lang::cs>();
+        constexpr bool is_member{std::meta::is_class_member(Fn)};
+        constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+        const call_pieces cp{
+            build_params<Fn, ::welder::naming::none>(std::make_index_sequence<n>{})};
+        const std::string sym{_operator_sym<Fn>(w)};
+        w.doc->record_symbol(sym);
+
+        // --- shim thunk + P/Invoke (uniform: member -> method, free -> function)
+        std::string shim_params{cp.shim_params};
+        std::string delegate_args{};
+        std::string pin_params{cp.pinvoke_params};
+        if constexpr (is_member) {
+            shim_params = "void* self" +
+                          (cp.shim_params.empty() ? "" : ", " + cp.shim_params);
+            delegate_args = "self, err";
+            pin_params = w.cs_name + "Handle self" +
+                         (cp.pinvoke_params.empty() ? "" : ", " + cp.pinvoke_params);
+        } else {
+            delegate_args = "err";
+        }
+        if (!cp.delegate_args.empty())
+            delegate_args += ", " + cp.delegate_args;
+        shim_params += (shim_params.empty() ? "" : ", ");
+        shim_params += "welder_error* err";
+        pin_params += (pin_params.empty() ? "" : ", ");
+        pin_params += "out WelderError err";
+        const std::string expr{
+            is_member ? "wcs::shim::method<^^" + w.cpp_qualified + ", " +
+                            _operator_lookup<Fn>() + ">"
+                      : "wcs::shim::function<" + _operator_lookup<Fn>() + ">"};
+        w.doc->shim += std::string{
+                           wire_return_v<std::meta::return_type_of(Fn)>} +
+                       " " + sym + "(" + shim_params + ") { return " + expr +
+                       "(" + delegate_args + "); }\n\n";
+        constexpr bool r_is_bool{classify(std::meta::return_type_of(Fn)) ==
+                                 marshal_kind::boolean};
+        w.doc->pinvoke +=
+            "        " + import_attr(cp.has_string) + " " +
+            (r_is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "") +
+            "internal static partial " +
+            pinvoke_type<std::meta::return_type_of(Fn),
+                         ::welder::naming::none>(true) +
+            " " + sym + "(" + pin_params + ");\n";
+
+        // --- managed surface, by shape --------------------------------------
+        // Operand spellings: `this`-typed for a member's left, declared
+        // otherwise; the wrapper call rebuilds the argument expressions with
+        // the operator parameter names (member left = `l`, others per shape).
+        if constexpr (oi.kind == cs_op_kind::invoke) {
+            // operator() -> a plain Invoke method (self + params).
+            std::string args{std::string{"_handle"} +
+                             (cp.wrapper_args.empty() ? "" : ", " + cp.wrapper_args)};
+            w.members += "        public " +
+                         public_return_type<std::meta::return_type_of(Fn),
+                                            ::welder::naming::none>() +
+                         " Invoke(" + cp.wrapper_params + ")\n        {\n";
+            w.members += wrapper_return_body<std::meta::return_type_of(Fn),
+                                             ::welder::naming::none,
+                                             ::welder::return_policy_of(
+                                                 Fn, lang::cs)>(
+                "NativeMethods." + sym + "(" + args + ", out WelderError __e)",
+                "            ", "this");
+            w.members += "        }\n\n";
+        } else if constexpr (oi.kind == cs_op_kind::indexer) {
+            if (std::find(w.indexer_sigs.begin(), w.indexer_sigs.end(),
+                          cp.wrapper_params) != w.indexer_sigs.end())
+                return; // const/non-const C++ pair -> one C# indexer
+            w.indexer_sigs.push_back(cp.wrapper_params);
+            w.members += "        public " +
+                         public_return_type<std::meta::return_type_of(Fn),
+                                            ::welder::naming::none>() +
+                         " this[" + cp.wrapper_params +
+                         "]\n        {\n            get\n            {\n";
+            w.members += wrapper_return_body<std::meta::return_type_of(Fn),
+                                             ::welder::naming::none,
+                                             ::welder::return_policy_of(
+                                                 Fn, lang::cs)>(
+                "NativeMethods." + sym + "(_handle, " + cp.wrapper_args +
+                    ", out WelderError __e)",
+                "                ", "this");
+            w.members += "            }\n        }\n\n";
+        } else {
+            // A static operator. Operand list: member -> (T l, P r) / (T v);
+            // free -> the declared order (reflected entries included — C#
+            // allows any order as long as one operand is the class).
+            std::vector<std::string> op_types{};
+            std::vector<std::string> op_names{};
+            std::string args{}; // the P/Invoke argument expressions
+            if constexpr (is_member) {
+                op_types.push_back(type_ref<^^T>());
+                op_names.push_back("l");
+                args = "l._handle";
+            }
+            // Guard the empty pack: param_types<Fn> must not instantiate for
+            // a parameterless callable (a unary member operator) — the
+            // array<info, 0> gotcha (see build_params).
+            if constexpr (n != 0) {
+                static constexpr auto pts{::welder::detail::param_types<Fn>()};
+                std::size_t j{0};
+                template for (constexpr auto pt : std::define_static_array(pts)) {
+                    const std::string nm{is_member ? "r" : (j == 0 ? "l" : "r")};
+                    op_types.push_back(public_type<pt, ::welder::naming::none>());
+                    op_names.push_back(nm);
+                    args += (args.empty() ? "" : ", ");
+                    if constexpr (classify(pt) == marshal_kind::handle)
+                        args += nm + "._handle";
+                    else
+                        args += nm;
+                    ++j;
+                }
+            }
+            std::string params{};
+            for (std::size_t i{0}; i < op_types.size(); ++i) {
+                params += (params.empty() ? "" : ", ");
+                params += op_types[i] + " " + op_names[i];
+            }
+            std::string body{wrapper_return_body<
+                std::meta::return_type_of(Fn), ::welder::naming::none,
+                ::welder::return_policy_of(Fn, lang::cs)>(
+                "NativeMethods." + sym + "(" + args + ", out WelderError __e)",
+                "            ")};
+            if constexpr (oi.kind == cs_op_kind::comparison) {
+                // Binary always; the pairing ledger decides operator-vs-named
+                // at flush.
+                class_writer::cs_comparison c{};
+                c.op = oi.symbol;
+                c.lhs = op_types[0];
+                c.rhs = op_types[1];
+                c.ret = public_return_type<std::meta::return_type_of(Fn),
+                                           ::welder::naming::none>();
+                c.body = std::move(body);
+                if (!w._have_comparison(c.op, c.lhs, c.rhs))
+                    w.comparisons.push_back(std::move(c));
+            } else if constexpr (oi.kind == cs_op_kind::unary) {
+                w.members += "        public static " +
+                             public_return_type<std::meta::return_type_of(Fn),
+                                                ::welder::naming::none>() +
+                             " operator " + oi.symbol + "(" + op_types[0] +
+                             " v)\n        {\n";
+                // The single operand is named `l`/`v` per shape; rebuild the
+                // call with `v`.
+                w.members += wrapper_return_body<
+                    std::meta::return_type_of(Fn), ::welder::naming::none,
+                    ::welder::return_policy_of(Fn, lang::cs)>(
+                    "NativeMethods." + sym + "(" +
+                        (is_member ? std::string{"v._handle"} : std::string{"v"}) +
+                        ", out WelderError __e)",
+                    "            ");
+                w.members += "        }\n\n";
+            } else {
+                w.members += "        public static " +
+                             public_return_type<std::meta::return_type_of(Fn),
+                                                ::welder::naming::none>() +
+                             " operator " + oi.symbol + "(" + params +
+                             ")\n        {\n" + body + "        }\n\n";
+            }
+        }
+    }
+
+    /** Emit the compare thunk + the (un-@a Covered) relational operators for
+        one spaceship overload @a Fn of @a T. */
+    template <class T, std::meta::info Fn, auto Covered>
+    static void _emit_comparison_set(class_writer& w) {
+        constexpr std::size_t k{index_of_operator(Fn)};
+        const std::string sym{w.sym_prefix + "_cmp_" + std::to_string(k)};
+        w.doc->record_symbol(sym);
+        const std::string lookup{_operator_lookup<Fn>()};
+        // The operand: spelled through the SAME consteval re-derivation the
+        // generator used, so the shim's compare<> sees the identical type.
+        const std::string opnd{"::welder::detail::comparison_operand(" + lookup +
+                               ", ^^" + w.cpp_qualified + ")"};
+        w.doc->shim +=
+            "std::int32_t " + sym + "(void* self, " +
+            std::string{wire_param_v<::welder::detail::comparison_operand(
+                Fn, ^^T)>} +
+            " a0, welder_error* err) { return wcs::shim::compare<^^" +
+            w.cpp_qualified + ", " + opnd + ">(self, err, a0); }\n\n";
+        constexpr bool p_is_bool{
+            classify(::welder::detail::comparison_operand(Fn, ^^T)) ==
+            marshal_kind::boolean};
+        w.doc->pinvoke +=
+            "        [LibraryImport(Lib)] internal static partial int " + sym +
+            "(" + w.cs_name + "Handle self, " +
+            (p_is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "") +
+            pinvoke_type<::welder::detail::comparison_operand(Fn, ^^T),
+                         ::welder::naming::none>(false) +
+            " a0, out WelderError err);\n";
+
+        const std::string lhs{type_ref<^^T>()};
+        const std::string rhs{public_type<::welder::detail::comparison_operand(
+                                              Fn, ^^T),
+                                          ::welder::naming::none>()};
+        constexpr bool rhs_is_handle{
+            classify(::welder::detail::comparison_operand(Fn, ^^T)) ==
+            marshal_kind::handle};
+        const bool hetero{lhs != rhs};
+        auto record = [&](const char* op, bool reversed, const char* cond) {
+            class_writer::cs_comparison c{};
+            c.op = op;
+            c.lhs = reversed ? rhs : lhs;
+            c.rhs = reversed ? lhs : rhs;
+            c.ret = "bool";
+            const std::string self_arg{reversed ? "r._handle" : "l._handle"};
+            std::string other{reversed ? "l" : "r"};
+            if (rhs_is_handle)
+                other += "._handle";
+            c.body = "            var __c = NativeMethods." + sym + "(" +
+                     self_arg + ", " + other +
+                     ", out WelderError __e);\n"
+                     "            WelderInterop.ThrowIfError(in __e);\n"
+                     "            return " + cond + ";\n";
+            if (!w._have_comparison(c.op, c.lhs, c.rhs))
+                w.comparisons.push_back(std::move(c));
+        };
+        if constexpr (!Covered[0]) record("<", false, "__c == -1");
+        if constexpr (!Covered[1]) record("<=", false, "__c == -1 || __c == 0");
+        if constexpr (!Covered[2]) record(">", false, "__c == 1");
+        if constexpr (!Covered[3]) record(">=", false, "__c == 0 || __c == 1");
+        if (hetero) {
+            // The reversed operand order (C++'s rewritten `5 < obj`): the
+            // relation flips around the same thunk.
+            if constexpr (!Covered[2]) record("<", true, "__c == 1");
+            if constexpr (!Covered[3]) record("<=", true, "__c == 0 || __c == 1");
+            if constexpr (!Covered[0]) record(">", true, "__c == -1");
+            if constexpr (!Covered[1]) record(">=", true, "__c == -1 || __c == 0");
+        }
+    }
+
+  public:
 
     // --- enum binding -------------------------------------------------------
 
@@ -809,6 +1132,7 @@ struct rod {
         w.doc = m.doc;
         w.cs_name = name;
         w.doc_text = doc ? doc : "";
+        m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>, name);
         constexpr const char* u{scalar_spell(
             std::meta::underlying_type(std::meta::dealias(^^E))).cs};
         w.underlying = u;

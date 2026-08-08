@@ -11,8 +11,10 @@
 #include <type_traits>
 #include <utility>
 
-#include <welder/bind_traits.hpp>          // param_types / aggregate_fields
-#include <welder/rods/csharp/type_map.hpp> // classify / bare / lookup layer
+#include <welder/bind_traits.hpp>           // param_types / aggregate_fields
+#include <welder/rods/csharp/type_map.hpp>  // classify / bare / lookup layer
+#include <welder/rods/csharp/operators.hpp> // named_operator (the generated shim
+                                            // splices operator lookups too)
 
 /** @file
     The compiled marshalling library the **generated** C# shim delegates into.
@@ -383,6 +385,41 @@ void field_set(void* self, welder_error* err, Wire w) noexcept {
     guarded<^^void>(err, [&] {
         std::invoke(&[:Mem:], *obj) =
             to_cpp<std::meta::remove_cv(std::meta::type_of(Mem))>(w);
+    });
+}
+
+/** The spaceship-comparison thunk body: evaluate `*obj <=> rhs` through
+    C++'s own operator-rewriting rules (so member/free/reversed spaceship
+    overloads all resolve exactly as for a C++ caller — the pybind rods'
+    synthesized_comparison idiom) and collapse the ordering to a wire int:
+    `-1` less, `0` equivalent, `1` greater, `2` unordered (partial_ordering).
+    The C# side derives the four relational operators from it. @a P is the
+    declared operand type. */
+template <std::meta::info W, std::meta::info P, class Wire>
+std::int32_t compare(void* self, welder_error* err, Wire w) noexcept {
+    using Obj = [:W:];
+    auto* obj{reinterpret_cast<Obj*>(self)};
+    return caught<std::int32_t>(err, [&]() -> std::int32_t {
+        const auto c{*obj <=> to_cpp<P>(w)};
+        if (c < 0)
+            return -1;
+        if (c > 0)
+            return 1;
+        if (c == 0)
+            return 0;
+        return 2;
+    });
+}
+
+/** The stringifier thunk body: run the swept free ostream inserter through
+    @ref welder::detail::stringify and dup the text (the managed `ToString()`
+    frees it via `welder_free`). */
+template <std::meta::info W, std::meta::info Fn>
+const char* stringify_text(void* self, welder_error* err) noexcept {
+    using Obj = [:W:];
+    auto* obj{reinterpret_cast<Obj*>(self)};
+    return caught<const char*>(err, [&]() -> const char* {
+        return dup(::welder::detail::stringify<Obj, Fn>(*obj));
     });
 }
 

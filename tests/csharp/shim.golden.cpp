@@ -51,6 +51,10 @@ std::int32_t welder_csharp_cases_Point_pget_Depth(void* self, welder_error* err)
 
 void welder_csharp_cases_Point_pset_Depth(void* self, std::int32_t v, welder_error* err) { (void)wcs::shim::method<^^::csharp_cases::Point, wcs::named_member(^^::csharp_cases::Point, "depth", 1)>(self, err, v); }
 
+void* welder_csharp_cases_Point_op_plus_b_0(void* self, void* a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Point, wcs::named_operator(^^::csharp_cases::Point, std::meta::operators::op_plus, false, 0)>(self, err, a0); }
+
+bool welder_csharp_cases_Point_op_equals_equals_b_0(void* self, void* a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Point, wcs::named_operator(^^::csharp_cases::Point, std::meta::operators::op_equals_equals, false, 0)>(self, err, a0); }
+
 void welder_csharp_cases_Size_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Size>(self); }
 
 void* welder_csharp_cases_Size_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Size>(err); }

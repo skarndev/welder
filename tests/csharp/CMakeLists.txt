@@ -28,11 +28,18 @@ welder_csharp_generate_bindings(welder_test_cs_retpolicy
   OUTPUT_DIR ${_ws}/retpolicy
   DEPENDS ${WELDER_TEST_COMMON_CPP}/retpolicy.hpp)
 
+welder_csharp_generate_bindings(welder_test_cs_operators
+  SOURCES cpp/gen_operators.cpp
+  LIBRARY welder_test_cs_operators
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/operators
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/operators.hpp)
+
 # Building the targets both regenerates the artifacts and compiles the shims —
 # the compile IS a test (the generated splices must re-derive every member).
 add_test(NAME csharp.build
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
-          --target welder_test_csharp welder_test_cs_retpolicy
+          --target welder_test_csharp welder_test_cs_retpolicy welder_test_cs_operators
           --config $<CONFIG>)
 set_tests_properties(csharp.build PROPERTIES FIXTURES_SETUP csharp_native)
 
@@ -81,8 +88,10 @@ file(GENERATE OUTPUT ${_app}/app.csproj CONTENT
     <Compile Include=\"${CMAKE_CURRENT_SOURCE_DIR}/app/Program.cs\" />
     <Compile Include=\"${_ws}/Bindings.cs\" />
     <Compile Include=\"${_ws}/retpolicy/Bindings.cs\" />
+    <Compile Include=\"${_ws}/operators/Bindings.cs\" />
     <None Include=\"$<TARGET_FILE:welder_test_csharp>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_retpolicy>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_operators>\" CopyToOutputDirectory=\"PreserveNewest\" />
   </ItemGroup>
 </Project>
 ")

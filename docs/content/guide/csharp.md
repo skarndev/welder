@@ -62,6 +62,17 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   protocol; a `T(other)` overload would collide with one-argument constructors).
 - **Enums** mirror as `enum : <underlying>` with per-enumerator `///` docs —
   C# has the per-member doc slot Python lacks.
+- **Operators** map to C# operator overloading: arithmetic/bitwise/unary
+  become `static operator`s (a free operator with the welded type on either
+  side included), `operator[]` a get-only indexer, `operator()` an `Invoke`
+  method, and the free ostream inserter `ToString()`. Comparisons respect
+  C#'s pairing rules — a partner C++ never declared is synthesized (`!=` from
+  `==` by negation, `>` from homogeneous `<` by operand swap), `operator<=>`
+  expands to the four relationals (heterogeneous operands get both operand
+  orders, mirroring C++'s rewriting), homogeneous `==` brings the null
+  protocol plus `Equals`/`GetHashCode` overrides, and a lone heterogeneous
+  relational demotes to a named method (`LessThan`, …) rather than emitting
+  unpairable C#.
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.
@@ -158,7 +169,7 @@ documented-ignored (as on the Lua rods) — the owner-reference mechanism covers
 the common case.
 
 What the [bindability gate](bindability.md) admits but this phase cannot yet
-marshal — STL containers, operators, welded-base inheritance, virtuals
+marshal — STL containers, welded-base inheritance, virtuals
 overridden from C# — fails **loudly at generation time** with a designed
 diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
 silently-corrupting `void*`. Those families land in the following phases.

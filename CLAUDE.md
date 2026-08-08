@@ -62,7 +62,7 @@ namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint`,
 `array<short,289>`→`ArrayShortIntx289` (element + `x` + extent) — overridable
 per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
 the name style); and **`welder::rods::csharp::rod`** (`lang::cs`, branch
-`feature/csharp`, Phase 2 of 7 done: + full exception taxonomy → BCL types, rv:: ownership mapping — owned/adopted/view/view-pinned per handle_return_of, live class-field views, nullable pointer returns) — C# has no in-process registration C API, so this
+`feature/csharp`, Phase 3 of 7 done: + full exception taxonomy → BCL types, rv:: ownership mapping — owned/adopted/view/view-pinned per handle_return_of, live class-field views, nullable pointer returns; operators — static C# operators incl. reflected/free entries, pairing ledger synthesizing missing partners, <=> → relational set via a compare thunk, indexer, ToString(), Equals/GetHashCode + null protocol on ==) — C# has no in-process registration C API, so this
 rod emits **two coordinated artifacts** per pass: an `extern "C"` C-ABI **shim**
 (compiled *with reflection* against the same welded header — each thunk one-line
 delegates into `shim_support.hpp`, parameterized by the exact member reflection
@@ -74,7 +74,7 @@ marks → properties, overload groups → natural C# overloads with per-overload
 symbols, Copyable → `Clone()`, `enum : <underlying>` with per-enumerator docs, full
 XML doc comments; every thunk carries a trailing `welder_error*` — C++ exceptions
 map to `WelderNativeException`, never unwinding the C ABI). Phase-gated hard
-errors (`diag::csharp_unmarshallable`) for what later phases add: operators,
+errors (`diag::csharp_unmarshallable`) for what later phases add:
 inheritance, directors (virtuals overridden in C#), STL containers, nested
 types. Driven by `welder_csharp_generate_bindings()`
 (cmake/WelderCSharpModule.cmake); tests: goldens + `compile.csharp_marshal`

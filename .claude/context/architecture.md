@@ -416,7 +416,7 @@ C ABI) plus a `[LibraryImport]` C# wrapper (SafeHandle per class, natural overlo
 `Clone()` for Copyable, `enum : <underlying>`, XML docs, and a `welder_error`
 out-param on every thunk mapping C++ exceptions to `WelderNativeException`).
 Phase-gated: what the gate admits but the marshalling layer cannot yet carry
-(containers, operators, welded bases, virtuals/directors) throws
+(containers, welded bases, virtuals/directors) throws
 `diag::csharp_unmarshallable` at generation — never a silent `void*`. Ownership
 is policy-mapped (type_map.hpp `handle_return_of`, consumed by BOTH sides):
 owned copy/move, adopted pointer, or a non-owning view — `reference_internal`

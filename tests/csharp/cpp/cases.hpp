@@ -63,6 +63,8 @@ Point {
     }
     static Point origin() { return Point(0, 0); }
     void explode() const { throw std::out_of_range{"boom"}; } // error contract
+    Point operator+(const Point& o) const { return Point(x + o.x, y + o.y); }
+    bool operator==(const Point& o) const { return x == o.x && y == o.y; }
     // A method-backed property (getter/setter marks).
     [[=welder::getter]] std::int32_t depth() const { return depth_; }
     [[=welder::setter]] void depth(std::int32_t d) { depth_ = d; }

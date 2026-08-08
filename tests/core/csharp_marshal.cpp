@@ -86,6 +86,48 @@ static_assert(std::meta::identifier_of(
               std::string_view{"s"});
 static_assert(wcs::named_member(^^lockcases, "leaf", 0) == ^^lockcases::leaf);
 
+// --- the operator map + operator lookups --------------------------------------
+namespace lockops {
+struct [[=welder::weld(welder::lang::cs)]] V {
+    int n{0};
+    V operator+(const V& o) const { return V{n + o.n}; }
+    V operator-() const { return V{-n}; }
+    bool operator==(const V& o) const { return n == o.n; }
+    int operator[](int i) const { return n + i; }
+    auto operator<=>(const V& o) const = default;
+};
+} // namespace lockops
+
+consteval std::meta::info lockop(std::meta::operators op, bool unary,
+                                 std::size_t k = 0) {
+    return wcs::named_operator(^^lockops::V, op, unary, k);
+}
+static_assert(wcs::cs_operator(lockop(std::meta::operators::op_plus, false)).kind ==
+              wcs::cs_op_kind::binary);
+static_assert(streq(
+    wcs::cs_operator(lockop(std::meta::operators::op_plus, false)).cls_name,
+    "op_Addition"));
+static_assert(wcs::cs_operator(lockop(std::meta::operators::op_minus, true)).kind ==
+              wcs::cs_op_kind::unary);
+static_assert(streq(
+    wcs::cs_operator(lockop(std::meta::operators::op_equals_equals, false)).symbol,
+    "=="));
+static_assert(
+    wcs::cs_operator(lockop(std::meta::operators::op_equals_equals, false)).kind ==
+    wcs::cs_op_kind::comparison);
+static_assert(
+    wcs::cs_operator(lockop(std::meta::operators::op_square_brackets, false)).kind ==
+    wcs::cs_op_kind::indexer);
+// the lookup inverts its index, like named_member
+static_assert(wcs::index_of_operator(
+                  lockop(std::meta::operators::op_plus, false)) == 0);
+static_assert(wcs::operator_enum_ident(std::meta::operators::op_spaceship) ==
+              "op_spaceship");
+// spaceship is NOT name-gated (it routes through add_comparisons, never
+// add_operator), exactly like the unmapped set
+static_assert(wcs::rod::special_method_name(
+                  lockop(std::meta::operators::op_spaceship, false)) == nullptr);
+
 // --- parameter identifiers (camelCase + keyword escape) ----------------------
 static_assert(wcs::param_ident(
                   std::meta::parameters_of(^^lockcases::leaf)[0], 0) == "v");

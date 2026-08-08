@@ -17,11 +17,24 @@ type_map.hpp: value/&/copy → owned heap-copy, ptr default/take_ownership →
 adopted, reference → view, reference_internal → view + C# __owner pinning; a
 non-const class-typed FIELD is a live view with __owner, mirroring
 def_readwrite's reference_internal; pointer returns nullable `T?`). keep_alive =
-documented-ignored (like the Lua rods). Shared-case widening so far:
-retpolicy.hpp Inner/Owner (the view/snapshot pair — bound via
-tests/csharp/cpp/shared_seam.hpp + gen_retpolicy.cpp, a second binding pair).
+documented-ignored (like the Lua rods). Operators (Phase 3): the full add_operator/add_comparisons/add_stringifier
+set — static C# operators (member + anchored/reflected free entries, per-overload
+symbols via named_operator — operators have no identifier, so the lookup layer
+keys on (token, arity, decl index)); comparisons go through the class_writer
+PAIRING LEDGER (C# pairs ==/!=, </>, <=/>=: missing partners synthesized by
+negation/operand-swap, homogeneous == gets null protocol + Equals/GetHashCode,
+lone heterogeneous relationals demote to named methods); <=> → one compare
+thunk (shim::compare evaluates `l <=> r` via C++ rewriting; -1/0/1/2 wire) +
+the un-Covered relational operators, heterogeneous operands in both orders;
+operator[] → get-only indexer; operator() → Invoke; ostream << → ToString().
+Type REFERENCES in operator emission (no Style reaches add_operator) use
+render-time placeholders reconciled from the document's type_names map (the
+luacats record_type_name idiom) — now used by ALL C# type references.
+Shared-case widening so far: retpolicy.hpp Inner/Owner (view/snapshot),
+operators.hpp whole file (bound via tests/csharp/cpp/shared_seam.hpp +
+gen_retpolicy/gen_operators.cpp binding pairs).
 NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
-generation): operators/comparisons/stringifier, welded-base inheritance,
+generation): welded-base inheritance,
 virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference
 (rejected combos), STL containers, nested types (flat fallback is fine —
 they're not yet marshallable anyway), weld_protected members (the shim's

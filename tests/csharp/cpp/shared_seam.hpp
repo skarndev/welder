@@ -15,4 +15,5 @@
 #define WELDER_TEST_WELDER \
     ::welder::welder<::welder::rods::csharp::rod, ::welder::rods::csharp::dotnet>
 
+#include "operators.hpp"
 #include "retpolicy.hpp"

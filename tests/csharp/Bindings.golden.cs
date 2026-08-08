@@ -69,6 +69,8 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Point_m_explode_0(PointHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Point_pget_Depth(PointHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Point_pset_Depth(PointHandle self, int v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Point_op_plus_b_0(PointHandle self, PointHandle a0, out WelderError err);
+        [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.U1)] internal static partial bool welder_csharp_cases_Point_op_equals_equals_b_0(PointHandle self, PointHandle a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Size_destroy(IntPtr self);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Size_new_default(out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Size_new_agg(int a0, int a1, out WelderError err);
@@ -270,6 +272,28 @@ namespace csharp_cases
                 WelderInterop.ThrowIfError(in __e);
             }
         }
+
+        public static Point operator +(Point l, Point r)
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Point_op_plus_b_0(l._handle, r._handle, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Point(__r, true);
+        }
+
+        public static bool operator ==(Point? l, Point? r)
+        {
+            if (ReferenceEquals(l, r)) return true;
+            if (l is null || r is null) return false;
+            var __r = NativeMethods.welder_csharp_cases_Point_op_equals_equals_b_0(l._handle, r._handle, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+
+        public static bool operator !=(Point? l, Point? r) => !(l == r);
+
+        public override bool Equals(object? obj) => obj is Point __o && this == __o;
+        /// <summary>Reference-identity hash (the C++ type has no hash to mirror).</summary>
+        public override int GetHashCode() => base.GetHashCode();
 
         public void Dispose() => _handle.Dispose();
     }

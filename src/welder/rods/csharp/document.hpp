@@ -62,6 +62,39 @@ struct document {
     std::string types{};   /**< Wrapper class + enum declarations (flat in the ns). */
     std::vector<static_class> statics{}; /**< Per-namespace function/variable holders. */
     std::vector<std::string> symbols{};  /**< Every emitted C symbol (collision check). */
+    /** raw `::qualified` C++ name → final C# name, filled by make_class/make_enum.
+        Type REFERENCES are emitted as `\x01raw\x02` placeholders and reconciled
+        at render (the luacats record_type_name idiom) — declaration order never
+        matters, and hooks without a Style (add_operator) still spell styled
+        names correctly. */
+    std::vector<std::pair<std::string, std::string>> type_names{};
+
+    /** Register the final C# name for raw C++ type spelling @a raw. */
+    void record_type_name(std::string raw, std::string styled) {
+        type_names.emplace_back(std::move(raw), std::move(styled));
+    }
+
+    /** Resolve every `\x01raw\x02` placeholder in @a text against
+        @ref type_names (an unmatched one keeps the raw name — visibly wrong
+        C#, which cannot happen for gate-admitted references). */
+    std::string apply_type_renames(std::string text) const {
+        std::size_t b1{0};
+        while ((b1 = text.find('\x01', b1)) != std::string::npos) {
+            const std::size_t b2{text.find('\x02', b1 + 1)};
+            if (b2 == std::string::npos)
+                break;
+            const std::string raw{text.substr(b1 + 1, b2 - b1 - 1)};
+            std::string sub{raw};
+            for (const auto& [r, cs] : type_names)
+                if (r == raw) {
+                    sub = cs;
+                    break;
+                }
+            text.replace(b1, b2 - b1 + 1, sub);
+            b1 += sub.size();
+        }
+        return text;
+    }
 
     /** Record an emitted C symbol; a duplicate aborts the generator with a
         designed message (two members whose underscore paths collide — e.g.
@@ -184,7 +217,7 @@ struct document {
             out += "    }\n\n";
         }
         out += "}\n";
-        return out;
+        return apply_type_renames(std::move(out));
     }
 };
 
@@ -212,6 +245,22 @@ struct class_writer {
     std::string destroy_symbol{}; /**< The `welder_…_destroy` symbol. */
     std::string members{};        /**< Accumulated property/method/ctor text. */
 
+    /** One recorded comparison-operator emission, held back until flush: C#
+        requires `==`/`!=`, `<`/`>` and `<=`/`>=` in PAIRS, so pairing is
+        decided over the whole class surface — a partner C++ never declared is
+        synthesized (negation / operand swap), and a heterogeneous relational
+        whose partner cannot be synthesized demotes to a named method. */
+    struct cs_comparison {
+        std::string op;   /**< The C# token (`"=="`, `"<"`, …). */
+        std::string lhs;  /**< The left operand's public C# spelling. */
+        std::string rhs;  /**< The right operand's public C# spelling. */
+        std::string ret;  /**< The C# return type (usually `bool`). */
+        std::string body; /**< The operator body (params are `l` and `r`). */
+    };
+    std::vector<cs_comparison> comparisons{};
+    std::vector<std::string> indexer_sigs{}; /**< Emitted indexer param lists
+        (dedup: a const/non-const C++ pair is one C# indexer). */
+
     class_writer() = default;
     class_writer(const class_writer&) = delete;
     class_writer& operator=(const class_writer&) = delete;
@@ -224,9 +273,103 @@ struct class_writer {
         sym_prefix = std::move(o.sym_prefix);
         destroy_symbol = std::move(o.destroy_symbol);
         members = std::move(o.members);
+        comparisons = std::move(o.comparisons);
+        indexer_sigs = std::move(o.indexer_sigs);
         o.doc = nullptr;
         return *this;
     }
+
+    /** Whether a comparison with this exact shape was recorded. */
+    bool _have_comparison(std::string_view op, std::string_view lhs,
+                          std::string_view rhs) const {
+        for (const auto& c : comparisons)
+            if (c.op == op && c.lhs == lhs && c.rhs == rhs)
+                return true;
+        return false;
+    }
+
+    /** Render the recorded comparisons with C#'s pairing rules applied. */
+    std::string _flush_comparisons() const {
+        auto partner = [](std::string_view op) -> const char* {
+            if (op == "==") return "!=";
+            if (op == "!=") return "==";
+            if (op == "<") return ">";
+            if (op == ">") return "<";
+            if (op == "<=") return ">=";
+            return "<=";
+        };
+        auto demoted = [](std::string_view op) -> const char* {
+            if (op == "<") return "LessThan";
+            if (op == ">") return "GreaterThan";
+            if (op == "<=") return "LessThanOrEqual";
+            if (op == ">=") return "GreaterThanOrEqual";
+            return op == "==" ? "EqualsValue" : "NotEqualsValue";
+        };
+        std::string out{};
+        for (const auto& c : comparisons) {
+            const bool equality{c.op == "==" || c.op == "!="};
+            const bool can_pair{_have_comparison(partner(c.op), c.lhs, c.rhs) ||
+                                (c.ret == "bool" &&
+                                 (equality || c.lhs == c.rhs))};
+            // Homogeneous wrapper equality gets the C# null protocol (a
+            // wrapper is a reference type; `p == null` must not NRE).
+            std::string guard{};
+            if (equality && c.lhs == c.rhs && c.lhs.front() == '\x01')
+                guard = c.op == "=="
+                            ? "            if (ReferenceEquals(l, r)) return "
+                              "true;\n            if (l is null || r is null) "
+                              "return false;\n"
+                            : "            if (ReferenceEquals(l, r)) return "
+                              "false;\n            if (l is null || r is null) "
+                              "return true;\n";
+            const std::string q{guard.empty() ? "" : "?"};
+            if (can_pair) {
+                out += "        public static " + c.ret + " operator " + c.op +
+                       "(" + c.lhs + q + " l, " + c.rhs + q +
+                       " r)\n        {\n" + guard + c.body + "        }\n\n";
+            } else {
+                // Unpairable (a lone heterogeneous relational, or a non-bool
+                // comparison): a named method instead of an operator.
+                out += "        public static " + c.ret + " " + demoted(c.op) +
+                       "(" + c.lhs + " l, " + c.rhs + " r)\n        {\n" +
+                       c.body + "        }\n\n";
+            }
+        }
+        // Synthesize the missing partners of pairable emissions.
+        for (const auto& c : comparisons) {
+            const bool equality{c.op == "==" || c.op == "!="};
+            if (_have_comparison(partner(c.op), c.lhs, c.rhs))
+                continue;
+            if (c.ret != "bool" || !(equality || c.lhs == c.rhs))
+                continue; // was demoted above
+            const std::string p{partner(c.op)};
+            const std::string pq{(equality && c.lhs == c.rhs &&
+                                  c.lhs.front() == '\x01')
+                                     ? "?"
+                                     : ""};
+            out += "        public static bool operator " + p + "(" + c.lhs +
+                   pq + " l, " + c.rhs + pq + " r) => ";
+            if (equality)
+                out += "!(l " + c.op + " r);\n";
+            else // homogeneous relational: swap the operands
+                out += "r " + c.op + " l;\n";
+            out += "\n";
+        }
+        // == over the class itself: give Equals/GetHashCode their overrides
+        // (silencing CS0660/CS0661). The hash is reference identity — C++ has
+        // no hash slot to mirror; equal VALUES may hash differently.
+        const std::string self_ph{std::string{"\x01"} + cpp_qualified + "\x02"};
+        if (_have_comparison("==", self_ph, self_ph)) {
+            out += "        public override bool Equals(object? obj) => obj is " +
+                   cs_name + " __o && this == __o;\n";
+            out += "        /// <summary>Reference-identity hash (the C++ type "
+                   "has no hash to mirror).</summary>\n";
+            out += "        public override int GetHashCode() => "
+                   "base.GetHashCode();\n\n";
+        }
+        return out;
+    }
+
     ~class_writer() {
         if (!doc)
             return;
@@ -254,6 +397,7 @@ struct class_writer {
                "(IntPtr handle, bool owns) { _handle = new " + cs_name +
                "Handle(handle, owns); }\n\n";
         out += members;
+        out += _flush_comparisons();
         out += "        public void Dispose() => _handle.Dispose();\n";
         out += "    }\n\n";
     }

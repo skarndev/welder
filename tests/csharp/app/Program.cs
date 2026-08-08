@@ -103,6 +103,55 @@ catch (ArgumentException ex) { Check(ex.Message == "negative", "invalid_argument
 try { Global.Reject(1); Check(false, "reject(1) should throw"); }
 catch (ArithmeticException ex) { Check(ex.Message == "too big", "overflow_error -> ArithmeticException"); }
 
+// --- operators (dedicated Point + the shared operators cases) ------------------
+
+using (var pa = new Point(1, 2))
+using (var pb = new Point(3, 4))
+{
+    using (var ps = pa + pb)
+        Check(ps.X == 4 && ps.Y == 6, "member operator +");
+    Check(pa == new Point(1, 2), "operator == compares values");
+    Check(pa != pb, "synthesized operator !=");
+    Check(pa != null && !(pa == null), "null protocol on ==/!=");
+    Check(pa.Equals(new Point(1, 2)), "Equals via ==");
+}
+
+using (var va = new operators.Vec(1, 2))
+using (var vb = new operators.Vec(3, 4))
+{
+    using (var vs = va + vb)
+        Check(vs.X == 4 && vs.Y == 6, "shared: Vec +");
+    using (var vn = -va)
+        Check(vn.X == -1 && vn.Y == -2, "shared: unary -");
+    using (var vm = va * 2.0)
+        Check(vm.X == 2, "shared: Vec * double");
+    Check(va[0] == 1 && va[1] == 2, "shared: indexer from operator[]");
+    Check(va != vb && va == new operators.Vec(1, 2), "shared: Vec ==/!=");
+}
+using (var mt = new operators.Meters(1) + new operators.Feet(10))
+    Check(Math.Abs(mt.Value - 4.048) < 1e-9, "shared: heterogeneous welded +");
+using (var cn = new operators.Coin(5) + new operators.Coin(7))
+    Check(cn.Cents == 12, "shared: free anchored +");
+using (var mm = new operators.Mixed(1) + new operators.Mixed(2))
+    Check(mm.V == 3, "shared: member + free in one slot (member)");
+using (var mi = new operators.Mixed(1) + 41)
+    Check(mi.V == 42, "shared: member + free in one slot (free, int rhs)");
+using (var sc = new operators.Scaled(2.5))
+{
+    Check(sc.ToString() == "Scaled(2.5)", "shared: ostream << -> ToString()");
+    using (var sr = 2.0 * sc)
+        Check(Math.Abs(sr.F - 5.0) < 1e-12, "shared: reflected operand *");
+}
+Check(new operators.Version(1, 2) < new operators.Version(1, 3), "shared: defaulted <=> synthesizes <");
+Check(new operators.Version(1, 2) == new operators.Version(1, 2), "shared: defaulted <=> implicit ==");
+Check(new operators.Temp(1) < new operators.Temp(2) && new operators.Temp(2) >= new operators.Temp(2),
+      "shared: custom <=> relationals");
+using (var acct = new operators.Account(3))
+{
+    Check(acct < 5 && acct == 3 && acct != 4, "shared: heterogeneous <=> + ==");
+    Check(2 < acct && 3 <= acct, "shared: reversed heterogeneous <=>");
+}
+
 // --- the shared retpolicy cases (tests/common/cpp/retpolicy.hpp) ---------------
 
 using (var owner = new retpolicy.Owner())
