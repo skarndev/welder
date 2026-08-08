@@ -321,6 +321,43 @@ matter (`undefined-doc-name`/`-class`, `unknown-operator`) are forced on via
 directory check with the config co-located (a single-file `--check` ignores it).
 This lint is what caught the invalid `---@operator eq/lt/le/index` emissions.
 
+## C#/.NET rod build/test (build-time C-ABI + P/Invoke)
+
+The C# backend generates from reflection like luacats — but emits TWO coordinated
+artifacts (`shim.cpp` + `Bindings.cs`) and needs a shared-library build for the
+shim. Generation + the native build + the golden gates need **only the compiler**,
+so `welder::csharp` is an unconditional INTERFACE target and `tests/csharp/` sits
+at the top level of tests/ (like luacats). Only the behavioral round-trip needs a
+**.NET SDK**: `find_program(dotnet)`-gated (skip with a status message; set
+`WELDER_DOTNET` to override). On the Homebrew macOS install the test sets
+`DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec` itself (the dotnet CLI needs it).
+
+`welder_csharp_generate_bindings(<name> SOURCES gen.cpp LIBRARY <pinvoke-name>
+[OUTPUT_DIR …] [INCLUDE_DIRS …] [LINK …] [DEPENDS …])`
+(cmake/WelderCSharpModule.cmake): builds the `WELDER_CSHARP_MAIN` generator exe,
+runs it (argv[1]=shim.cpp, argv[2]=Bindings.cs), compiles the shim into a SHARED
+lib with `OUTPUT_NAME <pinvoke-name>` (Windows adds `PREFIX ""` so .NET's resolver
+finds `<name>.dll`; MinGW statically links libstdc++/libgcc so the dll loads under
+a native dotnet). The `.cs` path lands in the `WELDER_CSHARP_BINDINGS` target
+property. NOTE the shim is compiled **with reflection against the welded header**
+— its thunks re-run the generator's reflection via the shared lookup layer
+(`named_member`/`ctor_at`/`named_field`), so generator and shim must see the same
+header (the helper's DEPENDS regenerates on change; a drifted stale artifact fails
+the shim build with `diag::csharp_member_lookup_mismatch`).
+
+CTest names: `csharp.build` (a FIXTURES_SETUP build of the target — regenerating +
+compiling the shim IS a test), `csharp.shim_golden` / `csharp.bindings_golden`
+(`cmake -E compare_files --ignore-eol` against `tests/csharp/*.golden.*` — bless by
+copying the freshly generated files from `<bindir>/tests/csharp/`),
+`csharp.roundtrip` (a `dotnet run` app: `file(GENERATE)`d csproj — TFM from the
+`WELDER_CSHARP_TFM` cache var, default net10.0, `[LibraryImport]` needs net7+ —
+compiling `app/Program.cs` + the generated `Bindings.cs`, native lib copied beside
+the exe via `$<TARGET_FILE>`), and `compile.csharp_marshal` (consteval locks over
+classify/spellings/mangling/lookup layer, `tests/core/csharp_marshal.cpp`). The
+cases are a dedicated slice `tests/csharp/cpp/cases.hpp` (the golden anchor);
+widening `tests/common/cpp` with `lang::cs` is the per-phase completeness bar as
+operators/inheritance/virtuals/containers land.
+
 ## Test-side type gates (mypy)
 Three test-side mypy gates:
 - `stubcheck` — mypy over each stub tree.

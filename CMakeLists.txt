@@ -81,6 +81,7 @@ include(WelderLuaBridgeModule)
 include(WelderLuaCATSStub)
 include(WelderTrampolines)
 include(WelderOpaqueContainers)
+include(WelderCSharpModule)
 include(WelderRequirements)
 
 # Check (don't impose) welder's compiler + language-standard requirements — shared

@@ -244,3 +244,17 @@ target_link_libraries(welder_trampolines INTERFACE welder_headers)
 add_library(welder_opaque_containers INTERFACE)
 add_library(welder::opaque_containers ALIAS welder_opaque_containers)
 target_link_libraries(welder_opaque_containers INTERFACE welder_headers)
+
+# --- welder::csharp : C#/.NET P/Invoke rod -------------------------------
+# A text-emitting rod (same driver, same model as the LuaCATS stub rod) that
+# reflects the welded types and emits TWO coordinated artifacts: an `extern "C"`
+# shim (compiled — with reflection — into a shared library; its thunks splice the
+# exact member reflections via <welder/rods/csharp/shim_support.hpp>) and a
+# [LibraryImport] C# wrapper. Pure reflection + text — no .NET dependency at
+# build time (dotnet is only needed to CONSUME the generated wrapper) — so this
+# is an unconditional INTERFACE target over the header-only core. Generate a
+# binding pair with welder_csharp_generate_bindings() (see
+# cmake/WelderCSharpModule.cmake).
+add_library(welder_csharp INTERFACE)
+add_library(welder::csharp ALIAS welder_csharp)
+target_link_libraries(welder_csharp INTERFACE welder_headers)

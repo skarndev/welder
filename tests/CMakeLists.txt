@@ -234,6 +234,18 @@ add_test(NAME compile.properties
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_properties --config $<CONFIG>)
 
+
+# C# rod marshalling/consteval locks (compile-only): the classification, the
+# paired C-ABI/C# scalar spellings, the symbol mangling and the shared
+# member-lookup layer (the generator<->shim agreement the emitted splices rely
+# on). static_asserts; same compile-to-pass shape as above (no .NET needed).
+add_library(welder_csharp_marshal OBJECT EXCLUDE_FROM_ALL core/csharp_marshal.cpp)
+target_compile_features(welder_csharp_marshal PRIVATE cxx_std_26)
+target_link_libraries(welder_csharp_marshal PRIVATE welder::headers welder_warnings)
+add_test(NAME compile.csharp_marshal
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_csharp_marshal --config $<CONFIG>)
+
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 
@@ -241,6 +253,10 @@ add_subdirectory(doxyfilter)
 # backend depends on neither sol2 nor a Lua runtime, so it is registered here, not
 # under the sol2-gated lua/ tree).
 add_subdirectory(luacats)
+
+# C#/.NET backend (generate + goldens need only the compiler; the managed
+# round-trip is gated on a dotnet SDK inside).
+add_subdirectory(csharp)
 
 # Per-language test trees. python/ builds the pybind11 + nanobind extensions and
 # runs the shared pytest specs against each (a cross-backend consistency check);

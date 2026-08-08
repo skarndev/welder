@@ -7,6 +7,18 @@ guide has the user-facing walkthrough, this has driver hooks + test files.
 
 All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 
+**`lang::cs` coverage (branch feature/csharp, Phase 1 of 7):** the C# rod
+participates in the SAME resolution/gate for: fields (+no_reassign), ctors
+(default/declared/aggregate, Copyable→Clone), method/static/free overload groups,
+method-backed properties, enums (underlying-typed, per-enumerator docs), namespace
+variables, submodules, docs. NOT yet (a designed `diag::csharp_unmarshallable` /
+`static_assert` at generation): operators/comparisons/stringifier, welded-base
+inheritance, virtuals-overridden-in-C# (directors), rv::/keep_alive ownership
+mapping (class-pointer returns rejected; value/& returns heap-copy), STL
+containers, nested types (flat fallback is fine — they're not yet marshallable
+anyway), weld_protected members (the shim's `&[:Mem:]` needs public access).
+Details: architecture.md (the rod section) + tests/csharp.
+
 ## Data members & constructors
 Public data members (a mutable member read/write via `def_readwrite`; a **const**
 member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on

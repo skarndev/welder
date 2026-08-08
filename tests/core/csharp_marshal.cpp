@@ -1,0 +1,102 @@
+// C# rod marshalling/consteval locks (compile-only; must SUCCEED to compile).
+//
+// static_asserts over the C# rod's consteval text layer — the classification,
+// the paired C-ABI/C# scalar spellings, the symbol mangling and the shared
+// member-lookup layer (the generator↔shim agreement contract). These lock the
+// exact strings/reflections the golden files depend on, without running the
+// generator. Compiled by the `compile.csharp_marshal` CTest (a plain build
+// target, no WILL_FAIL) — needs only the compiler, no .NET.
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+#include <welder/vocabulary.hpp>
+#include <welder/rods/csharp/rod.hpp>
+
+namespace {
+
+namespace wcs = ::welder::rods::csharp;
+using wcs::marshal_kind;
+
+// A small welded surface to reflect over.
+namespace lockcases {
+struct [[=welder::weld(welder::lang::cs)]] Thing {
+    std::int32_t n{0};
+    std::string s{};
+    Thing() = default;
+    Thing(std::int32_t v) : n{v} {}
+    Thing(std::int32_t v, std::int32_t w) : n{v + w} {}
+    std::int32_t get() const { return n; }
+    std::int32_t get(std::int32_t base) const { return n + base; } // overload
+};
+enum class [[=welder::weld(welder::lang::cs)]] Tag : std::uint16_t { A, B };
+[[=welder::weld(welder::lang::cs)]] inline std::int32_t leaf(std::int32_t v) {
+    return v;
+}
+} // namespace lockcases
+
+consteval bool streq(const char* a, std::string_view b) { return a && a == b; }
+
+// --- classification ---------------------------------------------------------
+static_assert(wcs::classify(^^void) == marshal_kind::void_);
+static_assert(wcs::classify(^^int) == marshal_kind::scalar);
+static_assert(wcs::classify(^^const double&) == marshal_kind::scalar);
+static_assert(wcs::classify(^^bool) == marshal_kind::boolean);
+static_assert(wcs::classify(^^std::string) == marshal_kind::utf8_string);
+static_assert(wcs::classify(^^const std::string&) == marshal_kind::utf8_string);
+static_assert(wcs::classify(^^std::string_view) == marshal_kind::utf8_string);
+static_assert(wcs::classify(^^const char*) == marshal_kind::utf8_string);
+static_assert(wcs::classify(^^lockcases::Tag) == marshal_kind::enum_);
+static_assert(wcs::classify(^^lockcases::Thing) == marshal_kind::handle);
+static_assert(wcs::classify(^^const lockcases::Thing&) == marshal_kind::handle);
+static_assert(wcs::classify(^^lockcases::Thing*) == marshal_kind::handle);
+static_assert(wcs::is_pointer_flavor(^^lockcases::Thing*));
+static_assert(!wcs::is_pointer_flavor(^^const lockcases::Thing&));
+
+// --- paired scalar spellings (byte-for-byte agreement) -----------------------
+// std::int32_t & co. are using-DECLARATIONS in libstdc++ (unreflectable),
+// so the locks spell the fundamentals; scalar_spell keys on size/signedness.
+static_assert(streq(wcs::scalar_spell(^^int).c_abi, "std::int32_t"));
+static_assert(streq(wcs::scalar_spell(^^int).cs, "int"));
+static_assert(streq(wcs::scalar_spell(^^unsigned char).cs, "byte"));
+static_assert(streq(wcs::scalar_spell(^^double).c_abi, "double"));
+static_assert(streq(wcs::scalar_spell(^^float).cs, "float"));
+static_assert(streq(wcs::scalar_spell(^^long long).cs, "long"));
+// An enum crosses as its underlying type's pair.
+static_assert(streq(wcs::enum_wire_spell(^^lockcases::Tag).cs, "ushort"));
+
+// --- symbol mangling ---------------------------------------------------------
+static_assert(wcs::underscore_path(^^lockcases::Thing) ==
+              "lockcases_Thing");
+static_assert(wcs::qualified_cpp_name(^^lockcases::Thing) ==
+              "::lockcases::Thing");
+
+// --- the member-lookup layer (generator <-> shim agreement) ------------------
+// named_member(owner, name, k) must invert index_of_named_member for every
+// overload — the exact contract the emitted shim relies on.
+static_assert(wcs::named_member(^^lockcases::Thing, "get", 0) !=
+              wcs::named_member(^^lockcases::Thing, "get", 1));
+static_assert(wcs::index_of_named_member(
+                  wcs::named_member(^^lockcases::Thing, "get", 1)) == 1);
+static_assert(std::meta::parameters_of(
+                  wcs::named_member(^^lockcases::Thing, "get", 1)).size() == 1);
+static_assert(wcs::index_of_ctor(wcs::ctor_at(^^lockcases::Thing, 2)) == 2);
+static_assert(std::meta::identifier_of(
+                  wcs::named_field(^^lockcases::Thing, "s")) ==
+              std::string_view{"s"});
+static_assert(wcs::named_member(^^lockcases, "leaf", 0) == ^^lockcases::leaf);
+
+// --- parameter identifiers (camelCase + keyword escape) ----------------------
+static_assert(wcs::param_ident(
+                  std::meta::parameters_of(^^lockcases::leaf)[0], 0) == "v");
+// The C# name style: PascalCase members, verbatim enumerators.
+static_assert(std::string_view{
+                  ::welder::name_of<^^lockcases::Thing, welder::lang::cs,
+                                    wcs::dotnet, ::welder::ent_kind::class_>()} ==
+              "Thing");
+
+// The rod satisfies the full contract (also asserted in rod.hpp; this locks it
+// from the test tree so a contract change fails here first).
+static_assert(::welder::rod<wcs::rod>);
+
+} // namespace

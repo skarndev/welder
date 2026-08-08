@@ -40,7 +40,7 @@ two **Python** (**pybind11**, **nanobind**) and two **Lua** (**sol2**,
 **LuaBridge3**) — all sharing the same core and the *same* backend-neutral C++ test
 cases, which each rod binds and asserts (pytest for Python, busted `.lua` specs for
 Lua) as a cross-rod consistency check. The two Lua rods run the *same* busted specs
-(selected by `WELDER_TEST_LUA_MODULE`). Three more are *build-time* text-emitting rods
+(selected by `WELDER_TEST_LUA_MODULE`). Four more are *build-time* text-emitting rods
 over the same driver: **`welder::rods::luacats::rod`** reflects the welded Lua types and
 emits a **LuaCATS (`---@meta`) stub file** (the Lua analogue of the Python `.pyi` stubs,
 carrying the docstrings Lua has no runtime slot for); **`welder::rods::trampolines::rod`**
@@ -61,7 +61,24 @@ can emit; blanket over welded types, `by_value` opt-out, **collision-free
 namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint`,
 `array<short,289>`→`ArrayShortIntx289` (element + `x` + extent) — overridable
 per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
-the name style). Class-element
+the name style); and **`welder::rods::csharp::rod`** (`lang::cs`, branch
+`feature/csharp`, Phase 1 of 7) — C# has no in-process registration C API, so this
+rod emits **two coordinated artifacts** per pass: an `extern "C"` C-ABI **shim**
+(compiled *with reflection* against the same welded header — each thunk one-line
+delegates into `shim_support.hpp`, parameterized by the exact member reflection
+re-derived through a shared lookup layer (`named_member`/`ctor_at`/`named_field`),
+the trampoline rod's splice-don't-respell idiom applied to the C ABI; a drifted
+header fails the shim build, never calls the wrong overload) and a
+**`[LibraryImport]` C# wrapper** (net7+; a `SafeHandle` per class, fields/accessor
+marks → properties, overload groups → natural C# overloads with per-overload
+symbols, Copyable → `Clone()`, `enum : <underlying>` with per-enumerator docs, full
+XML doc comments; every thunk carries a trailing `welder_error*` — C++ exceptions
+map to `WelderNativeException`, never unwinding the C ABI). Phase-gated hard
+errors (`diag::csharp_unmarshallable`) for what later phases add: ownership/rv::
+mapping, operators, inheritance, directors (virtuals overridden in C#), STL
+containers, nested types. Driven by `welder_csharp_generate_bindings()`
+(cmake/WelderCSharpModule.cmake); tests: goldens + `compile.csharp_marshal`
+consteval locks + a dotnet-gated round-trip (tests/csharp). Class-element
 containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
 Python rods opt in via a `reopen_class` hook): it registers every welded type's NAME,
 then binds the opaque containers, then fills members — so no container-typed

@@ -66,7 +66,14 @@ src/welder/
       luacats/module.hpp    the WELDER_LUACATS_MAIN generator-main() macro; include only for a stub-generator TU
       luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
       luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
-    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats
+    csharp/
+      rod.hpp             C#/.NET rod: text-emitting welder::rod (welder::rods::csharp::rod, lang::cs) emitting TWO coordinated artifacts per pass — extern "C" shim.cpp (one-line thunks delegating into shim_support, spliced reflections) + [LibraryImport] Bindings.cs (SafeHandle wrappers, natural C# overloads, XML docs); overload groups get per-overload indexed symbols; whole-module generate<^^Ns>(shim_os, cs_os, options)
+      shim_support.hpp    the compiled marshalling library the GENERATED shim includes: wire conversion (to_cpp / guarded), exact-overload invocation via &[:Fn:], the welder_error out-param contract (catch-all, code 0 = success), heap-copy handle returns; global-scope struct welder_error (the wire type the extern "C" signatures spell)
+      type_map.hpp        classify/marshal_kind (scalar/bool/string/enum/handle), paired C-ABI+C# scalar spellings (scalar_spell/enum_wire_spell), symbol mangling (underscore_path), the SHARED member-lookup layer (named_member/ctor_at/named_field + index inverses — generator<->shim agreement; a drifted header throws diag::csharp_member_lookup_mismatch at shim build), require_marshallable (phase gate → diag::csharp_unmarshallable), is_native_dotnet oracle
+      document.hpp        the two-stream document (shim/pinvoke/types/statics buffers + symbol-collision check) + RAII writers; renders the C# error scaffolding (WelderError/WelderInterop/WelderNativeException) and one SafeHandle subclass per class
+      naming.hpp          welder::rods::csharp::dotnet name style (PascalCase; enumerators verbatim — the pep8 pattern)
+      module.hpp          the WELDER_CSHARP_MAIN(ns, header, lib) generator-main() macro (argv[1]=shim.cpp, argv[2]=Bindings.cs)
+    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats, welder::trampolines, welder::opaque_containers, welder::csharp
 src/CMakeLists.txt      target: welder::headers (the header-only core; the C++20 `welder::module` wrapper was removed — see gcc16-toolchain.md)
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
@@ -75,6 +82,7 @@ cmake/
   WelderLuaCATSStub.cmake      welder_luacats_generate_stub() — build a generator exe (welder::luacats) + run it → <name>.lua (ALL target)
   WelderTrampolines.cmake      welder_generate_trampolines() — build a generator exe (welder::trampolines) + run it → <name>.trampolines.hpp (ALL target); the Python trampoline analogue of the LuaCATS stub helper
   WelderOpaqueContainers.cmake welder_generate_opaque_containers() — build a generator exe (welder::opaque_containers) + run it → <name>.opaque.hpp (ALL target); the opaque-container analogue of the trampoline helper
+  WelderCSharpModule.cmake     welder_csharp_generate_bindings() — build a generator exe (welder::csharp) + run it → shim.cpp + Bindings.cs, then compile the shim into a SHARED lib named for P/Invoke (Windows: PREFIX "", MinGW: static gcc runtimes); .cs path in the WELDER_CSHARP_BINDINGS target property
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
@@ -398,7 +406,18 @@ is the Python analogue: also `lang::py`, also a build-time text emitter, but it 
 *C++ trampoline source* (not a stub) — its `make_class<T>` renders a trampoline subclass
 for a welded virtual type; every other primitive is a no-op, and `has_native_caster` is
 permissive (it only reproduces virtual *signatures*, which splicing handles for any
-type, so it needs no bindability oracle). (`welder::rods` is deliberately a grouping
+type, so it needs no bindability oracle). The **`welder::rods::csharp::rod`** is the
+third build-time text emitter and the first for a language with NO in-process
+registration C API (`lang::cs`): one driver pass emits an `extern "C"` C-ABI shim
+(compiled with reflection against the same welded header — each thunk is a one-line
+delegation into `shim_support.hpp`, parameterized by the exact member reflection
+re-derived via the shared lookup layer, the trampolines splice idiom applied to the
+C ABI) plus a `[LibraryImport]` C# wrapper (SafeHandle per class, natural overloads,
+`Clone()` for Copyable, `enum : <underlying>`, XML docs, and a `welder_error`
+out-param on every thunk mapping C++ exceptions to `WelderNativeException`).
+Phase-gated: what the gate admits but the marshalling layer cannot yet carry
+(containers, class-pointer returns, welded bases, virtuals/directors) throws
+`diag::csharp_unmarshallable` at generation — never a silent `void*`. (`welder::rods` is deliberately a grouping
 namespace with room for non-rod helpers alongside the rods, e.g. `welder::rods::python`
 / `welder::rods::lua`.)
 
@@ -453,6 +472,13 @@ framework's own mechanisms, separately from core resolution — design pending.
   `<name>.trampolines.hpp` as an ALL target. The generated header is backend-neutral;
   the consuming binding TU adds it on its include path, `#include`s it after the active
   backend's `trampoline.hpp`, and depends on the generation target so it exists first.
+- **`welder::csharp`** — INTERFACE, the C#/.NET P/Invoke rod. Pure reflection →
+  text at generation time (dotnet is only needed to *consume* the wrapper), so it is
+  **unconditional** — just `welder::headers`. Emit a binding pair with
+  `welder_csharp_generate_bindings()` (cmake/WelderCSharpModule.cmake): generator exe
+  → `shim.cpp` + `Bindings.cs` → the shim compiled (with reflection, against the
+  welded header — the generated thunks re-run the generator's reflection queries and
+  splice) into a SHARED library named for the default P/Invoke resolver.
 
 Reflection flags are **not** propagated to consumers: `welder::headers` is the include
 path only (no `cxx_std_26`, no `-freflection`). welder's own build applies
