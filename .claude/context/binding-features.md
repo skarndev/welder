@@ -44,6 +44,31 @@ appear in a chained-this argument). Dispose is virtual (root) / override.
 Shared-case widening so far: retpolicy.hpp Inner/Owner (view/snapshot),
 operators.hpp + inheritance.hpp whole files (bound via
 tests/csharp/cpp/shared_seam.hpp + gen_* binding pairs).
+Directors (Phase 5, src/welder/rods/csharp/directors.hpp): per eligible type
+(overridable_virtuals nonempty — REUSES rods/python/trampoline.hpp, pure
+reflection; virtual dtor; ≤64 slots; bind_flat opts out) the shim emits a C++
+director subclass (fnptr table + ctx + mask; overrides splice via the
+re-derived wcs::director_slot(^^T,k), converting through shim::to_wire_arg /
+from_wire_return — a class-by-value return is CLONED managed-side through the
+class's _clone thunk before crossing, avoiding the GC race). C#-constructed
+instances always construct the director (construct_as keeps the handle
+T-adjusted); ctors chain __DirBind() (weak GCHandle ctx + reflection-computed
+override mask; __NotWrapper excludes the welded ancestor wrappers). Wrapper
+slot methods are `public virtual` + origin-branched: __isDirector → the
+qualified base-call thunk `sym_base` (guarded<> over a text-emitted
+`__o->T::name(to_cpp<...>(a))` — this is what terminates base.Method());
+else the ordinary virtual thunk. Slot↔method matching is RUNTIME (class_writer
+vslots: identifier + display_string_of(type) — add_method has no ^^T);
+method-name placeholders keyed `<declaring-qual>#<id>#<sig>` so inherited
+slots resolve through the base wrapper's binding. Only BOUND public slots get
+callbacks/mask (an NVI hook or excluded virtual keeps a null table field →
+qualified fallback). Managed exceptions: callback catch-all → code 7 →
+shim::managed_exception → re-mapped at the next boundary. Not directed:
+abstract types (no construction_type nomination yet — keep py-only), covariant
+pointer-returning slots (unsupported shape → static_assert naming bind_flat).
+Shared overridable.hpp: Animal/Bird/Robot welded for cs (Shape/Plant/Tree
+stay py-only); the Py* trampolines compile under neutral stub macros in
+shared_seam.hpp.
 NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
 generation):
 virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference

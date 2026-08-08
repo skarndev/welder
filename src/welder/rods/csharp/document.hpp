@@ -58,6 +58,7 @@ struct document {
     options opts{};
     std::string module_doc{}; /**< The root namespace's doc (a file-header comment). */
     std::string shim{};    /**< `extern "C"` thunk bodies. */
+    std::string directors{}; /**< Director subclass definitions (before extern "C"). */
     std::string pinvoke{}; /**< `[LibraryImport]` declarations (inside NativeMethods). */
     std::string types{};   /**< Wrapper class + enum declarations (flat in the ns). */
     std::vector<static_class> statics{}; /**< Per-namespace function/variable holders. */
@@ -138,10 +139,13 @@ struct document {
         out += "#include <welder/rods/csharp/shim_support.hpp>\n"
                "\n"
                "namespace wcs = ::welder::rods::csharp;\n"
-               "\n"
-               "extern \"C\" {\n\n";
+               "\n";
+        out += directors;
+        out += "extern \"C\" {\n\n";
         out += shim;
-        out += "void welder_free(void* p) { std::free(p); }\n\n";
+        out += "void welder_free(void* p) { std::free(p); }\n\n"
+               "const char* welder_dup_utf8(const char* s) { return "
+               "wcs::shim::dup(s ? s : \"\"); }\n\n";
         out += "} // extern \"C\"\n";
         return out;
     }
@@ -162,7 +166,9 @@ struct document {
             }
         }
         out += "#nullable enable\n"
-               "using System;\nusing System.Runtime.InteropServices;\n\n";
+               "using System;\n"
+               "using System.Runtime.CompilerServices;\n"
+               "using System.Runtime.InteropServices;\n\n";
         out += "namespace " + opts.cs_namespace + "\n{\n";
         // The error contract: the blittable slot + the check-and-throw helper.
         out +=
@@ -209,6 +215,9 @@ struct document {
         out += pinvoke;
         out += "        [LibraryImport(Lib)] internal static partial void "
                "welder_free(IntPtr p);\n";
+        out += "        [LibraryImport(Lib, StringMarshalling = "
+               "StringMarshalling.Utf8)] internal static partial IntPtr "
+               "welder_dup_utf8(string s);\n";
         out += "    }\n\n";
         out += types;
         for (const auto& s : statics) {
@@ -246,6 +255,18 @@ struct class_writer {
     std::string handle_field{};   /**< This level's handle field (`_h_<Class>`). */
     std::string base_ref{};       /**< First welded base's placeholder ref, or empty. */
     std::string base_upcast_sym{};/**< The `welder_<D>_as_<B>` symbol for it. */
+    bool is_director{false};      /**< Emit the director machinery for this class. */
+    std::string director_ident{}; /**< The C++ director struct's identifier. */
+    /** One overridable slot, as make_class recorded it: identifier + the full
+        function-type display (unique per signature) + the slot index. The
+        method sweep matches its callables against this at emission time —
+        add_method has no compile-time handle on the welded type. */
+    struct vslot {
+        const char* name;
+        const char* sig;
+        std::size_t k;
+    };
+    std::vector<vslot> vslots{};
     std::string members{};        /**< Accumulated property/method/ctor text. */
 
     /** One recorded comparison-operator emission, held back until flush: C#
@@ -278,6 +299,9 @@ struct class_writer {
         handle_field = std::move(o.handle_field);
         base_ref = std::move(o.base_ref);
         base_upcast_sym = std::move(o.base_upcast_sym);
+        is_director = o.is_director;
+        director_ident = std::move(o.director_ident);
+        vslots = std::move(o.vslots);
         members = std::move(o.members);
         comparisons = std::move(o.comparisons);
         indexer_sigs = std::move(o.indexer_sigs);
@@ -409,6 +433,9 @@ struct class_writer {
             // the parent cannot be collected while the view lives. Declared on
             // the hierarchy root only (derived levels inherit it).
             out += "        internal object? __owner;\n";
+            // Whether this instance was constructed from C# (a director): its
+            // virtual-slot methods then take the qualified base-call path.
+            out += "        internal bool __isDirector;\n";
             out += "        internal " + cs_name + "(IntPtr handle, bool owns) { " +
                    handle_field + " = new " + cs_name +
                    "Handle(handle, owns); }\n\n";

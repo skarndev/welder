@@ -81,6 +81,20 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   so a second welded base surfaces as a non-owning `As<Base>()` view (pinning
   its parent); a non-welded base's members are flattened onto the derived
   wrapper, exactly as on the other rods.
+- **Virtuals** are overridable from C# through generated **directors** (the
+  SWIG model — no vtable patching): the shim defines a C++ subclass per welded
+  virtual type whose overrides call back through `[UnmanagedCallersOnly]`
+  function pointers, gated by a per-instance override bitmask computed from the
+  dynamic C# type. Wrapper slot methods are `public virtual`; `override` them
+  and C++ virtual calls — including from C++ callers holding a base reference —
+  dispatch into your C# code. `base.Method()` works; a slot you don't override
+  falls through to the C++ base (also during C++ construction); a managed
+  exception thrown in an override crosses back to the next C# frame intact
+  (code 7). Requires a **virtual destructor** on the type (else it binds
+  non-overridably), `AllowUnsafeBlocks` in the consuming project, and
+  `[[=welder::rods::python::bind_flat]]` opts a type or method out, exactly as
+  on the Python rods. Unsupported slot shapes (C-variadic, reference/pointer
+  class or string returns) are a designed shim-build error naming that escape.
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.
@@ -177,7 +191,6 @@ documented-ignored (as on the Lua rods) — the owner-reference mechanism covers
 the common case.
 
 What the [bindability gate](bindability.md) admits but this phase cannot yet
-marshal — STL containers, virtuals overridden from C# — fails **loudly at
-generation time** with a designed
+marshal — STL containers — fails **loudly at generation time** with a designed
 diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
 silently-corrupting `void*`. Those families land in the following phases.

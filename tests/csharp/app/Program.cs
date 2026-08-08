@@ -203,6 +203,93 @@ using (var owner = new retpolicy.Owner())
     }
 }
 
+// --- directors: C# subclasses overriding C++ virtuals --------------------------
+
+using (var sh = new Shape())
+{
+    Check(sh.Name() == "shape", "director-constructed base behaves as base");
+    Check(sh.Describe() == "shape:0", "C++ caller through unoverridden director");
+}
+using (var sq = new SquareCs())
+{
+    Check(sq.Name() == "square", "C# override called directly");
+    Check(sq.Describe() == "square:4", "C++ virtual dispatch reaches C# overrides");
+    Check(Global.DescribeShape(sq) == "square", "dispatch through a base-typed param");
+}
+using (var bc = new BaseCallerCs())
+    Check(bc.Describe() == "mega-shape:0", "base.Name() inside an override terminates");
+using (var th = new ThrowerCs())
+{
+    try { th.Describe(); Check(false, "managed exception should cross"); }
+    catch (WelderNativeException ex)
+        { Check(ex.NativeCode == 7 && ex.Message == "cs-boom",
+                "managed exception round-trips as code 7"); }
+}
+
+// --- the shared overridable cases (tests/common/cpp/overridable.hpp) -----------
+
+using (var an = new overridable.Animal())
+{
+    Check(an.Describe() == "... on 4 legs", "shared: unoverridden virtuals");
+    Check(an.Kingdom() == "Animalia", "shared: bind_flat stays a plain method");
+}
+using (var ld = new LoudDogCs())
+    Check(ld.Describe() == "WOOF on 2 legs",
+          "shared: C++ caller dispatches into C# overrides");
+using (var bird = new CsBird())
+    Check(bird.Describe() == "tweet on 2 legs" && bird.Fly() == "soar",
+          "shared: inherited + own virtual slots on a derived director");
+using (var cy = new CyborgCs())
+{
+    Check(cy.March(2) == "STEP STEP ", "shared: parameterful virtual override");
+    Check(cy.Transmit() == "INT:7|STR:hi", "shared: overloaded virtuals per slot");
+    Check(cy.Recharge(5) == 500, "shared: noexcept virtual override");
+    Check(cy.Handshake() == "proto=asimov",
+          "shared: unbound NVI hook falls through to base");
+}
+
 if (failures > 0) { Console.Error.WriteLine($"{failures} FAILURES"); return 1; }
 Console.WriteLine("ALL PASS");
 return 0;
+
+class SquareCs : Shape
+{
+    public override string Name() => "square";
+    public override int Sides() => 4;
+}
+
+class BaseCallerCs : Shape
+{
+    public override string Name() => "mega-" + base.Name();
+}
+
+class ThrowerCs : Shape
+{
+    public override int Sides() => throw new InvalidOperationException("cs-boom");
+}
+
+class LoudDogCs : overridable.Animal
+{
+    public override string Speak() => "WOOF";
+    public override int Legs() => 2;
+}
+
+class CsBird : overridable.Bird
+{
+    public override string Speak() => "tweet";
+    public override int Legs() => 2;
+    public override string Fly() => "soar";
+}
+
+class CyborgCs : overridable.Robot
+{
+    public override string Obey(string order, int times)
+    {
+        string r = "";
+        for (int i = 0; i < times; i++) r += order.ToUpperInvariant();
+        return r;
+    }
+    public override string Send(int code) => "INT:" + code;
+    public override string Send(string text) => "STR:" + text;
+    public override int Recharge(int amount) => amount * 100;
+}

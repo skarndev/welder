@@ -61,6 +61,7 @@
 #include <welder/rods/csharp/type_map.hpp> // classify / spellings / lookup layer
 #include <welder/rods/csharp/naming.hpp>   // the dotnet name style
 #include <welder/rods/csharp/operators.hpp> // the C++-operator -> C# map + lookups
+#include <welder/rods/csharp/directors.hpp> // director eligibility/slots (C# overrides)
 
 namespace welder::inline v0::rods::csharp {
 
@@ -82,6 +83,11 @@ inline constexpr const char* cpp_name_v =
 /** The styled C# name of entity @a E (kind @a K) under name style @a Style. */
 template <std::meta::info E, class Style, ::welder::ent_kind K>
 inline constexpr const char* styled_v = ::welder::name_of<E, lang::cs, Style, K>();
+
+/** The identifier of entity @a E as a runtime-usable static C string. */
+template <std::meta::info E>
+inline constexpr const char* ident_v =
+    std::define_static_string(std::meta::identifier_of(E));
 
 /** The `welder_<underscore-path>` C-symbol prefix of namespace/type @a Ent. */
 template <std::meta::info Ent>
@@ -495,7 +501,8 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
         names += n;
     }
     w.members += "        public " + w.cs_name + "(" + cp.wrapper_params +
-                 ") : this(" + helper + "(" + names + "), true) {}\n\n";
+                 ") : this(" + helper + "(" + names + "), true) {" +
+                 (w.is_director ? " __DirBind(); " : "") + "}\n\n";
 }
 
 /** The C#/.NET rod: a stateless policy satisfying @ref welder::rod that emits a
@@ -591,6 +598,11 @@ struct rod {
             }
             ++base_i;
         }
+        if constexpr (director_eligible(std::meta::dealias(^^T))) {
+            w.is_director = true;
+            w.director_ident = std::string{"__wcs_dir_"} + upath_v<Decl>;
+            _emit_director<T>(m, w);
+        }
         // The destructor thunk + its P/Invoke (the SafeHandle's release path).
         m.doc->record_symbol(w.destroy_symbol);
         m.doc->shim += "void " + w.destroy_symbol +
@@ -610,9 +622,19 @@ struct rod {
     template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(class_writer& w) {
         const std::string anchor{"^^" + w.cpp_qualified};
+        // A director-eligible type is C#-constructed AS its director subclass
+        // (the handle stays "pointer to T" — construct_as adjusts), so a C#
+        // subclass can override its virtuals; unoverridden slots fall through
+        // to the qualified base call, so a plain C#-side instance behaves
+        // identically to a T.
+        const std::string dir_anchor{w.is_director ? "^^" + w.director_ident
+                                                   : std::string{}};
         if constexpr (HasDefault) {
             emit_ctor(w, call_pieces{}, w.sym_prefix + "_new_default",
-                      "wcs::shim::default_construct<" + anchor + ">");
+                      w.is_director
+                          ? "wcs::shim::default_construct_as<" + dir_anchor +
+                                ", " + anchor + ">"
+                          : "wcs::shim::default_construct<" + anchor + ">");
         }
         template for (constexpr auto ctor : std::define_static_array(Ctors)) {
             constexpr std::size_t k{index_of_ctor(ctor)};
@@ -621,8 +643,12 @@ struct rod {
                       build_params<ctor, ::welder::naming::none>(
                           std::make_index_sequence<n>{}),
                       w.sym_prefix + "_new_" + std::to_string(k),
-                      "wcs::shim::construct<" + anchor + ", wcs::ctor_at(" +
-                          anchor + ", " + std::to_string(k) + ")>");
+                      w.is_director
+                          ? "wcs::shim::construct_as<" + dir_anchor + ", " +
+                                anchor + ", wcs::ctor_at(" + anchor + ", " +
+                                std::to_string(k) + ")>"
+                          : "wcs::shim::construct<" + anchor + ", wcs::ctor_at(" +
+                                anchor + ", " + std::to_string(k) + ")>");
         }
         if constexpr (Aggregate) {
             constexpr std::size_t n{
@@ -820,7 +846,12 @@ struct rod {
 
     /** Emit method overload group @a Fns as natural C# overloads sharing one
         name, each with its own indexed symbol (the group's name resolves from
-        `Fns[0]`; the index re-derives the exact overload shim-side). */
+        `Fns[0]`; the index re-derives the exact overload shim-side). An
+        overridable virtual slot of a director-eligible type emits as a
+        `public virtual` method that dispatches by origin — the ordinary
+        virtual thunk for a C++-originated object, the qualified base-call
+        thunk for a director (C# has already resolved the dynamic dispatch;
+        this is also what terminates `base.Method()` inside an override). */
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(class_writer& w) {
         const std::string name{::welder::name_of<Fns[0], lang::cs, Style,
@@ -835,11 +866,156 @@ struct rod {
                 "wcs::shim::method<" + anchor + ", wcs::named_member(^^" +
                 std::string{cpp_name_v<std::meta::parent_of(fn)>} + ", \"" + id +
                 "\", " + std::to_string(k) + ")>"};
-            emit_callable<fn, Style, true>(*w.doc, sym, w.members, "        ",
-                                           name, expr, w.cs_name + "Handle",
-                                           w.handle_field);
+            static constexpr const char* fsig{std::define_static_string(
+                std::meta::display_string_of(std::meta::type_of(fn)))};
+            // The director scaffolding names slots through render-time
+            // placeholders keyed by (declaring class, identifier, signature) —
+            // record every bound method, so an inherited slot resolves through
+            // the BASE wrapper's binding.
+            w.doc->record_type_name(
+                std::string{cpp_name_v<std::meta::parent_of(fn)>} + "#" + id +
+                    "#" + fsig,
+                name);
+            std::size_t vslot_k{static_cast<std::size_t>(-1)};
+            if constexpr (std::meta::is_virtual(fn)) {
+                if (w.is_director) {
+                    static constexpr const char* vid{std::define_static_string(
+                        std::meta::identifier_of(fn))};
+                    for (const auto& vs : w.vslots)
+                        if (std::string_view{vs.name} == vid &&
+                            std::string_view{vs.sig} == fsig)
+                            vslot_k = vs.k;
+                }
+            }
+            if (vslot_k != static_cast<std::size_t>(-1)) {
+                _emit_virtual_method<fn, Style>(w, name, sym, expr, vslot_k);
+            } else {
+                emit_callable<fn, Style, true>(*w.doc, sym, w.members,
+                                               "        ", name, expr,
+                                               w.cs_name + "Handle",
+                                               w.handle_field);
+            }
         }
     }
+
+  protected:
+    /** Emit virtual slot @a Fn: the ordinary (virtual-dispatch) thunk, a
+        qualified base-call thunk, and a `public virtual` wrapper branching on
+        `__isDirector`. Records the slot's C# name for the director
+        scaffolding's placeholders. */
+    template <std::meta::info Fn, class Style>
+    static void _emit_virtual_method(class_writer& w, const std::string& name,
+                                     const std::string& sym,
+                                     const std::string& expr,
+                                     std::size_t slot) {
+        {
+            const std::string ks{std::to_string(slot)};
+
+            ::welder::validate_return_policy<Fn, lang::cs>();
+            constexpr bool ret_checked{
+                (require_marshallable(std::meta::return_type_of(Fn), true),
+                 true)};
+            static_assert(ret_checked);
+            constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+            const call_pieces cp{
+                build_params<Fn, Style>(std::make_index_sequence<n>{})};
+            const std::string bsym{sym + "_base"};
+            w.doc->record_symbol(sym);
+            w.doc->record_symbol(bsym);
+
+            const std::string idx{"wcs::director_slot(^^" + w.cpp_qualified +
+                                  ", " + ks + ")"};
+            std::string shim_params{"void* self" +
+                                    (cp.shim_params.empty()
+                                         ? std::string{}
+                                         : ", " + cp.shim_params) +
+                                    ", welder_error* err"};
+            std::string delegate_args{"self, err" +
+                                      (cp.delegate_args.empty()
+                                           ? std::string{}
+                                           : ", " + cp.delegate_args)};
+            // 1) the ordinary thunk (virtual dispatch through the pmf)
+            w.doc->shim += std::string{
+                               wire_return_v<std::meta::return_type_of(Fn)>} +
+                           " " + sym + "(" +
+                           shim_params + ") { return " + expr + "(" +
+                           delegate_args + "); }\n\n";
+            // 2) the qualified base-call thunk (never re-enters the director)
+            {
+                std::string conv{};
+                [[maybe_unused]] std::size_t j{0};
+                template for ([[maybe_unused]] constexpr auto p :
+                              std::define_static_array(
+                                  std::meta::parameters_of(Fn))) {
+                    const std::string js{std::to_string(j)};
+                    conv += (j ? ", " : "");
+                    conv += "wcs::shim::to_cpp<::std::meta::type_of(::std::"
+                            "meta::parameters_of(" +
+                            idx + ")[" + js + "])>(a" + js + ")";
+                    ++j;
+                }
+                static constexpr const char* fid{std::define_static_string(
+                    std::meta::identifier_of(Fn))};
+                w.doc->shim +=
+                    std::string{
+                        wire_return_v<std::meta::return_type_of(Fn)>} +
+                    " " + bsym + "(" +
+                    shim_params + ") {\n    auto* __o = reinterpret_cast<" +
+                    w.cpp_qualified +
+                    "*>(self);\n    return wcs::shim::guarded<"
+                    "::std::meta::return_type_of(" +
+                    idx + ")>(err, [&]() -> decltype(auto) { return __o->" +
+                    w.cpp_qualified + "::" + fid + "(" + conv +
+                    "); });\n}\n\n";
+            }
+            // P/Invokes for both
+            std::string pin_params{w.cs_name + "Handle self" +
+                                   (cp.pinvoke_params.empty()
+                                        ? std::string{}
+                                        : ", " + cp.pinvoke_params) +
+                                   ", out WelderError err"};
+            constexpr bool r_is_bool{
+                classify(std::meta::return_type_of(Fn)) ==
+                marshal_kind::boolean};
+            const std::string ret_attr{
+                r_is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : ""};
+            for (const std::string& s2 : {sym, bsym})
+                w.doc->pinvoke += "        " + import_attr(cp.has_string) + " " +
+                                  ret_attr + "internal static partial " +
+                                  pinvoke_type<std::meta::return_type_of(Fn),
+                                               Style>(true) +
+                                  " " + s2 + "(" + pin_params + ");\n";
+            // 3) the public virtual wrapper, branching by origin
+            emit_callable_docs<Fn>(w.members, "        ", cp);
+            std::string call_args{w.handle_field +
+                                  (cp.wrapper_args.empty()
+                                       ? std::string{}
+                                       : ", " + cp.wrapper_args) +
+                                  ", out WelderError __e"};
+            w.members += "        public virtual " +
+                         public_return_type<std::meta::return_type_of(Fn),
+                                            Style>() +
+                         " " + name + "(" + cp.wrapper_params +
+                         ")\n        {\n            if (__isDirector)\n"
+                         "            {\n";
+            w.members += wrapper_return_body<std::meta::return_type_of(Fn),
+                                             Style,
+                                             ::welder::return_policy_of(
+                                                 Fn, lang::cs)>(
+                "NativeMethods." + bsym + "(" + call_args + ")",
+                "                ", "this");
+            w.members += "            }\n            else\n            {\n";
+            w.members += wrapper_return_body<std::meta::return_type_of(Fn),
+                                             Style,
+                                             ::welder::return_policy_of(
+                                                 Fn, lang::cs)>(
+                "NativeMethods." + sym + "(" + call_args + ")",
+                "                ", "this");
+            w.members += "            }\n        }\n\n";
+        }
+    }
+
+  public:
 
     /** Emit static-method overload group @a Fns as `public static` overloads. */
     template <auto Fns, class Style = ::welder::naming::none>
@@ -1178,6 +1354,356 @@ struct rod {
             if constexpr (!Covered[0]) record(">", true, "__c == -1");
             if constexpr (!Covered[1]) record(">=", true, "__c == -1 || __c == 0");
         }
+    }
+
+    /** Emit the whole director apparatus for welded virtual type @a T: the
+        C++ director subclass (into the document's `directors` section), its
+        registration/bind thunks, and the managed scaffolding (callbacks, the
+        override mask, `__DirBind`). See `directors.hpp` for the model. */
+    template <class T>
+    static void _emit_director(module_type& m, class_writer& w) {
+        static constexpr auto slots{
+            std::define_static_array(director_slots(std::meta::dealias(^^T)))};
+        const std::string qual{w.cpp_qualified};
+        const std::string dir{w.director_ident};
+        const std::string idx_base{"wcs::director_slot(^^" + qual + ", "};
+
+        // --- the C++ director subclass -----------------------------------
+        std::string d{};
+        // Plain (uninitialized) members + a value-initialized static: an NSDMI
+        // in the nested table would be required before the enclosing class is
+        // complete (the static member's {} sits in-class).
+        std::string tbl{"    struct __wcs_table_t {\n"
+                        "        void (*release)(void*);\n"};
+        d += "struct " + dir + " final : " + qual + " {\n";
+        d += "    using " + qual + "::" + qual.substr(qual.rfind(':') + 1) +
+             ";\n";
+        d += "    void* __wcs_ctx{nullptr};\n";
+        d += "    std::uint64_t __wcs_mask{0};\n";
+        std::string overrides{};
+        std::size_t k{0};
+        template for (constexpr auto slot : slots) {
+            const std::string ks{std::to_string(k)};
+            const std::string idx{idx_base + ks + ")"};
+            static constexpr const char* sname{std::define_static_string(
+                std::meta::identifier_of(slot))};
+            const std::string name{sname};
+            if constexpr (!director_slot_supported(slot)) {
+                overrides += "    static_assert(false, \"welder: the virtual '" +
+                             qual + "::" + name +
+                             "' has a shape the C# director wire cannot carry "
+                             "(C-variadic, or a reference/pointer class or "
+                             "string return); mark it "
+                             "[[=welder::rods::python::bind_flat]] to bind it "
+                             "non-overridably\");\n";
+                ++k;
+                continue;
+            }
+            // table entry: <wire-ret> (*sK)(void*, wires..., welder_error*)
+            std::string wires{};
+            template for (constexpr auto p : std::define_static_array(
+                              std::meta::parameters_of(slot))) {
+                wires += ", ";
+                wires += wire_param_v<std::meta::type_of(p)>;
+            }
+            tbl += "        " +
+                   std::string{
+                       wire_return_v<std::meta::return_type_of(slot)>} +
+                   " (*s" + ks + ")(void*" + wires +
+                   ", welder_error*);\n";
+
+            // the override: spliced signature, callback-or-qualified-base body
+            overrides += "    [: ::std::meta::return_type_of(" + idx + ") :] " +
+                         name + "(";
+            std::string cargs{};      // the C++ argument names
+            std::string wire_args{};  // ctx + converted wire args
+            {
+                [[maybe_unused]] std::size_t j{0};
+                template for ([[maybe_unused]] constexpr auto p :
+                              std::define_static_array(
+                                  std::meta::parameters_of(slot))) {
+                    const std::string js{std::to_string(j)};
+                    if (j) {
+                        overrides += ", ";
+                        cargs += ", ";
+                    }
+                    const std::string pt{"::std::meta::type_of(::std::meta::"
+                                         "parameters_of(" +
+                                         idx + ")[" + js + "])"};
+                    overrides += "[: " + pt + " :] a" + js;
+                    cargs += "a" + js;
+                    wire_args += ", wcs::shim::to_wire_arg<" + pt + ">(a" + js +
+                                 ").get()";
+                    ++j;
+                }
+            }
+            static constexpr const char* quals{
+                std::define_static_string(slot_qualifiers(slot))};
+            overrides += ")" + std::string{quals} + " override {\n";
+            overrides += "        if (__wcs_ctx && (__wcs_mask & (1ull << " +
+                         ks + ")) && __wcs_tbl.s" + ks + ") {\n";
+            overrides += "            welder_error __e{0, nullptr};\n";
+            constexpr bool voidret{
+                classify(std::meta::return_type_of(slot)) ==
+                marshal_kind::void_};
+            if constexpr (voidret) {
+                overrides += "            __wcs_tbl.s" + ks + "(__wcs_ctx" +
+                             wire_args + ", &__e);\n";
+                overrides += "            if (__e.code != 0) "
+                             "wcs::shim::rethrow_managed(&__e);\n";
+                overrides += "            return;\n";
+            } else {
+                overrides += "            auto __r = __wcs_tbl.s" + ks +
+                             "(__wcs_ctx" + wire_args + ", &__e);\n";
+                overrides += "            if (__e.code != 0) "
+                             "wcs::shim::rethrow_managed(&__e);\n";
+                overrides += "            return wcs::shim::from_wire_return<"
+                             "::std::meta::return_type_of(" +
+                             idx + ")>(__r);\n";
+            }
+            overrides += "        }\n";
+            if constexpr (std::meta::is_pure_virtual(slot)) {
+                overrides += "        throw std::runtime_error{\"welder: pure "
+                             "virtual '" + name +
+                             "' called with no managed override\"};\n";
+            } else {
+                overrides += "        return " + qual + "::" + name + "(" +
+                             cargs + ");\n";
+            }
+            overrides += "    }\n";
+
+            // Record the slot so add_method can match its callables (the
+            // method sweep has no compile-time handle on the welded type).
+            static constexpr const char* vsig{std::define_static_string(
+                std::meta::display_string_of(std::meta::type_of(slot)))};
+            w.vslots.push_back(class_writer::vslot{sname, vsig, k});
+            ++k;
+        }
+        tbl += "    };\n    static inline __wcs_table_t __wcs_tbl{};\n";
+        d += tbl;
+        d += "    ~" + dir + "() override { if (__wcs_ctx && __wcs_tbl.release) "
+             "__wcs_tbl.release(__wcs_ctx); }\n";
+        d += overrides;
+        d += "};\n\n";
+        m.doc->directors += d;
+
+        // --- registration + bind thunks -----------------------------------
+        const std::string init_sym{w.sym_prefix + "_dir_init"};
+        const std::string bind_sym{w.sym_prefix + "_dir_bind"};
+        m.doc->record_symbol(init_sym);
+        m.doc->record_symbol(bind_sym);
+        std::string init_params{"void* release"};
+        std::string init_body{"    " + dir +
+                              "::__wcs_tbl.release = "
+                              "reinterpret_cast<void (*)(void*)>(release);\n"};
+        std::string cs_init_params{"IntPtr release"};
+        std::string cs_init_args{
+            "                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, "
+            "void>)&__Release"};
+        std::string cs_slots{};      // the [UnmanagedCallersOnly] thunks
+        std::string cs_mask{};       // the __OverrideMask body lines
+        k = 0;
+        template for (constexpr auto slot : slots) {
+            // Only a slot that is BOUND for cs gets a callback + mask entry: a
+            // protected NVI hook or an excluded virtual keeps its table field
+            // null, so the director falls through to the qualified base.
+            if constexpr (director_slot_supported(slot) &&
+                          std::meta::is_public(slot) &&
+                          ::welder::member_bound(
+                              slot, lang::cs,
+                              ::welder::policy_of(
+                                  std::meta::dealias(^^T)))) {
+                const std::string ks{std::to_string(k)};
+                std::string wires{};
+                std::string cs_wires{};      // C# fnptr generic args (params)
+                std::string cs_params{};     // __SlotK parameter list
+                std::string conv{};          // arg conversions
+                std::string call_args{};
+                std::string typeofs{};       // __OverrideMask GetMethod types
+                std::size_t j{0};
+                template for (constexpr auto p : std::define_static_array(
+                                  std::meta::parameters_of(slot))) {
+                    const std::string js{std::to_string(j)};
+                    const std::string sep{j ? ", " : ""};
+                    wires += ", ";
+                    wires += wire_param_v<std::meta::type_of(p)>;
+                    constexpr marshal_kind pk{classify(std::meta::type_of(p))};
+                    std::string cst{};
+                    if constexpr (pk == marshal_kind::boolean)
+                        cst = "byte";
+                    else if constexpr (pk == marshal_kind::scalar) {
+                        static constexpr const char* csc{
+                            scalar_spell(std::meta::type_of(p)).cs};
+                        cst = csc;
+                    } else if constexpr (pk == marshal_kind::enum_)
+                        cst = type_ref<bare(std::meta::type_of(p))>();
+                    else
+                        cst = "IntPtr"; // string / handle
+                    cs_wires += cst + ", ";
+                    cs_params += sep + cst + " a" + js;
+                    call_args += sep;
+                    if constexpr (pk == marshal_kind::boolean) {
+                        call_args += "a" + js + " != 0";
+                        typeofs += sep + "typeof(bool)";
+                    } else if constexpr (pk == marshal_kind::utf8_string) {
+                        conv += "                string __a" + js +
+                                " = Marshal.PtrToStringUTF8(a" + js +
+                                ") ?? \"\";\n";
+                        call_args += "__a" + js;
+                        typeofs += sep + "typeof(string)";
+                    } else if constexpr (pk == marshal_kind::handle) {
+                        conv += "                var __a" + js + " = new " +
+                                type_ref<bare(std::meta::type_of(p))>() +
+                                "(a" + js + ", false);\n";
+                        call_args += "__a" + js;
+                        typeofs += sep + "typeof(" +
+                                   type_ref<bare(std::meta::type_of(p))>() +
+                                   ")";
+                    } else {
+                        call_args += "a" + js;
+                        typeofs += sep + "typeof(" + cst + ")";
+                    }
+                    ++j;
+                }
+                init_params += ", void* s" + ks;
+                init_body += "    " + dir + "::__wcs_tbl.s" + ks +
+                             " = reinterpret_cast<" +
+                             std::string{wire_return_v<
+                                 std::meta::return_type_of(slot)>} +
+                             " (*)(void*" + wires + ", welder_error*)>(s" +
+                             ks + ");\n";
+                cs_init_params += ", IntPtr s" + ks;
+                constexpr marshal_kind rk{
+                    classify(std::meta::return_type_of(slot))};
+                std::string cs_ret{};
+                if constexpr (rk == marshal_kind::void_) cs_ret = "void";
+                else if constexpr (rk == marshal_kind::boolean) cs_ret = "byte";
+                else if constexpr (rk == marshal_kind::scalar) {
+                    static constexpr const char* csr{
+                        scalar_spell(std::meta::return_type_of(slot)).cs};
+                    cs_ret = csr;
+                } else if constexpr (rk == marshal_kind::enum_)
+                    cs_ret = type_ref<bare(std::meta::return_type_of(slot))>();
+                else cs_ret = "IntPtr";
+                cs_init_args += ",\n                (IntPtr)(delegate* "
+                                "unmanaged[Cdecl]<IntPtr, " +
+                                cs_wires + "WelderError*, " +
+                                (cs_ret == "void" ? "void" : cs_ret) +
+                                ">)&__Slot" + ks;
+                // the method-name placeholder add_method resolves at render
+                static constexpr const char* ssig{std::define_static_string(
+                    std::meta::display_string_of(std::meta::type_of(slot)))};
+                const std::string mname{
+                    "\x01" +
+                    std::string{cpp_name_v<std::meta::parent_of(slot)>} + "#" +
+                    std::string{ident_v<slot>} + "#" + ssig + "\x02"};
+                cs_slots +=
+                    "        [UnmanagedCallersOnly(CallConvs = new[] { "
+                    "typeof(CallConvCdecl) })]\n"
+                    "        private static unsafe " + cs_ret + " __Slot" + ks +
+                    "(IntPtr __ctx" + (cs_params.empty() ? "" : ", " + cs_params) +
+                    ", WelderError* __err)\n        {\n"
+                    "            try\n            {\n"
+                    "                var __self = (" + w.cs_name +
+                    "?)GCHandle.FromIntPtr(__ctx).Target;\n"
+                    "                if (__self is null) throw new "
+                    "InvalidOperationException(\"welder: director target "
+                    "collected\");\n" + conv;
+                const std::string mcall{"__self." + mname + "(" + call_args +
+                                        ")"};
+                if constexpr (rk == marshal_kind::void_) {
+                    cs_slots += "                " + mcall + ";\n";
+                } else if constexpr (rk == marshal_kind::boolean) {
+                    cs_slots += "                return (byte)(" + mcall +
+                                " ? 1 : 0);\n";
+                } else if constexpr (rk == marshal_kind::utf8_string) {
+                    cs_slots += "                return "
+                                "NativeMethods.welder_dup_utf8(" + mcall +
+                                ");\n";
+                } else if constexpr (rk == marshal_kind::handle) {
+                    // Clone through the return class's copy thunk so the copy
+                    // exists before the managed temporary can be collected.
+                    cs_slots += "                var __ret = " + mcall + ";\n";
+                    cs_slots += "                IntPtr __c = "
+                                "NativeMethods.welder_" +
+                                std::string{upath_v<bare(
+                                    std::meta::return_type_of(slot))>} +
+                                "_clone(__ret._h_" +
+                                type_ref<bare(std::meta::return_type_of(slot))>() +
+                                ", out WelderError __e2);\n"
+                                "                "
+                                "WelderInterop.ThrowIfError(in __e2);\n"
+                                "                GC.KeepAlive(__ret);\n"
+                                "                return __c;\n";
+                } else {
+                    cs_slots += "                return " + mcall + ";\n";
+                }
+                cs_slots +=
+                    "            }\n            catch (Exception __ex)\n"
+                    "            {\n"
+                    "                __err->Code = 7;\n"
+                    "                __err->Message = "
+                    "NativeMethods.welder_dup_utf8(__ex.Message);\n" +
+                    std::string{cs_ret == "void"
+                                    ? "                return;\n"
+                                    : "                return default;\n"} +
+                    "            }\n        }\n";
+                cs_mask += "            if (__NotWrapper(__t.GetMethod(\"" +
+                           mname + "\", new Type[] { " + typeofs +
+                           " })?.DeclaringType)) __m |= 1UL << " + ks + ";\n";
+            }
+            ++k;
+        }
+        m.doc->shim += "void " + init_sym + "(" + init_params + ") {\n" +
+                       init_body + "}\n\n";
+        m.doc->shim += "void " + bind_sym +
+                       "(void* self, void* ctx, std::uint64_t mask) {\n"
+                       "    if (auto* __d = dynamic_cast<" + dir +
+                       "*>(reinterpret_cast<" + qual +
+                       "*>(self))) { __d->__wcs_ctx = ctx; __d->__wcs_mask = "
+                       "mask; }\n}\n\n";
+        m.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
+                          "void " + init_sym + "(" + cs_init_params + ");\n";
+        m.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
+                          "void " + bind_sym +
+                          "(IntPtr self, IntPtr ctx, ulong mask);\n";
+
+        // --- the managed scaffolding --------------------------------------
+        std::string anc{};
+        static constexpr auto ancestors{std::define_static_array(
+            welded_ancestors(std::meta::dealias(^^T)))};
+        template for (constexpr auto a : ancestors) {
+            anc += " && __d != typeof(" + type_ref<std::meta::dealias(a)>() +
+                   ")";
+        }
+        w.members +=
+            "        private static bool __cbInit;\n"
+            "        private static unsafe void __EnsureCallbacks()\n"
+            "        {\n            if (__cbInit) return;\n"
+            "            __cbInit = true;\n"
+            "            NativeMethods." + init_sym + "(\n" + cs_init_args +
+            ");\n        }\n"
+            "        [UnmanagedCallersOnly(CallConvs = new[] { "
+            "typeof(CallConvCdecl) })]\n"
+            "        private static void __Release(IntPtr ctx) => "
+            "GCHandle.FromIntPtr(ctx).Free();\n" +
+            cs_slots +
+            "        private static ulong __OverrideMask(Type __t)\n"
+            "        {\n            ulong __m = 0;\n"
+            "            if (__t == typeof(" + w.cs_name +
+            ")) return __m;\n" + cs_mask +
+            "            return __m;\n        }\n"
+            "        private static bool __NotWrapper(Type? __d) =>\n"
+            "            __d is not null && __d != typeof(" + w.cs_name + ")" +
+            anc + ";\n"
+            "        private void __DirBind()\n        {\n"
+            "            __isDirector = true;\n"
+            "            __EnsureCallbacks();\n"
+            "            NativeMethods." + bind_sym + "(\n                " +
+            w.handle_field + ".DangerousGetHandle(),\n                "
+            "GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Weak)),\n"
+            "                __OverrideMask(GetType()));\n"
+            "            GC.KeepAlive(this);\n        }\n\n";
     }
 
   public:

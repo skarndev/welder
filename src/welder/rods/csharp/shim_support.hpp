@@ -15,6 +15,8 @@
 #include <welder/rods/csharp/type_map.hpp>  // classify / bare / lookup layer
 #include <welder/rods/csharp/operators.hpp> // named_operator (the generated shim
                                             // splices operator lookups too)
+#include <welder/rods/csharp/directors.hpp> // director_slot (the generated shim
+                                            // re-derives virtual slots too)
 
 /** @file
     The compiled marshalling library the **generated** C# shim delegates into.
@@ -99,6 +101,23 @@ inline void set_error(welder_error* err, error_code code,
     }
 }
 
+/** A managed (C#) exception crossing BACK through a director callback: the
+    override's error slot re-throws as this type, so when it reaches the next
+    thunk boundary the catch chain records it as @ref error_code::managed and
+    the managed side rethrows the original message. */
+struct managed_exception : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+/** Rethrow a director callback's failed error slot as @ref managed_exception
+    (frees the slot's message buffer). */
+[[noreturn]] inline void rethrow_managed(welder_error* e) {
+    std::string msg{e && e->message ? e->message : "managed exception"};
+    if (e && e->message)
+        std::free(e->message);
+    throw managed_exception{msg};
+}
+
 /** THE catch chain — every thunk's exception boundary in one place: clear
     @a err, run @a f, translate any escaping C++ exception into the error
     taxonomy (never letting it unwind through the C ABI), and return @a Wire{}
@@ -111,6 +130,8 @@ Wire caught(welder_error* err, F&& f) noexcept {
             f();
         else
             return f();
+    } catch (const managed_exception& e) {
+        set_error(err, error_code::managed, e.what());
     } catch (const std::bad_alloc& e) {
         set_error(err, error_code::bad_alloc, e.what());
     } catch (const std::invalid_argument& e) {
@@ -307,6 +328,30 @@ void* construct(welder_error* err, Wire... w) noexcept {
     });
 }
 
+/** @ref construct's director twin: heap-construct the DIRECTOR type @a Dir
+    (which inherits @a W's constructors) and hand back the @a W-adjusted
+    pointer — the handle convention is "points at the welded type". */
+template <std::meta::info Dir, std::meta::info W, std::meta::info Ctor,
+          class... Wire>
+void* construct_as(welder_error* err, Wire... w) noexcept {
+    return caught<void*>(err, [&]() -> void* {
+        if constexpr (sizeof...(Wire) == 0)
+            return static_cast<[:W:]*>(new [:Dir:]());
+        else
+            return static_cast<[:W:]*>(
+                reinterpret_cast<[:Dir:]*>(_construct_wired<Dir, Ctor>(
+                    std::forward_as_tuple(w...),
+                    std::index_sequence_for<Wire...>{})));
+    });
+}
+
+/** @ref default_construct's director twin. */
+template <std::meta::info Dir, std::meta::info W>
+void* default_construct_as(welder_error* err) noexcept {
+    return caught<void*>(
+        err, [&]() -> void* { return static_cast<[:W:]*>(new [:Dir:]()); });
+}
+
 /** The default-constructor thunk body (the synthesized form has no reflection
     to name). */
 template <std::meta::info W>
@@ -421,6 +466,90 @@ const char* stringify_text(void* self, welder_error* err) noexcept {
     return caught<const char*>(err, [&]() -> const char* {
         return dup(::welder::detail::stringify<Obj, Fn>(*obj));
     });
+}
+
+// --- director (C# virtual-override) support ---------------------------------
+
+/** Convert a director override's C++ argument (declared type @a P) into its
+    wire form, OWNING any storage the wire pointer needs for the duration of
+    the callback (the holder lives to the end of the full-expression). */
+template <std::meta::info P>
+auto to_wire_arg(const auto& a) {
+    constexpr marshal_kind k{classify(P)};
+    if constexpr (k == marshal_kind::handle) {
+        using Bare = [:bare(P):];
+        if constexpr (is_pointer_flavor(P)) {
+            struct hold {
+                void* p;
+                void* get() const { return p; }
+            };
+            return hold{const_cast<Bare*>(static_cast<const Bare*>(a))};
+        } else {
+            struct hold {
+                void* p;
+                void* get() const { return p; }
+            };
+            return hold{const_cast<Bare*>(std::addressof(a))};
+        }
+    } else if constexpr (k == marshal_kind::utf8_string) {
+        using Bare = [:bare(P):];
+        if constexpr (^^Bare == ^^char) {
+            struct hold {
+                const char* p;
+                const char* get() const { return p; }
+            };
+            return hold{a};
+        } else {
+            // std::string passes its own buffer; a string_view materializes a
+            // NUL-terminated copy (its data() need not be terminated).
+            struct hold {
+                std::string s;
+                const char* get() const { return s.c_str(); }
+            };
+            return hold{std::string{a}};
+        }
+    } else if constexpr (k == marshal_kind::enum_) {
+        using U = [:std::meta::underlying_type(bare(P)):];
+        struct hold {
+            U v;
+            U get() const { return v; }
+        };
+        return hold{static_cast<U>(a)};
+    } else { // scalar / boolean
+        using V = [:bare(P):];
+        struct hold {
+            V v;
+            V get() const { return v; }
+        };
+        return hold{static_cast<V>(a)};
+    }
+}
+
+/** Convert a director callback's wire result back into the override's C++
+    return type @a R. A string result arrives as a `welder_dup_utf8` buffer
+    (freed here); a class-by-value result arrives as an OWNED heap copy (the
+    managed thunk cloned it, so no managed lifetime races) and is moved out. */
+template <std::meta::info R>
+auto from_wire_return(auto w) -> [:std::meta::remove_cvref(R):] {
+    constexpr marshal_kind k{classify(R)};
+    if constexpr (k == marshal_kind::utf8_string) {
+        std::string s{w ? w : ""};
+        if (w)
+            std::free(const_cast<char*>(static_cast<const char*>(w)));
+        return s;
+    } else if constexpr (k == marshal_kind::handle) {
+        using Bare = [:bare(R):];
+        Bare* p{reinterpret_cast<Bare*>(w)};
+        Bare v{std::move(*p)};
+        delete p;
+        return v;
+    } else if constexpr (k == marshal_kind::enum_) {
+        using E = [:bare(R):];
+        return static_cast<E>(w);
+    } else {
+        using V = [:std::meta::remove_cvref(R):];
+        return static_cast<V>(w);
+    }
 }
 
 /** The upcast thunk body: adjust a @a From handle to its @a To base subobject

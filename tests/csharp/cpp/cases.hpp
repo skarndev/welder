@@ -169,6 +169,21 @@ struct [[=welder::weld(welder::lang::cs)]] Dog : Animal, Legged {
 [[=welder::weld(welder::lang::cs)]]
 inline std::int32_t age_of(const Animal& a) { return a.age; }
 
+// --- virtuals / directors (C# subclasses overriding C++ virtuals) --------------
+
+struct [[=welder::weld(welder::lang::cs)]] Shape {
+    Shape() = default;
+    virtual ~Shape() = default;
+    virtual std::string name() const { return "shape"; }
+    virtual std::int32_t sides() const { return 0; }
+    // A C++ caller dispatching polymorphically: observing its result from C#
+    // proves the virtual call reaches a C# override.
+    std::string describe() const { return name() + ":" + std::to_string(sides()); }
+};
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::string describe_shape(const Shape& s) { return s.name(); }
+
 // --- a nested namespace (a static-class scope) --------------------------------
 
 namespace inner {

@@ -2,6 +2,7 @@
 // regenerate via the welder_csharp_generate_bindings() target.
 #nullable enable
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace csharp_cases
@@ -121,8 +122,20 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Dog_clone(DogHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Dog_m_bark_0(DogHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_f_age_of_0(AnimalHandle a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_init(IntPtr release, IntPtr s0, IntPtr s1);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_bind(IntPtr self, IntPtr ctx, ulong mask);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Shape_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Shape_clone(ShapeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Shape_m_name_0(ShapeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Shape_m_name_0_base(ShapeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Shape_m_sides_0(ShapeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Shape_m_sides_0_base(ShapeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Shape_m_describe_0(ShapeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_f_describe_shape_0(ShapeHandle a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_inner_f_twice_0(int a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_free(IntPtr p);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial IntPtr welder_dup_utf8(string s);
     }
 
     /// <summary>Primary display colors.</summary>
@@ -158,6 +171,7 @@ namespace csharp_cases
     {
         internal PointHandle _h_Point;
         internal object? __owner;
+        internal bool __isDirector;
         internal Point(IntPtr handle, bool owns) { _h_Point = new PointHandle(handle, owns); }
 
         private static IntPtr __New_default()
@@ -336,6 +350,7 @@ namespace csharp_cases
     {
         internal SizeHandle _h_Size;
         internal object? __owner;
+        internal bool __isDirector;
         internal Size(IntPtr handle, bool owns) { _h_Size = new SizeHandle(handle, owns); }
 
         private static IntPtr __New_default()
@@ -413,6 +428,7 @@ namespace csharp_cases
     {
         internal HolderHandle _h_Holder;
         internal object? __owner;
+        internal bool __isDirector;
         internal Holder(IntPtr handle, bool owns) { _h_Holder = new HolderHandle(handle, owns); }
 
         private static IntPtr __New_default()
@@ -484,6 +500,7 @@ namespace csharp_cases
     {
         internal SegmentHandle _h_Segment;
         internal object? __owner;
+        internal bool __isDirector;
         internal Segment(IntPtr handle, bool owns) { _h_Segment = new SegmentHandle(handle, owns); }
 
         private static IntPtr __New_default()
@@ -579,6 +596,7 @@ namespace csharp_cases
     {
         internal AnimalHandle _h_Animal;
         internal object? __owner;
+        internal bool __isDirector;
         internal Animal(IntPtr handle, bool owns) { _h_Animal = new AnimalHandle(handle, owns); }
 
         private static IntPtr __New_default()
@@ -641,6 +659,7 @@ namespace csharp_cases
     {
         internal LeggedHandle _h_Legged;
         internal object? __owner;
+        internal bool __isDirector;
         internal Legged(IntPtr handle, bool owns) { _h_Legged = new LeggedHandle(handle, owns); }
 
         private static IntPtr __New_default()
@@ -733,6 +752,153 @@ namespace csharp_cases
         public override void Dispose() { _h_Dog.Dispose(); base.Dispose(); }
     }
 
+    internal sealed class ShapeHandle : SafeHandle
+    {
+        internal ShapeHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Shape_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Shape : IDisposable
+    {
+        internal ShapeHandle _h_Shape;
+        internal object? __owner;
+        internal bool __isDirector;
+        internal Shape(IntPtr handle, bool owns) { _h_Shape = new ShapeHandle(handle, owns); }
+
+        private static bool __cbInit;
+        private static unsafe void __EnsureCallbacks()
+        {
+            if (__cbInit) return;
+            __cbInit = true;
+            NativeMethods.welder_csharp_cases_Shape_dir_init(
+                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&__Release,
+                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, WelderError*, IntPtr>)&__Slot0,
+                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, WelderError*, int>)&__Slot1);
+        }
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static void __Release(IntPtr ctx) => GCHandle.FromIntPtr(ctx).Free();
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static unsafe IntPtr __Slot0(IntPtr __ctx, WelderError* __err)
+        {
+            try
+            {
+                var __self = (Shape?)GCHandle.FromIntPtr(__ctx).Target;
+                if (__self is null) throw new InvalidOperationException("welder: director target collected");
+                return NativeMethods.welder_dup_utf8(__self.Name());
+            }
+            catch (Exception __ex)
+            {
+                __err->Code = 7;
+                __err->Message = NativeMethods.welder_dup_utf8(__ex.Message);
+                return default;
+            }
+        }
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static unsafe int __Slot1(IntPtr __ctx, WelderError* __err)
+        {
+            try
+            {
+                var __self = (Shape?)GCHandle.FromIntPtr(__ctx).Target;
+                if (__self is null) throw new InvalidOperationException("welder: director target collected");
+                return __self.Sides();
+            }
+            catch (Exception __ex)
+            {
+                __err->Code = 7;
+                __err->Message = NativeMethods.welder_dup_utf8(__ex.Message);
+                return default;
+            }
+        }
+        private static ulong __OverrideMask(Type __t)
+        {
+            ulong __m = 0;
+            if (__t == typeof(Shape)) return __m;
+            if (__NotWrapper(__t.GetMethod("Name", new Type[] {  })?.DeclaringType)) __m |= 1UL << 0;
+            if (__NotWrapper(__t.GetMethod("Sides", new Type[] {  })?.DeclaringType)) __m |= 1UL << 1;
+            return __m;
+        }
+        private static bool __NotWrapper(Type? __d) =>
+            __d is not null && __d != typeof(Shape);
+        private void __DirBind()
+        {
+            __isDirector = true;
+            __EnsureCallbacks();
+            NativeMethods.welder_csharp_cases_Shape_dir_bind(
+                _h_Shape.DangerousGetHandle(),
+                GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Weak)),
+                __OverrideMask(GetType()));
+            GC.KeepAlive(this);
+        }
+
+        private static IntPtr __New_default()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Shape_new_default(out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public Shape() : this(__New_default(), true) { __DirBind(); }
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Shape Clone()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Shape_clone(_h_Shape, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Shape(__r, true);
+        }
+
+        public virtual string Name()
+        {
+            if (__isDirector)
+            {
+                IntPtr __r = NativeMethods.welder_csharp_cases_Shape_m_name_0_base(_h_Shape, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
+                finally { NativeMethods.welder_free(__r); }
+            }
+            else
+            {
+                IntPtr __r = NativeMethods.welder_csharp_cases_Shape_m_name_0(_h_Shape, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
+                finally { NativeMethods.welder_free(__r); }
+            }
+        }
+
+        public virtual int Sides()
+        {
+            if (__isDirector)
+            {
+                var __r = NativeMethods.welder_csharp_cases_Shape_m_sides_0_base(_h_Shape, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                return __r;
+            }
+            else
+            {
+                var __r = NativeMethods.welder_csharp_cases_Shape_m_sides_0(_h_Shape, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                return __r;
+            }
+        }
+
+        public string Describe()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Shape_m_describe_0(_h_Shape, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
+            finally { NativeMethods.welder_free(__r); }
+        }
+
+        public virtual void Dispose() => _h_Shape.Dispose();
+    }
+
     public static class Global
     {
         public static Point? MakePoint(int x, int y)
@@ -795,6 +961,14 @@ namespace csharp_cases
             var __r = NativeMethods.welder_csharp_cases_f_age_of_0(a._h_Animal, out WelderError __e);
             WelderInterop.ThrowIfError(in __e);
             return __r;
+        }
+
+        public static string DescribeShape(Shape s)
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_f_describe_shape_0(s._h_Shape, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
+            finally { NativeMethods.welder_free(__r); }
         }
 
     }

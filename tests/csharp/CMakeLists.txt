@@ -42,12 +42,19 @@ welder_csharp_generate_bindings(welder_test_cs_inheritance
   OUTPUT_DIR ${_ws}/inheritance
   DEPENDS ${WELDER_TEST_COMMON_CPP}/inheritance.hpp)
 
+welder_csharp_generate_bindings(welder_test_cs_overridable
+  SOURCES cpp/gen_overridable.cpp
+  LIBRARY welder_test_cs_overridable
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/overridable
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/overridable.hpp)
+
 # Building the targets both regenerates the artifacts and compiles the shims —
 # the compile IS a test (the generated splices must re-derive every member).
 add_test(NAME csharp.build
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_test_csharp welder_test_cs_retpolicy welder_test_cs_operators
-                  welder_test_cs_inheritance
+                  welder_test_cs_inheritance welder_test_cs_overridable
           --config $<CONFIG>)
 set_tests_properties(csharp.build PROPERTIES FIXTURES_SETUP csharp_native)
 
@@ -98,10 +105,12 @@ file(GENERATE OUTPUT ${_app}/app.csproj CONTENT
     <Compile Include=\"${_ws}/retpolicy/Bindings.cs\" />
     <Compile Include=\"${_ws}/operators/Bindings.cs\" />
     <Compile Include=\"${_ws}/inheritance/Bindings.cs\" />
+    <Compile Include=\"${_ws}/overridable/Bindings.cs\" />
     <None Include=\"$<TARGET_FILE:welder_test_csharp>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_retpolicy>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_operators>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_inheritance>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_overridable>\" CopyToOutputDirectory=\"PreserveNewest\" />
   </ItemGroup>
 </Project>
 ")

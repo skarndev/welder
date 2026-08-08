@@ -11,6 +11,37 @@
 
 namespace wcs = ::welder::rods::csharp;
 
+struct __wcs_dir_csharp_cases_Shape final : ::csharp_cases::Shape {
+    using ::csharp_cases::Shape::Shape;
+    void* __wcs_ctx{nullptr};
+    std::uint64_t __wcs_mask{0};
+    struct __wcs_table_t {
+        void (*release)(void*);
+        const char* (*s0)(void*, welder_error*);
+        std::int32_t (*s1)(void*, welder_error*);
+    };
+    static inline __wcs_table_t __wcs_tbl{};
+    ~__wcs_dir_csharp_cases_Shape() override { if (__wcs_ctx && __wcs_tbl.release) __wcs_tbl.release(__wcs_ctx); }
+    [: ::std::meta::return_type_of(wcs::director_slot(^^::csharp_cases::Shape, 0)) :] name() const override {
+        if (__wcs_ctx && (__wcs_mask & (1ull << 0)) && __wcs_tbl.s0) {
+            welder_error __e{0, nullptr};
+            auto __r = __wcs_tbl.s0(__wcs_ctx, &__e);
+            if (__e.code != 0) wcs::shim::rethrow_managed(&__e);
+            return wcs::shim::from_wire_return<::std::meta::return_type_of(wcs::director_slot(^^::csharp_cases::Shape, 0))>(__r);
+        }
+        return ::csharp_cases::Shape::name();
+    }
+    [: ::std::meta::return_type_of(wcs::director_slot(^^::csharp_cases::Shape, 1)) :] sides() const override {
+        if (__wcs_ctx && (__wcs_mask & (1ull << 1)) && __wcs_tbl.s1) {
+            welder_error __e{0, nullptr};
+            auto __r = __wcs_tbl.s1(__wcs_ctx, &__e);
+            if (__e.code != 0) wcs::shim::rethrow_managed(&__e);
+            return wcs::shim::from_wire_return<::std::meta::return_type_of(wcs::director_slot(^^::csharp_cases::Shape, 1))>(__r);
+        }
+        return ::csharp_cases::Shape::sides();
+    }
+};
+
 extern "C" {
 
 void welder_csharp_cases_Point_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Point>(self); }
@@ -155,8 +186,44 @@ const char* welder_csharp_cases_Dog_m_bark_0(void* self, welder_error* err) { re
 
 std::int32_t welder_csharp_cases_f_age_of_0(void* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "age_of", 0)>(err, a0); }
 
+void welder_csharp_cases_Shape_dir_init(void* release, void* s0, void* s1) {
+    __wcs_dir_csharp_cases_Shape::__wcs_tbl.release = reinterpret_cast<void (*)(void*)>(release);
+    __wcs_dir_csharp_cases_Shape::__wcs_tbl.s0 = reinterpret_cast<const char* (*)(void*, welder_error*)>(s0);
+    __wcs_dir_csharp_cases_Shape::__wcs_tbl.s1 = reinterpret_cast<std::int32_t (*)(void*, welder_error*)>(s1);
+}
+
+void welder_csharp_cases_Shape_dir_bind(void* self, void* ctx, std::uint64_t mask) {
+    if (auto* __d = dynamic_cast<__wcs_dir_csharp_cases_Shape*>(reinterpret_cast<::csharp_cases::Shape*>(self))) { __d->__wcs_ctx = ctx; __d->__wcs_mask = mask; }
+}
+
+void welder_csharp_cases_Shape_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Shape>(self); }
+
+void* welder_csharp_cases_Shape_new_default(welder_error* err) { return wcs::shim::default_construct_as<^^__wcs_dir_csharp_cases_Shape, ^^::csharp_cases::Shape>(err); }
+
+void* welder_csharp_cases_Shape_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Shape>(self, err); }
+
+const char* welder_csharp_cases_Shape_m_name_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Shape, wcs::named_member(^^::csharp_cases::Shape, "name", 0)>(self, err); }
+
+const char* welder_csharp_cases_Shape_m_name_0_base(void* self, welder_error* err) {
+    auto* __o = reinterpret_cast<::csharp_cases::Shape*>(self);
+    return wcs::shim::guarded<::std::meta::return_type_of(wcs::director_slot(^^::csharp_cases::Shape, 0))>(err, [&]() -> decltype(auto) { return __o->::csharp_cases::Shape::name(); });
+}
+
+std::int32_t welder_csharp_cases_Shape_m_sides_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Shape, wcs::named_member(^^::csharp_cases::Shape, "sides", 0)>(self, err); }
+
+std::int32_t welder_csharp_cases_Shape_m_sides_0_base(void* self, welder_error* err) {
+    auto* __o = reinterpret_cast<::csharp_cases::Shape*>(self);
+    return wcs::shim::guarded<::std::meta::return_type_of(wcs::director_slot(^^::csharp_cases::Shape, 1))>(err, [&]() -> decltype(auto) { return __o->::csharp_cases::Shape::sides(); });
+}
+
+const char* welder_csharp_cases_Shape_m_describe_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Shape, wcs::named_member(^^::csharp_cases::Shape, "describe", 0)>(self, err); }
+
+const char* welder_csharp_cases_f_describe_shape_0(void* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "describe_shape", 0)>(err, a0); }
+
 std::int32_t welder_csharp_cases_inner_f_twice_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases::inner, "twice", 0)>(err, a0); }
 
 void welder_free(void* p) { std::free(p); }
+
+const char* welder_dup_utf8(const char* s) { return wcs::shim::dup(s ? s : ""); }
 
 } // extern "C"
