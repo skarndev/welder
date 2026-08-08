@@ -251,6 +251,26 @@ struct [[=welder::weld(welder::lang::cs)]] Shape {
 [[=welder::weld(welder::lang::cs)]]
 inline std::string describe_shape(const Shape& s) { return s.name(); }
 
+// --- nested member types (registered under the outer's binding) -----------------
+
+struct [[=welder::weld(welder::lang::cs)]] Machine {
+    enum class State : std::uint8_t {
+        Off, /**< Powered down. */
+        On,
+    };
+    struct Gauge {
+        Gauge() = default;
+        explicit Gauge(std::int32_t v) : value{v} {}
+        std::int32_t value{0};
+    };
+    Machine() = default;
+    State power{State::Off};
+    Gauge dial{};  // NB not `gauge`: PascalCase "Gauge" would collide with the
+                   // nested TYPE name in C# (CS0102)
+    void turn_on() { power = State::On; }
+    Gauge peak() const { return Gauge{99}; }
+};
+
 // --- a nested namespace (a static-class scope) --------------------------------
 
 namespace inner {

@@ -6,9 +6,12 @@
 // exact strings/reflections the golden files depend on, without running the
 // generator. Compiled by the `compile.csharp_marshal` CTest (a plain build
 // target, no WILL_FAIL) — needs only the compiler, no .NET.
+#include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <welder/vocabulary.hpp>
 #include <welder/rods/csharp/rod.hpp>
@@ -30,6 +33,7 @@ struct [[=welder::weld(welder::lang::cs)]] Thing {
     std::int32_t get(std::int32_t base) const { return n + base; } // overload
 };
 enum class [[=welder::weld(welder::lang::cs)]] Tag : std::uint16_t { A, B };
+struct NotWelded {};
 [[=welder::weld(welder::lang::cs)]] inline std::int32_t leaf(std::int32_t v) {
     return v;
 }
@@ -52,6 +56,26 @@ static_assert(wcs::classify(^^const lockcases::Thing&) == marshal_kind::handle);
 static_assert(wcs::classify(^^lockcases::Thing*) == marshal_kind::handle);
 static_assert(wcs::is_pointer_flavor(^^lockcases::Thing*));
 static_assert(!wcs::is_pointer_flavor(^^const lockcases::Thing&));
+
+// --- the container families ---------------------------------------------------
+static_assert(wcs::classify(^^std::optional<int>) == marshal_kind::optional_);
+static_assert(wcs::classify(^^std::optional<std::string>) ==
+              marshal_kind::optional_);
+static_assert(wcs::classify(^^std::optional<lockcases::Thing>) ==
+              marshal_kind::optional_);
+static_assert(wcs::classify(^^std::vector<int>) == marshal_kind::seq_value);
+static_assert(wcs::classify(^^std::array<double, 3>) == marshal_kind::seq_value);
+static_assert(wcs::classify(^^std::vector<lockcases::Tag>) ==
+              marshal_kind::seq_value);
+static_assert(wcs::classify(^^std::vector<lockcases::Thing>) ==
+              marshal_kind::seq_ref);
+// vector<bool> is a bitset; nesting has no wire yet; a non-welded class is
+// NEVER a silent handle.
+static_assert(wcs::classify(^^std::vector<bool>) == marshal_kind::unsupported);
+static_assert(wcs::classify(^^std::optional<std::vector<int>>) ==
+              marshal_kind::unsupported);
+static_assert(wcs::classify(^^lockcases::NotWelded) ==
+              marshal_kind::unsupported);
 
 // --- paired scalar spellings (byte-for-byte agreement) -----------------------
 // std::int32_t & co. are using-DECLARATIONS in libstdc++ (unreflectable),

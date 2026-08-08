@@ -32,7 +32,8 @@ jobs:
           brew update --quiet
           # gcc → 16.1.0 (gcc-16 / g++-16); the language runtimes + build tools.
           brew install --quiet \
-            gcc lua@5.4 luarocks ninja cmake conan uv python@3.14 lua-language-server
+            gcc lua@5.4 luarocks ninja cmake conan uv python@3.14 lua-language-server \
+            dotnet
           # luarocks pulls linked `lua` 5.5 into the prefix, whose headers shadow
           # the keg-only lua@5.4 on the -isystem path (sol2 then miscompiles against
           # 5.5). Unlink it: we reference the 5.4 keg explicitly via WELDER_LUA_DIR,

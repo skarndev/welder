@@ -181,6 +181,21 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Shape_m_sides_0_base(ShapeHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Shape_m_describe_0(ShapeHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_f_describe_shape_0(ShapeHandle a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_Gauge_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_Gauge_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_Gauge_new_1(int a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_Gauge_clone(Machine.GaugeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Machine_Gauge_get_value(Machine.GaugeHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_Gauge_set_value(Machine.GaugeHandle self, int v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_clone(MachineHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial Machine.State welder_csharp_cases_Machine_get_power(MachineHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_set_power(MachineHandle self, Machine.State v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_get_dial(MachineHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_set_dial(MachineHandle self, Machine.GaugeHandle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_m_turn_on_0(MachineHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_m_peak_0(MachineHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_inner_f_twice_0(int a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_free(IntPtr p);
         [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial IntPtr welder_dup_utf8(string s);
@@ -1150,6 +1165,160 @@ namespace csharp_cases
         }
 
         public virtual void Dispose() => _h_Shape.Dispose();
+    }
+
+    internal sealed class MachineHandle : SafeHandle
+    {
+        internal MachineHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Machine_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Machine : IDisposable
+    {
+        internal MachineHandle _h_Machine;
+        internal object? __owner;
+        internal bool __isDirector;
+        internal Machine(IntPtr handle, bool owns) { _h_Machine = new MachineHandle(handle, owns); }
+
+    public enum State : byte
+    {
+        Off = 0,
+        On = 1,
+    }
+
+    internal sealed class GaugeHandle : SafeHandle
+    {
+        internal GaugeHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Machine_Gauge_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Gauge : IDisposable
+    {
+        internal GaugeHandle _h_Machine_Gauge;
+        internal object? __owner;
+        internal bool __isDirector;
+        internal Gauge(IntPtr handle, bool owns) { _h_Machine_Gauge = new GaugeHandle(handle, owns); }
+
+        private static IntPtr __New_default()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_Gauge_new_default(out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public Gauge() : this(__New_default(), true) {}
+
+        private static IntPtr __New_1(int v)
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_Gauge_new_1(v, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public Gauge(int v) : this(__New_1(v), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Gauge Clone()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_Gauge_clone(_h_Machine_Gauge, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Gauge(__r, true);
+        }
+
+        public int Value
+        {
+            get
+            {
+                var __r = NativeMethods.welder_csharp_cases_Machine_Gauge_get_value(_h_Machine_Gauge, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                return __r;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Machine_Gauge_set_value(_h_Machine_Gauge, @value, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+            }
+        }
+
+        public virtual void Dispose() => _h_Machine_Gauge.Dispose();
+    }
+
+        private static IntPtr __New_default()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_new_default(out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public Machine() : this(__New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Machine Clone()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_clone(_h_Machine, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Machine(__r, true);
+        }
+
+        public Machine.State Power
+        {
+            get
+            {
+                var __r = NativeMethods.welder_csharp_cases_Machine_get_power(_h_Machine, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                return __r;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Machine_set_power(_h_Machine, @value, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+            }
+        }
+
+        public Machine.Gauge Dial
+        {
+            get
+            {
+                IntPtr __r = NativeMethods.welder_csharp_cases_Machine_get_dial(_h_Machine, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                var __v = new Machine.Gauge(__r, false);
+                __v.__owner = this;
+                return __v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Machine_set_dial(_h_Machine, @value._h_Machine_Gauge, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+            }
+        }
+
+        public void TurnOn()
+        {
+            NativeMethods.welder_csharp_cases_Machine_m_turn_on_0(_h_Machine, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+        }
+
+        public Machine.Gauge Peak()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_m_peak_0(_h_Machine, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Machine.Gauge(__r, true);
+        }
+
+        public virtual void Dispose() => _h_Machine.Dispose();
     }
 
     internal sealed class VectorPointHandle : SafeHandle

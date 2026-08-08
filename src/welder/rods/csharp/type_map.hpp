@@ -343,9 +343,19 @@ consteval marshal_kind classify(std::meta::info type) {
         }
         // Only a class this rod REGISTERS can cross as a handle; any other
         // class (a gate-trusted third-party type, an unlisted container) is a
-        // designed diagnostic, never a silently-mistyped void*.
-        return ::welder::welded_for(w, lang::cs) ? marshal_kind::handle
-                                                 : marshal_kind::unsupported;
+        // designed diagnostic, never a silently-mistyped void*. A NESTED class
+        // registers under its enclosing welded type (the gate's registration
+        // oracle enforces the exact participation rules before we get here, so
+        // the enclosing-chain check suffices).
+        if (::welder::welded_for(w, lang::cs))
+            return marshal_kind::handle;
+        for (std::meta::info p{std::meta::parent_of(w)};
+             // is_class_type THROWS on a namespace reflection — guard it
+             std::meta::is_type(p) && std::meta::is_class_type(p);
+             p = std::meta::parent_of(p))
+            if (::welder::welded_for(p, lang::cs))
+                return marshal_kind::handle;
+        return marshal_kind::unsupported;
     }
     return marshal_kind::unsupported;
 }

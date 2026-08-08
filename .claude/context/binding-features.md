@@ -96,6 +96,18 @@ indexer with __owner pinning, Add/Clear, public parameterless ctor);
 signature-driven collection via _collect_containers in every rod hook
 (operators excepted — known gap). gcc16: a splice as template arg must be
 parenthesized/aliased (`using El = [:E:]` before std::vector<El>).
+Nested types (Phase 7): make_nested_class/make_nested_enum flush into the
+OUTER's members buffer (class_writer/enum_writer `sink`), references resolve
+to the dotted path (record_type_name now OVERWRITES, so the nested factory
+refines the flat registration), handle FIELDS use a second identifier-safe
+placeholder flavor (`\x03raw\x04` → dots sanitize to underscores; field_ref<>
+vs type_ref<>), handle CLASS spellings the dotted `w.handle_cs`. classify's
+handle arm accepts a nested class via the enclosing-welded-chain walk (guard:
+is_class_type THROWS on a namespace reflection — is_type first). Gotcha:
+C# forbids a property and a nested type sharing a name (CS0102) — the shared
+`gauge`-field/`Gauge`-type pattern must rename. CI: Linux/macOS install brew
+`dotnet` (DOTNET_ROOT resolved from the found executable — linuxbrew too);
+Windows roundtrip auto-skips until proven on a runner.
 NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
 generation):
 virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference

@@ -95,6 +95,10 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   `[[=welder::rods::python::bind_flat]]` opts a type or method out, exactly as
   on the Python rods. Unsupported slot shapes (C-variadic, reference/pointer
   class or string returns) are a designed shim-build error naming that escape.
+- **Nested member types** register under the outer's binding as real C#
+  nested types (`Machine.State`, `Machine.Gauge`), resolving like any other
+  member — mind that C# forbids a property and a nested type sharing a name
+  (rename the member, or `weld_as` one of them).
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.

@@ -167,6 +167,14 @@ std::string container_ref() {
     return std::string{"\x01"} + d + "\x02";
 }
 
+/** A welded class/enum reference in a HANDLE-FIELD position: the
+    identifier-safe placeholder flavor (a nested type's dotted name sanitizes
+    to underscores at render). */
+template <std::meta::info Bare>
+std::string field_ref() {
+    return std::string{"\x03"} + cpp_name_v<Bare> + "\x04";
+}
+
 /** The managed type the P/Invoke declaration uses for @a Type. @a is_return
     switches a string between its `in` (`string`) and `out` (`IntPtr`,
     caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
@@ -407,7 +415,7 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
     if constexpr (classify(PT) == marshal_kind::handle)
         // The param's STATIC type picks its own level's handle field — for a
         // derived instance passed as a base that is the correctly-upcast one.
-        cp.wrapper_args += name + "._h_" + type_ref<bare(PT)>();
+        cp.wrapper_args += name + "._h_" + field_ref<bare(PT)>();
     else if constexpr (classify(PT) == marshal_kind::optional_) {
         constexpr marshal_kind pk{classify(optional_payload(bare(PT)))};
         if constexpr (pk == marshal_kind::utf8_string)
@@ -419,7 +427,7 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
             cp.wrapper_args += name +
                                " is null ? default : new WelderOptWire { Has = "
                                "1, P = " + name + "._h_" +
-                               type_ref<bare(optional_payload(bare(PT)))>() +
+                               field_ref<bare(optional_payload(bare(PT)))>() +
                                ".DangerousGetHandle() }";
         else if constexpr (pk == marshal_kind::boolean)
             cp.wrapper_args += name + ".HasValue ? new WelderOptWire { Has = 1, "
@@ -703,6 +711,7 @@ struct rod {
         class_writer w{};
         w.doc = m.doc;
         w.cs_name = name;
+        w.cs_path = name;
         w.doc_text = doc ? doc : "";
         w.cpp_qualified = cpp_name_v<Decl>;
         // References to T anywhere (params, returns, fields, operators) are
@@ -716,6 +725,7 @@ struct rod {
                 m.doc->record_type_name(cpp_name_v<^^T>, name);
         w.sym_prefix = std::string{"welder_"} + upath_v<Decl>;
         w.handle_field = std::string{"_h_"} + name;
+        w.handle_cs = std::string{name} + "Handle";
         w.destroy_symbol = w.sym_prefix + "_destroy";
         // Welded bases: the FIRST becomes the C# base class (the internal
         // constructor chains an upcast pointer down); every FURTHER one gets a
@@ -767,6 +777,56 @@ struct rod {
                           w.destroy_symbol + "(IntPtr self);\n";
         return w;
     }
+
+    /** Place a NESTED member class under its enclosing type's binding: the
+        writer flushes into the OUTER's members (a real C# nested type), its
+        references resolve to the dotted path, and its handle field/class
+        spellings derive from it (identifier-sanitized / dotted). */
+    template <class T, auto Bases, std::size_t... I>
+    static class_writer make_nested_class(module_type& m, class_writer& outer,
+                                          const char* name, const char* doc,
+                                          std::index_sequence<I...> seq) {
+        return make_nested_class<T, ^^T, Bases>(m, outer, name, doc, seq);
+    }
+
+    /** The declaring-entity-aware nested form the carriage prefers. */
+    template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
+    static class_writer make_nested_class(module_type& m, class_writer& outer,
+                                          const char* name, const char* doc,
+                                          std::index_sequence<I...> seq) {
+        class_writer w{make_class<T, Decl, Bases>(m, name, doc, seq)};
+        w.sink = &outer.members;
+        w.cs_path = outer.cs_path + "." + name;
+        w.handle_cs = w.cs_path + "Handle";
+        std::string safe{w.cs_path};
+        for (char& c : safe)
+            if (c == '.')
+                c = '_';
+        w.handle_field = "_h_" + safe;
+        // Refine the flat registration to the dotted path.
+        m.doc->record_type_name(cpp_name_v<Decl>, w.cs_path);
+        if constexpr (std::meta::has_identifier(^^T))
+            if (std::string{cpp_name_v<^^T>} != cpp_name_v<Decl>)
+                m.doc->record_type_name(cpp_name_v<^^T>, w.cs_path);
+        return w;
+    }
+
+    /** Place a NESTED member enum under the outer's binding (same model). */
+    template <class E>
+    static enum_writer make_nested_enum(module_type& m, class_writer& outer,
+                                        const char* name, const char* doc) {
+        enum_writer w{make_enum<E>(m, name, doc)};
+        w.sink = &outer.members;
+        m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
+                                outer.cs_path + "." + name);
+        return w;
+    }
+
+    /** Nothing to finalize — the nested writer's RAII flush lands its block
+        inside the outer's members before the outer itself flushes. */
+    template <class T>
+    static void finish_nested_class(module_type&, class_writer&, class_writer&,
+                                    const char*) {}
 
     /** Emit the whole constructor surface in one call (main's contract): a
         no-argument form when @a HasDefault, one per member of @a Ctors (exact
@@ -822,8 +882,8 @@ struct rod {
                            "(void* self, welder_error* err) { return "
                            "wcs::shim::clone<" + anchor + ">(self, err); }\n\n";
             w.doc->pinvoke += "        [LibraryImport(Lib)] internal static "
-                              "partial IntPtr " + sym + "(" + w.cs_name +
-                              "Handle self, out WelderError err);\n";
+                              "partial IntPtr " + sym + "(" + w.handle_cs +
+                              " self, out WelderError err);\n";
             w.members += "        /// <summary>Copy this instance (the C++ copy "
                          "constructor).</summary>\n"
                          "        public " + w.cs_name + " Clone()\n"
@@ -870,8 +930,8 @@ struct rod {
                           (is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "") +
                           "internal static partial " +
                           pinvoke_type<std::meta::type_of(Mem), Style>(true) +
-                          " " + getsym + "(" + w.cs_name +
-                          "Handle self, out WelderError err);\n";
+                          " " + getsym + "(" + w.handle_cs +
+                          " self, out WelderError err);\n";
         if constexpr (!read_only) {
             w.doc->record_symbol(setsym);
             w.doc->shim += "void " + setsym + "(void* self, " +
@@ -881,7 +941,7 @@ struct rod {
                            ">(self, err, v); }\n\n";
             w.doc->pinvoke += "        " + import_attr(is_str) +
                               " internal static partial void " + setsym +
-                              "(" + w.cs_name + "Handle self, " +
+                              "(" + w.handle_cs + " self, " +
                               (is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "") +
                               pinvoke_type<std::meta::type_of(Mem), Style>(false) +
                               " v, out WelderError err);\n";
@@ -953,8 +1013,8 @@ struct rod {
                           (is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "") +
                           "internal static partial " +
                           pinvoke_type<std::meta::remove_cvref(std::meta::return_type_of(Getter)), ::welder::naming::none>(true) +
-                          " " + getsym + "(" + w.cs_name +
-                          "Handle self, out WelderError err);\n";
+                          " " + getsym + "(" + w.handle_cs +
+                          " self, out WelderError err);\n";
 
         emit_doc_comment(w.members, "        ", ::welder::doc_of<Getter>());
         w.members += "        public " +
@@ -993,7 +1053,7 @@ struct rod {
             constexpr bool p_is_str{classify(PT) == marshal_kind::utf8_string};
             w.doc->pinvoke += "        " + import_attr(p_is_str) +
                               " internal static partial void " + setsym +
-                              "(" + w.cs_name + "Handle self, " +
+                              "(" + w.handle_cs + " self, " +
                               (p_is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "") +
                               pinvoke_type<first_param_type(Setter),
                                            ::welder::naming::none>(false) +
@@ -1065,7 +1125,7 @@ struct rod {
             } else {
                 emit_callable<fn, Style, true>(*w.doc, sym, w.members,
                                                "        ", name, expr,
-                                               w.cs_name + "Handle",
+                                               w.handle_cs,
                                                w.handle_field);
             }
         }
@@ -1142,7 +1202,7 @@ struct rod {
                     "); });\n}\n\n";
             }
             // P/Invokes for both
-            std::string pin_params{w.cs_name + "Handle self" +
+            std::string pin_params{w.handle_cs + " self" +
                                    (cp.pinvoke_params.empty()
                                         ? std::string{}
                                         : ", " + cp.pinvoke_params) +
@@ -1258,8 +1318,8 @@ struct rod {
                        ", std::meta::operators::" + opid + ", false, " +
                        std::to_string(k) + ")>(self, err); }\n\n";
         w.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
-                          "IntPtr " + sym + "(" + w.cs_name +
-                          "Handle self, out WelderError err);\n";
+                          "IntPtr " + sym + "(" + w.handle_cs +
+                          " self, out WelderError err);\n";
         w.members += "        public override string ToString()\n        {\n";
         w.members += wrapper_return_body<^^std::string, ::welder::naming::none>(
             "NativeMethods." + sym + "(" + w.handle_field +
@@ -1316,7 +1376,7 @@ struct rod {
             shim_params = "void* self" +
                           (cp.shim_params.empty() ? "" : ", " + cp.shim_params);
             delegate_args = "self, err";
-            pin_params = w.cs_name + "Handle self" +
+            pin_params = w.handle_cs + " self" +
                          (cp.pinvoke_params.empty() ? "" : ", " + cp.pinvoke_params);
         } else {
             delegate_args = "err";
@@ -1392,7 +1452,7 @@ struct rod {
             if constexpr (is_member) {
                 op_types.push_back(type_ref<^^T>());
                 op_names.push_back("l");
-                args = "l._h_" + type_ref<^^T>();
+                args = "l._h_" + field_ref<^^T>();
             }
             // Guard the empty pack: param_types<Fn> must not instantiate for
             // a parameterless callable (a unary member operator) — the
@@ -1406,7 +1466,7 @@ struct rod {
                     op_names.push_back(nm);
                     args += (args.empty() ? "" : ", ");
                     if constexpr (classify(pt) == marshal_kind::handle)
-                        args += nm + "._h_" + type_ref<bare(pt)>();
+                        args += nm + "._h_" + field_ref<bare(pt)>();
                     else
                         args += nm;
                     ++j;
@@ -1446,7 +1506,7 @@ struct rod {
                     std::meta::return_type_of(Fn), ::welder::naming::none,
                     ::welder::return_policy_of(Fn, lang::cs)>(
                     "NativeMethods." + sym + "(" +
-                        (is_member ? "v._h_" + type_ref<^^T>() : std::string{"v"}) +
+                        (is_member ? "v._h_" + field_ref<^^T>() : std::string{"v"}) +
                         ", out WelderError __e)",
                     "            ");
                 w.members += "        }\n\n";
@@ -1483,7 +1543,7 @@ struct rod {
             marshal_kind::boolean};
         w.doc->pinvoke +=
             "        [LibraryImport(Lib)] internal static partial int " + sym +
-            "(" + w.cs_name + "Handle self, " +
+            "(" + w.handle_cs + " self, " +
             (p_is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "") +
             pinvoke_type<::welder::detail::comparison_operand(Fn, ^^T),
                          ::welder::naming::none>(false) +
@@ -1496,6 +1556,13 @@ struct rod {
         constexpr bool rhs_is_handle{
             classify(::welder::detail::comparison_operand(Fn, ^^T)) ==
             marshal_kind::handle};
+        // Computed under if constexpr: field_ref must not instantiate for a
+        // scalar operand (no parent to spell).
+        std::string rhs_field{};
+        if constexpr (rhs_is_handle)
+            rhs_field = "._h_" + field_ref<bare(::welder::detail::
+                                                    comparison_operand(
+                                                        Fn, ^^T))>();
         const bool hetero{lhs != rhs};
         auto record = [&](const char* op, bool reversed, const char* cond) {
             class_writer::cs_comparison c{};
@@ -1504,10 +1571,9 @@ struct rod {
             c.rhs = reversed ? lhs : rhs;
             c.ret = "bool";
             const std::string self_arg{(reversed ? "r._h_" : "l._h_") +
-                                       type_ref<^^T>()};
+                                       field_ref<^^T>()};
             std::string other{reversed ? "l" : "r"};
-            if (rhs_is_handle)
-                other += "._h_" + rhs; // rhs is already the placeholder ref
+            other += rhs_field;
             c.body = "            var __c = NativeMethods." + sym + "(" +
                      self_arg + ", " + other +
                      ", out WelderError __e);\n"
@@ -1547,7 +1613,10 @@ struct rod {
                              std::string{cpp_name_v<bare(sequence_element(C))>}};
         const std::string V{container_ref<C>()};
         const std::string E{type_ref<bare(sequence_element(C))>()};
-        doc.record_type_name(key, "Vector" + E);
+        const std::string Ef{field_ref<bare(sequence_element(C))>()};
+        // The wrapper's NAME must be an identifier, so it derives from the
+        // element's identifier-safe form (a nested element's dots sanitize).
+        doc.record_type_name(key, "Vector" + Ef);
         for (const char* leaf : {"_new", "_destroy", "_size", "_get", "_set",
                                  "_add", "_clear"})
             doc.record_symbol(sym + leaf);
@@ -1623,12 +1692,12 @@ struct rod {
             "                return __v;\n            }\n"
             "            set\n            {\n"
             "                NativeMethods." + sym + "_set(_h_" + V + ", i, "
-            "value._h_" + E + ", out WelderError __e);\n"
+            "value._h_" + Ef + ", out WelderError __e);\n"
             "                WelderInterop.ThrowIfError(in __e);\n"
             "            }\n        }\n"
             "        public void Add(" + E + " item)\n        {\n"
             "            NativeMethods." + sym + "_add(_h_" + V + ", item._h_" +
-            E + ", out WelderError __e);\n"
+            Ef + ", out WelderError __e);\n"
             "            WelderInterop.ThrowIfError(in __e);\n        }\n"
             "        public void Clear()\n        {\n"
             "            NativeMethods." + sym + "_clear(_h_" + V +
@@ -1927,7 +1996,7 @@ struct rod {
                                 std::string{upath_v<bare(
                                     std::meta::return_type_of(slot))>} +
                                 "_clone(__ret._h_" +
-                                type_ref<bare(std::meta::return_type_of(slot))>() +
+                                field_ref<bare(std::meta::return_type_of(slot))>() +
                                 ", out WelderError __e2);\n"
                                 "                "
                                 "WelderInterop.ThrowIfError(in __e2);\n"

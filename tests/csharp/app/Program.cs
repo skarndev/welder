@@ -228,6 +228,21 @@ Check(Global.MaybePoint(false) == null, "optional<welded> none -> null");
 Check(Global.MaybeLevel(true) == Level.High && Global.MaybeLevel(false) == null,
       "optional<enum>");
 
+// --- nested member types ---------------------------------------------------------
+
+using (var mc = new Machine())
+{
+    Check(mc.Power == Machine.State.Off, "nested enum type + field");
+    mc.TurnOn();
+    Check(mc.Power == Machine.State.On, "nested enum round-trips");
+    mc.Dial.Value = 42;
+    Check(mc.Dial.Value == 42, "nested class field is a live view");
+    using (var g = new Machine.Gauge())
+        Check(g.Value == 0, "nested class constructible from C#");
+    using (var pk = mc.Peak())
+        Check(pk.Value == 99, "nested class return (owned copy)");
+}
+
 // --- reference-semantic vector of welded elements -------------------------------
 
 using (var rt = new Route())

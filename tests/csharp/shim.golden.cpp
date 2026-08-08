@@ -278,6 +278,36 @@ const char* welder_csharp_cases_Shape_m_describe_0(void* self, welder_error* err
 
 const char* welder_csharp_cases_f_describe_shape_0(void* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "describe_shape", 0)>(err, a0); }
 
+void welder_csharp_cases_Machine_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Machine>(self); }
+
+void welder_csharp_cases_Machine_Gauge_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Machine::Gauge>(self); }
+
+void* welder_csharp_cases_Machine_Gauge_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Machine::Gauge>(err); }
+
+void* welder_csharp_cases_Machine_Gauge_new_1(std::int32_t a0, welder_error* err) { return wcs::shim::construct<^^::csharp_cases::Machine::Gauge, wcs::ctor_at(^^::csharp_cases::Machine::Gauge, 1)>(err, a0); }
+
+void* welder_csharp_cases_Machine_Gauge_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Machine::Gauge>(self, err); }
+
+std::int32_t welder_csharp_cases_Machine_Gauge_get_value(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Machine::Gauge, wcs::named_field(^^::csharp_cases::Machine::Gauge, "value")>(self, err); }
+
+void welder_csharp_cases_Machine_Gauge_set_value(void* self, std::int32_t v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Machine::Gauge, wcs::named_field(^^::csharp_cases::Machine::Gauge, "value")>(self, err, v); }
+
+void* welder_csharp_cases_Machine_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Machine>(err); }
+
+void* welder_csharp_cases_Machine_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Machine>(self, err); }
+
+std::uint8_t welder_csharp_cases_Machine_get_power(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Machine, wcs::named_field(^^::csharp_cases::Machine, "power")>(self, err); }
+
+void welder_csharp_cases_Machine_set_power(void* self, std::uint8_t v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Machine, wcs::named_field(^^::csharp_cases::Machine, "power")>(self, err, v); }
+
+void* welder_csharp_cases_Machine_get_dial(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Machine, wcs::named_field(^^::csharp_cases::Machine, "dial")>(self, err); }
+
+void welder_csharp_cases_Machine_set_dial(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Machine, wcs::named_field(^^::csharp_cases::Machine, "dial")>(self, err, v); }
+
+void welder_csharp_cases_Machine_m_turn_on_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Machine, wcs::named_member(^^::csharp_cases::Machine, "turn_on", 0)>(self, err); }
+
+void* welder_csharp_cases_Machine_m_peak_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Machine, wcs::named_member(^^::csharp_cases::Machine, "peak", 0)>(self, err); }
+
 std::int32_t welder_csharp_cases_inner_f_twice_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases::inner, "twice", 0)>(err, a0); }
 
 void welder_free(void* p) { std::free(p); }

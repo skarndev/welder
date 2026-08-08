@@ -115,10 +115,14 @@ file(GENERATE OUTPUT ${_app}/app.csproj CONTENT
 </Project>
 ")
 
-# Environment for dotnet (quiet; point at the SDK root on a Homebrew macOS install).
+# Environment for dotnet (quiet; a Homebrew install needs DOTNET_ROOT pointing
+# at the real SDK root — resolve it from the found executable so macOS and
+# linuxbrew both work).
 set(_dotnet_env DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1)
-if(EXISTS "/opt/homebrew/opt/dotnet/libexec")
-  list(APPEND _dotnet_env DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec)
+get_filename_component(_dotnet_real ${WELDER_DOTNET} REALPATH)
+get_filename_component(_dotnet_root ${_dotnet_real} DIRECTORY)
+if(EXISTS "${_dotnet_root}/sdk")
+  list(APPEND _dotnet_env DOTNET_ROOT=${_dotnet_root})
 endif()
 
 add_test(NAME csharp.roundtrip

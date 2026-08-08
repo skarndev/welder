@@ -81,31 +81,48 @@ struct document {
         names correctly. */
     std::vector<std::pair<std::string, std::string>> type_names{};
 
-    /** Register the final C# name for raw C++ type spelling @a raw. */
+    /** Register (or update — nested factories refine the flat name to the
+        dotted path) the final C# name for raw C++ type spelling @a raw. */
     void record_type_name(std::string raw, std::string styled) {
+        for (auto& [r, cs] : type_names)
+            if (r == raw) {
+                cs = std::move(styled);
+                return;
+            }
         type_names.emplace_back(std::move(raw), std::move(styled));
     }
 
-    /** Resolve every `\x01raw\x02` placeholder in @a text against
-        @ref type_names (an unmatched one keeps the raw name — visibly wrong
-        C#, which cannot happen for gate-admitted references). */
+    /** Resolve every placeholder in @a text against @ref type_names: the
+        `\x01raw\x02` flavor substitutes the registered C# name verbatim
+        (`Outer.Inner` for a nested type), the `\x03raw\x04` flavor its
+        IDENTIFIER-SAFE form (dots → underscores — handle-field names). An
+        unmatched one keeps the raw name — visibly wrong C#, which cannot
+        happen for gate-admitted references. */
     std::string apply_type_renames(std::string text) const {
-        std::size_t b1{0};
-        while ((b1 = text.find('\x01', b1)) != std::string::npos) {
-            const std::size_t b2{text.find('\x02', b1 + 1)};
-            if (b2 == std::string::npos)
-                break;
-            const std::string raw{text.substr(b1 + 1, b2 - b1 - 1)};
-            std::string sub{raw};
-            for (const auto& [r, cs] : type_names)
-                if (r == raw) {
-                    sub = cs;
+        for (const char open : {'\x01', '\x03'}) {
+            const char close{open == '\x01' ? '\x02' : '\x04'};
+            std::size_t b1{0};
+            while ((b1 = text.find(open, b1)) != std::string::npos) {
+                const std::size_t b2{text.find(close, b1 + 1)};
+                if (b2 == std::string::npos)
                     break;
-                }
-            text.replace(b1, b2 - b1 + 1, sub);
-            // Do NOT skip past the substitution: a container's final name
-            // itself contains its element's placeholder (rescan resolves it;
-            // keys never contain themselves, so this terminates).
+                const std::string raw{text.substr(b1 + 1, b2 - b1 - 1)};
+                std::string sub{raw};
+                for (const auto& [r, cs] : type_names)
+                    if (r == raw) {
+                        sub = cs;
+                        break;
+                    }
+                if (open == '\x03')
+                    for (char& c : sub)
+                        if (c == '.')
+                            c = '_';
+                text.replace(b1, b2 - b1 + 1, sub);
+                // Do NOT skip past the substitution: a container's final name
+                // itself contains its element's placeholder (the rescan
+                // resolves it; keys never contain themselves, so this
+                // terminates).
+            }
         }
         return text;
     }
@@ -278,12 +295,18 @@ struct module_writer {
     document as each member was emitted. */
 struct class_writer {
     document* doc{nullptr};
-    std::string cs_name{};        /**< The C# class name. */
+    std::string cs_name{};        /**< The C# class name (the leaf). */
+    std::string cs_path{};        /**< The dotted C# path (`Outer.Inner`). */
+    std::string* sink{nullptr};   /**< Flush target: an outer class's members
+                                       buffer for a NESTED type, else null =
+                                       the document's types section. */
     std::string doc_text{};       /**< The class summary doc. */
     std::string cpp_qualified{};  /**< The `::`-qualified C++ type (anchor spelling). */
     std::string sym_prefix{};     /**< The `welder_<path>` C-symbol prefix. */
     std::string destroy_symbol{}; /**< The `welder_…_destroy` symbol. */
     std::string handle_field{};   /**< This level's handle field (`_h_<Class>`). */
+    std::string handle_cs{};      /**< The handle class's C# TYPE spelling
+                                       (`Outer.InnerHandle` for nested). */
     std::string base_ref{};       /**< First welded base's placeholder ref, or empty. */
     std::string base_upcast_sym{};/**< The `welder_<D>_as_<B>` symbol for it. */
     bool is_director{false};      /**< Emit the director machinery for this class. */
@@ -323,11 +346,14 @@ struct class_writer {
     class_writer& operator=(class_writer&& o) noexcept {
         doc = o.doc;
         cs_name = std::move(o.cs_name);
+        cs_path = std::move(o.cs_path);
+        sink = o.sink;
         doc_text = std::move(o.doc_text);
         cpp_qualified = std::move(o.cpp_qualified);
         sym_prefix = std::move(o.sym_prefix);
         destroy_symbol = std::move(o.destroy_symbol);
         handle_field = std::move(o.handle_field);
+        handle_cs = std::move(o.handle_cs);
         base_ref = std::move(o.base_ref);
         base_upcast_sym = std::move(o.base_upcast_sym);
         is_director = o.is_director;
@@ -434,7 +460,7 @@ struct class_writer {
     ~class_writer() {
         if (!doc)
             return;
-        std::string& out{doc->types};
+        std::string& out{sink ? *sink : doc->types};
         // The per-class SafeHandle: ReleaseHandle calls the destroy thunk, so
         // finalization and Dispose share one release path.
         out += "    internal sealed class " + cs_name +
@@ -495,6 +521,7 @@ struct class_writer {
     enum crosses as its underlying value. */
 struct enum_writer {
     document* doc{nullptr};
+    std::string* sink{nullptr}; /**< An outer class's members for a nested enum. */
     std::string cs_name{};
     std::string doc_text{};
     std::string underlying{}; /**< The C# underlying-type spelling (`int`, …). */
@@ -506,6 +533,7 @@ struct enum_writer {
     enum_writer(enum_writer&& o) noexcept { *this = std::move(o); }
     enum_writer& operator=(enum_writer&& o) noexcept {
         doc = o.doc;
+        sink = o.sink;
         cs_name = std::move(o.cs_name);
         doc_text = std::move(o.doc_text);
         underlying = std::move(o.underlying);
@@ -516,7 +544,7 @@ struct enum_writer {
     ~enum_writer() {
         if (!doc)
             return;
-        std::string& out{doc->types};
+        std::string& out{sink ? *sink : doc->types};
         emit_doc_comment(out, "    ", doc_text.empty() ? nullptr : doc_text.c_str());
         out += "    public enum " + cs_name + " : " + underlying + "\n    {\n";
         out += values;
