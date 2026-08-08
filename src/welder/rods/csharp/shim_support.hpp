@@ -423,6 +423,16 @@ const char* stringify_text(void* self, welder_error* err) noexcept {
     });
 }
 
+/** The upcast thunk body: adjust a @a From handle to its @a To base subobject
+    — a compiled `static_cast`, so multiple/virtual-inheritance offsets are the
+    ABI's own. Pure pointer math: no error slot. */
+template <std::meta::info From, std::meta::info To>
+void* upcast(void* self) noexcept {
+    if (!self)
+        return nullptr;
+    return static_cast<[:To:]*>(reinterpret_cast<[:From:]*>(self));
+}
+
 /** A namespace-variable getter thunk body. */
 template <std::meta::info Var>
 auto var_get(welder_error* err) noexcept {

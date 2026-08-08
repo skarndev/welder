@@ -119,6 +119,42 @@ void welder_csharp_cases_v_answer_set(std::int32_t v, welder_error* err) { retur
 
 double welder_csharp_cases_v_golden_get(welder_error* err) { return wcs::shim::var_get<wcs::named_field(^^::csharp_cases, "golden")>(err); }
 
+void welder_csharp_cases_Animal_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Animal>(self); }
+
+void* welder_csharp_cases_Animal_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Animal>(err); }
+
+void* welder_csharp_cases_Animal_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Animal>(self, err); }
+
+std::int32_t welder_csharp_cases_Animal_get_age(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Animal, wcs::named_field(^^::csharp_cases::Animal, "age")>(self, err); }
+
+void welder_csharp_cases_Animal_set_age(void* self, std::int32_t v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Animal, wcs::named_field(^^::csharp_cases::Animal, "age")>(self, err, v); }
+
+const char* welder_csharp_cases_Animal_m_kind_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Animal, wcs::named_member(^^::csharp_cases::Animal, "kind", 0)>(self, err); }
+
+void welder_csharp_cases_Legged_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Legged>(self); }
+
+void* welder_csharp_cases_Legged_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Legged>(err); }
+
+void* welder_csharp_cases_Legged_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Legged>(self, err); }
+
+std::int32_t welder_csharp_cases_Legged_get_legs(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Legged, wcs::named_field(^^::csharp_cases::Legged, "legs")>(self, err); }
+
+void welder_csharp_cases_Legged_set_legs(void* self, std::int32_t v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Legged, wcs::named_field(^^::csharp_cases::Legged, "legs")>(self, err, v); }
+
+void* welder_csharp_cases_Dog_as_csharp_cases_Animal(void* self) { return wcs::shim::upcast<^^::csharp_cases::Dog, ^^::csharp_cases::Animal>(self); }
+
+void* welder_csharp_cases_Dog_as_csharp_cases_Legged(void* self) { return wcs::shim::upcast<^^::csharp_cases::Dog, ^^::csharp_cases::Legged>(self); }
+
+void welder_csharp_cases_Dog_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Dog>(self); }
+
+void* welder_csharp_cases_Dog_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Dog>(err); }
+
+void* welder_csharp_cases_Dog_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Dog>(self, err); }
+
+const char* welder_csharp_cases_Dog_m_bark_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Dog, wcs::named_member(^^::csharp_cases::Dog, "bark", 0)>(self, err); }
+
+std::int32_t welder_csharp_cases_f_age_of_0(void* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "age_of", 0)>(err, a0); }
+
 std::int32_t welder_csharp_cases_inner_f_twice_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases::inner, "twice", 0)>(err, a0); }
 
 void welder_free(void* p) { std::free(p); }

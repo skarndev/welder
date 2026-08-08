@@ -148,6 +148,27 @@ inline std::int32_t answer{42}; // mutable → a static get/set property
 [[=welder::weld(welder::lang::cs)]]
 inline constexpr double golden{1.618}; // const → get-only
 
+// --- inheritance (base chain + an extra base as a view) ------------------------
+
+struct [[=welder::weld(welder::lang::cs)]] Animal {
+    Animal() = default;
+    std::string kind() const { return "animal"; }
+    std::int32_t age{1};
+};
+
+struct [[=welder::weld(welder::lang::cs)]] Legged {
+    Legged() = default;
+    std::int32_t legs{4};
+};
+
+struct [[=welder::weld(welder::lang::cs)]] Dog : Animal, Legged {
+    Dog() = default;
+    std::string bark() const { return "woof"; }
+};
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::int32_t age_of(const Animal& a) { return a.age; }
+
 // --- a nested namespace (a static-class scope) --------------------------------
 
 namespace inner {

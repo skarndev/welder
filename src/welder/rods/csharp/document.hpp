@@ -243,6 +243,9 @@ struct class_writer {
     std::string cpp_qualified{};  /**< The `::`-qualified C++ type (anchor spelling). */
     std::string sym_prefix{};     /**< The `welder_<path>` C-symbol prefix. */
     std::string destroy_symbol{}; /**< The `welder_…_destroy` symbol. */
+    std::string handle_field{};   /**< This level's handle field (`_h_<Class>`). */
+    std::string base_ref{};       /**< First welded base's placeholder ref, or empty. */
+    std::string base_upcast_sym{};/**< The `welder_<D>_as_<B>` symbol for it. */
     std::string members{};        /**< Accumulated property/method/ctor text. */
 
     /** One recorded comparison-operator emission, held back until flush: C#
@@ -272,6 +275,9 @@ struct class_writer {
         cpp_qualified = std::move(o.cpp_qualified);
         sym_prefix = std::move(o.sym_prefix);
         destroy_symbol = std::move(o.destroy_symbol);
+        handle_field = std::move(o.handle_field);
+        base_ref = std::move(o.base_ref);
+        base_upcast_sym = std::move(o.base_upcast_sym);
         members = std::move(o.members);
         comparisons = std::move(o.comparisons);
         indexer_sigs = std::move(o.indexer_sigs);
@@ -388,17 +394,40 @@ struct class_writer {
                "(handle);\n            return true;\n        }\n"
                "    }\n\n";
         emit_doc_comment(out, "    ", doc_text.empty() ? nullptr : doc_text.c_str());
-        out += "    public sealed class " + cs_name + " : IDisposable\n    {\n";
-        out += "        internal " + cs_name + "Handle _handle;\n";
-        // The reference_internal anchor: a view stores its parent here so the
-        // parent cannot be collected (and finalized) while the view lives.
-        out += "        internal object? __owner;\n";
-        out += "        internal " + cs_name +
-               "(IntPtr handle, bool owns) { _handle = new " + cs_name +
-               "Handle(handle, owns); }\n\n";
+        // Unsealed: another welded type may derive (and the directors phase
+        // needs subclassable wrappers anyway).
+        out += "    public class " + cs_name + " : " +
+               (base_ref.empty() ? std::string{"IDisposable"} : base_ref) +
+               "\n    {\n";
+        // Per-LEVEL handle: this level's field holds the address of ITS base
+        // subobject (the derived constructor chains an upcast down), so a
+        // base-typed parameter always passes the correctly-adjusted pointer —
+        // multiple inheritance included.
+        out += "        internal " + cs_name + "Handle " + handle_field + ";\n";
+        if (base_ref.empty()) {
+            // The reference_internal anchor: a view stores its parent here so
+            // the parent cannot be collected while the view lives. Declared on
+            // the hierarchy root only (derived levels inherit it).
+            out += "        internal object? __owner;\n";
+            out += "        internal " + cs_name + "(IntPtr handle, bool owns) { " +
+                   handle_field + " = new " + cs_name +
+                   "Handle(handle, owns); }\n\n";
+        } else {
+            // Chain the UPCAST pointer to the base level (non-owning there —
+            // the most-derived level owns and destroys via ITS destructor).
+            out += "        internal " + cs_name +
+                   "(IntPtr handle, bool owns) : base(NativeMethods." +
+                   base_upcast_sym + "(handle), false) { " + handle_field +
+                   " = new " + cs_name + "Handle(handle, owns); }\n\n";
+        }
         out += members;
         out += _flush_comparisons();
-        out += "        public void Dispose() => _handle.Dispose();\n";
+        if (base_ref.empty())
+            out += "        public virtual void Dispose() => " + handle_field +
+                   ".Dispose();\n";
+        else
+            out += "        public override void Dispose() { " + handle_field +
+                   ".Dispose(); base.Dispose(); }\n";
         out += "    }\n\n";
     }
 };

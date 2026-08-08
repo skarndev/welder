@@ -15,5 +15,10 @@
 #define WELDER_TEST_WELDER \
     ::welder::welder<::welder::rods::csharp::rod, ::welder::rods::csharp::dotnet>
 
+// The virtual-diamond MI case: the C# rod represents extra welded bases as
+// As<Base>() views, so it participates (like sol2, unlike LuaBridge3).
+#define WELDER_TEST_MULTIPLE_INHERITANCE 1
+
+#include "inheritance.hpp"
 #include "operators.hpp"
 #include "retpolicy.hpp"

@@ -297,7 +297,9 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
     cp.pinvoke_params += pinvoke_type<PT, Style>(false) + " a" + i;
     cp.wrapper_params += public_type<PT, Style>() + " " + name;
     if constexpr (classify(PT) == marshal_kind::handle)
-        cp.wrapper_args += name + "._handle";
+        // The param's STATIC type picks its own level's handle field — for a
+        // derived instance passed as a base that is the correctly-upcast one.
+        cp.wrapper_args += name + "._h_" + type_ref<bare(PT)>();
     else
         cp.wrapper_args += name;
     cp.param_names += name + '\x1f';
@@ -398,7 +400,8 @@ template <std::meta::info Fn, class Style, bool HasSelf>
 void emit_callable(document& doc, const std::string& sym, std::string& wrapper_out,
                    const std::string& indent, const std::string& wrapper_name,
                    const std::string& delegate_expr,
-                   const std::string& self_cs = {}) {
+                   const std::string& self_cs = {},
+                   const std::string& self_field = {}) {
     ::welder::validate_return_policy<Fn, lang::cs>();
     constexpr std::meta::info R{std::meta::return_type_of(Fn)};
     constexpr bool ret_checked{(require_marshallable(R, true), true)};
@@ -436,7 +439,7 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
                    sym + "(" + pin_params + ");\n";
 
     // --- managed wrapper ----------------------------------------------------
-    std::string call_args{HasSelf ? "_handle" : ""};
+    std::string call_args{HasSelf ? self_field : std::string{}};
     if (!cp.wrapper_args.empty())
         call_args += (call_args.empty() ? "" : ", ") + cp.wrapper_args;
     call_args += (call_args.empty() ? "" : ", ");
@@ -472,14 +475,27 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
     w.doc->pinvoke += "        " + import_attr(cp.has_string) +
                       " internal static partial IntPtr " + sym + "(" +
                       pin_params + ");\n";
-    w.members += "        public " + w.cs_name + "(" + cp.wrapper_params + ")\n" +
-                 "        {\n            IntPtr __r = NativeMethods." + sym + "(" +
+    // The public constructor CHAINS through the internal (IntPtr, bool) one
+    // (which initializes every base level's upcast handle), so construction
+    // works identically for roots and derived classes. The static helper
+    // exists because a chained `this(...)` argument cannot use `out var`.
+    const std::string helper{"__New" + sym.substr(sym.rfind("_new") + 4)};
+    w.members += "        private static IntPtr " + helper + "(" +
+                 cp.wrapper_params + ")\n        {\n"
+                 "            IntPtr __r = NativeMethods." + sym + "(" +
                  (cp.wrapper_args.empty() ? std::string{}
                                           : cp.wrapper_args + ", ") +
                  "out WelderError __e);\n"
                  "            WelderInterop.ThrowIfError(in __e);\n"
-                 "            _handle = new " + w.cs_name + "Handle(__r, true);\n"
-                 "        }\n\n";
+                 "            return __r;\n        }\n";
+    // Re-list the wrapper parameter NAMES for the chained call.
+    std::string names{};
+    for (const std::string& n : split_param_names(cp.param_names)) {
+        names += (names.empty() ? "" : ", ");
+        names += n;
+    }
+    w.members += "        public " + w.cs_name + "(" + cp.wrapper_params +
+                 ") : this(" + helper + "(" + names + "), true) {}\n\n";
 }
 
 /** The C#/.NET rod: a stateless policy satisfying @ref welder::rod that emits a
@@ -522,11 +538,6 @@ struct rod {
     template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
     static class_writer make_class(module_type& m, const char* name,
                                    const char* doc, std::index_sequence<I...>) {
-        static_assert(sizeof...(I) == 0,
-                      "welder: the C# rod does not bind welded base classes yet "
-                      "(cross-boundary inheritance lands in a later phase); "
-                      "mark::exclude the derived type for lang::cs, or drop the "
-                      "base's weld for cs");
         class_writer w{};
         w.doc = m.doc;
         w.cs_name = name;
@@ -542,7 +553,44 @@ struct rod {
             if (std::string{cpp_name_v<^^T>} != cpp_name_v<Decl>)
                 m.doc->record_type_name(cpp_name_v<^^T>, name);
         w.sym_prefix = std::string{"welder_"} + upath_v<Decl>;
+        w.handle_field = std::string{"_h_"} + name;
         w.destroy_symbol = w.sym_prefix + "_destroy";
+        // Welded bases: the FIRST becomes the C# base class (the internal
+        // constructor chains an upcast pointer down); every FURTHER one gets a
+        // non-owning As<Base>() view — C# has single inheritance, so the extra
+        // bases' surfaces are reached through their own wrapper. Each base
+        // needs an upcast thunk: a compiled static_cast, so multiple/virtual
+        // inheritance offsets are exact.
+        std::size_t base_i{0};
+        template for (constexpr auto base : std::define_static_array(Bases)) {
+            const std::string bsym{w.sym_prefix + "_as_" +
+                                   upath_v<std::meta::dealias(base)>};
+            m.doc->record_symbol(bsym);
+            m.doc->shim += "void* " + bsym + "(void* self) { return "
+                           "wcs::shim::upcast<^^" + w.cpp_qualified + ", ^^" +
+                           std::string{cpp_name_v<std::meta::dealias(base)>} +
+                           ">(self); }\n\n";
+            m.doc->pinvoke += "        [LibraryImport(Lib)] internal static "
+                              "partial IntPtr " + bsym + "(IntPtr self);\n";
+            const std::string bref{type_ref<std::meta::dealias(base)>()};
+            if (base_i == 0) {
+                w.base_ref = bref;
+                w.base_upcast_sym = bsym;
+            } else {
+                w.members += "        /// <summary>This object's " + bref +
+                             " base surface (a non-owning view).</summary>\n"
+                             "        public " + bref + " As" + bref +
+                             "()\n        {\n"
+                             "            IntPtr __p = NativeMethods." + bsym +
+                             "(" + w.handle_field + ".DangerousGetHandle());\n"
+                             "            GC.KeepAlive(this);\n"
+                             "            var __v = new " + bref +
+                             "(__p, false);\n"
+                             "            __v.__owner = this;\n"
+                             "            return __v;\n        }\n\n";
+            }
+            ++base_i;
+        }
         // The destructor thunk + its P/Invoke (the SafeHandle's release path).
         m.doc->record_symbol(w.destroy_symbol);
         m.doc->shim += "void " + w.destroy_symbol +
@@ -599,7 +647,7 @@ struct rod {
                          "        public " + w.cs_name + " Clone()\n"
                          "        {\n"
                          "            IntPtr __r = NativeMethods." + sym +
-                         "(_handle, out WelderError __e);\n"
+                         "(" + w.handle_field + ", out WelderError __e);\n"
                          "            WelderInterop.ThrowIfError(in __e);\n"
                          "            return new " + w.cs_name + "(__r, true);\n"
                          "        }\n\n";
@@ -666,13 +714,17 @@ struct rod {
         w.members += wrapper_return_body<std::meta::type_of(Mem), Style,
                                          field_return_policy(
                                              std::meta::type_of(Mem))>(
-            "NativeMethods." + getsym + "(_handle, out WelderError __e)",
+            "NativeMethods." + getsym + "(" + w.handle_field +
+                ", out WelderError __e)",
             "                ", "this");
         w.members += "            }\n";
         if constexpr (!read_only) {
+            std::string vexpr{"value"};
+            if constexpr (is_handle)
+                vexpr += "._h_" + type_ref<bare(std::meta::type_of(Mem))>();
             w.members += "            set\n            {\n"
-                         "                NativeMethods." + setsym + "(_handle, " +
-                         (is_handle ? "value._handle" : "value") +
+                         "                NativeMethods." + setsym + "(" +
+                         w.handle_field + ", " + vexpr +
                          ", out WelderError __e);\n"
                          "                WelderInterop.ThrowIfError(in __e);\n"
                          "            }\n";
@@ -718,7 +770,8 @@ struct rod {
                                          ::welder::naming::none,
                                          ::welder::return_policy_of(
                                              Getter, lang::cs)>(
-            "NativeMethods." + getsym + "(_handle, out WelderError __e)",
+            "NativeMethods." + getsym + "(" + w.handle_field +
+                ", out WelderError __e)",
             "                ", "this");
         w.members += "            }\n";
         if constexpr (Setter != std::meta::info{}) {
@@ -752,9 +805,12 @@ struct rod {
                               pinvoke_type<first_param_type(Setter),
                                            ::welder::naming::none>(false) +
                               " v, out WelderError err);\n";
+            std::string vexpr{"value"};
+            if constexpr (p_is_handle)
+                vexpr += "._h_" + type_ref<bare(first_param_type(Setter))>();
             w.members += "            set\n            {\n"
-                         "                NativeMethods." + setsym + "(_handle, " +
-                         (p_is_handle ? "value._handle" : "value") +
+                         "                NativeMethods." + setsym + "(" +
+                         w.handle_field + ", " + vexpr +
                          ", out WelderError __e);\n"
                          "                WelderInterop.ThrowIfError(in __e);\n"
                          "            }\n";
@@ -780,7 +836,8 @@ struct rod {
                 std::string{cpp_name_v<std::meta::parent_of(fn)>} + ", \"" + id +
                 "\", " + std::to_string(k) + ")>"};
             emit_callable<fn, Style, true>(*w.doc, sym, w.members, "        ",
-                                           name, expr, w.cs_name + "Handle");
+                                           name, expr, w.cs_name + "Handle",
+                                           w.handle_field);
         }
     }
 
@@ -855,7 +912,8 @@ struct rod {
                           "Handle self, out WelderError err);\n";
         w.members += "        public override string ToString()\n        {\n";
         w.members += wrapper_return_body<^^std::string, ::welder::naming::none>(
-            "NativeMethods." + sym + "(_handle, out WelderError __e)",
+            "NativeMethods." + sym + "(" + w.handle_field +
+                ", out WelderError __e)",
             "            ");
         w.members += "        }\n\n";
     }
@@ -943,7 +1001,7 @@ struct rod {
         // the operator parameter names (member left = `l`, others per shape).
         if constexpr (oi.kind == cs_op_kind::invoke) {
             // operator() -> a plain Invoke method (self + params).
-            std::string args{std::string{"_handle"} +
+            std::string args{w.handle_field +
                              (cp.wrapper_args.empty() ? "" : ", " + cp.wrapper_args)};
             w.members += "        public " +
                          public_return_type<std::meta::return_type_of(Fn),
@@ -970,8 +1028,8 @@ struct rod {
                                              ::welder::naming::none,
                                              ::welder::return_policy_of(
                                                  Fn, lang::cs)>(
-                "NativeMethods." + sym + "(_handle, " + cp.wrapper_args +
-                    ", out WelderError __e)",
+                "NativeMethods." + sym + "(" + w.handle_field + ", " +
+                    cp.wrapper_args + ", out WelderError __e)",
                 "                ", "this");
             w.members += "            }\n        }\n\n";
         } else {
@@ -984,7 +1042,7 @@ struct rod {
             if constexpr (is_member) {
                 op_types.push_back(type_ref<^^T>());
                 op_names.push_back("l");
-                args = "l._handle";
+                args = "l._h_" + type_ref<^^T>();
             }
             // Guard the empty pack: param_types<Fn> must not instantiate for
             // a parameterless callable (a unary member operator) — the
@@ -998,7 +1056,7 @@ struct rod {
                     op_names.push_back(nm);
                     args += (args.empty() ? "" : ", ");
                     if constexpr (classify(pt) == marshal_kind::handle)
-                        args += nm + "._handle";
+                        args += nm + "._h_" + type_ref<bare(pt)>();
                     else
                         args += nm;
                     ++j;
@@ -1038,7 +1096,7 @@ struct rod {
                     std::meta::return_type_of(Fn), ::welder::naming::none,
                     ::welder::return_policy_of(Fn, lang::cs)>(
                     "NativeMethods." + sym + "(" +
-                        (is_member ? std::string{"v._handle"} : std::string{"v"}) +
+                        (is_member ? "v._h_" + type_ref<^^T>() : std::string{"v"}) +
                         ", out WelderError __e)",
                     "            ");
                 w.members += "        }\n\n";
@@ -1095,10 +1153,11 @@ struct rod {
             c.lhs = reversed ? rhs : lhs;
             c.rhs = reversed ? lhs : rhs;
             c.ret = "bool";
-            const std::string self_arg{reversed ? "r._handle" : "l._handle"};
+            const std::string self_arg{(reversed ? "r._h_" : "l._h_") +
+                                       type_ref<^^T>()};
             std::string other{reversed ? "l" : "r"};
             if (rhs_is_handle)
-                other += "._handle";
+                other += "._h_" + rhs; // rhs is already the placeholder ref
             c.body = "            var __c = NativeMethods." + sym + "(" +
                      self_arg + ", " + other +
                      ", out WelderError __e);\n"
@@ -1242,9 +1301,11 @@ struct rod {
             "                ");
         body += "            }\n";
         if constexpr (!read_only) {
+            std::string vexpr{"value"};
+            if constexpr (is_handle)
+                vexpr += "._h_" + type_ref<bare(std::meta::type_of(Var))>();
             body += "            set\n            {\n"
-                    "                NativeMethods." + base + "_set(" +
-                    (is_handle ? "value._handle" : "value") +
+                    "                NativeMethods." + base + "_set(" + vexpr +
                     ", out WelderError __e);\n"
                     "                WelderInterop.ThrowIfError(in __e);\n"
                     "            }\n";

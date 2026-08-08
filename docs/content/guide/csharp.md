@@ -73,6 +73,14 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   protocol plus `Equals`/`GetHashCode` overrides, and a lone heterogeneous
   relational demotes to a named method (`LessThan`, …) rather than emitting
   unpairable C#.
+- **Inheritance** maps a welded base chain onto C# base classes. Each wrapper
+  level holds its *own* handle — the address of its base subobject, chained
+  down through compiled `static_cast` upcast thunks — so a derived instance
+  passed as a base parameter always crosses with the correctly-adjusted
+  pointer, multiple and virtual inheritance included. C# is single-inheritance,
+  so a second welded base surfaces as a non-owning `As<Base>()` view (pinning
+  its parent); a non-welded base's members are flattened onto the derived
+  wrapper, exactly as on the other rods.
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.
@@ -169,7 +177,7 @@ documented-ignored (as on the Lua rods) — the owner-reference mechanism covers
 the common case.
 
 What the [bindability gate](bindability.md) admits but this phase cannot yet
-marshal — STL containers, welded-base inheritance, virtuals
-overridden from C# — fails **loudly at generation time** with a designed
+marshal — STL containers, virtuals overridden from C# — fails **loudly at
+generation time** with a designed
 diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
 silently-corrupting `void*`. Those families land in the following phases.

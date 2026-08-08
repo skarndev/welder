@@ -152,6 +152,43 @@ using (var acct = new operators.Account(3))
     Check(2 < acct && 3 <= acct, "shared: reversed heterogeneous <=>");
 }
 
+// --- inheritance (dedicated Dog + the shared inheritance cases) ----------------
+
+using (var dog = new Dog())
+{
+    Check(dog.Bark() == "woof" && dog.Kind() == "animal",
+          "inherited base method via C# base class");
+    dog.Age = 7;
+    Check(Global.AgeOf(dog) == 7, "derived instance passes as base param");
+    using (var lg = dog.AsLegged())
+        Check(lg.Legs == 4, "extra base surface via As-view");
+    Check(dog is Animal, "C# base clause (is Animal)");
+}
+
+using (var d = new inheritance.Derived())
+{
+    Check(d.BaseMethod() == 1 && d.DerivedMethod() == 2,
+          "shared: welded base chain");
+    Check(d is inheritance.Base, "shared: issubclass equivalent");
+}
+using (var leaf = new inheritance.Leaf())
+    Check(leaf.LeafField == 6 && leaf.MidField == 5 && leaf.BaseField == 1,
+          "shared: multi-level chain fields");
+using (var wm = new inheritance.WithMixin())
+    Check(wm.OwnField == 4 && wm.MixinMethod() == 3,
+          "shared: non-welded mixin flattened");
+using (var th = new inheritance.Through())
+    Check(th.ThroughField == 12 && th.WeldedMethod() == 10 &&
+              th is inheritance.Welded,
+          "shared: welded base through a non-welded bridge");
+using (var bot = new inheritance.Bottom())
+{
+    Check(bot is inheritance.Left && bot is inheritance.Apex,
+          "shared: diamond primary chain");
+    using (var r = bot.AsRight())
+        Check(r is inheritance.Right, "shared: diamond extra base As-view");
+}
+
 // --- the shared retpolicy cases (tests/common/cpp/retpolicy.hpp) ---------------
 
 using (var owner = new retpolicy.Owner())

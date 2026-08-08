@@ -30,11 +30,22 @@ operator[] → get-only indexer; operator() → Invoke; ostream << → ToString(
 Type REFERENCES in operator emission (no Style reaches add_operator) use
 render-time placeholders reconciled from the document's type_names map (the
 luacats record_type_name idiom) — now used by ALL C# type references.
+Inheritance (Phase 4): PER-LEVEL HANDLES — every wrapper level owns a
+`_h_<Class>` field holding ITS base-subobject address, chained down by the
+internal (IntPtr,bool) ctor through compiled upcast thunks
+(shim::upcast<From,To> = static_cast → MI/virtual offsets exact; the diamond
+case runs with WELDER_TEST_MULTIPLE_INHERITANCE defined in shared_seam.hpp).
+First welded base = the C# base class; further bases = As<Base>() non-owning
+views (__owner-pinned); non-welded bases flatten via the carriage as usual.
+A handle-typed argument site always spells `<name>._h_<placeholder>` — the
+STATIC param type picks the right level. Public ctors chain
+`: this(__New_k(args), true)` through a private static helper (out-var can't
+appear in a chained-this argument). Dispose is virtual (root) / override.
 Shared-case widening so far: retpolicy.hpp Inner/Owner (view/snapshot),
-operators.hpp whole file (bound via tests/csharp/cpp/shared_seam.hpp +
-gen_retpolicy/gen_operators.cpp binding pairs).
+operators.hpp + inheritance.hpp whole files (bound via
+tests/csharp/cpp/shared_seam.hpp + gen_* binding pairs).
 NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
-generation): welded-base inheritance,
+generation):
 virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference
 (rejected combos), STL containers, nested types (flat fallback is fine —
 they're not yet marshallable anyway), weld_protected members (the shim's
