@@ -155,6 +155,21 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial double welder_csharp_cases_Basket_m_trip_sum_0(BasketHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_f_maybe_point_0([MarshalAs(UnmanagedType.U1)] bool a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_f_maybe_level_0([MarshalAs(UnmanagedType.U1)] bool a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Route_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Route_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Route_clone(RouteHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_vec_csharp_cases_Point_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vec_csharp_cases_Point_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial long welder_vec_csharp_cases_Point_size(VectorPointHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_vec_csharp_cases_Point_get(VectorPointHandle self, long i, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vec_csharp_cases_Point_set(VectorPointHandle self, long i, PointHandle elem, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vec_csharp_cases_Point_add(VectorPointHandle self, PointHandle elem, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vec_csharp_cases_Point_clear(VectorPointHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Route_get_stops(RouteHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Route_set_stops(RouteHandle self, VectorPointHandle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Route_m_stop_count_0(RouteHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Route_m_reversed_0(RouteHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Route_m_total_x_0(RouteHandle self, VectorPointHandle a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_init(IntPtr release, IntPtr s0, IntPtr s1);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_bind(IntPtr self, IntPtr ctx, ulong mask);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_destroy(IntPtr self);
@@ -912,6 +927,84 @@ namespace csharp_cases
         public virtual void Dispose() => _h_Basket.Dispose();
     }
 
+    internal sealed class RouteHandle : SafeHandle
+    {
+        internal RouteHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Route_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Route : IDisposable
+    {
+        internal RouteHandle _h_Route;
+        internal object? __owner;
+        internal bool __isDirector;
+        internal Route(IntPtr handle, bool owns) { _h_Route = new RouteHandle(handle, owns); }
+
+        private static IntPtr __New_default()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Route_new_default(out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public Route() : this(__New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Route Clone()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Route_clone(_h_Route, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new Route(__r, true);
+        }
+
+        public VectorPoint Stops
+        {
+            get
+            {
+                IntPtr __r = NativeMethods.welder_csharp_cases_Route_get_stops(_h_Route, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                var __v = new VectorPoint(__r, false);
+                __v.__owner = this;
+                return __v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Route_set_stops(_h_Route, @value._h_VectorPoint, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+            }
+        }
+
+        public int StopCount()
+        {
+            var __r = NativeMethods.welder_csharp_cases_Route_m_stop_count_0(_h_Route, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+
+        public VectorPoint Reversed()
+        {
+            IntPtr __r = NativeMethods.welder_csharp_cases_Route_m_reversed_0(_h_Route, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return new VectorPoint(__r, true);
+        }
+
+        public int TotalX(VectorPoint pts)
+        {
+            var __r = NativeMethods.welder_csharp_cases_Route_m_total_x_0(_h_Route, pts._h_VectorPoint, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+
+        public virtual void Dispose() => _h_Route.Dispose();
+    }
+
     internal sealed class ShapeHandle : SafeHandle
     {
         internal ShapeHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
@@ -1057,6 +1150,71 @@ namespace csharp_cases
         }
 
         public virtual void Dispose() => _h_Shape.Dispose();
+    }
+
+    internal sealed class VectorPointHandle : SafeHandle
+    {
+        internal VectorPointHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_vec_csharp_cases_Point_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ vector of Point (live element views).</summary>
+    public sealed class VectorPoint : IDisposable
+    {
+        internal VectorPointHandle _h_VectorPoint;
+        internal object? __owner;
+        internal VectorPoint(IntPtr handle, bool owns) { _h_VectorPoint = new VectorPointHandle(handle, owns); }
+        public VectorPoint() : this(__New(), true) {}
+        private static IntPtr __New()
+        {
+            IntPtr __r = NativeMethods.welder_vec_csharp_cases_Point_new(out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+            return __r;
+        }
+        public int Count
+        {
+            get
+            {
+                var __r = NativeMethods.welder_vec_csharp_cases_Point_size(_h_VectorPoint, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                return (int)__r;
+            }
+        }
+        public Point this[int i]
+        {
+            get
+            {
+                IntPtr __r = NativeMethods.welder_vec_csharp_cases_Point_get(_h_VectorPoint, i, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+                var __v = new Point(__r, false);
+                __v.__owner = this;
+                return __v;
+            }
+            set
+            {
+                NativeMethods.welder_vec_csharp_cases_Point_set(_h_VectorPoint, i, value._h_Point, out WelderError __e);
+                WelderInterop.ThrowIfError(in __e);
+            }
+        }
+        public void Add(Point item)
+        {
+            NativeMethods.welder_vec_csharp_cases_Point_add(_h_VectorPoint, item._h_Point, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+        }
+        public void Clear()
+        {
+            NativeMethods.welder_vec_csharp_cases_Point_clear(_h_VectorPoint, out WelderError __e);
+            WelderInterop.ThrowIfError(in __e);
+        }
+        public void Dispose() => _h_VectorPoint.Dispose();
     }
 
     public static class Global

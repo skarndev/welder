@@ -243,6 +243,9 @@ enum class marshal_kind {
                       fixed `welder_opt_wire` struct ⇄ C# `T?`. */
     seq_value,   /**< `std::vector`/`std::array` of scalar/enum elements:
                       crosses by VALUE (a copy) as `welder_seq_wire` ⇄ `T[]`. */
+    seq_ref,     /**< `std::vector` of a WELDED class: crosses as an opaque
+                      handle behind a generated reference-semantic C# wrapper
+                      (live element views — welder's opaque-container model). */
     unsupported  /**< Not yet representable — see @ref require_marshallable. */
 };
 
@@ -329,9 +332,14 @@ consteval marshal_kind classify(std::meta::info type) {
             is_specialization_of(w, ^^std::array)) {
             const marshal_kind ek{classify(sequence_element(w))};
             // NOT bool: std::vector<bool> is a bitset, not contiguous bools.
-            return (ek == marshal_kind::scalar || ek == marshal_kind::enum_)
-                       ? marshal_kind::seq_value
-                       : marshal_kind::unsupported;
+            if (ek == marshal_kind::scalar || ek == marshal_kind::enum_)
+                return marshal_kind::seq_value;
+            // A welded-class element: reference semantics behind a generated
+            // wrapper — vector only (the fixed-size opaque wrapper is pending).
+            if (ek == marshal_kind::handle &&
+                is_specialization_of(w, ^^std::vector))
+                return marshal_kind::seq_ref;
+            return marshal_kind::unsupported;
         }
         // Only a class this rod REGISTERS can cross as a handle; any other
         // class (a gate-trusted third-party type, an unlisted container) is a

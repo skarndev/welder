@@ -228,6 +228,30 @@ Check(Global.MaybePoint(false) == null, "optional<welded> none -> null");
 Check(Global.MaybeLevel(true) == Level.High && Global.MaybeLevel(false) == null,
       "optional<enum>");
 
+// --- reference-semantic vector of welded elements -------------------------------
+
+using (var rt = new Route())
+{
+    var stops = rt.Stops;                    // a live wrapper over the member
+    using (var p1 = new Point(1, 2)) stops.Add(p1);
+    using (var p2 = new Point(3, 4)) stops.Add(p2);
+    Check(rt.StopCount() == 2, "vector<welded> field wrapper: Add writes through");
+    stops[0].X = 10;                          // a live element view
+    Check(rt.TotalX(stops) == 13, "live element write-through + wrapper param");
+    using (var rev = rt.Reversed())
+        Check(rev.Count == 2 && rev[0].X == 3, "owned vector return + indexer");
+    stops.Clear();
+    Check(rt.StopCount() == 0, "wrapper Clear writes through");
+    using (var mine = new VectorPoint())
+    {
+        using (var p = new Point(7, 0)) mine.Add(p);
+        Check(rt.TotalX(mine) == 7, "C#-constructed vector as a param");
+        try { _ = mine[5]; Check(false, "OOB index must throw"); }
+        catch (ArgumentOutOfRangeException)
+            { Check(true, "wrapper indexer bounds-checks (at -> OOR)"); }
+    }
+}
+
 // --- directors: C# subclasses overriding C++ virtuals --------------------------
 
 using (var sh = new Shape())

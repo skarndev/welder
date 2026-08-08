@@ -81,6 +81,21 @@ add_variable setters). Classify's handle arm is now STRICT: only
 welded_for(cs) classes are handles — a gate-trusted third-party class or
 unlisted container is a designed diagnostic (was a silent void* before 6a).
 Director slots stay leaf-kind-only.
+Reference vectors (Phase 6b): vector<welded> → marshal_kind::seq_ref, which
+PIGGYBACKS the whole handle machinery (to_cpp deref, guarded's
+handle_return_of ownership incl. views, live non-const field views,
+wrapper_return_body) — the only extras are the name mapping and the wrapper
+class. Names: container rename KEYS are display_string_of (qualified_cpp_name
+would collapse every instantiation to ::std::vector); the registered final
+name "Vector"+<elem placeholder> resolves via the render pass's RESCAN
+(apply_type_renames no longer skips past substitutions). rod::_ensure_vector<C>
+generates once per instantiation (document::claim_container): 7 thunks
+(welder_vec_<elem>_new/destroy/size/get/set/add/clear → shim::vec_* templates,
+bounds-checked at() → OOR) + the C# wrapper (SafeHandle, Count, live-view
+indexer with __owner pinning, Add/Clear, public parameterless ctor);
+signature-driven collection via _collect_containers in every rod hook
+(operators excepted — known gap). gcc16: a splice as template arg must be
+parenthesized/aliased (`using El = [:E:]` before std::vector<El>).
 NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
 generation):
 virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference

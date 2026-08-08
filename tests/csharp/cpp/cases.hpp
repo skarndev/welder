@@ -217,6 +217,25 @@ inline std::optional<Level> maybe_level(bool give) {
     return give ? std::optional<Level>{Level::High} : std::nullopt;
 }
 
+// --- a reference-semantic vector of welded elements ----------------------------
+
+struct [[=welder::weld(welder::lang::cs)]] Route {
+    Route() = default;
+    std::vector<Point> stops{};  // -> a live VectorPoint wrapper
+    std::int32_t stop_count() const {
+        return static_cast<std::int32_t>(stops.size());
+    }
+    std::vector<Point> reversed() const {  // an owned copy crosses out
+        return std::vector<Point>(stops.rbegin(), stops.rend());
+    }
+    std::int32_t total_x(const std::vector<Point>& pts) const {
+        std::int32_t t{0};
+        for (const Point& p : pts)
+            t += p.x;
+        return t;
+    }
+};
+
 // --- virtuals / directors (C# subclasses overriding C++ virtuals) --------------
 
 struct [[=welder::weld(welder::lang::cs)]] Shape {

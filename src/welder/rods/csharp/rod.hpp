@@ -154,6 +154,19 @@ inline std::string cs_escape(std::string id) {
 
 // --- per-type marshalling spellings -----------------------------------------
 
+/** A generated CONTAINER wrapper reference (`std::vector<welded>`): the
+    rename key is the specialization's display string — `qualified_cpp_name`
+    would collapse every instantiation to `::std::vector`. The final C# name
+    ("Vector" + the element's name) is registered at collection
+    (@ref rod::_ensure_vector) and itself contains the element placeholder,
+    which the render pass's rescan resolves. */
+template <std::meta::info C>
+std::string container_ref() {
+    static constexpr const char* d{
+        std::define_static_string(std::meta::display_string_of(C))};
+    return std::string{"\x01"} + d + "\x02";
+}
+
 /** The managed type the P/Invoke declaration uses for @a Type. @a is_return
     switches a string between its `in` (`string`) and `out` (`IntPtr`,
     caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
@@ -187,6 +200,9 @@ std::string pinvoke_type(bool is_return) {
         return "WelderOptWire";
     else if constexpr (k == marshal_kind::seq_value)
         return "WelderSeqWire";
+    else if constexpr (k == marshal_kind::seq_ref)
+        return is_return ? std::string{"IntPtr"}
+                         : container_ref<bare(Type)>() + "Handle";
     else // handle
         return is_return ? std::string{"IntPtr"}
                          : type_ref<bare(Type)>() + "Handle";
@@ -223,7 +239,9 @@ std::string public_type() {
                 scalar_spell(sequence_element(bare(Type))).cs};
             return std::string{c} + "[]";
         }
-    } else
+    } else if constexpr (k == marshal_kind::seq_ref)
+        return container_ref<bare(Type)>();
+    else
         return type_ref<bare(Type)>(); // enum_ / handle
 }
 
@@ -232,7 +250,8 @@ std::string public_type() {
     C# `null`). */
 template <std::meta::info R, class Style>
 std::string public_return_type() {
-    if constexpr (classify(R) == marshal_kind::handle) {
+    if constexpr (classify(R) == marshal_kind::handle ||
+                  classify(R) == marshal_kind::seq_ref) {
         if constexpr (handle_return_nullable(R))
             return public_type<R, Style>() + "?";
         else
@@ -262,7 +281,8 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
         return ind + "IntPtr __r = " + pc + ";\n" + check +
                ind + "try { return Marshal.PtrToStringUTF8(__r) ?? \"\"; }\n" +
                ind + "finally { NativeMethods.welder_free(__r); }\n";
-    else if constexpr (k == marshal_kind::handle) {
+    else if constexpr (k == marshal_kind::handle ||
+                       k == marshal_kind::seq_ref) {
         constexpr handle_return hr{handle_return_of(R, Rv)};
         std::string out{ind + "IntPtr __r = " + pc + ";\n" + check};
         if constexpr (handle_return_nullable(R))
@@ -341,7 +361,8 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
     `def_readwrite` reference_internal semantics); everything else crosses by
     value. Mirrored structurally by `shim::field_get`. */
 consteval ::welder::rv_kind field_return_policy(std::meta::info MT) {
-    return (classify(MT) == marshal_kind::handle &&
+    return ((classify(MT) == marshal_kind::handle ||
+             classify(MT) == marshal_kind::seq_ref) &&
             !std::meta::is_const_type(MT))
                ? ::welder::rv_kind::reference_internal
                : ::welder::rv_kind::automatic;
@@ -410,6 +431,8 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
         else // integral scalar / enum
             cp.wrapper_args += name + ".HasValue ? new WelderOptWire { Has = 1, "
                                "I = (long)" + name + ".Value } : default";
+    } else if constexpr (classify(PT) == marshal_kind::seq_ref) {
+        cp.wrapper_args += name + "._h_" + container_ref<bare(PT)>();
     } else if constexpr (classify(PT) == marshal_kind::seq_value) {
         const std::string pin{"__pin" + i};
         std::string ecs{};
@@ -771,6 +794,7 @@ struct rod {
         template for (constexpr auto ctor : std::define_static_array(Ctors)) {
             constexpr std::size_t k{index_of_ctor(ctor)};
             constexpr std::size_t n{std::meta::parameters_of(ctor).size()};
+            _collect_containers<ctor>(*w.doc);
             emit_ctor(w,
                       build_params<ctor, ::welder::naming::none>(
                           std::make_index_sequence<n>{}),
@@ -815,6 +839,8 @@ struct rod {
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         constexpr std::meta::info MT{std::meta::type_of(Mem)};
+        if constexpr (classify(std::meta::type_of(Mem)) == marshal_kind::seq_ref)
+            _ensure_vector<bare(std::meta::type_of(Mem))>(*w.doc);
         constexpr bool checked{(require_marshallable(MT, true), true)};
         static_assert(checked);
         const std::string id{std::meta::identifier_of(Mem)};
@@ -902,6 +928,9 @@ struct rod {
         a C# property calling them under the driver-resolved @a name. */
     template <class T, std::meta::info Getter, std::meta::info Setter>
     static void add_property(class_writer& w, const char* name) {
+        _collect_containers<Getter>(*w.doc);
+        if constexpr (Setter != std::meta::info{})
+            _collect_containers<Setter>(*w.doc);
         ::welder::validate_return_policy<Getter, lang::cs>();
         constexpr std::meta::info RT{
             std::meta::remove_cvref(std::meta::return_type_of(Getter))};
@@ -1019,6 +1048,7 @@ struct rod {
                 std::string{cpp_name_v<std::meta::parent_of(fn)>} + "#" + id +
                     "#" + fsig,
                 name);
+            _collect_containers<fn>(*w.doc);
             std::size_t vslot_k{static_cast<std::size_t>(-1)};
             if constexpr (std::meta::is_virtual(fn)) {
                 if (w.is_director) {
@@ -1168,6 +1198,7 @@ struct rod {
                               ::welder::ent_kind::static_method>()};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             constexpr std::size_t k{index_of_named_member(fn)};
+            _collect_containers<fn>(*w.doc);
             const std::string id{std::meta::identifier_of(fn)};
             const std::string sym{w.sym_prefix + "_s_" + id + "_" +
                                   std::to_string(k)};
@@ -1496,6 +1527,130 @@ struct rod {
             if constexpr (!Covered[3]) record("<=", true, "__c == 0 || __c == 1");
             if constexpr (!Covered[0]) record(">", true, "__c == -1");
             if constexpr (!Covered[1]) record(">=", true, "__c == -1 || __c == 0");
+        }
+    }
+
+    /** Generate the reference-semantic wrapper for `std::vector<welded>`
+        container type @a C (once per distinct instantiation): the native op
+        thunks (delegating into `shim::vec_*`), their P/Invokes, the rename
+        registration and the C# wrapper class (live element views pinned to
+        the vector wrapper — welder's opaque-container model). */
+    template <std::meta::info C>
+    static void _ensure_vector(document& doc) {
+        static constexpr const char* key{
+            std::define_static_string(std::meta::display_string_of(C))};
+        if (!doc.claim_container(key))
+            return;
+        const std::string sym{std::string{"welder_vec_"} +
+                              upath_v<bare(sequence_element(C))>};
+        const std::string eq{"^^" +
+                             std::string{cpp_name_v<bare(sequence_element(C))>}};
+        const std::string V{container_ref<C>()};
+        const std::string E{type_ref<bare(sequence_element(C))>()};
+        doc.record_type_name(key, "Vector" + E);
+        for (const char* leaf : {"_new", "_destroy", "_size", "_get", "_set",
+                                 "_add", "_clear"})
+            doc.record_symbol(sym + leaf);
+        doc.shim +=
+            "void* " + sym + "_new(welder_error* err) { return "
+            "wcs::shim::vec_new<" + eq + ">(err); }\n\n"
+            "void " + sym + "_destroy(void* self) { wcs::shim::vec_destroy<" +
+            eq + ">(self); }\n\n"
+            "std::int64_t " + sym + "_size(void* self, welder_error* err) { "
+            "return wcs::shim::vec_size<" + eq + ">(self, err); }\n\n"
+            "void* " + sym + "_get(void* self, std::int64_t i, welder_error* "
+            "err) { return wcs::shim::vec_get<" + eq + ">(self, i, err); }\n\n"
+            "void " + sym + "_set(void* self, std::int64_t i, void* elem, "
+            "welder_error* err) { wcs::shim::vec_set<" + eq +
+            ">(self, i, elem, err); }\n\n"
+            "void " + sym + "_add(void* self, void* elem, welder_error* err) { "
+            "wcs::shim::vec_add<" + eq + ">(self, elem, err); }\n\n"
+            "void " + sym + "_clear(void* self, welder_error* err) { "
+            "wcs::shim::vec_clear<" + eq + ">(self, err); }\n\n";
+        doc.pinvoke +=
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_new(out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_destroy(IntPtr self);\n"
+            "        [LibraryImport(Lib)] internal static partial long " + sym +
+            "_size(" + V + "Handle self, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_get(" + V + "Handle self, long i, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_set(" + V + "Handle self, long i, " + E +
+            "Handle elem, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_add(" + V + "Handle self, " + E +
+            "Handle elem, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_clear(" + V + "Handle self, out WelderError err);\n";
+        doc.containers +=
+            "    internal sealed class " + V + "Handle : SafeHandle\n    {\n"
+            "        internal " + V + "Handle(IntPtr handle, bool owns) : "
+            "base(IntPtr.Zero, owns)\n        {\n            "
+            "SetHandle(handle);\n        }\n"
+            "        public override bool IsInvalid => handle == "
+            "IntPtr.Zero;\n"
+            "        protected override bool ReleaseHandle()\n        {\n"
+            "            NativeMethods." + sym + "_destroy(handle);\n"
+            "            return true;\n        }\n    }\n\n"
+            "    /// <summary>A reference-semantic C++ vector of " + E +
+            " (live element views).</summary>\n"
+            "    public sealed class " + V + " : IDisposable\n    {\n"
+            "        internal " + V + "Handle _h_" + V + ";\n"
+            "        internal object? __owner;\n"
+            "        internal " + V + "(IntPtr handle, bool owns) { _h_" + V +
+            " = new " + V + "Handle(handle, owns); }\n"
+            "        public " + V + "() : this(__New(), true) {}\n"
+            "        private static IntPtr __New()\n        {\n"
+            "            IntPtr __r = NativeMethods." + sym +
+            "_new(out WelderError __e);\n"
+            "            WelderInterop.ThrowIfError(in __e);\n"
+            "            return __r;\n        }\n"
+            "        public int Count\n        {\n            get\n"
+            "            {\n"
+            "                var __r = NativeMethods." + sym + "_size(_h_" + V +
+            ", out WelderError __e);\n"
+            "                WelderInterop.ThrowIfError(in __e);\n"
+            "                return (int)__r;\n            }\n        }\n"
+            "        public " + E + " this[int i]\n        {\n"
+            "            get\n            {\n"
+            "                IntPtr __r = NativeMethods." + sym + "_get(_h_" +
+            V + ", i, out WelderError __e);\n"
+            "                WelderInterop.ThrowIfError(in __e);\n"
+            "                var __v = new " + E + "(__r, false);\n"
+            "                __v.__owner = this;\n"
+            "                return __v;\n            }\n"
+            "            set\n            {\n"
+            "                NativeMethods." + sym + "_set(_h_" + V + ", i, "
+            "value._h_" + E + ", out WelderError __e);\n"
+            "                WelderInterop.ThrowIfError(in __e);\n"
+            "            }\n        }\n"
+            "        public void Add(" + E + " item)\n        {\n"
+            "            NativeMethods." + sym + "_add(_h_" + V + ", item._h_" +
+            E + ", out WelderError __e);\n"
+            "            WelderInterop.ThrowIfError(in __e);\n        }\n"
+            "        public void Clear()\n        {\n"
+            "            NativeMethods." + sym + "_clear(_h_" + V +
+            ", out WelderError __e);\n"
+            "            WelderInterop.ThrowIfError(in __e);\n        }\n"
+            "        public void Dispose() => _h_" + V + ".Dispose();\n"
+            "    }\n\n";
+    }
+
+    /** Collect the generated-wrapper containers a callable's signature uses. */
+    template <std::meta::info Fn>
+    static void _collect_containers(document& doc) {
+        if constexpr (!std::meta::is_constructor(Fn)) {
+            if constexpr (classify(std::meta::return_type_of(Fn)) ==
+                          marshal_kind::seq_ref)
+                _ensure_vector<bare(std::meta::return_type_of(Fn))>(doc);
+        }
+        template for ([[maybe_unused]] constexpr auto p :
+                      std::define_static_array(std::meta::parameters_of(Fn))) {
+            if constexpr (classify(std::meta::type_of(p)) ==
+                          marshal_kind::seq_ref)
+                _ensure_vector<bare(std::meta::type_of(p))>(doc);
         }
     }
 
@@ -1907,6 +2062,7 @@ struct rod {
                                  ::welder::ent_kind::function>(name)};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             constexpr std::size_t k{index_of_named_member(fn)};
+            _collect_containers<fn>(*m.doc);
             constexpr std::meta::info Ns{std::meta::parent_of(fn)};
             const std::string id{std::meta::identifier_of(fn)};
             const std::string sym{std::string{"welder_"} + upath_v<Ns> + "_f_" +
@@ -1924,6 +2080,8 @@ struct rod {
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&, const char* name = nullptr) {
         constexpr std::meta::info VT{std::meta::type_of(Var)};
+        if constexpr (classify(std::meta::type_of(Var)) == marshal_kind::seq_ref)
+            _ensure_vector<bare(std::meta::type_of(Var))>(*m.doc);
         constexpr bool checked{(require_marshallable(VT, true), true)};
         static_assert(checked);
         constexpr std::meta::info Ns{std::meta::parent_of(Var)};

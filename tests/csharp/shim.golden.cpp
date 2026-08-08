@@ -214,6 +214,36 @@ welder_opt_wire welder_csharp_cases_f_maybe_point_0(bool a0, welder_error* err) 
 
 welder_opt_wire welder_csharp_cases_f_maybe_level_0(bool a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "maybe_level", 0)>(err, a0); }
 
+void welder_csharp_cases_Route_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Route>(self); }
+
+void* welder_csharp_cases_Route_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Route>(err); }
+
+void* welder_csharp_cases_Route_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Route>(self, err); }
+
+void* welder_vec_csharp_cases_Point_new(welder_error* err) { return wcs::shim::vec_new<^^::csharp_cases::Point>(err); }
+
+void welder_vec_csharp_cases_Point_destroy(void* self) { wcs::shim::vec_destroy<^^::csharp_cases::Point>(self); }
+
+std::int64_t welder_vec_csharp_cases_Point_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^::csharp_cases::Point>(self, err); }
+
+void* welder_vec_csharp_cases_Point_get(void* self, std::int64_t i, welder_error* err) { return wcs::shim::vec_get<^^::csharp_cases::Point>(self, i, err); }
+
+void welder_vec_csharp_cases_Point_set(void* self, std::int64_t i, void* elem, welder_error* err) { wcs::shim::vec_set<^^::csharp_cases::Point>(self, i, elem, err); }
+
+void welder_vec_csharp_cases_Point_add(void* self, void* elem, welder_error* err) { wcs::shim::vec_add<^^::csharp_cases::Point>(self, elem, err); }
+
+void welder_vec_csharp_cases_Point_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^::csharp_cases::Point>(self, err); }
+
+void* welder_csharp_cases_Route_get_stops(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Route, wcs::named_field(^^::csharp_cases::Route, "stops")>(self, err); }
+
+void welder_csharp_cases_Route_set_stops(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Route, wcs::named_field(^^::csharp_cases::Route, "stops")>(self, err, v); }
+
+std::int32_t welder_csharp_cases_Route_m_stop_count_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Route, wcs::named_member(^^::csharp_cases::Route, "stop_count", 0)>(self, err); }
+
+void* welder_csharp_cases_Route_m_reversed_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Route, wcs::named_member(^^::csharp_cases::Route, "reversed", 0)>(self, err); }
+
+std::int32_t welder_csharp_cases_Route_m_total_x_0(void* self, void* a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Route, wcs::named_member(^^::csharp_cases::Route, "total_x", 0)>(self, err, a0); }
+
 void welder_csharp_cases_Shape_dir_init(void* release, void* s0, void* s1) {
     __wcs_dir_csharp_cases_Shape::__wcs_tbl.release = reinterpret_cast<void (*)(void*)>(release);
     __wcs_dir_csharp_cases_Shape::__wcs_tbl.s0 = reinterpret_cast<const char* (*)(void*, welder_error*)>(s0);

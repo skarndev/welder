@@ -62,6 +62,17 @@ struct document {
     std::string pinvoke{}; /**< `[LibraryImport]` declarations (inside NativeMethods). */
     std::string types{};   /**< Wrapper class + enum declarations (flat in the ns). */
     std::vector<static_class> statics{}; /**< Per-namespace function/variable holders. */
+    std::string containers{};   /**< Generated container-wrapper classes. */
+    std::vector<std::string> container_keys{}; /**< Dedup (one wrapper per type). */
+
+    /** First-emission check for a generated container wrapper. */
+    bool claim_container(std::string key) {
+        for (const auto& k : container_keys)
+            if (k == key)
+                return false;
+        container_keys.push_back(std::move(key));
+        return true;
+    }
     std::vector<std::string> symbols{};  /**< Every emitted C symbol (collision check). */
     /** raw `::qualified` C++ name → final C# name, filled by make_class/make_enum.
         Type REFERENCES are emitted as `\x01raw\x02` placeholders and reconciled
@@ -92,7 +103,9 @@ struct document {
                     break;
                 }
             text.replace(b1, b2 - b1 + 1, sub);
-            b1 += sub.size();
+            // Do NOT skip past the substitution: a container's final name
+            // itself contains its element's placeholder (rescan resolves it;
+            // keys never contain themselves, so this terminates).
         }
         return text;
     }
@@ -237,6 +250,7 @@ struct document {
                "welder_dup_utf8(string s);\n";
         out += "    }\n\n";
         out += types;
+        out += containers;
         for (const auto& s : statics) {
             out += "    public static class " + s.name + "\n    {\n";
             out += s.body;

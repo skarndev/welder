@@ -170,6 +170,7 @@ WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 | non-const welded-class **field** | the member's address | a live view (writes go through) |
 | `std::optional` of a leaf kind | by-value `welder_opt_wire` struct | `T?` |
 | `std::vector`/`std::array` of scalars/enums | by-value `welder_seq_wire` (copy; params pin the managed array) | `T[]` |
+| `std::vector` of a welded class | opaque handle | a generated `Vector<Element>` wrapper — **reference semantics**, live element views |
 
 ## Ownership and views
 
@@ -195,9 +196,13 @@ the common case.
 Value-family containers cross by **copy** (like the Python rods' default
 `<pybind11/stl.h>` behavior): an `optional` with a leaf payload maps to `T?`,
 a scalar/enum `vector`/`array` to `T[]` (an `std::array` parameter of the
-wrong length throws `ArgumentException`). What the
-[bindability gate](bindability.md) admits but this phase cannot yet marshal —
-containers of welded classes, maps, smart pointers, `variant`, nested
-wrappers — fails **loudly at generation time** with a designed
+wrong length throws `ArgumentException`). A `std::vector` of a **welded
+class** instead gets [reference semantics](containers.md) — welder's
+opaque-container model: a generated `Vector<Element>` wrapper whose `Add` /
+indexer / `Clear` write through to the C++ vector, and whose elements are
+live views pinned to it. What the [bindability gate](bindability.md) admits
+but this phase cannot yet marshal — maps, smart pointers, `variant`, nested
+wrappers, `std::array` of welded elements — fails **loudly at generation
+time** with a designed
 diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
 silently-corrupting `void*`. Those families land in the following phases.

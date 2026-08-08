@@ -183,7 +183,7 @@ Wire caught(welder_error* err, F&& f) noexcept {
 template <std::meta::info P>
 constexpr decltype(auto) to_cpp(auto&& w) {
     constexpr marshal_kind k{classify(P)};
-    if constexpr (k == marshal_kind::handle) {
+    if constexpr (k == marshal_kind::handle || k == marshal_kind::seq_ref) {
         using Bare = [:bare(P):];
         if constexpr (is_pointer_flavor(P))
             return reinterpret_cast<Bare*>(w);
@@ -250,7 +250,8 @@ consteval std::meta::info wire_return_type() {
         return ^^const char*;
     else if constexpr (k == marshal_kind::enum_)
         return std::meta::underlying_type(bare(R));
-    else if constexpr (k == marshal_kind::handle)
+    else if constexpr (k == marshal_kind::handle ||
+                       k == marshal_kind::seq_ref)
         return ^^void*;
     else if constexpr (k == marshal_kind::optional_)
         return ^^welder_opt_wire;
@@ -280,7 +281,8 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
             } else {
                 return dup(std::string_view{f()});
             }
-        } else if constexpr (k == marshal_kind::handle) {
+        } else if constexpr (k == marshal_kind::handle ||
+                             k == marshal_kind::seq_ref) {
             using Bare = [:bare(R):];
             constexpr handle_return hr{handle_return_of(R, Rv)};
             if constexpr (hr == handle_return::view ||
@@ -495,7 +497,9 @@ template <std::meta::info W, std::meta::info Mem>
 auto field_get(void* self, welder_error* err) noexcept {
     using Obj = [:W:];
     auto* obj{reinterpret_cast<Obj*>(self)};
-    if constexpr (classify(std::meta::type_of(Mem)) == marshal_kind::handle &&
+    if constexpr ((classify(std::meta::type_of(Mem)) == marshal_kind::handle ||
+                   classify(std::meta::type_of(Mem)) ==
+                       marshal_kind::seq_ref) &&
                   !std::meta::is_const_type(std::meta::type_of(Mem))) {
         return caught<void*>(err, [&]() -> void* {
             // Two statements on purpose: gcc-16 rejects the spliced member's
@@ -554,6 +558,75 @@ const char* stringify_text(void* self, welder_error* err) noexcept {
     auto* obj{reinterpret_cast<Obj*>(self)};
     return caught<const char*>(err, [&]() -> const char* {
         return dup(::welder::detail::stringify<Obj, Fn>(*obj));
+    });
+}
+
+// --- reference-semantic vector support (the seq_ref family) -----------------
+
+/** `new std::vector<E>` (the C# wrapper's parameterless constructor). */
+template <std::meta::info E>
+void* vec_new(welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<void*>(
+        err, [&]() -> void* { return new std::vector<El>(); });
+}
+
+template <std::meta::info E>
+void vec_destroy(void* self) noexcept {
+    using El = [:E:];
+    delete reinterpret_cast<std::vector<El>*>(self);
+}
+
+template <std::meta::info E>
+std::int64_t vec_size(void* self, welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<std::int64_t>(err, [&]() -> std::int64_t {
+        return static_cast<std::int64_t>(
+            reinterpret_cast<std::vector<El>*>(self)->size());
+    });
+}
+
+/** A LIVE element view (welder's opaque-container aliasing: the wrapper ties
+    it to the vector wrapper managed-side). Bounds-checked (`at`). */
+template <std::meta::info E>
+void* vec_get(void* self, std::int64_t i, welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<void*>(err, [&]() -> void* {
+        auto& r{reinterpret_cast<std::vector<El>*>(self)->at(
+            static_cast<std::size_t>(i))};
+        return static_cast<void*>(std::addressof(r));
+    });
+}
+
+/** Copy-assign an element from a borrowed handle. */
+template <std::meta::info E>
+void vec_set(void* self, std::int64_t i, void* elem,
+             welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<std::vector<El>*>(self)->at(
+            static_cast<std::size_t>(i)) = *reinterpret_cast<El*>(elem);
+        return 0;
+    });
+}
+
+/** Append a copy of a borrowed handle's object. */
+template <std::meta::info E>
+void vec_add(void* self, void* elem, welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<std::vector<El>*>(self)->push_back(
+            *reinterpret_cast<El*>(elem));
+        return 0;
+    });
+}
+
+template <std::meta::info E>
+void vec_clear(void* self, welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<std::vector<El>*>(self)->clear();
+        return 0;
     });
 }
 
