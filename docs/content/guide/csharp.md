@@ -70,11 +70,15 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
 
 Every thunk carries a trailing `welder_error*` out-parameter. A C++ exception is
 caught in the shim's marshalling layer (never unwinding through the C ABI) and
-rethrown managed-side as `WelderNativeException` with the `what()` text:
+rethrown managed-side, mapped onto the matching BCL type where one exists —
+`std::invalid_argument` → `ArgumentException`, `std::out_of_range` →
+`ArgumentOutOfRangeException`, `std::bad_alloc` → `OutOfMemoryException`,
+overflow/underflow/range errors → `ArithmeticException` — and anything else as
+`WelderNativeException`, always carrying the `what()` text:
 
 ```csharp
-try { p.Explode(); }
-catch (WelderNativeException ex) { Console.WriteLine(ex.Message); }
+try { boundary.At(99); }
+catch (ArgumentOutOfRangeException ex) { Console.WriteLine(ex.Message); }
 ```
 
 ## How the shim stays correct: splice, don't respell
@@ -127,12 +131,34 @@ WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 | `std::string` / `string_view` / `char*` | UTF-8 `const char*` in; malloc'd out (freed via `welder_free`) | `string` |
 | welded enum | its underlying type | the mirrored `enum` |
 | welded class (param) | opaque `void*` | the wrapper (its `SafeHandle`) |
-| welded class (value/`&` return) | owned `void*` (heap copy — pybind11's `automatic` for these categories) | the wrapper, owning |
+| welded class (value/`&` return, default or `rv::copy`) | owned `void*` (heap copy — pybind11's `automatic`) | the wrapper, owning |
+| welded class (`T*` return, default or `rv::take_ownership`) | adopted `void*` | the wrapper (owning), or `null` |
+| welded class return under `rv::reference` / `reference_internal` | the object's address | a non-owning **view** |
+| non-const welded-class **field** | the member's address | a live view (writes go through) |
+
+## Ownership and views
+
+The [`return_policy`](return-policies.md) annotation is honored exactly as on
+the Python rods. A **view** wraps the same C++ object without owning it
+(`Dispose` releases nothing); under `reference_internal` — and for every
+class-typed field — the view also stores its parent in an internal `__owner`
+reference, so the parent cannot be garbage-collected (and its C++ object
+destroyed) while the view is reachable:
+
+```csharp
+var v = holder.Item();   // [[=welder::return_policy(rv::reference_internal)]]
+v.X = 55;                // writes the C++ member through the view
+holder = null!;
+GC.Collect();            // holder is pinned by v.__owner — v stays valid
+seg.Start.X = 100;       // fields are live views too: writes go through
+```
+
+A pointer return may be C# `null` (the wrapper type is `T?`); `keep_alive` is
+documented-ignored (as on the Lua rods) — the owner-reference mechanism covers
+the common case.
 
 What the [bindability gate](bindability.md) admits but this phase cannot yet
-marshal — STL containers, class-pointer returns (`rv::` ownership mapping),
-welded-base inheritance, virtuals overridden from C# — fails **loudly at
-generation time** with a designed diagnostic naming the escape
-(`mark::exclude(welder::lang::cs)`), never a silently-corrupting `void*`. Those
-families land in the following phases. `keep_alive` and reference-category
-`return_policy` kinds are likewise not honored yet.
+marshal — STL containers, operators, welded-base inheritance, virtuals
+overridden from C# — fails **loudly at generation time** with a designed
+diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
+silently-corrupting `void*`. Those families land in the following phases.

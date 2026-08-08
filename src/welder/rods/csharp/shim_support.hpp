@@ -53,13 +53,20 @@ struct welder_error {
 
 namespace welder::inline v0::rods::csharp::shim {
 
-/** The error codes the catch chain writes (mirrored by the managed wrapper).
-    Phase 1 maps every `std::exception` to @ref std_exception; the finer
-    taxonomy (bad_alloc, invalid_argument, …) lands with the exception phase. */
+/** The error codes the catch chain writes, mirrored by the managed wrapper's
+    `WelderInterop.ThrowIfError` (which maps 2–5 to the matching BCL exception
+    types and everything else to `WelderNativeException`). Code 7 is reserved
+    for a managed-origin exception round-tripping through a director callback
+    (the virtuals phase). */
 enum class error_code : std::int32_t {
-    none = 0,          /**< Success. */
-    std_exception = 1, /**< A `std::exception` — `message` carries `what()`. */
-    unknown = 6,       /**< A non-`std::exception` C++ exception (`catch (...)`). */
+    none = 0,             /**< Success. */
+    std_exception = 1,    /**< A plain `std::exception` — `message` = `what()`. */
+    bad_alloc = 2,        /**< `std::bad_alloc` → `OutOfMemoryException`. */
+    invalid_argument = 3, /**< `std::invalid_argument` → `ArgumentException`. */
+    out_of_range = 4,     /**< `std::out_of_range` → `ArgumentOutOfRangeException`. */
+    arithmetic = 5,       /**< overflow/underflow/range → `ArithmeticException`. */
+    unknown = 6,          /**< A non-`std::exception` throw (`catch (...)`). */
+    managed = 7,          /**< Reserved: a managed exception crossing back. */
 };
 
 /** Duplicate @a s into a malloc'd, NUL-terminated UTF-8 buffer the managed side
@@ -88,6 +95,39 @@ inline void set_error(welder_error* err, error_code code,
         err->code = static_cast<std::int32_t>(code);
         err->message = dup(msg);
     }
+}
+
+/** THE catch chain — every thunk's exception boundary in one place: clear
+    @a err, run @a f, translate any escaping C++ exception into the error
+    taxonomy (never letting it unwind through the C ABI), and return @a Wire{}
+    on failure. The taxonomy catches the std hierarchy most-derived-first. */
+template <class Wire, class F>
+Wire caught(welder_error* err, F&& f) noexcept {
+    clear(err);
+    try {
+        if constexpr (std::is_void_v<Wire>)
+            f();
+        else
+            return f();
+    } catch (const std::bad_alloc& e) {
+        set_error(err, error_code::bad_alloc, e.what());
+    } catch (const std::invalid_argument& e) {
+        set_error(err, error_code::invalid_argument, e.what());
+    } catch (const std::out_of_range& e) {
+        set_error(err, error_code::out_of_range, e.what());
+    } catch (const std::overflow_error& e) {
+        set_error(err, error_code::arithmetic, e.what());
+    } catch (const std::underflow_error& e) {
+        set_error(err, error_code::arithmetic, e.what());
+    } catch (const std::range_error& e) {
+        set_error(err, error_code::arithmetic, e.what());
+    } catch (const std::exception& e) {
+        set_error(err, error_code::std_exception, e.what());
+    } catch (...) {
+        set_error(err, error_code::unknown, "unknown C++ exception");
+    }
+    if constexpr (!std::is_void_v<Wire>)
+        return Wire{};
 }
 
 /** Convert the wire argument @a w into the C++ argument a parameter of declared
@@ -137,15 +177,15 @@ consteval std::meta::info wire_return_type() {
         return bare(R);
 }
 
-/** Run @a f under the error contract: clear @a err, invoke, convert the C++
-    result (type @a R) to its wire form, and translate any escaping exception
-    into @a err — never letting it unwind through the C ABI. */
-template <std::meta::info R, class F>
+/** Run @a f under the error contract: convert the C++ result (type @a R,
+    under return policy @a Rv for a welded-class result) to its wire form,
+    inside the @ref caught boundary. */
+template <std::meta::info R, ::welder::rv_kind Rv = ::welder::rv_kind::automatic,
+          class F>
 auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
     using Wire = [:wire_return_type<R>():];
-    clear(err);
     constexpr marshal_kind k{classify(R)};
-    try {
+    return caught<Wire>(err, [&]() -> Wire {
         if constexpr (k == marshal_kind::void_) {
             f();
         } else if constexpr (k == marshal_kind::utf8_string) {
@@ -159,24 +199,43 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
             }
         } else if constexpr (k == marshal_kind::handle) {
             using Bare = [:bare(R):];
-            // Heap-copy the returned value/reference into an owned handle
-            // (pybind11's `automatic` for these categories); pointer returns
-            // are rejected at generation until the rv:: mapping lands.
-            return static_cast<void*>(new Bare(f()));
+            constexpr handle_return hr{handle_return_of(R, Rv)};
+            if constexpr (hr == handle_return::view ||
+                          hr == handle_return::view_keepalive) {
+                if constexpr (is_pointer_flavor(R))
+                    return static_cast<void*>(
+                        const_cast<Bare*>(static_cast<const Bare*>(f())));
+                else
+                    return static_cast<void*>(
+                        const_cast<Bare*>(std::addressof(f())));
+            } else if constexpr (hr == handle_return::adopt) {
+                return static_cast<void*>(const_cast<Bare*>(
+                    static_cast<const Bare*>(f())));
+            } else if constexpr (hr == handle_return::move_owned) {
+                if constexpr (is_pointer_flavor(R)) {
+                    auto* p{f()};
+                    return p ? static_cast<void*>(new Bare(std::move(*p)))
+                             : nullptr;
+                } else {
+                    return static_cast<void*>(new Bare(std::move(f())));
+                }
+            } else { // copy_owned (a by-value result moves — prvalue)
+                if constexpr (is_pointer_flavor(R)) {
+                    auto* p{f()};
+                    return p ? static_cast<void*>(new Bare(*p)) : nullptr;
+                } else {
+                    return static_cast<void*>(new Bare(f()));
+                }
+            }
         } else if constexpr (k == marshal_kind::enum_) {
             return static_cast<Wire>(f());
         } else { // scalar / boolean
             return static_cast<Wire>(f());
         }
-    } catch (const std::exception& e) {
-        set_error(err, error_code::std_exception, e.what());
-    } catch (...) {
-        set_error(err, error_code::unknown, "unknown C++ exception");
-    }
-    if constexpr (!std::is_void_v<Wire>)
-        return Wire{};
+        if constexpr (!std::is_void_v<Wire>)
+            return Wire{};
+    });
 }
-
 /** Invoke the exact callable @a Fn (spliced — never overload resolution over
     wire types) with the wire arguments converted per its declared parameter
     types. @a lead is the object reference for a nonstatic member, or nothing. */
@@ -200,7 +259,9 @@ template <std::meta::info W, std::meta::info Fn, class... Wire>
 auto method(void* self, welder_error* err, Wire... w) noexcept {
     using Obj = [:W:];
     auto* obj{reinterpret_cast<Obj*>(self)};
-    return guarded<std::meta::return_type_of(Fn)>(err, [&]() -> decltype(auto) {
+    return guarded<std::meta::return_type_of(Fn),
+                   ::welder::return_policy_of(Fn, lang::cs)>(
+        err, [&]() -> decltype(auto) {
         if constexpr (sizeof...(Wire) == 0)
             return invoke_exact<Fn>(*obj);
         else
@@ -212,7 +273,9 @@ auto method(void* self, welder_error* err, Wire... w) noexcept {
 /** A static-method / free-function thunk body. */
 template <std::meta::info Fn, class... Wire>
 auto function(welder_error* err, Wire... w) noexcept {
-    return guarded<std::meta::return_type_of(Fn)>(err, [&]() -> decltype(auto) {
+    return guarded<std::meta::return_type_of(Fn),
+                   ::welder::return_policy_of(Fn, lang::cs)>(
+        err, [&]() -> decltype(auto) {
         if constexpr (sizeof...(Wire) == 0)
             return invoke_exact<Fn>();
         else
@@ -233,34 +296,20 @@ void* _construct_wired(Tup&& wire, std::index_sequence<J...>) {
     resolution selects @a Ctor itself). */
 template <std::meta::info W, std::meta::info Ctor, class... Wire>
 void* construct(welder_error* err, Wire... w) noexcept {
-    clear(err);
-    try {
+    return caught<void*>(err, [&]() -> void* {
         if constexpr (sizeof...(Wire) == 0)
             return new [:W:]();
         else
             return _construct_wired<W, Ctor>(std::forward_as_tuple(w...),
                                              std::index_sequence_for<Wire...>{});
-    } catch (const std::exception& e) {
-        set_error(err, error_code::std_exception, e.what());
-    } catch (...) {
-        set_error(err, error_code::unknown, "unknown C++ exception");
-    }
-    return nullptr;
+    });
 }
 
 /** The default-constructor thunk body (the synthesized form has no reflection
     to name). */
 template <std::meta::info W>
 void* default_construct(welder_error* err) noexcept {
-    clear(err);
-    try {
-        return new [:W:]();
-    } catch (const std::exception& e) {
-        set_error(err, error_code::std_exception, e.what());
-    } catch (...) {
-        set_error(err, error_code::unknown, "unknown C++ exception");
-    }
-    return nullptr;
+    return caught<void*>(err, [&]() -> void* { return new [:W:](); });
 }
 
 template <std::meta::info W, class Tup, std::size_t... J>
@@ -275,19 +324,13 @@ void* _aggregate_wired(Tup&& wire, std::index_sequence<J...>) {
 /** The synthesized aggregate field-constructor thunk body. */
 template <std::meta::info W, class... Wire>
 void* aggregate_construct(welder_error* err, Wire... w) noexcept {
-    clear(err);
-    try {
+    return caught<void*>(err, [&]() -> void* {
         if constexpr (sizeof...(Wire) == 0)
             return new [:W:]();
         else
             return _aggregate_wired<W>(std::forward_as_tuple(w...),
                                        std::index_sequence_for<Wire...>{});
-    } catch (const std::exception& e) {
-        set_error(err, error_code::std_exception, e.what());
-    } catch (...) {
-        set_error(err, error_code::unknown, "unknown C++ exception");
-    }
-    return nullptr;
+    });
 }
 
 /** The copy thunk body backing the managed `Clone()` (the admitted copy
@@ -295,15 +338,9 @@ void* aggregate_construct(welder_error* err, Wire... w) noexcept {
 template <std::meta::info W>
 void* clone(void* self, welder_error* err) noexcept {
     using Obj = [:W:];
-    clear(err);
-    try {
+    return caught<void*>(err, [&]() -> void* {
         return new Obj(*reinterpret_cast<const Obj*>(self));
-    } catch (const std::exception& e) {
-        set_error(err, error_code::std_exception, e.what());
-    } catch (...) {
-        set_error(err, error_code::unknown, "unknown C++ exception");
-    }
-    return nullptr;
+    });
 }
 
 /** The destroy thunk body (the managed `SafeHandle`'s release). Never throws —
@@ -313,14 +350,29 @@ void destroy(void* self) noexcept {
     delete reinterpret_cast<[:W:]*>(self);
 }
 
-/** A data-member getter thunk body (@a W as in @ref method). A class-typed
-    member is heap-copied — the live-reference view lands with the rv:: phase. */
+/** A data-member getter thunk body (@a W as in @ref method). A **non-const
+    class-typed member** hands out a live, non-owning view aliasing the member
+    (the runtime rods' `def_readwrite` reference_internal semantics — the C#
+    side ties the view to the parent); a const class member and every other
+    kind cross by value as before. */
 template <std::meta::info W, std::meta::info Mem>
 auto field_get(void* self, welder_error* err) noexcept {
     using Obj = [:W:];
     auto* obj{reinterpret_cast<Obj*>(self)};
-    return guarded<std::meta::type_of(Mem)>(
-        err, [&]() -> decltype(auto) { return std::invoke(&[:Mem:], *obj); });
+    if constexpr (classify(std::meta::type_of(Mem)) == marshal_kind::handle &&
+                  !std::meta::is_const_type(std::meta::type_of(Mem))) {
+        return caught<void*>(err, [&]() -> void* {
+            // Two statements on purpose: gcc-16 rejects the spliced member's
+            // address when nested inside a larger runtime expression
+            // ("consteval-only expressions..."), but binding the reference
+            // first is fine.
+            auto& r{std::invoke(&[:Mem:], *obj)};
+            return static_cast<void*>(&r);
+        });
+    } else {
+        return guarded<std::meta::type_of(Mem)>(
+            err, [&]() -> decltype(auto) { return std::invoke(&[:Mem:], *obj); });
+    }
 }
 
 /** A data-member setter thunk body (copy-assigns through the wire value). */

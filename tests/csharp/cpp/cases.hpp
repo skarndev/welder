@@ -78,6 +78,46 @@ struct [[=welder::weld(welder::lang::cs)]] Size {
     std::int32_t height{0};
 };
 
+// --- ownership / return policies ----------------------------------------------
+
+struct [[=welder::weld(welder::lang::cs)]]
+Holder {
+    Holder() = default;
+
+    // reference_internal: a live view aliasing the member; the C# view wrapper
+    // pins this Holder (its __owner) so GC cannot finalize it under the view.
+    [[=welder::return_policy(welder::rv::reference_internal)]]
+    Point& item() { return item_; }
+
+    // copy: an independent snapshot.
+    [[=welder::return_policy(welder::rv::copy)]]
+    Point& item_copy() { return item_; }
+
+    // reference on a nullable pointer: a view, or C# null.
+    [[=welder::return_policy(welder::rv::reference)]]
+    Point* peek(bool give) { return give ? &item_ : nullptr; }
+
+    std::int32_t item_x() const { return item_.x; }
+
+  private:
+    Point item_{1, 2};
+};
+
+// A factory pointer return under the default policy: the C# side adopts it.
+[[=welder::weld(welder::lang::cs)]]
+inline Point* make_point(std::int32_t x, std::int32_t y) {
+    return new Point(x, y);
+}
+
+// --- the exception taxonomy ----------------------------------------------------
+
+[[=welder::weld(welder::lang::cs)]]
+inline void reject(std::int32_t v) {
+    if (v < 0)
+        throw std::invalid_argument{"negative"};
+    throw std::overflow_error{"too big"};
+}
+
 // --- a class taking + holding welded types -----------------------------------
 
 struct [[=welder::weld(welder::lang::cs)]]

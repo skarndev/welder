@@ -41,10 +41,9 @@ using (var p = new Point(3, 4))
         p.Explode();
         Check(false, "exception should have crossed");
     }
-    catch (WelderNativeException ex)
+    catch (ArgumentOutOfRangeException ex)
     {
-        Check(ex.Message == "boom" && ex.NativeCode == 1,
-              "C++ exception -> WelderNativeException");
+        Check(ex.Message == "boom", "std::out_of_range -> ArgumentOutOfRangeException");
     }
 }
 
@@ -63,8 +62,8 @@ using (var seg = new Segment(a, b))
 {
     Check(seg.Span() == 8, "welded by-value params");
     Check(!seg.Degenerate(), "bool return");
-    using (var st = seg.Start)
-        Check(st.X == 1, "welded field get (a copy)");
+    seg.Start.X = 100; // a live view: the write goes through to the C++ member
+    Check(seg.Start.X == 100 && seg.Span() == -91, "class field is a live view");
 }
 
 Check(Global.Add(2, 3) == 5, "free function");
@@ -74,6 +73,49 @@ Check(Global.Answer == 43, "namespace variable set/get");
 Check(Math.Abs(Global.Golden - 1.618) < 1e-12, "const variable (get-only)");
 Check(Inner.Twice(21) == 42, "nested namespace static class");
 Check((byte)Level.High == 200, "enum : byte underlying");
+
+// --- ownership / return policies ---------------------------------------------
+
+var holder = new Holder();
+var view = holder.Item();          // reference_internal -> live view, pins holder
+view.X = 55;
+Check(holder.ItemX() == 55, "reference_internal view writes through");
+using (var snap = holder.ItemCopy())
+{
+    snap.X = 77;
+    Check(holder.ItemX() == 55, "copy policy snapshots");
+}
+Check(holder.Peek(false) == null, "null pointer return -> C# null");
+using (var peeked = holder.Peek(true)!)
+    Check(peeked.X == 55, "reference pointer return is a view");
+holder = null!;                    // drop the only direct reference...
+GC.Collect();
+GC.WaitForPendingFinalizers();
+GC.Collect();
+Check(view.X == 55, "view's __owner pins the parent across GC");
+using (var made = Global.MakePoint(6, 7)!)
+    Check(made.X == 6, "factory pointer return adopted (owned)");
+
+// --- the exception taxonomy ----------------------------------------------------
+
+try { Global.Reject(-1); Check(false, "reject(-1) should throw"); }
+catch (ArgumentException ex) { Check(ex.Message == "negative", "invalid_argument -> ArgumentException"); }
+try { Global.Reject(1); Check(false, "reject(1) should throw"); }
+catch (ArithmeticException ex) { Check(ex.Message == "too big", "overflow_error -> ArithmeticException"); }
+
+// --- the shared retpolicy cases (tests/common/cpp/retpolicy.hpp) ---------------
+
+using (var owner = new retpolicy.Owner())
+{
+    var v = owner.View();          // reference_internal (shared case)
+    v.V = 9;
+    Check(owner.InnerV() == 9, "shared retpolicy: view aliases");
+    using (var s2 = owner.Snapshot())
+    {
+        s2.V = 1;
+        Check(owner.InnerV() == 9, "shared retpolicy: snapshot copies");
+    }
+}
 
 if (failures > 0) { Console.Error.WriteLine($"{failures} FAILURES"); return 1; }
 Console.WriteLine("ALL PASS");

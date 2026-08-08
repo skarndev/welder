@@ -416,8 +416,12 @@ C ABI) plus a `[LibraryImport]` C# wrapper (SafeHandle per class, natural overlo
 `Clone()` for Copyable, `enum : <underlying>`, XML docs, and a `welder_error`
 out-param on every thunk mapping C++ exceptions to `WelderNativeException`).
 Phase-gated: what the gate admits but the marshalling layer cannot yet carry
-(containers, class-pointer returns, welded bases, virtuals/directors) throws
-`diag::csharp_unmarshallable` at generation — never a silent `void*`. (`welder::rods` is deliberately a grouping
+(containers, operators, welded bases, virtuals/directors) throws
+`diag::csharp_unmarshallable` at generation — never a silent `void*`. Ownership
+is policy-mapped (type_map.hpp `handle_return_of`, consumed by BOTH sides):
+owned copy/move, adopted pointer, or a non-owning view — `reference_internal`
+(and every non-const class-typed field) pins the parent via the view's
+managed `__owner`. (`welder::rods` is deliberately a grouping
 namespace with room for non-rod helpers alongside the rods, e.g. `welder::rods::python`
 / `welder::rods::lua`.)
 

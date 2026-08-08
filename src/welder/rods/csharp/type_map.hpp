@@ -299,20 +299,67 @@ consteval bool is_pointer_flavor(std::meta::info type) {
     cannot yet carry across the C ABI must fail LOUDLY at generation time, never
     silently emit a corrupting `void*`.
 
-    Phase-1 limits raised here: the structurally-unsupported kinds (containers
-    arrive with the container families), and a **pointer-to-welded-class
-    return** (its ownership contract — a non-owning view — lands with the
-    `rv::` mapping; a value/reference class return heap-copies, matching
-    pybind11's `automatic` lvalue-reference behavior, so it is admitted).
+    Currently raised here: the structurally-unsupported kinds (containers
+    arrive with the container families). Policy-level rejections (`rv::none`,
+    `take_ownership` on a reference) live in @ref handle_return_of.
     @param type      the param/return type reflection.
     @param is_return true when @a type is a return type.
     @throws diag::csharp_unmarshallable when the type cannot cross yet. */
 consteval void require_marshallable(std::meta::info type, bool is_return) {
-    const marshal_kind k{classify(type)};
-    if (k == marshal_kind::unsupported)
+    (void)is_return; // both directions currently share one coverage rule
+    if (classify(type) == marshal_kind::unsupported)
         throw diag::csharp_unmarshallable{};
-    if (is_return && k == marshal_kind::handle && is_pointer_flavor(type))
-        throw diag::csharp_unmarshallable{};
+}
+
+/** How a welded-class RETURN crosses, resolved from its category (value /
+    lvalue-reference / pointer) and its `[[=welder::return_policy]]` — decided
+    here once, consumed by BOTH the generator (the C# side's `owns` flag,
+    nullability and owner-reference) and the shim's marshalling layer, so the
+    two sides cannot disagree. */
+enum class handle_return {
+    copy_owned, /**< Heap-copy into a fresh owned handle (pybind11 `automatic`
+                     for values and lvalue refs; `rv::copy`). */
+    move_owned, /**< Heap-move into a fresh owned handle (`rv::move`). */
+    adopt,      /**< Adopt the returned pointer as owned (`automatic` /
+                     `take_ownership` on a pointer). */
+    view,       /**< A non-owning view (`rv::reference`; `automatic_reference`
+                     on a pointer). */
+    view_keepalive, /**< A non-owning view that keeps its parent object alive
+                     managed-side (`rv::reference_internal`). */
+};
+
+/** Resolve @ref handle_return for return type @a R under policy @a rv.
+    @throws diag::csharp_unmarshallable for combinations this backend rejects:
+    `rv::none` (nanobind-only), and `take_ownership` on an lvalue reference
+    (adopting a reference is a double-free trap). */
+consteval handle_return handle_return_of(std::meta::info R, rv_kind rv) {
+    const bool ptr{is_pointer_flavor(R)};
+    switch (rv) {
+        case rv_kind::automatic:
+            return ptr ? handle_return::adopt : handle_return::copy_owned;
+        case rv_kind::automatic_reference:
+            return ptr ? handle_return::view : handle_return::copy_owned;
+        case rv_kind::take_ownership:
+            if (!ptr)
+                throw diag::csharp_unmarshallable{};
+            return handle_return::adopt;
+        case rv_kind::copy:
+            return handle_return::copy_owned;
+        case rv_kind::move:
+            return handle_return::move_owned;
+        case rv_kind::reference:
+            return handle_return::view;
+        case rv_kind::reference_internal:
+            return handle_return::view_keepalive;
+        default: // rv_kind::none
+            throw diag::csharp_unmarshallable{};
+    }
+}
+
+/** Whether the C# wrapper for this handle return may be `null` (a pointer
+    return can carry `nullptr`; values and references cannot). */
+consteval bool handle_return_nullable(std::meta::info R) {
+    return is_pointer_flavor(R);
 }
 
 /** The two spellings of a scalar/bool type: the fixed-width C ABI type the shim

@@ -67,6 +67,24 @@ std::int32_t welder_csharp_cases_Size_get_height(void* self, welder_error* err) 
 
 void welder_csharp_cases_Size_set_height(void* self, std::int32_t v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Size, wcs::named_field(^^::csharp_cases::Size, "height")>(self, err, v); }
 
+void welder_csharp_cases_Holder_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Holder>(self); }
+
+void* welder_csharp_cases_Holder_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Holder>(err); }
+
+void* welder_csharp_cases_Holder_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Holder>(self, err); }
+
+void* welder_csharp_cases_Holder_m_item_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Holder, wcs::named_member(^^::csharp_cases::Holder, "item", 0)>(self, err); }
+
+void* welder_csharp_cases_Holder_m_item_copy_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Holder, wcs::named_member(^^::csharp_cases::Holder, "item_copy", 0)>(self, err); }
+
+void* welder_csharp_cases_Holder_m_peek_0(void* self, bool a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Holder, wcs::named_member(^^::csharp_cases::Holder, "peek", 0)>(self, err, a0); }
+
+std::int32_t welder_csharp_cases_Holder_m_item_x_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Holder, wcs::named_member(^^::csharp_cases::Holder, "item_x", 0)>(self, err); }
+
+void* welder_csharp_cases_f_make_point_0(std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "make_point", 0)>(err, a0, a1); }
+
+void welder_csharp_cases_f_reject_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "reject", 0)>(err, a0); }
+
 void welder_csharp_cases_Segment_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Segment>(self); }
 
 void* welder_csharp_cases_Segment_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Segment>(err); }

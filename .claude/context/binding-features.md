@@ -11,13 +11,22 @@ All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 participates in the SAME resolution/gate for: fields (+no_reassign), ctors
 (default/declared/aggregate, Copyable→Clone), method/static/free overload groups,
 method-backed properties, enums (underlying-typed, per-enumerator docs), namespace
-variables, submodules, docs. NOT yet (a designed `diag::csharp_unmarshallable` /
-`static_assert` at generation): operators/comparisons/stringifier, welded-base
-inheritance, virtuals-overridden-in-C# (directors), rv::/keep_alive ownership
-mapping (class-pointer returns rejected; value/& returns heap-copy), STL
-containers, nested types (flat fallback is fine — they're not yet marshallable
-anyway), weld_protected members (the shim's `&[:Mem:]` needs public access).
-Details: architecture.md (the rod section) + tests/csharp.
+variables, submodules, docs; the FULL exception taxonomy (welder_error out-param →
+BCL exception mapping) and the rv:: ownership mapping (handle_return_of in
+type_map.hpp: value/&/copy → owned heap-copy, ptr default/take_ownership →
+adopted, reference → view, reference_internal → view + C# __owner pinning; a
+non-const class-typed FIELD is a live view with __owner, mirroring
+def_readwrite's reference_internal; pointer returns nullable `T?`). keep_alive =
+documented-ignored (like the Lua rods). Shared-case widening so far:
+retpolicy.hpp Inner/Owner (the view/snapshot pair — bound via
+tests/csharp/cpp/shared_seam.hpp + gen_retpolicy.cpp, a second binding pair).
+NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
+generation): operators/comparisons/stringifier, welded-base inheritance,
+virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference
+(rejected combos), STL containers, nested types (flat fallback is fine —
+they're not yet marshallable anyway), weld_protected members (the shim's
+`&[:Mem:]` needs public access). Details: architecture.md (the rod section) +
+tests/csharp.
 
 ## Data members & constructors
 Public data members (a mutable member read/write via `def_readwrite`; a **const**

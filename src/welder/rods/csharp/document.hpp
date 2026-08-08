@@ -23,8 +23,11 @@
 
     The managed scaffolding rendered once per `Bindings.cs`:
     - `WelderError` — the blittable mirror of the shim's trailing error out-param;
-    - `WelderInterop.ThrowIfError` — reads the slot, frees the message, throws
-      @c WelderNativeException;
+    - `WelderInterop.ThrowIfError` — reads the slot, frees the message, and
+      throws: codes 2–5 map to the matching BCL exception types
+      (`OutOfMemoryException` / `ArgumentException` /
+      `ArgumentOutOfRangeException` / `ArithmeticException`), everything else
+      to @c WelderNativeException;
     - one `SafeHandle` subclass per welded class (its `ReleaseHandle` calls the
       class's destroy thunk), giving every wrapper finalizer-safe ownership and
       premature-collection safety on every P/Invoke that passes it.
@@ -125,7 +128,8 @@ struct document {
                 b = e + 1;
             }
         }
-        out += "using System;\nusing System.Runtime.InteropServices;\n\n";
+        out += "#nullable enable\n"
+               "using System;\nusing System.Runtime.InteropServices;\n\n";
         out += "namespace " + opts.cs_namespace + "\n{\n";
         // The error contract: the blittable slot + the check-and-throw helper.
         out +=
@@ -155,7 +159,15 @@ struct document {
             "\"\";\n"
             "                NativeMethods.welder_free(err.Message);\n"
             "            }\n"
-            "            throw new WelderNativeException(err.Code, msg);\n"
+            "            throw err.Code switch\n"
+            "            {\n"
+            "                2 => new OutOfMemoryException(msg),\n"
+            "                3 => new ArgumentException(msg),\n"
+            "                4 => new ArgumentOutOfRangeException(null, msg),\n"
+            "                5 => new ArithmeticException(msg),\n"
+            "                _ => (Exception)new WelderNativeException(err.Code, "
+            "msg),\n"
+            "            };\n"
             "        }\n"
             "    }\n\n";
         // The P/Invoke surface: one partial static class (LibraryImport needs partial).
@@ -235,6 +247,9 @@ struct class_writer {
         emit_doc_comment(out, "    ", doc_text.empty() ? nullptr : doc_text.c_str());
         out += "    public sealed class " + cs_name + " : IDisposable\n    {\n";
         out += "        internal " + cs_name + "Handle _handle;\n";
+        // The reference_internal anchor: a view stores its parent here so the
+        // parent cannot be collected (and finalized) while the view lives.
+        out += "        internal object? __owner;\n";
         out += "        internal " + cs_name +
                "(IntPtr handle, bool owns) { _handle = new " + cs_name +
                "Handle(handle, owns); }\n\n";

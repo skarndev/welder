@@ -185,12 +185,33 @@ std::string public_type() {
         return std::string{styled_v<bare(Type), Style, ::welder::ent_kind::class_>};
 }
 
+/** The public C# RETURN type: like @ref public_type, plus the `?` nullable
+    marker for a pointer-flavor welded-class return (a C++ `nullptr` maps to
+    C# `null`). */
+template <std::meta::info R, class Style>
+std::string public_return_type() {
+    if constexpr (classify(R) == marshal_kind::handle) {
+        if constexpr (handle_return_nullable(R))
+            return public_type<R, Style>() + "?";
+        else
+            return public_type<R, Style>();
+    } else {
+        return public_type<R, Style>();
+    }
+}
+
 /** The wrapper statements converting the checked P/Invoke result into the
     managed return value. @a pc is the P/Invoke call expression (without the
     trailing error arg — appended here so every call is checked), @a ind the
-    indentation. */
-template <std::meta::info R, class Style>
-std::string wrapper_return_body(const std::string& pc, const std::string& ind) {
+    indentation. A welded-class result follows @ref handle_return_of for
+    policy @a Rv: owned kinds wrap with `owns: true`; view kinds with
+    `owns: false`, and `view_keepalive` additionally stores @a owner in the
+    view's `__owner` (preventing collection of the parent while the view
+    lives — the managed spelling of `reference_internal`). */
+template <std::meta::info R, class Style,
+          ::welder::rv_kind Rv = ::welder::rv_kind::automatic>
+std::string wrapper_return_body(const std::string& pc, const std::string& ind,
+                                const std::string& owner = {}) {
     constexpr marshal_kind k{classify(R)};
     const std::string check{ind + "WelderInterop.ThrowIfError(in __e);\n"};
     if constexpr (k == marshal_kind::void_)
@@ -199,11 +220,37 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind) {
         return ind + "IntPtr __r = " + pc + ";\n" + check +
                ind + "try { return Marshal.PtrToStringUTF8(__r) ?? \"\"; }\n" +
                ind + "finally { NativeMethods.welder_free(__r); }\n";
-    else if constexpr (k == marshal_kind::handle)
-        return ind + "IntPtr __r = " + pc + ";\n" + check +
-               ind + "return new " + public_type<R, Style>() + "(__r, true);\n";
-    else
+    else if constexpr (k == marshal_kind::handle) {
+        constexpr handle_return hr{handle_return_of(R, Rv)};
+        std::string out{ind + "IntPtr __r = " + pc + ";\n" + check};
+        if constexpr (handle_return_nullable(R))
+            out += ind + "if (__r == IntPtr.Zero) return null;\n";
+        if constexpr (hr == handle_return::view ||
+                      hr == handle_return::view_keepalive) {
+            out += ind + "var __v = new " + public_type<R, Style>() +
+                   "(__r, false);\n";
+            if (hr == handle_return::view_keepalive && !owner.empty())
+                out += ind + "__v.__owner = " + owner + ";\n";
+            out += ind + "return __v;\n";
+        } else {
+            out += ind + "return new " + public_type<R, Style>() +
+                   "(__r, true);\n";
+        }
+        return out;
+    } else {
         return ind + "var __r = " + pc + ";\n" + check + ind + "return __r;\n";
+    }
+}
+
+/** The policy a data member's read binds under: a non-const welded-class
+    member hands out a live view tied to its parent (the runtime rods'
+    `def_readwrite` reference_internal semantics); everything else crosses by
+    value. Mirrored structurally by `shim::field_get`. */
+consteval ::welder::rv_kind field_return_policy(std::meta::info MT) {
+    return (classify(MT) == marshal_kind::handle &&
+            !std::meta::is_const_type(MT))
+               ? ::welder::rv_kind::reference_internal
+               : ::welder::rv_kind::automatic;
 }
 
 /** The per-parameter string lists a callable needs, built together. */
@@ -388,10 +435,12 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
     const std::string pc{"NativeMethods." + sym + "(" + call_args + ")"};
     emit_callable_docs<Fn>(wrapper_out, indent, cp);
     wrapper_out += indent + "public " + (HasSelf ? "" : "static ") +
-                   public_type<std::meta::return_type_of(Fn), Style>() + " " + wrapper_name + "(" +
-                   cp.wrapper_params + ")\n" + indent + "{\n";
-    wrapper_out += wrapper_return_body<std::meta::return_type_of(Fn), Style>(
-        pc, indent + "    ");
+                   public_return_type<std::meta::return_type_of(Fn), Style>() +
+                   " " + wrapper_name + "(" + cp.wrapper_params + ")\n" + indent +
+                   "{\n";
+    wrapper_out += wrapper_return_body<std::meta::return_type_of(Fn), Style,
+                                       ::welder::return_policy_of(Fn, lang::cs)>(
+        pc, indent + "    ", HasSelf ? "this" : "");
     wrapper_out += indent + "}\n\n";
 }
 
@@ -596,9 +645,11 @@ struct rod {
         w.members += "        public " +
                      public_type<std::meta::type_of(Mem), Style>() + " " + pname +
                      "\n        {\n            get\n            {\n";
-        w.members += wrapper_return_body<std::meta::type_of(Mem), Style>(
+        w.members += wrapper_return_body<std::meta::type_of(Mem), Style,
+                                         field_return_policy(
+                                             std::meta::type_of(Mem))>(
             "NativeMethods." + getsym + "(_handle, out WelderError __e)",
-            "                ");
+            "                ", "this");
         w.members += "            }\n";
         if constexpr (!read_only) {
             w.members += "            set\n            {\n"
@@ -645,9 +696,12 @@ struct rod {
         w.members += "        public " +
                      public_type<std::meta::remove_cvref(std::meta::return_type_of(Getter)), ::welder::naming::none>() +
                      " " + name + "\n        {\n            get\n            {\n";
-        w.members += wrapper_return_body<std::meta::remove_cvref(std::meta::return_type_of(Getter)), ::welder::naming::none>(
+        w.members += wrapper_return_body<std::meta::return_type_of(Getter),
+                                         ::welder::naming::none,
+                                         ::welder::return_policy_of(
+                                             Getter, lang::cs)>(
             "NativeMethods." + getsym + "(_handle, out WelderError __e)",
-            "                ");
+            "                ", "this");
         w.members += "            }\n";
         if constexpr (Setter != std::meta::info{}) {
             constexpr std::meta::info PT{
