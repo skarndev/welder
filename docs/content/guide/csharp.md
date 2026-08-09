@@ -101,6 +101,12 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   welder diagnoses the collision at generation with a designed `#error` in the
   emitted `Bindings.cs` naming both sides and the `weld_as` escape, so the
   first build fails with welder's message rather than a bare compiler error.
+  Bound C# names beginning with an underscore are likewise diagnosed — that
+  namespace is reserved for the generated scaffolding (`_h_*`, `_owner`, …);
+  an underscore-led C++ member restyles into it (`_leading` → `_Leading`), so
+  rename it or `weld_as` a name starting with a letter. Parameter names shed
+  their leading underscores instead (`_count` → `count`) — the faithful
+  camelCase, and what keeps them clear of the wrappers' generated locals.
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.

@@ -118,11 +118,20 @@ template <std::meta::info T>
 inline constexpr const char* wire_return_v = shim_wire_spelling(T, true);
 
 /** The camelCase C# parameter identifier for reflection @a param (falling back
-    to `p<j>` for an unnamed parameter). */
+    to `p<j>` for an unnamed parameter). LEADING UNDERSCORES ARE STRIPPED —
+    both the more faithful camelCase rendering of `_count`, and what keeps the
+    wrapper's parameter scope disjoint from the generated `_`-prefixed locals
+    (`_e`, `_r`, …): after this, every parameter name begins with a letter (or
+    the `@` keyword escape), so it cannot shadow them. */
 consteval std::string param_ident(std::meta::info param, std::size_t j) {
-    if (std::meta::has_identifier(param))
-        return ::welder::naming::restyle(std::meta::identifier_of(param),
-                                         ::welder::naming::case_kind::camel);
+    if (std::meta::has_identifier(param)) {
+        std::string_view id{std::meta::identifier_of(param)};
+        while (!id.empty() && id.front() == '_')
+            id.remove_prefix(1);
+        if (!id.empty())
+            return ::welder::naming::restyle(
+                id, ::welder::naming::case_kind::camel);
+    }
     std::string s{"p"};
     s += static_cast<char>('0' + (j / 10) % 10);
     s += static_cast<char>('0' + j % 10);

@@ -513,6 +513,20 @@ struct class_writer {
                    base_upcast_sym + "(handle), false) { " + handle_field +
                    " = new " + cs_name + "Handle(handle, owns); }\n\n";
         }
+        // A member or nested-type name beginning with '_' would land in the
+        // namespace of the generated scaffolding (_h_*, _owner, _isDirector,
+        // _New*, _Slot*, ...) — an underscore-led C++ identifier restyles to
+        // one (`_leading` -> `_Leading`), and a weld_as can spell one
+        // verbatim. Reserved, diagnosed with the escape named.
+        for (const auto* names : {&surface_names, &nested_names})
+            for (const auto& n : *names)
+                if (!n.empty() && n.front() == '_')
+                    out += "#error welder: the C# name '" + n + "' bound on '" +
+                           cs_path +
+                           "' begins with an underscore, which is reserved for "
+                           "welder's generated scaffolding; rename the member, "
+                           "or give it a [[=welder::weld_as]] that does not "
+                           "start with '_'\n";
         // The nested-type/member name collision (C# CS0102), diagnosed here
         // with welder's message rather than left to the consumer's compiler.
         for (const auto& n : nested_names)

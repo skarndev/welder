@@ -37,6 +37,10 @@ struct NotWelded {};
 [[=welder::weld(welder::lang::cs)]] inline std::int32_t leaf(std::int32_t v) {
     return v;
 }
+[[=welder::weld(welder::lang::cs)]] inline std::int32_t stripped(
+    std::int32_t _err_slot) {
+    return _err_slot;
+}
 } // namespace lockcases
 
 consteval bool streq(const char* a, std::string_view b) { return a && a == b; }
@@ -155,6 +159,11 @@ static_assert(wcs::rod::special_method_name(
 // --- parameter identifiers (camelCase + keyword escape) ----------------------
 static_assert(wcs::param_ident(
                   std::meta::parameters_of(^^lockcases::leaf)[0], 0) == "v");
+// leading underscores strip (both the faithful camelCase and what keeps the
+// wrapper's parameter scope disjoint from the generated _-prefixed locals)
+static_assert(wcs::param_ident(
+                  std::meta::parameters_of(^^lockcases::stripped)[0], 0) ==
+              "errSlot");
 // The C# name style: PascalCase members, verbatim enumerators.
 static_assert(std::string_view{
                   ::welder::name_of<^^lockcases::Thing, welder::lang::cs,
