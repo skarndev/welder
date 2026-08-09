@@ -1199,6 +1199,18 @@ struct rod {
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         constexpr std::meta::info MT{std::meta::type_of(Mem)};
+        // A non-const SCALAR/ENUM sequence member is a LIVE object, so it
+        // binds by reference like its welded-element siblings — a generated
+        // wrapper with live element access and a zero-copy AsSpan() — never a
+        // by-value T[] snapshot (which would make `obj.Nums.Add(…)` silently
+        // mutate a temporary). Params/returns keep the ergonomic T[] copies;
+        // a const member stays a copy too (writing through its span would be
+        // UB).
+        if constexpr (classify(MT) == marshal_kind::seq_value &&
+                      !std::meta::is_const_type(MT)) {
+            _add_scalar_seq_field<Mem, Style>(w);
+            return;
+        }
         _ensure_for<std::meta::type_of(Mem)>(*w.doc);
         constexpr bool checked{(require_marshallable(MT, true), true)};
         static_assert(checked);
@@ -1286,6 +1298,69 @@ struct rod {
                                                : "                }\n") +
                          "            }\n";
         }
+        w.members += "        }\n\n";
+    }
+
+    /** The live-field binding for a scalar/enum sequence member: the getter
+        thunk hands out the MEMBER'S ADDRESS (a view the wrapper pins to its
+        parent), the setter — absent under `mark::no_reassign` — copy-assigns
+        the whole container from another wrapped instance (the implicit `T[]`
+        conversion makes `obj.Nums = new[] {…}` read naturally). */
+    template <std::meta::info Mem, class Style>
+    static void _add_scalar_seq_field(class_writer& w) {
+        constexpr std::meta::info MT{std::meta::type_of(Mem)};
+        _ensure_scalar_seq<bare(MT)>(*w.doc);
+        const std::string id{std::meta::identifier_of(Mem)};
+        const std::string anchor{w.cpp_anchor};
+        constexpr bool named_parent{
+            spellable(std::meta::parent_of(Mem))};
+        const std::string owner{_owner_expr(
+            named_parent, cpp_name_v<std::meta::parent_of(Mem)>,
+            w.cpp_qualified, anchor)};
+        const std::string lookup{"wcs::named_field(" + owner + ", \"" + id +
+                                 "\")"};
+        const std::string getsym{w.sym_prefix + "_get_" + id};
+        const std::string setsym{w.sym_prefix + "_set_" + id};
+        constexpr bool read_only{::welder::member_no_reassign(Mem, language)};
+        const std::string V{container_ref<bare(MT)>()};
+        w.doc->record_symbol(getsym);
+        w.doc->shim += "void* " + getsym +
+                       "(void* self, welder_error* err) { return "
+                       "wcs::shim::field_addr<" + anchor + ", " + lookup +
+                       ">(self, err); }\n\n";
+        w.doc->pinvoke += "        [LibraryImport(Lib)] internal static "
+                          "partial IntPtr " + getsym + "(" + w.handle_cs +
+                          " self, out WelderError err);\n";
+        if constexpr (!read_only) {
+            w.doc->record_symbol(setsym);
+            w.doc->shim += "void " + setsym +
+                           "(void* self, void* v, welder_error* err) { "
+                           "wcs::shim::field_assign<" + anchor + ", " + lookup +
+                           ">(self, v, err); }\n\n";
+            w.doc->pinvoke += "        [LibraryImport(Lib)] internal static "
+                              "partial void " + setsym + "(" + w.handle_cs +
+                              " self, " + V + "Handle v, out WelderError "
+                              "err);\n";
+        }
+        const std::string pname{
+            ::welder::name_of<Mem, lang::cs, Style, ::welder::ent_kind::field>()};
+        w.surface_names.push_back(pname);
+        emit_doc_comment(w.members, "        ", ::welder::doc_of<Mem>());
+        w.members += "        public " + V + " " + pname +
+                     "\n        {\n            get\n            {\n"
+                     "                IntPtr _r = NativeMethods." + getsym +
+                     "(" + w.handle_field + ", out WelderError _e);\n"
+                     "                WelderInterop.ThrowIfError(in _e);\n"
+                     "                var _v = new " + V + "(_r, false);\n"
+                     "                _v._owner = this;\n"
+                     "                return _v;\n            }\n";
+        if constexpr (!read_only)
+            w.members += "            set\n            {\n"
+                         "                NativeMethods." + setsym + "(" +
+                         w.handle_field + ", value._h_" + V +
+                         ", out WelderError _e);\n"
+                         "                WelderInterop.ThrowIfError(in _e);\n"
+                         "            }\n";
         w.members += "        }\n\n";
     }
 
@@ -1608,6 +1683,7 @@ struct rod {
     template <class T, auto Fns>
     static void add_operator(class_writer& w) {
         template for (constexpr auto fn : std::define_static_array(Fns)) {
+            _collect_containers<fn>(*w.doc);
             _emit_operator<T, fn>(w);
         }
     }
@@ -2036,6 +2112,177 @@ struct rod {
             "            NativeMethods." + sym + "_clear(_h_" + V +
             ", out WelderError _e);\n"
             "            WelderInterop.ThrowIfError(in _e);\n        }\n"
+            "        public void Dispose() => _h_" + V + ".Dispose();\n"
+            "    }\n\n";
+    }
+
+    /** The reference-semantic wrapper for a SCALAR/ENUM sequence used as a
+        live field (`std::vector<int>` / `std::array<double, 3>` members):
+        Count, a bounds-checked indexer, `Add`/`Clear` (vector only), bulk
+        `CopyFrom`, an implicit conversion from `T[]` (so whole-property
+        assignment reads naturally), and — the zero-copy path — `AsSpan()`
+        over the C++ buffer (`Span<T>` IS C#'s buffer protocol; valid until a
+        size-changing operation or Dispose, exactly a C++ iterator's rule). */
+    template <std::meta::info C>
+    static void _ensure_scalar_seq(document& doc) {
+        static constexpr const char* key{
+            std::define_static_string(std::meta::display_string_of(C))};
+        if (!doc.claim_container(key))
+            return;
+        constexpr std::meta::info E{
+            std::meta::dealias(sequence_element(C))};
+        constexpr bool fixed{is_fixed_sequence(C)};
+        constexpr bool enum_elem{classify(E) == marshal_kind::enum_};
+        // the element's C# spelling / name token / wire spelling
+        std::string ecs{}, ename{};
+        if constexpr (enum_elem) {
+            ecs = type_ref<bare(E)>();
+            ename = field_ref<bare(E)>();
+        } else {
+            constexpr const char* c{scalar_spell(E).cs};
+            ecs = c;
+            ename = c;
+            ename[0] = static_cast<char>(std::toupper(ename[0]));
+        }
+        static constexpr const char* tok{std::define_static_string(
+            map_token(E))};
+        static constexpr const char* wire{std::define_static_string(
+            enum_elem ? std::string{enum_wire_spell(E).c_abi}
+                      : std::string{scalar_spell(E).c_abi})};
+        static constexpr const char* wire_cs{std::define_static_string(
+            enum_elem ? std::string{enum_wire_spell(E).cs}
+                      : std::string{scalar_spell(E).cs})};
+        static constexpr const char* ecpp{
+            std::define_static_string(leaf_cpp_spelling(E))};
+        std::string ns{};
+        if constexpr (fixed)
+            ns = std::to_string(fixed_extent(C));
+        const std::string sym{fixed ? "welder_arrs_" + std::string{tok} + "_" + ns
+                                    : "welder_vecs_" + std::string{tok}};
+        const std::string targs{fixed ? "^^" + std::string{ecpp} + ", " + ns
+                                      : "^^" + std::string{ecpp}};
+        const std::string V{fixed ? "Array" + ename + "x" + ns
+                                  : "Vector" + ename};
+        doc.record_type_name(key, V);
+        const char* pfx{fixed ? "arr" : "vec"};
+        for (const char* leaf : {"_new", "_destroy", "_data", "_fill"})
+            doc.record_symbol(sym + leaf);
+        doc.shim +=
+            "void* " + sym + "_new(welder_error* err) { return wcs::shim::" +
+            pfx + "_new<" + targs + ">(err); }\n\n"
+            "void " + sym + "_destroy(void* self) { wcs::shim::" + pfx +
+            "_destroy<" + targs + ">(self); }\n\n"
+            "void* " + sym + "_data(void* self, welder_error* err) { return "
+            "wcs::shim::" + pfx + "_data<" + targs + ">(self, err); }\n\n"
+            "void " + sym + "_fill(void* self, const void* data, std::int64_t "
+            "len, welder_error* err) { wcs::shim::" + pfx + "_fill<" + targs +
+            ">(self, data, len, err); }\n\n";
+        if constexpr (!fixed) {
+            for (const char* leaf : {"_size", "_push", "_clear"})
+                doc.record_symbol(sym + leaf);
+            doc.shim +=
+                "std::int64_t " + sym + "_size(void* self, welder_error* err) "
+                "{ return wcs::shim::vec_size<" + targs + ">(self, err); }\n\n"
+                "void " + sym + "_push(void* self, " + wire +
+                " v, welder_error* err) { wcs::shim::vec_push<" + targs +
+                ">(self, v, err); }\n\n"
+                "void " + sym + "_clear(void* self, welder_error* err) { "
+                "wcs::shim::vec_clear<" + targs + ">(self, err); }\n\n";
+        }
+        doc.pinvoke +=
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_new(out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_destroy(IntPtr self);\n"
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_data(" + V + "Handle self, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_fill(" + V + "Handle self, IntPtr data, long len, out "
+            "WelderError err);\n";
+        if constexpr (!fixed)
+            doc.pinvoke +=
+                "        [LibraryImport(Lib)] internal static partial long " +
+                sym + "_size(" + V + "Handle self, out WelderError err);\n"
+                "        [LibraryImport(Lib)] internal static partial void " +
+                sym + "_push(" + V + "Handle self, " + wire_cs +
+                " v, out WelderError err);\n"
+                "        [LibraryImport(Lib)] internal static partial void " +
+                sym + "_clear(" + V + "Handle self, out WelderError err);\n";
+        std::string count_body{};
+        if constexpr (fixed)
+            count_body = "        public int Count => " + ns + ";\n";
+        else
+            count_body =
+                "        public int Count\n        {\n            get\n"
+                "            {\n"
+                "                var _r = NativeMethods." + sym + "_size(_h_" +
+                V + ", out WelderError _e);\n"
+                "                WelderInterop.ThrowIfError(in _e);\n"
+                "                return (int)_r;\n            }\n        }\n";
+        doc.containers +=
+            "    internal sealed class " + V + "Handle : SafeHandle\n    {\n"
+            "        internal " + V + "Handle(IntPtr handle, bool owns) : "
+            "base(IntPtr.Zero, owns)\n        {\n            "
+            "SetHandle(handle);\n        }\n"
+            "        public override bool IsInvalid => handle == "
+            "IntPtr.Zero;\n"
+            "        protected override bool ReleaseHandle()\n        {\n"
+            "            NativeMethods." + sym + "_destroy(handle);\n"
+            "            return true;\n        }\n    }\n\n"
+            "    /// <summary>A reference-semantic C++ " +
+            (fixed ? "std::array of " + ns + " " : "vector of ") + ecs +
+            " (live element access; AsSpan() is a zero-copy view over the C++ "
+            "buffer, valid until a size-changing operation or "
+            "Dispose).</summary>\n"
+            "    public sealed class " + V + " : IDisposable\n    {\n"
+            "        internal " + V + "Handle _h_" + V + ";\n"
+            "        internal object? _owner;\n"
+            "        internal " + V + "(IntPtr handle, bool owns) { _h_" + V +
+            " = new " + V + "Handle(handle, owns); }\n"
+            "        public " + V + "() : this(_New(), true) {}\n"
+            "        private static IntPtr _New()\n        {\n"
+            "            IntPtr _r = NativeMethods." + sym +
+            "_new(out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            return _r;\n        }\n" +
+            count_body +
+            "        public unsafe Span<" + ecs + "> AsSpan()\n        {\n"
+            "            IntPtr _d = NativeMethods." + sym + "_data(_h_" + V +
+            ", out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            var _s = new Span<" + ecs + ">((void*)_d, Count);\n"
+            "            GC.KeepAlive(this);\n"
+            "            return _s;\n        }\n"
+            "        public " + ecs + " this[int i]\n        {\n"
+            "            get => AsSpan()[i];\n"
+            "            set => AsSpan()[i] = value;\n        }\n" +
+            (fixed ? std::string{}
+                   : "        public void Add(" + ecs + " item)\n        {\n"
+                     "            NativeMethods." + sym + "_push(_h_" + V +
+                     ", " +
+                     (enum_elem ? "(" + std::string{wire_cs} + ")item"
+                                : std::string{"item"}) +
+                     ", out WelderError _e);\n"
+                     "            WelderInterop.ThrowIfError(in _e);\n"
+                     "        }\n"
+                     "        public void Clear()\n        {\n"
+                     "            NativeMethods." + sym + "_clear(_h_" + V +
+                     ", out WelderError _e);\n"
+                     "            WelderInterop.ThrowIfError(in _e);\n"
+                     "        }\n") +
+            "        public " + ecs + "[] ToArray() => AsSpan().ToArray();\n"
+            "        public unsafe void CopyFrom(ReadOnlySpan<" + ecs +
+            "> src)\n        {\n"
+            "            fixed (" + ecs + "* _p = src)\n            {\n"
+            "                NativeMethods." + sym + "_fill(_h_" + V +
+            ", (IntPtr)_p, src.Length, out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "            }\n        }\n"
+            "        public static implicit operator " + V + "(" + ecs +
+            "[] a)\n        {\n"
+            "            var _v = new " + V + "();\n"
+            "            _v.CopyFrom(a);\n"
+            "            return _v;\n        }\n"
             "        public void Dispose() => _h_" + V + ".Dispose();\n"
             "    }\n\n";
     }

@@ -32,6 +32,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The .NET SDK for the C# rod's managed round-trip (dotnet is a native
+      # Windows tool — the MinGW-built shim dll is exactly what it must load;
+      # static gcc runtimes keep it loadable without the msys2 DLLs on PATH).
+      # setup-dotnet exports DOTNET_ROOT for the configure step below.
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
       - name: Set up MSYS2 (UCRT64)
         uses: msys2/setup-msys2@v2
         with:
@@ -125,7 +134,8 @@ jobs:
             -DWELDER_BUILD_LUABRIDGE=ON \
             -DWELDER_LUABRIDGE_LUA_VERSION=5.5 \
             -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX" \
-            -DWELDER_BUSTED_EXECUTABLE="$WELDER_BUSTED_EXECUTABLE"
+            -DWELDER_BUSTED_EXECUTABLE="$WELDER_BUSTED_EXECUTABLE" \
+            -DWELDER_DOTNET="$(cygpath -m "${DOTNET_ROOT:-C:/Program Files/dotnet}/dotnet.exe")"
           # The Python rods run their full specs + stubs against the mingw-ABI venv
           # prepared above; the LuaBridge3 rod builds its loadable module against the
           # ucrt64 Lua 5.5 (LuaBridge3 supports 5.5; the module links the Lua import
@@ -156,7 +166,8 @@ jobs:
             -DPython_EXECUTABLE="$PYEXE" \
             -DWELDER_BUILD_SOL2=OFF \
             -DWELDER_LUABRIDGE_LUA_VERSION=5.5 \
-            -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX"
+            -DWELDER_LUABRIDGE_LUA_DIR="$LUA_PREFIX" \
+            -DWELDER_COOKBOOK_DOTNET="$(cygpath -m "${DOTNET_ROOT:-C:/Program Files/dotnet}/dotnet.exe")"
           cmake --build build/cookbook
           ctest --test-dir build/cookbook --output-on-failure
 

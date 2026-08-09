@@ -176,7 +176,28 @@ generator TU:
 WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 ```
 
-## Marshalling rules (current phase)
+Both helpers ship with the package — `find_package(welder)` defines them
+exactly like FetchContent (the `welder::csharp` generator target is exported).
+
+## Distributing: NuGet
+
+```cmake
+welder_csharp_nuget_project(mymod_csharp
+  PACKAGE_ID Acme.MyMod
+  VERSION 1.0.0)          # TFM defaults to net8.0
+```
+
+writes a packable SDK-style csproj around the generated pair;
+`dotnet pack Acme.MyMod.csproj -c Release` (after the native build) yields a
+standard NuGet package: the managed assembly under `lib/<tfm>/`, the native
+library under `runtimes/<rid>/native/` — the layout .NET's runtime probing
+resolves automatically, so a consumer just adds the package reference. The RID
+is the build platform's; produce a multi-platform package by packing per
+platform and merging the `runtimes/` trees, or publish per-RID packages from a
+CI matrix. The end-to-end walkthrough is cookbook recipe
+[11 — C# / .NET bindings](../cookbook/csharp.md).
+
+## Marshalling rules
 
 | C++ | C ABI wire | C# |
 |---|---|---|
@@ -190,7 +211,8 @@ WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 | welded class return under `rv::reference` / `reference_internal` | the object's address | a non-owning **view** |
 | non-const welded-class **field** | the member's address | a live view (writes go through) |
 | `std::optional` of a leaf kind | by-value `welder_opt_wire` struct | `T?` |
-| `std::vector`/`std::array` of scalars/enums | by-value `welder_seq_wire` (copy; params pin the managed array) | `T[]` |
+| `std::vector`/`std::array` of scalars/enums (params/returns) | by-value `welder_seq_wire` (copy; params pin the managed array) | `T[]` |
+| `std::vector`/`std::array` of scalars/enums (**non-const field**) | the member's address | a live wrapper — `Add`/indexer write through; `AsSpan()` is a **zero-copy `Span<T>`** over the C++ buffer |
 | `std::pair` / `std::tuple` of leaf kinds | slot array (`welder_opt_wire[]`) | a `ValueTuple` — `(int, string)` |
 | `std::vector` of a welded class | opaque handle | a generated `Vector<Element>` wrapper — **reference semantics**, live element views |
 | `std::array<welded, N>` | opaque handle | a generated `Array<Element>x<N>` wrapper — fixed size, live element views |
@@ -239,12 +261,22 @@ A pointer return may be C# `null` (the wrapper type is `T?`); `keep_alive` is
 documented-ignored (as on the Lua rods) — the owner-reference mechanism covers
 the common case.
 
-Value-family containers cross by **copy** (like the Python rods' default
-`<pybind11/stl.h>` behavior): an `optional` with a leaf payload maps to `T?`,
-a scalar/enum `vector`/`array` to `T[]` (an `std::array` parameter of the
-wrong length throws `ArgumentException`), and a `std::pair`/`std::tuple` of
-leaf kinds to a C# `ValueTuple` (`std::tuple<int, std::string>` →
-`(int, string)`, both directions). Containers of a **welded class** instead
+Value-family containers cross by **copy** in parameter and return position
+(like the Python rods' default `<pybind11/stl.h>` behavior): an `optional`
+with a leaf payload maps to `T?`, a scalar/enum `vector`/`array` to `T[]` (an
+`std::array` parameter of the wrong length throws `ArgumentException`), and a
+`std::pair`/`std::tuple` of leaf kinds to a C# `ValueTuple`
+(`std::tuple<int, std::string>` → `(int, string)`, both directions).
+
+A **non-const scalar/enum sequence member** is a live object, so it binds by
+reference instead — a generated wrapper (`VectorInt`, `ArrayDoublex3`, …)
+whose indexer and `Add`/`Clear` write through to the C++ container, whose
+`AsSpan()` hands out a **zero-copy `Span<T>` over the C++ buffer** (C#'s
+buffer protocol; valid until a size-changing operation or `Dispose`, exactly
+a C++ iterator's rule), and which converts implicitly from `T[]` so
+whole-property assignment (`obj.Nums = new[] {1, 2};`) still reads naturally.
+A `const` member keeps the `T[]` copy (writing through its span would be
+undefined behavior). Containers of a **welded class** instead
 get [reference semantics](containers.md) — welder's opaque-container model,
 one generated wrapper per distinct instantiation:
 

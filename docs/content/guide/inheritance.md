@@ -358,4 +358,11 @@ The one shape reflection cannot reproduce is a **C-style variadic** virtual
 generator emit a `static_assert` (a clear compile error) unless you mark it
 `[[=welder::bind_flat]]`.
 
+!!! note "On the C# rod"
+    A welded base chain maps onto C# base classes over per-level upcast-chained
+    handles (multiple/virtual inheritance exact; extra bases surface as
+    `As<Base>()` views), and virtuals are overridable from C# through generated
+    **directors** — no hand-authored trampoline at all. `[[=welder::bind_flat]]`
+    opts out identically. See [C# / .NET bindings](csharp.md).
+
 Next: [Namespaces & modules](namespaces-modules.md).

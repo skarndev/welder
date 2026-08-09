@@ -90,3 +90,77 @@ function(welder_csharp_generate_bindings name)
     endif()
   endif()
 endfunction()
+
+# welder_csharp_nuget_project(<name>              # a welder_csharp_generate_bindings target
+#   PACKAGE_ID   <Acme.Geo>                       # required: the NuGet package id
+#   [VERSION     <1.2.3>]                         # default: 0.1.0
+#   [TFM         <net8.0>]                        # default: net8.0 ([LibraryImport] needs net7+)
+#   [OUTPUT_DIR  <dir>])                          # default: <binary dir>/<PACKAGE_ID>
+#
+# The .NET distribution half: writes a PACKABLE SDK-style .csproj around the
+# generated bindings, so
+#
+#   dotnet pack <OUTPUT_DIR>/<PACKAGE_ID>.csproj -c Release
+#
+# yields a standard NuGet package — the managed assembly under lib/<TFM>/ and the
+# native shim library under runtimes/<rid>/native/ (the layout NuGet's runtime
+# probing expects; the .NET host loads the right native library automatically).
+# The RID is derived from the CMake target platform, so the package carries THIS
+# build's native library; a multi-platform (fat) package is produced by packing on
+# each platform and merging the runtimes/ trees — or by a CI matrix publishing
+# per-RID packages (document either in your release pipeline).
+#
+# The csproj is written with file(GENERATE), so $<TARGET_FILE:...> resolves to the
+# built shim; `dotnet pack` must run AFTER the native target is built.
+function(welder_csharp_nuget_project name)
+  cmake_parse_arguments(NG "" "PACKAGE_ID;VERSION;TFM;OUTPUT_DIR" "" ${ARGN})
+  if(NOT NG_PACKAGE_ID)
+    message(FATAL_ERROR "welder_csharp_nuget_project(${name}): PACKAGE_ID is required")
+  endif()
+  if(NOT NG_VERSION)
+    set(NG_VERSION 0.1.0)
+  endif()
+  if(NOT NG_TFM)
+    set(NG_TFM net8.0)
+  endif()
+  if(NOT NG_OUTPUT_DIR)
+    set(NG_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/${NG_PACKAGE_ID})
+  endif()
+
+  # The NuGet runtime identifier of the CMake target platform.
+  if(WIN32)
+    set(_os win)
+  elseif(APPLE)
+    set(_os osx)
+  else()
+    set(_os linux)
+  endif()
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    set(_arch arm64)
+  else()
+    set(_arch x64)
+  endif()
+  set(_rid ${_os}-${_arch})
+
+  get_target_property(_bindings ${name} WELDER_CSHARP_BINDINGS)
+  file(GENERATE OUTPUT ${NG_OUTPUT_DIR}/${NG_PACKAGE_ID}.csproj CONTENT
+"<Project Sdk=\"Microsoft.NET.Sdk\">
+  <PropertyGroup>
+    <TargetFramework>${NG_TFM}</TargetFramework>
+    <PackageId>${NG_PACKAGE_ID}</PackageId>
+    <Version>${NG_VERSION}</Version>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include=\"${_bindings}\" />
+    <None Include=\"$<TARGET_FILE:${name}>\" Pack=\"true\"
+          PackagePath=\"runtimes/${_rid}/native/\"
+          CopyToOutputDirectory=\"PreserveNewest\" />
+  </ItemGroup>
+</Project>
+")
+endfunction()

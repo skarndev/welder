@@ -198,7 +198,9 @@ inline std::int32_t age_of(const Animal& a) { return a.age; }
 
 struct [[=welder::weld(welder::lang::cs)]] Basket {
     Basket() = default;
-    std::vector<std::int32_t> nums{1, 2, 3};  // -> int[] copy property
+    std::vector<std::int32_t> nums{1, 2, 3};  // -> live VectorInt (AsSpan zero-copy)
+    std::array<double, 3> bounds{0.5, 1.5, 2.5};  // -> live ArrayDoublex3
+    std::vector<Level> levels{};              // enum elements -> live VectorLevel
     std::optional<std::string> label{};       // -> string? property
     std::optional<std::int32_t> find(std::int32_t v) const {
         for (std::size_t i{0}; i < nums.size(); ++i)

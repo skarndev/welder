@@ -274,3 +274,11 @@ uninstantiated template. The same annotation therefore feeds both paths:
 You write the doc once, on the template; `Box<int>` and `Box<double>` each carry
 it into their `__doc__`, and the reference documents `Box` — no shadow copy to
 keep in sync.
+
+!!! note "On the C# rod"
+    The alias route is identical for `lang::cs`: the instantiation binds under
+    the alias's (or its `weld_as`) name, nested types of a specialization
+    included. Function templates are outside welder's walk on every rod; where
+    the Python backends escape through [handle chaining](../guide/extending.md),
+    the C# backend — build-time text, no runtime handle — uses the universal
+    escape instead: a plain welded wrapper function calling the instantiation.

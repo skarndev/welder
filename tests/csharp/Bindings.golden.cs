@@ -156,8 +156,30 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_destroy(IntPtr self);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_new_default(out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_clone(BasketHandle self, out WelderError err);
-        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_Basket_get_nums(BasketHandle self, out WelderError err);
-        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_nums(BasketHandle self, WelderSeqWire v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_vecs_int_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_int_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_vecs_int_data(VectorIntHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_int_fill(VectorIntHandle self, IntPtr data, long len, out WelderError err);
+        [LibraryImport(Lib)] internal static partial long welder_vecs_int_size(VectorIntHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_int_push(VectorIntHandle self, int v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_int_clear(VectorIntHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_get_nums(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_nums(BasketHandle self, VectorIntHandle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_arrs_double_3_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_arrs_double_3_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_arrs_double_3_data(ArrayDoublex3Handle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_arrs_double_3_fill(ArrayDoublex3Handle self, IntPtr data, long len, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_get_bounds(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_bounds(BasketHandle self, ArrayDoublex3Handle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_vecs_csharp_cases_Level_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_csharp_cases_Level_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_vecs_csharp_cases_Level_data(VectorLevelHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_csharp_cases_Level_fill(VectorLevelHandle self, IntPtr data, long len, out WelderError err);
+        [LibraryImport(Lib)] internal static partial long welder_vecs_csharp_cases_Level_size(VectorLevelHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_csharp_cases_Level_push(VectorLevelHandle self, byte v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_vecs_csharp_cases_Level_clear(VectorLevelHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Basket_get_levels(BasketHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_levels(BasketHandle self, VectorLevelHandle v, out WelderError err);
         [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_Basket_get_label(BasketHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Basket_set_label(BasketHandle self, WelderOptWire v, out WelderError err);
         [LibraryImport(Lib)] internal static partial WelderOptWire welder_csharp_cases_Basket_m_find_0(BasketHandle self, int a0, out WelderError err);
@@ -904,27 +926,54 @@ namespace csharp_cases
             return new Basket(_r, true);
         }
 
-        public unsafe int[] Nums
+        public VectorInt Nums
         {
             get
             {
-                var _r = NativeMethods.welder_csharp_cases_Basket_get_nums(_h_Basket, out WelderError _e);
+                IntPtr _r = NativeMethods.welder_csharp_cases_Basket_get_nums(_h_Basket, out WelderError _e);
                 WelderInterop.ThrowIfError(in _e);
-                var _out = new int[_r.Len];
-                if (_r.Len != 0)
-                {
-                    fixed (int* _d = _out)
-                        Buffer.MemoryCopy((void*)_r.Data, _d, _r.Len * sizeof(int), _r.Len * sizeof(int));
-                }
-                if (_r.Data != IntPtr.Zero) NativeMethods.welder_free(_r.Data);
-                return _out;
+                var _v = new VectorInt(_r, false);
+                _v._owner = this;
+                return _v;
             }
             set
             {
-                fixed (int* _pin0 = @value) {
-                NativeMethods.welder_csharp_cases_Basket_set_nums(_h_Basket, new WelderSeqWire { Data = (IntPtr)_pin0, Len = @value.Length }, out WelderError _e);
+                NativeMethods.welder_csharp_cases_Basket_set_nums(_h_Basket, value._h_VectorInt, out WelderError _e);
                 WelderInterop.ThrowIfError(in _e);
-                }
+            }
+        }
+
+        public ArrayDoublex3 Bounds
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_csharp_cases_Basket_get_bounds(_h_Basket, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new ArrayDoublex3(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Basket_set_bounds(_h_Basket, value._h_ArrayDoublex3, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+
+        public VectorLevel Levels
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_csharp_cases_Basket_get_levels(_h_Basket, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new VectorLevel(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Basket_set_levels(_h_Basket, value._h_VectorLevel, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -1523,6 +1572,219 @@ namespace csharp_cases
         }
 
         public virtual void Dispose() => _h_Machine.Dispose();
+    }
+
+    internal sealed class VectorIntHandle : SafeHandle
+    {
+        internal VectorIntHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_vecs_int_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ vector of int (live element access; AsSpan() is a zero-copy view over the C++ buffer, valid until a size-changing operation or Dispose).</summary>
+    public sealed class VectorInt : IDisposable
+    {
+        internal VectorIntHandle _h_VectorInt;
+        internal object? _owner;
+        internal VectorInt(IntPtr handle, bool owns) { _h_VectorInt = new VectorIntHandle(handle, owns); }
+        public VectorInt() : this(_New(), true) {}
+        private static IntPtr _New()
+        {
+            IntPtr _r = NativeMethods.welder_vecs_int_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public int Count
+        {
+            get
+            {
+                var _r = NativeMethods.welder_vecs_int_size(_h_VectorInt, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return (int)_r;
+            }
+        }
+        public unsafe Span<int> AsSpan()
+        {
+            IntPtr _d = NativeMethods.welder_vecs_int_data(_h_VectorInt, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _s = new Span<int>((void*)_d, Count);
+            GC.KeepAlive(this);
+            return _s;
+        }
+        public int this[int i]
+        {
+            get => AsSpan()[i];
+            set => AsSpan()[i] = value;
+        }
+        public void Add(int item)
+        {
+            NativeMethods.welder_vecs_int_push(_h_VectorInt, item, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+        }
+        public void Clear()
+        {
+            NativeMethods.welder_vecs_int_clear(_h_VectorInt, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+        }
+        public int[] ToArray() => AsSpan().ToArray();
+        public unsafe void CopyFrom(ReadOnlySpan<int> src)
+        {
+            fixed (int* _p = src)
+            {
+                NativeMethods.welder_vecs_int_fill(_h_VectorInt, (IntPtr)_p, src.Length, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+        public static implicit operator VectorInt(int[] a)
+        {
+            var _v = new VectorInt();
+            _v.CopyFrom(a);
+            return _v;
+        }
+        public void Dispose() => _h_VectorInt.Dispose();
+    }
+
+    internal sealed class ArrayDoublex3Handle : SafeHandle
+    {
+        internal ArrayDoublex3Handle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_arrs_double_3_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ std::array of 3 double (live element access; AsSpan() is a zero-copy view over the C++ buffer, valid until a size-changing operation or Dispose).</summary>
+    public sealed class ArrayDoublex3 : IDisposable
+    {
+        internal ArrayDoublex3Handle _h_ArrayDoublex3;
+        internal object? _owner;
+        internal ArrayDoublex3(IntPtr handle, bool owns) { _h_ArrayDoublex3 = new ArrayDoublex3Handle(handle, owns); }
+        public ArrayDoublex3() : this(_New(), true) {}
+        private static IntPtr _New()
+        {
+            IntPtr _r = NativeMethods.welder_arrs_double_3_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public int Count => 3;
+        public unsafe Span<double> AsSpan()
+        {
+            IntPtr _d = NativeMethods.welder_arrs_double_3_data(_h_ArrayDoublex3, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _s = new Span<double>((void*)_d, Count);
+            GC.KeepAlive(this);
+            return _s;
+        }
+        public double this[int i]
+        {
+            get => AsSpan()[i];
+            set => AsSpan()[i] = value;
+        }
+        public double[] ToArray() => AsSpan().ToArray();
+        public unsafe void CopyFrom(ReadOnlySpan<double> src)
+        {
+            fixed (double* _p = src)
+            {
+                NativeMethods.welder_arrs_double_3_fill(_h_ArrayDoublex3, (IntPtr)_p, src.Length, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+        public static implicit operator ArrayDoublex3(double[] a)
+        {
+            var _v = new ArrayDoublex3();
+            _v.CopyFrom(a);
+            return _v;
+        }
+        public void Dispose() => _h_ArrayDoublex3.Dispose();
+    }
+
+    internal sealed class VectorLevelHandle : SafeHandle
+    {
+        internal VectorLevelHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_vecs_csharp_cases_Level_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ vector of Level (live element access; AsSpan() is a zero-copy view over the C++ buffer, valid until a size-changing operation or Dispose).</summary>
+    public sealed class VectorLevel : IDisposable
+    {
+        internal VectorLevelHandle _h_VectorLevel;
+        internal object? _owner;
+        internal VectorLevel(IntPtr handle, bool owns) { _h_VectorLevel = new VectorLevelHandle(handle, owns); }
+        public VectorLevel() : this(_New(), true) {}
+        private static IntPtr _New()
+        {
+            IntPtr _r = NativeMethods.welder_vecs_csharp_cases_Level_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public int Count
+        {
+            get
+            {
+                var _r = NativeMethods.welder_vecs_csharp_cases_Level_size(_h_VectorLevel, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return (int)_r;
+            }
+        }
+        public unsafe Span<Level> AsSpan()
+        {
+            IntPtr _d = NativeMethods.welder_vecs_csharp_cases_Level_data(_h_VectorLevel, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _s = new Span<Level>((void*)_d, Count);
+            GC.KeepAlive(this);
+            return _s;
+        }
+        public Level this[int i]
+        {
+            get => AsSpan()[i];
+            set => AsSpan()[i] = value;
+        }
+        public void Add(Level item)
+        {
+            NativeMethods.welder_vecs_csharp_cases_Level_push(_h_VectorLevel, (byte)item, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+        }
+        public void Clear()
+        {
+            NativeMethods.welder_vecs_csharp_cases_Level_clear(_h_VectorLevel, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+        }
+        public Level[] ToArray() => AsSpan().ToArray();
+        public unsafe void CopyFrom(ReadOnlySpan<Level> src)
+        {
+            fixed (Level* _p = src)
+            {
+                NativeMethods.welder_vecs_csharp_cases_Level_fill(_h_VectorLevel, (IntPtr)_p, src.Length, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+        public static implicit operator VectorLevel(Level[] a)
+        {
+            var _v = new VectorLevel();
+            _v.CopyFrom(a);
+            return _v;
+        }
+        public void Dispose() => _h_VectorLevel.Dispose();
     }
 
     internal sealed class VectorPointHandle : SafeHandle

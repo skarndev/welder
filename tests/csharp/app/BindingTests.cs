@@ -229,10 +229,29 @@ public class BindingTests
     {
         using (var bk = new Basket())
         {
-            Assert.True(bk.Nums.Length == 3 && bk.Nums[2] == 3,
-                        "vector<int> field -> int[] copy");
-            bk.Nums = new[] { 5, 6 };
-            Assert.Equal(12, bk.Total(new[] { 1 })); // vector param + field set
+            var nums = bk.Nums; // live VectorInt view of the member
+            Assert.True(nums.Count == 3 && nums[2] == 3,
+                        "vector<int> field -> live wrapper");
+            nums.Add(4); // writes through to the C++ member
+            Assert.Equal(4, bk.Nums.Count);
+            var span = nums.AsSpan(); // zero-copy over the C++ buffer
+            span[0] = 10;
+            Assert.Equal(10, bk.Nums[0]);
+            Assert.Equal(new[] { 10, 2, 3, 4 }, nums.ToArray());
+            bk.Nums = new[] { 5, 6 }; // implicit T[] conversion, copy-assign
+            Assert.Equal(12, bk.Total(new[] { 1 })); // vector param (T[] copy)
+
+            var bounds = bk.Bounds; // live fixed array, constant Count
+            Assert.True(bounds.Count == 3 && Math.Abs(bounds[1] - 1.5) < 1e-12,
+                        "array<double,3> field -> live wrapper");
+            bounds[2] = 9.5; // element write-through
+            Assert.True(Math.Abs(bk.Bounds[2] - 9.5) < 1e-12);
+            Assert.ThrowsAny<ArgumentException>(
+                () => bk.Bounds = new[] { 1.0 }); // wrong extent on assignment
+
+            bk.Levels.Add(Level.High); // enum elements, same live protocol
+            Assert.Equal(Level.High, bk.Levels[0]);
+            Assert.Equal(1, bk.Levels.AsSpan().Length);
             Assert.Equal(1, bk.Find(6));             // optional<int> some
             Assert.Null(bk.Find(9));                 // optional<int> none
             Assert.Null(bk.Label); // optional<string> field (empty)

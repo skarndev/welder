@@ -117,7 +117,7 @@ generates once per instantiation (document::claim_container): 7 thunks
 bounds-checked at() → OOR) + the C# wrapper (SafeHandle, Count, live-view
 indexer with _owner pinning, Add/Clear, public parameterless ctor);
 signature-driven collection via _collect_containers in every rod hook
-(operators excepted — known gap). gcc16: a splice as template arg must be
+(add_operator included). gcc16: a splice as template arg must be
 parenthesized/aliased (`using El = [:E:]` before std::vector<El>).
 Gap-closing (post-Phase-7): pair/tuple<leaf…> → tuple_value (slot-array wire:
 returns malloc a welder_opt_wire[] read per-slot; params stackalloc one; C#
@@ -150,7 +150,20 @@ class/enum writers flush into their section; render_cs emits `namespace X.Y`
 blocks after the root) — types live IN their namespace (no flattening, no
 cross-namespace name collisions), free functions/variables in a per-namespace
 `Global` static class (`geo.Util.Global.Dist`; `using static` for bare
-calls). Cross-namespace references work because record_type_name registers
+calls). SCALAR/ENUM sequence FIELDS (non-const): _add_scalar_seq_field +
+_ensure_scalar_seq — live wrapper (welder_vecs_<tok>_*/welder_arrs_<tok>_<N>_*
+thunks: new/destroy/data/fill + size/push/clear for vectors; shim
+field_addr/field_assign for the property), AsSpan() = zero-copy Span<T> over
+data() (docs say: valid until size change/Dispose), implicit T[] conversion
+via bulk fill; const fields keep the T[] copy (span write = UB). Params/
+returns stay seq_value copies. PACKAGING: the four build-time rod INTERFACE
+targets are exported (find_package parity); WelderCSharpModule/Trampolines/
+OpaqueContainers .cmake ship with the package; welder_csharp_nuget_project()
+writes a packable csproj (runtimes/<rid>/native layout, RID from the CMake
+platform); cookbook recipe 11-csharp = the consumer + `dotnet pack` proof;
+Windows CI runs the dotnet round-trip (setup-dotnet + WELDER_DOTNET /
+WELDER_COOKBOOK_DOTNET cache presets — msys2 PATH doesn't see native tools).
+Cross-namespace references work because record_type_name registers
 the FROM-ROOT dotted path (valid anywhere inside the root namespace — C#
 lookup walks outward); handle FIELDS sanitize it (_h_Util_Circle), handle
 TYPE refs keep it dotted (Util.CircleHandle from root NativeMethods), the

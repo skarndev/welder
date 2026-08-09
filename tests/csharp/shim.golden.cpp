@@ -198,9 +198,53 @@ void* welder_csharp_cases_Basket_new_default(welder_error* err) { return wcs::sh
 
 void* welder_csharp_cases_Basket_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Basket>(self, err); }
 
-welder_seq_wire welder_csharp_cases_Basket_get_nums(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "nums")>(self, err); }
+void* welder_vecs_int_new(welder_error* err) { return wcs::shim::vec_new<^^int>(err); }
 
-void welder_csharp_cases_Basket_set_nums(void* self, welder_seq_wire v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "nums")>(self, err, v); }
+void welder_vecs_int_destroy(void* self) { wcs::shim::vec_destroy<^^int>(self); }
+
+void* welder_vecs_int_data(void* self, welder_error* err) { return wcs::shim::vec_data<^^int>(self, err); }
+
+void welder_vecs_int_fill(void* self, const void* data, std::int64_t len, welder_error* err) { wcs::shim::vec_fill<^^int>(self, data, len, err); }
+
+std::int64_t welder_vecs_int_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^int>(self, err); }
+
+void welder_vecs_int_push(void* self, std::int32_t v, welder_error* err) { wcs::shim::vec_push<^^int>(self, v, err); }
+
+void welder_vecs_int_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^int>(self, err); }
+
+void* welder_csharp_cases_Basket_get_nums(void* self, welder_error* err) { return wcs::shim::field_addr<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "nums")>(self, err); }
+
+void welder_csharp_cases_Basket_set_nums(void* self, void* v, welder_error* err) { wcs::shim::field_assign<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "nums")>(self, v, err); }
+
+void* welder_arrs_double_3_new(welder_error* err) { return wcs::shim::arr_new<^^double, 3>(err); }
+
+void welder_arrs_double_3_destroy(void* self) { wcs::shim::arr_destroy<^^double, 3>(self); }
+
+void* welder_arrs_double_3_data(void* self, welder_error* err) { return wcs::shim::arr_data<^^double, 3>(self, err); }
+
+void welder_arrs_double_3_fill(void* self, const void* data, std::int64_t len, welder_error* err) { wcs::shim::arr_fill<^^double, 3>(self, data, len, err); }
+
+void* welder_csharp_cases_Basket_get_bounds(void* self, welder_error* err) { return wcs::shim::field_addr<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "bounds")>(self, err); }
+
+void welder_csharp_cases_Basket_set_bounds(void* self, void* v, welder_error* err) { wcs::shim::field_assign<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "bounds")>(self, v, err); }
+
+void* welder_vecs_csharp_cases_Level_new(welder_error* err) { return wcs::shim::vec_new<^^::csharp_cases::Level>(err); }
+
+void welder_vecs_csharp_cases_Level_destroy(void* self) { wcs::shim::vec_destroy<^^::csharp_cases::Level>(self); }
+
+void* welder_vecs_csharp_cases_Level_data(void* self, welder_error* err) { return wcs::shim::vec_data<^^::csharp_cases::Level>(self, err); }
+
+void welder_vecs_csharp_cases_Level_fill(void* self, const void* data, std::int64_t len, welder_error* err) { wcs::shim::vec_fill<^^::csharp_cases::Level>(self, data, len, err); }
+
+std::int64_t welder_vecs_csharp_cases_Level_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^::csharp_cases::Level>(self, err); }
+
+void welder_vecs_csharp_cases_Level_push(void* self, std::uint8_t v, welder_error* err) { wcs::shim::vec_push<^^::csharp_cases::Level>(self, v, err); }
+
+void welder_vecs_csharp_cases_Level_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^::csharp_cases::Level>(self, err); }
+
+void* welder_csharp_cases_Basket_get_levels(void* self, welder_error* err) { return wcs::shim::field_addr<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "levels")>(self, err); }
+
+void welder_csharp_cases_Basket_set_levels(void* self, void* v, welder_error* err) { wcs::shim::field_assign<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "levels")>(self, v, err); }
 
 welder_opt_wire welder_csharp_cases_Basket_get_label(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Basket, wcs::named_field(^^::csharp_cases::Basket, "label")>(self, err); }
 

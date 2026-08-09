@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <exception>
 #include <functional>
 #include <meta>
@@ -724,6 +725,94 @@ void vec_clear(void* self, welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
         reinterpret_cast<std::vector<El>*>(self)->clear();
+        return 0;
+    });
+}
+
+// --- reference-semantic SCALAR-sequence support (live fields + spans) --------
+
+/** The buffer address of a `std::vector<scalar|enum>` — the zero-copy span's
+    base pointer. */
+template <std::meta::info E>
+void* vec_data(void* self, welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<void*>(err, [&]() -> void* {
+        return static_cast<void*>(
+            reinterpret_cast<std::vector<El>*>(self)->data());
+    });
+}
+
+/** Append one element crossing BY VALUE on the wire (@a W: the fixed-width
+    scalar / the enum's underlying type). */
+template <std::meta::info E, class W>
+void vec_push(void* self, W v, welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<std::vector<El>*>(self)->push_back(
+            static_cast<El>(v));
+        return 0;
+    });
+}
+
+/** Bulk-assign from a managed buffer (the wrapper's CopyFrom / the implicit
+    array conversion). */
+template <std::meta::info E>
+void vec_fill(void* self, const void* data, std::int64_t len,
+              welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        const El* d{reinterpret_cast<const El*>(data)};
+        reinterpret_cast<std::vector<El>*>(self)->assign(
+            d, d + static_cast<std::size_t>(len));
+        return 0;
+    });
+}
+
+template <std::meta::info E, std::size_t N>
+void* arr_data(void* self, welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<void*>(err, [&]() -> void* {
+        return static_cast<void*>(
+            reinterpret_cast<std::array<El, N>*>(self)->data());
+    });
+}
+
+/** Bulk-assign a fixed array — a wrong-length source is the same designed
+    error a length-mismatched managed array raises on the by-value path. */
+template <std::meta::info E, std::size_t N>
+void arr_fill(void* self, const void* data, std::int64_t len,
+              welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        if (static_cast<std::size_t>(len) != N)
+            throw std::invalid_argument{
+                "welder: expected a sequence of length " + std::to_string(N)};
+        const El* d{reinterpret_cast<const El*>(data)};
+        std::copy(d, d + N, reinterpret_cast<std::array<El, N>*>(self)->begin());
+        return 0;
+    });
+}
+
+/** A container-typed field's address — the live wrapper view's target. */
+template <std::meta::info C, std::meta::info Mem>
+void* field_addr(void* self, welder_error* err) noexcept {
+    using Cls = [:C:];
+    return caught<void*>(err, [&]() -> void* {
+        auto& r{reinterpret_cast<Cls*>(self)->[:Mem:]};
+        return static_cast<void*>(std::addressof(r));
+    });
+}
+
+/** Whole-container assignment INTO a field from another wrapped instance (the
+    property's set half: `obj.Nums = ...` copies contents, C++ `operator=`). */
+template <std::meta::info C, std::meta::info Mem>
+void field_assign(void* self, void* src, welder_error* err) noexcept {
+    using Cls = [:C:];
+    caught<int>(err, [&]() -> int {
+        using MT = std::remove_cvref_t<decltype(reinterpret_cast<Cls*>(self)
+                                                    ->[:Mem:])>;
+        reinterpret_cast<Cls*>(self)->[:Mem:] =
+            *reinterpret_cast<MT*>(src);
         return 0;
     });
 }

@@ -47,6 +47,22 @@ if(WELDER_INSTALL)
     EXPORT welder-targets
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
+  # The BUILD-TIME text rods (LuaCATS stubs, trampolines, opaque containers, C#)
+  # are pure INTERFACE targets over the headers — no framework coupling — so they
+  # export alongside: the shipped helpers (welder_luacats_generate_stub,
+  # welder_csharp_generate_bindings, …) link them and must work from
+  # find_package() exactly as from FetchContent. The RUNTIME rods stay
+  # unexported by design (a consumer brings pybind11/sol2/… and links the
+  # framework beside welder::headers).
+  set_target_properties(welder_luacats PROPERTIES EXPORT_NAME luacats)
+  set_target_properties(welder_trampolines PROPERTIES EXPORT_NAME trampolines)
+  set_target_properties(welder_opaque_containers PROPERTIES
+    EXPORT_NAME opaque_containers)
+  set_target_properties(welder_csharp PROPERTIES EXPORT_NAME csharp)
+  install(TARGETS welder_luacats welder_trampolines welder_opaque_containers
+                  welder_csharp
+    EXPORT welder-targets)
+
   install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/welder
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     FILES_MATCHING PATTERN "*.hpp")
@@ -66,6 +82,9 @@ if(WELDER_INSTALL)
     ${CMAKE_SOURCE_DIR}/cmake/WelderSol2Module.cmake
     ${CMAKE_SOURCE_DIR}/cmake/WelderLuaBridgeModule.cmake
     ${CMAKE_SOURCE_DIR}/cmake/WelderLuaCATSStub.cmake
+    ${CMAKE_SOURCE_DIR}/cmake/WelderTrampolines.cmake
+    ${CMAKE_SOURCE_DIR}/cmake/WelderOpaqueContainers.cmake
+    ${CMAKE_SOURCE_DIR}/cmake/WelderCSharpModule.cmake
     DESTINATION ${WELDER_INSTALL_CMAKEDIR})
 
   configure_package_config_file(

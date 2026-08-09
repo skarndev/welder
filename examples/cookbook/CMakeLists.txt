@@ -137,6 +137,15 @@ function(cookbook_add_pybind11_module target)
     CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 endfunction()
 
+# The C# recipe needs only a .NET SDK (the rod itself is pure reflection +
+# text); like the Lua recipes it self-skips when the tool is absent.
+find_program(WELDER_COOKBOOK_DOTNET NAMES dotnet)
+set(WELDER_COOKBOOK_CSHARP_TFM "net10.0" CACHE STRING
+  "TargetFramework for the C# cookbook recipe (needs net7.0+ for [LibraryImport])")
+if(NOT WELDER_COOKBOOK_DOTNET)
+  message(STATUS "cookbook: 'dotnet' not found - skipping recipe 11-csharp")
+endif()
+
 # Each recipe registers a `cookbook.<name>` CTest that imports/loads the built
 # module(s) and asserts the bound surface.
 enable_testing()
@@ -151,3 +160,6 @@ add_subdirectory(07-multilang)
 add_subdirectory(08-tack-welding)
 add_subdirectory(09-custom-traversal)
 add_subdirectory(10-containers)
+if(WELDER_COOKBOOK_DOTNET)
+  add_subdirectory(11-csharp)
+endif()

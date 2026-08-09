@@ -44,7 +44,8 @@ Widget { /* … */ };
 ```
 
 A `lang` is stored as a bit in an `unsigned` mask, and the value space is **open**:
-`welder::lang::py` / `welder::lang::lua` name the shipped languages, while
+`welder::lang::py` / `welder::lang::lua` / `welder::lang::cs` name the shipped
+languages, while
 `welder::user_lang<Slot>` mints an identity for a language welder doesn't ship —
 usable everywhere a `lang` is (see
 [Binding a new language](extending.md#binding-a-new-language)). `weld` is

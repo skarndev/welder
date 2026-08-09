@@ -137,4 +137,10 @@ this for you — put the enums before the structs that use them.
     as a trailing `/**< */` comment. How docs flow in general is covered later, in
     [Docstrings](docstrings.md).
 
+!!! note "On the C# rod"
+    A welded enum mirrors as a real `enum : <underlying>` with **verbatim**
+    enumerator spellings, and each enumerator's `[[=welder::doc]]` becomes its
+    own `///` XML comment — C# has the per-member doc slot Python lacks, so
+    nothing folds into the type's summary. See [C# / .NET bindings](csharp.md).
+
 Next: [Inheritance](inheritance.md).
