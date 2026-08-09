@@ -59,7 +59,7 @@ decltype(auto) override_dispatch(const nb::detail::trampoline<N>& tr,
         !std::is_reference_v<ret_type>,
         "welder: cannot trampoline a virtual method that returns a reference "
         "(nanobind cannot keep the referent alive across the C++/Python boundary); "
-        "return by value, or mark the type [[=welder::rods::python::bind_flat]].");
+        "return by value, or mark the type [[=welder::bind_flat]].");
 
     constexpr const char* name{
         std::define_static_string(std::meta::identifier_of(Fn))};
@@ -105,7 +105,7 @@ decltype(auto) override_dispatch(const nb::detail::trampoline<N>& tr,
         : welder_py_base(welder_src) {}                                       \
     using welder_py_base::welder_py_base;                                     \
     ::nanobind::detail::trampoline<                                           \
-        ::welder::rods::python::virtual_slot_count(^^BASE)>                   \
+        ::welder::virtual_slot_count(^^BASE)>                   \
         welder_nb_trampoline{this}
 
 /** Body of a single virtual override in a `WELDER_PY_TRAMPOLINE` class, keyed on an
@@ -115,7 +115,7 @@ decltype(auto) override_dispatch(const nb::detail::trampoline<N>& tr,
     cannot spell: an **overloaded** virtual, where `^^welder_py_base::FUNC` would name
     an overload set (ill-formed — P2996 has no overload-set reflection). @a SLOT is a
     reflection of the *one* base virtual this override implements — select it with
-    @ref welder::rods::python::virtual_slot — and drives the dispatch (name, return
+    @ref welder::virtual_slot — and drives the dispatch (name, return
     type, pureness); the textual @a FUNC only spells the qualified base-class
     fallback call, where ordinary overload resolution picks the right overload from
     the forwarded parameters. Parenthesize @a SLOT if the expression contains commas.
@@ -134,7 +134,7 @@ decltype(auto) override_dispatch(const nb::detail::trampoline<N>& tr,
     Forwards to the Python override of @a FUNC if present, else to `BASE::FUNC`. Extra
     arguments are the method's parameters, forwarded to both paths. @a FUNC must name a
     *single* virtual — for an overloaded one use @ref WELDER_PY_OVERRIDE_AS with a
-    @ref welder::rods::python::virtual_slot selection. Neutral name: each Python rod
+    @ref welder::virtual_slot selection. Neutral name: each Python rod
     defines it against its own dispatch. */
 #define WELDER_PY_OVERRIDE(FUNC, ...)                                          \
     WELDER_PY_OVERRIDE_AS(^^welder_py_base::FUNC, FUNC __VA_OPT__(, ) __VA_ARGS__)

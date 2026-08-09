@@ -779,7 +779,7 @@ via `_make_class`'s new `Trampoline` param + `static_assert(trampoline_covers(..
 (every overridable virtual is redeclared in `PyT`, matched by name + `type_of` — full
 signature incl. cv/ref, so overloads/covariant returns don't false-match); else
 `static_assert(bound_flat(^^T))` — a virtual type must register a trampoline or carry
-`[[=welder::rods::python::bind_flat]]` (type-level = whole type flat; per-method =
+`[[=welder::bind_flat]]` (type-level = whole type flat; per-method =
 that virtual stays a plain bound method, out of slot count + coverage).
 
 **Dispatch:** `WELDER_PY_OVERRIDE(fn, args…)` → `WELDER_PY_OVERRIDE_AS(^^welder_py_base::fn, fn, args…)`
@@ -787,7 +787,7 @@ that virtual stays a plain bound method, out of slot count + coverage).
 reflection). The `_AS` form exists because `^^Base::fn` is **ill-formed for an
 overloaded virtual** (no overload-set reflection in P2996; gcc-16: "cannot take the
 reflection of an overload set") — for overloads, hand-written trampolines pass an
-explicit slot via `welder::rods::python::virtual_slot(^^T, "fn", ^^ret(args) quals)`
+explicit slot via `welder::virtual_slot(^^T, "fn", ^^ret(args) quals)`
 (searches `overridable_virtuals`, so inherited slots too; no match = const-eval error
 naming a diagnostic function; extra parens keep commas out of macro splitting), while
 the textual `fn` arg only spells the qualified base fallback (overload resolution

@@ -20,7 +20,7 @@
     type (`[: std::meta::type_of(…) :]`) rather than a respelled type name — so the
     override matches the base signature by construction, for arbitrarily hairy types.
     The cv / ref / `noexcept` qualifiers are emitted from the matching reflection
-    queries. Slots come from @ref welder::rods::python::overridable_virtuals, so the
+    queries. Slots come from @ref welder::overridable_virtuals, so the
     generated trampoline covers inherited virtuals and honours `bind_flat`.
 
     The one signature shape reflection cannot reproduce is a **C-style variadic**
@@ -142,18 +142,18 @@ consteval std::string render_trampoline(std::meta::info type) {
     s += "    WELDER_PY_TRAMPOLINE(" + ident + ", " + base + ");\n";
 
     std::size_t k{0};
-    for (auto slot : ::welder::rods::python::overridable_virtuals(type)) {
+    for (auto slot : ::welder::overridable_virtuals(type)) {
         const std::string name{std::meta::identifier_of(slot)};
         if (is_c_variadic(slot)) {
             s += "    static_assert(false, \"welder: '" + base + "::" + name +
                  "' is a C-variadic virtual; C++26 reflection cannot reproduce its "
                  "'...' parameter. Mark it "
-                 "[[=welder::rods::python::bind_flat]] to bind it non-overridably.\");\n";
+                 "[[=welder::bind_flat]] to bind it non-overridably.\");\n";
             ++k; // keep k aligned with the overridable_virtuals index for later slots
             continue;
         }
         // The reflected slot, re-derived in the generated TU (same order as here).
-        const std::string idx{"::welder::rods::python::overridable_virtuals(^^" + base +
+        const std::string idx{"::welder::overridable_virtuals(^^" + base +
                               ")[" + int_string(k) + "]"};
         s += "    [: ::std::meta::return_type_of(" + idx + ") :] " + name + "(";
         std::string args{};
@@ -227,7 +227,7 @@ struct document {
             "respelled from reflection). Hand-write the trampoline, spelling "
             "the base through the welding alias (e.g. `struct PyValve : "
             "IntSilo::Valve { … }` with a trampoline_for specialization), or "
-            "annotate the type [[=welder::rods::python::bind_flat]].");
+            "annotate the type [[=welder::bind_flat]].");
         structs += std::define_static_string(render_trampoline(Type));
         registrations += std::define_static_string(render_registration(Type));
     }

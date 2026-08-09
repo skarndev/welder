@@ -5,7 +5,7 @@
 // WELDER_PY_TRAMPOLINE / WELDER_PY_OVERRIDE macros, so the SAME source binds under
 // either Python rod. The binding TU must include the active backend's
 // <welder/rods/python/<backend>/trampoline.hpp> *before* this header (for the macros
-// and welder::rods::python::{trampoline_for,bind_flat}). The Lua backends do not
+// and welder::bind_flat + welder::rods::python::trampoline_for). The Lua backends do not
 // include this header — trampolines are a Python-family concept.
 //
 // The cases live in namespace `overridable`, bound under an `overridable` submodule
@@ -29,7 +29,7 @@ Animal {
     // A virtual deliberately bound *flat*: it stays a plain, callable method but is
     // not routed through the trampoline, so it needs no override and drops out of the
     // slot count and coverage check. C++ never dispatches it back into Python.
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string kingdom() const { return "Animalia"; }
 
     // A non-virtual method that calls the virtuals polymorphically: observing its
@@ -140,13 +140,13 @@ struct PyRobot : Robot {
     // macro spells only the qualified base fallback, where overload resolution picks
     // the right overload from the forwarded argument.
     std::string send(int code) const override {
-        WELDER_PY_OVERRIDE_AS((welder::rods::python::virtual_slot(
+        WELDER_PY_OVERRIDE_AS((welder::virtual_slot(
                                   ^^Robot, "send", ^^std::string(int) const)),
                               send, code);
     }
     std::string send(const std::string& text) const override {
         WELDER_PY_OVERRIDE_AS(
-            (welder::rods::python::virtual_slot(
+            (welder::virtual_slot(
                 ^^Robot, "send", ^^std::string(const std::string&) const)),
             send, text);
     }

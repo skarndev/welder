@@ -29,7 +29,7 @@ Beast {
 
     // Deliberately bound flat: stays callable, not routed through the trampoline, so
     // the generator must NOT emit an override for it.
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string realm() const { return "Animalia"; }
 
     // A non-virtual method calling the virtuals polymorphically: observing it from

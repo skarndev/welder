@@ -10,8 +10,8 @@
 
 #include <welder/vocabulary.hpp>
 #include <welder/rods/csharp/rod.hpp>
-// The shared overridable cases spell the Python-side markers
-// (rods::python::bind_flat / ::trampoline) — pure reflection, no Python dep.
+// The shared overridable cases spell the Python-side trampoline hooks
+// (rods::python::trampoline_for) — pure reflection, no Python dep.
 #include <welder/rods/python/trampoline.hpp>
 
 #define WELDER_TEST_MODULE_T ::welder::rods::csharp::module_writer

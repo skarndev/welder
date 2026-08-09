@@ -467,14 +467,14 @@ struct rod {
 
         A type carrying virtual methods is bound *overridable* — it must register
         a trampoline (so Python subclasses can override those virtuals) or opt
-        out with `[[=welder::rods::python::bind_flat]]`. When a trampoline is
+        out with `[[=welder::bind_flat]]`. When a trampoline is
         present, its coverage of @a T's virtuals is checked at compile time.
         @see welder::rods::python::trampoline_for */
     template <class T, auto Bases, std::size_t... I>
     static auto _make_class_at(py::handle scope, const char* name,
                                const char* doc, std::index_sequence<I...> seq) {
         namespace py_ = ::welder::rods::python;
-        if constexpr (py_::has_virtual_methods(^^T)) {
+        if constexpr (::welder::has_virtual_methods(^^T)) {
             // Resolve the trampoline: an explicit `trampoline_for<T>` wins; otherwise
             // scan T's namespace for a `[[=trampoline]]`-annotated subclass.
             constexpr auto scanned{py_::scanned_trampoline_of(^^T)};
@@ -496,13 +496,13 @@ struct rod {
                 return _make_class<T, Trampoline, Bases>(scope, name, doc, seq);
             } else {
                 static_assert(
-                    py_::bound_flat(^^T),
+                    ::welder::bound_flat(^^T),
                     "welder: this welded type has virtual methods but no trampoline "
                     "is registered, so a Python subclass could not override them. "
                     "Register one — a [[=welder::rods::python::trampoline]] subclass "
                     "in T's namespace, or a welder::rods::python::trampoline_for<T> "
                     "specialization — or annotate T with "
-                    "[[=welder::rods::python::bind_flat]] to bind it non-overridably.");
+                    "[[=welder::bind_flat]] to bind it non-overridably.");
                 return _make_class<T, void, Bases>(scope, name, doc, seq);
             }
         } else {
@@ -541,7 +541,7 @@ struct rod {
 
         A type carrying virtual methods is bound *overridable* — it must register a
         trampoline (so Python subclasses can override those virtuals) or opt out with
-        `[[=welder::rods::python::bind_flat]]`. When a trampoline is present, its
+        `[[=welder::bind_flat]]`. When a trampoline is present, its
         coverage of @a T's virtuals is checked at compile time. @see _make_class
         @see welder::rods::python::trampoline_for @see welder::rod */
     template <class T, auto Bases, std::size_t... I>

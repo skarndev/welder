@@ -1,7 +1,7 @@
 // Negative-compile case (must FAIL to build): a welded type with an overridable
 // virtual method must register a trampoline (welder::rods::python::trampoline_for)
 // so a Python subclass can override it, or opt out with
-// [[=welder::rods::python::bind_flat]]. With neither, welder's Python rod refuses to
+// [[=welder::bind_flat]]. With neither, welder's Python rod refuses to
 // bind it — silently non-overridable polymorphism is a footgun, not a default.
 // pybind11 counterpart of tests/python/nanobind/cpp/neg/virtual_needs_trampoline.cpp.
 //

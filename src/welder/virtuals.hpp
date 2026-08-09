@@ -42,7 +42,7 @@ struct bind_flat_spec {};
 
 /** Mark a virtual entity as deliberately bound non-overridably.
 
-    Usage: `[[=welder::rods::python::bind_flat]]`. Two granularities:
+    Usage: `[[=welder::bind_flat]]`. Two granularities:
 
     - On a **type**: the whole type is bound non-overridably (produced by C++, never
       subclassed in Python) — no trampoline is required, and none of its virtuals are
@@ -195,7 +195,7 @@ consteval std::vector<std::meta::info> overridable_virtuals(std::meta::info type
     @code
     std::string send(int code) const override {
         WELDER_PY_OVERRIDE_AS(
-            (welder::rods::python::virtual_slot(^^Robot, "send", ^^std::string(int) const)),
+            (welder::virtual_slot(^^Robot, "send", ^^std::string(int) const)),
             send, code);
     }
     @endcode

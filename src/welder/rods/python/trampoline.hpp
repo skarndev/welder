@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <welder/diag.hpp>       // the consteval diagnostics (no_matching_virtual_slot)
-#include <welder/virtuals.hpp>   // the neutral slot machinery (re-exported below)
+#include <welder/virtuals.hpp>   // the neutral slot machinery (welder::virtual_slot, ...)
 #include <welder/vocabulary.hpp> // the annotation vocabulary (for structural specs)
 
 /** @file
@@ -21,19 +21,16 @@
     each override to be a real member function sharing the base method's exact name.
 
     So the trampoline is still hand-authored — but reflection automates everything
-    *around* it, and this header holds the backend-neutral half:
+    *around* it. The slot machinery itself (@ref welder::virtual_slot_count /
+    @ref welder::has_virtual_methods — the `NB_TRAMPOLINE(Base, N)` count, never
+    hand-maintained — @ref welder::overridable_virtuals, the
+    @ref welder::bind_flat opt-out marker) is language-neutral and lives in
+    `<welder/virtuals.hpp>`; this header holds the PYTHON-side half:
 
-    - @ref welder::rods::python::virtual_slot_count "virtual_slot_count" /
-      @ref welder::rods::python::has_virtual_methods "has_virtual_methods" — how many
-      overridable slots a type has (the `NB_TRAMPOLINE(Base, N)` count, never
-      hand-maintained);
     - @ref welder::rods::python::trampoline_for "trampoline_for" — the user's
       `T → trampoline` registration hook (a specializable variable template, the
       type-level analogue of `welder::trust_bindable`), read by each Python rod's
       class-creation primitive to bind `class_<T, Trampoline>` instead of `class_<T>`;
-    - @ref welder::rods::python::bind_flat "bind_flat" — the opt-out marker for a
-      virtual type that is deliberately bound non-overridably (C++-produced, never
-      subclassed in Python);
     - @ref welder::rods::python::trampoline_covers "trampoline_covers" — the
       compile-time coverage check (every virtual of `T` is overridden in the
       trampoline), so a forgotten override is a build error, not a method that
@@ -51,24 +48,10 @@
 
 namespace welder::inline v0::rods::python {
 
-// --- the backend-neutral half: hoisted to <welder/virtuals.hpp> --------------
-// The slot machinery (bind_flat, overridable_virtuals, virtual_slot, ...) is
-// language-neutral — the C# rod's directors consume the same answers — and
-// lives in <welder/virtuals.hpp>. Re-exported here under the historical
-// spellings, so trampoline sources (and the [[=welder::rods::python::bind_flat]]
-// attribute) keep working unchanged.
-using ::welder::bind_flat_spec;
-using ::welder::bind_flat;
-using ::welder::bound_flat;
-using ::welder::is_overridable_virtual;
-using ::welder::overridable_virtuals;
-using ::welder::virtual_slot;
-using ::welder::virtual_slot_count;
-using ::welder::has_virtual_methods;
-namespace detail {
-using ::welder::detail::same_slot;
-using ::welder::detail::collect_virtuals;
-} // namespace detail
+// The backend-neutral slot machinery (bind_flat, overridable_virtuals,
+// virtual_slot, ...) is language-neutral — the C# rod's directors consume the
+// same answers — and lives at welder:: scope in <welder/virtuals.hpp> (spell
+// it [[=welder::bind_flat]], welder::virtual_slot(...), ...).
 
 // --- trampoline registration -------------------------------------------------
 
