@@ -7,10 +7,7 @@
 #include <welder/bind_traits.hpp>
 #include <welder/reflect.hpp>                 // welded_for
 #include <welder/rods/csharp/type_map.hpp>    // classify / spellings / lookup
-#include <welder/rods/python/trampoline.hpp>  // overridable_virtuals / same_slot
-                                              // (pure reflection — no Python dep;
-                                              // hoisting to a neutral header is a
-                                              // pending cleanup)
+#include <welder/virtuals.hpp>             // the neutral slot machinery
 
 /** @file
     The **director** layer of the C# rod: C# subclasses overriding C++ virtuals.
@@ -38,8 +35,8 @@
     C# with the original message.
 
     **Eligibility** (@ref director_eligible): the type has overridable virtual
-    slots (the trampoline machinery's set — `bind_flat` opts out per type or
-    per method) and a **virtual destructor** (the wrapper's destroy thunk
+    slots (the shared `<welder/virtuals.hpp>` set — `welder::bind_flat` opts
+    out per type or per method, exactly as for the Python trampolines) and a **virtual destructor** (the wrapper's destroy thunk
     deletes through `T*`). At most 64 slots (the bitmask). A slot whose shape
     cannot cross (C-variadic, reference/pointer class returns, a class-by-value
     return without a copy constructor) is a designed generation-time error
@@ -52,7 +49,7 @@ namespace welder::inline v0::rods::csharp {
     the generator and the generated shim (which re-derives slot @a k with
     @ref director_slot), so the two sides agree by construction. */
 consteval std::vector<std::meta::info> director_slots(std::meta::info type) {
-    return ::welder::rods::python::overridable_virtuals(type);
+    return ::welder::overridable_virtuals(type);
 }
 
 /** Slot @a k of @a type (the generated shim's re-derivation entry point). */
@@ -71,7 +68,7 @@ consteval bool has_virtual_destructor_of(std::meta::info type) {
 
 /** Whether welded type @a type gets a director (see the file comment). */
 consteval bool director_eligible(std::meta::info type) {
-    if (::welder::rods::python::bound_flat(type))
+    if (::welder::bound_flat(type))
         return false;
     const auto slots{director_slots(type)};
     return !slots.empty() && slots.size() <= 64 &&
@@ -85,7 +82,7 @@ consteval std::size_t director_slot_index(std::meta::info type,
                                           std::meta::info fn) {
     const auto slots{director_slots(type)};
     for (std::size_t i{0}; i < slots.size(); ++i)
-        if (::welder::rods::python::detail::same_slot(slots[i], fn))
+        if (::welder::detail::same_slot(slots[i], fn))
             return i;
     return static_cast<std::size_t>(-1);
 }

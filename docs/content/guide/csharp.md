@@ -92,8 +92,8 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   exception thrown in an override crosses back to the next C# frame intact
   (code 7). Requires a **virtual destructor** on the type (else it binds
   non-overridably), `AllowUnsafeBlocks` in the consuming project, and
-  `[[=welder::rods::python::bind_flat]]` opts a type or method out, exactly as
-  on the Python rods. Unsupported slot shapes (C-variadic, reference/pointer
+  `[[=welder::bind_flat]]` opts a type or method out, exactly as on the
+  Python rods (whose `welder::rods::python::bind_flat` is the same marker). Unsupported slot shapes (C-variadic, reference/pointer
   class or string returns) are a designed shim-build error naming that escape.
 - **Nested member types** register under the outer's binding as real C#
   nested types (`Machine.State`, `Machine.Gauge`), resolving like any other

@@ -1761,7 +1761,7 @@ struct rod {
                              "' has a shape the C# director wire cannot carry "
                              "(C-variadic, or a reference/pointer class or "
                              "string return); mark it "
-                             "[[=welder::rods::python::bind_flat]] to bind it "
+                             "[[=welder::bind_flat]] to bind it "
                              "non-overridably\");\n";
                 ++k;
                 continue;

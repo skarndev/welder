@@ -45,8 +45,9 @@ Shared-case widening so far: retpolicy.hpp Inner/Owner (view/snapshot),
 operators.hpp + inheritance.hpp whole files (bound via
 tests/csharp/cpp/shared_seam.hpp + gen_* binding pairs).
 Directors (Phase 5, src/welder/rods/csharp/directors.hpp): per eligible type
-(overridable_virtuals nonempty — REUSES rods/python/trampoline.hpp, pure
-reflection; virtual dtor; ≤64 slots; bind_flat opts out) the shim emits a C++
+(overridable_virtuals nonempty — from the hoisted NEUTRAL
+src/welder/virtuals.hpp, which rods/python/trampoline.hpp re-exports; virtual
+dtor; ≤64 slots; welder::bind_flat opts out) the shim emits a C++
 director subclass (fnptr table + ctx + mask; overrides splice via the
 re-derived wcs::director_slot(^^T,k), converting through shim::to_wire_arg /
 from_wire_return — a class-by-value return is CLONED managed-side through the
