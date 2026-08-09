@@ -255,6 +255,19 @@ public class BindingTests
     }
 
     [Fact]
+    public void PairsAndTuples()
+    {
+        var (n, name) = Global.Tagged(4);
+        Assert.True(n == 4 && name == "n4", "pair return -> ValueTuple");
+        Assert.Equal(9, Global.PairSum((4, 5L))); // pair param
+        var (i, d, s, pt) = Global.Bundle();
+        Assert.True(i == 7 && Math.Abs(d - 2.5) < 1e-12 && s == "seven",
+                    "tuple return (leaf elements)");
+        using (pt)
+            Assert.Equal(1, pt.X); // a welded element crosses as an owned copy
+    }
+
+    [Fact]
     public void NestedMemberTypes()
     {
         using var mc = new Machine();
@@ -429,6 +442,70 @@ public class BindingTests
             Assert.Equal(500, cy.Recharge(5)); // noexcept override
             Assert.Equal("proto=asimov", cy.Handshake()); // unbound NVI -> base
         }
+    }
+
+    [Fact]
+    public void ReferenceMaps()
+    {
+        using var d = new Depot();
+        var sites = d.Sites; // a live view of the std::map member
+        Assert.Equal(0, sites.Count);
+        using (var hq = new Point(2, 3))
+            sites["hq"] = hq; // insert-or-assign copies the point in
+        Assert.True(sites.ContainsKey("hq"));
+        Assert.Equal(1, d.SiteCount()); // the C++ member saw the write
+        sites["hq"].X = 40; // element view writes through
+        Assert.Equal(40, d.Sites["hq"].X);
+        Assert.Throws<ArgumentOutOfRangeException>(() => sites["nowhere"]);
+        Assert.True(sites.Remove("hq"));
+        Assert.False(sites.Remove("hq"));
+        Assert.Equal(0, d.SiteCount());
+
+        var labels = d.Labels; // unordered_map with leaf key/value
+        labels[7] = "seven";
+        labels[35] = "thirty-five";
+        Assert.True(labels.Count == 2 && labels[7] == "seven",
+                    "leaf-valued umap roundtrip");
+        Assert.Equal(42, d.LabelKeys(labels)); // a map as a parameter
+        labels.Clear();
+        Assert.Equal(0, labels.Count);
+
+        using var standalone = new MapStrPoint(); // wrapper-owned fresh map
+        using (var p = new Point(1, 1))
+            standalone["a"] = p;
+        Assert.Equal(1, standalone.Count);
+    }
+
+    [Fact]
+    public void FixedArrayOfWelded()
+    {
+        using var c = new Cable();
+        var ends = c.Ends; // a live, fixed-size view
+        Assert.Equal(2, ends.Count);
+        ends[0].X = 5; // element view writes through
+        ends[1].X = 30;
+        Assert.Equal(25, c.SpanX());
+        using (var p = new Point(100, 0))
+            ends[1] = p; // whole-element assignment
+        Assert.Equal(95, c.SpanX());
+        Assert.Throws<ArgumentOutOfRangeException>(() => ends[2]);
+    }
+
+    [Fact]
+    public void SmartPointers()
+    {
+        var sp = Global.SharedPoint(6, 7); // shared_ptr -> pinned view
+        Assert.NotNull(sp);
+        Assert.Equal(6, sp!.X);
+        Assert.Equal(6, Global.SharedX(sp)); // borrowed back in, not adopted
+        Assert.Equal(13, sp.Sum()); // still alive after the borrow
+        Assert.Null(Global.NoPoint()); // a null shared_ptr -> null
+
+        var up = Global.UniquePoint(8, 9); // unique_ptr -> ownership transfer
+        Assert.NotNull(up);
+        Assert.Equal(17, up!.Sum());
+        up.Dispose(); // the C# side owns and frees it
+        Assert.Equal(-1, Global.SharedX(null)); // null borrow -> C++ nullptr
     }
 }
 

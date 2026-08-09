@@ -69,6 +69,14 @@ struct welder_opt_wire {
     void* p;
 };
 
+/** The by-value wire form of a `shared_ptr` RETURN: the object pointer plus
+    the boxed `shared_ptr` copy keeping it alive (freed managed-side through
+    the per-class `welder_sp_*_free` thunk). Both null for an empty pointer. */
+struct welder_sp_wire {
+    void* obj;
+    void* box;
+};
+
 /** The by-value wire form of a scalar/enum sequence: an element-typed buffer +
     length. Returns malloc the buffer (freed managed-side via `welder_free`);
     parameters point at the managed array, pinned for the call. */
@@ -175,6 +183,44 @@ Wire caught(welder_error* err, F&& f) noexcept {
         return Wire{};
 }
 
+/** Read one pair/tuple element of declared type @a E out of its wire slot
+    (the string buffer — dup'd by the sender — is freed here). */
+template <std::meta::info E>
+auto tuple_elem_from_slot(const welder_opt_wire& s) {
+    constexpr marshal_kind k{classify(E)};
+    using Bare = [:bare(E):];
+    if constexpr (k == marshal_kind::utf8_string) {
+        Bare v{s.s ? s.s : ""};
+        std::free(const_cast<char*>(s.s));
+        return v;
+    } else if constexpr (k == marshal_kind::handle) {
+        return Bare{*reinterpret_cast<Bare*>(s.p)}; // borrowed: copy in
+    } else if constexpr (type_trait(^^std::is_floating_point_v, ^^Bare)) {
+        return static_cast<Bare>(s.f);
+    } else { // integral scalar / bool / enum
+        return static_cast<Bare>(s.i);
+    }
+}
+
+/** Write one pair/tuple element into its wire slot (strings dup'd for the
+    receiver to free; a welded element heap-copies, owned by the receiver). */
+template <std::meta::info E>
+welder_opt_wire tuple_elem_to_slot(const auto& v) {
+    constexpr marshal_kind k{classify(E)};
+    welder_opt_wire s{};
+    s.has = 1;
+    if constexpr (k == marshal_kind::utf8_string)
+        s.s = dup(std::string_view{v});
+    else if constexpr (k == marshal_kind::handle) {
+        using Bare = [:bare(E):];
+        s.p = new Bare(v);
+    } else if constexpr (type_trait(^^std::is_floating_point_v, bare(E)))
+        s.f = static_cast<double>(v);
+    else
+        s.i = static_cast<std::int64_t>(v);
+    return s;
+}
+
 /** Convert the wire argument @a w into the C++ argument a parameter of declared
     type @a P receives. Scalars cast; an enum casts up from its underlying wire
     value; a string parameter constructs from the marshalled `const char*` (the
@@ -183,7 +229,14 @@ Wire caught(welder_error* err, F&& f) noexcept {
 template <std::meta::info P>
 constexpr decltype(auto) to_cpp(auto&& w) {
     constexpr marshal_kind k{classify(P)};
-    if constexpr (k == marshal_kind::handle || k == marshal_kind::seq_ref) {
+    if constexpr (k == marshal_kind::shared_ptr_) {
+        // Borrow: a non-owning aliasing shared_ptr over the wrapper's object.
+        using Sp = [:bare(P):];
+        using El = typename Sp::element_type;
+        return Sp{Sp{}, reinterpret_cast<El*>(w)};
+    } else if constexpr (k == marshal_kind::handle ||
+                         k == marshal_kind::seq_ref ||
+                         k == marshal_kind::map_ref) {
         using Bare = [:bare(P):];
         if constexpr (is_pointer_flavor(P))
             return reinterpret_cast<Bare*>(w);
@@ -232,6 +285,13 @@ constexpr decltype(auto) to_cpp(auto&& w) {
         } else {
             return Seq(d, d + w.len);
         }
+    } else if constexpr (k == marshal_kind::tuple_value) {
+        using Tup = [:bare(P):];
+        const welder_opt_wire* s{static_cast<const welder_opt_wire*>(w)};
+        return [&]<std::size_t... J>(std::index_sequence<J...>) {
+            return Tup{tuple_elem_from_slot<tuple_element_type(bare(P), J)>(
+                s[J])...};
+        }(std::make_index_sequence<tuple_arity(bare(P))>{});
     } else { // scalar / boolean
         using V = [:bare(P):];
         return static_cast<V>(w);
@@ -251,11 +311,16 @@ consteval std::meta::info wire_return_type() {
     else if constexpr (k == marshal_kind::enum_)
         return std::meta::underlying_type(bare(R));
     else if constexpr (k == marshal_kind::handle ||
-                       k == marshal_kind::seq_ref)
+                       k == marshal_kind::seq_ref ||
+                       k == marshal_kind::map_ref ||
+                       k == marshal_kind::unique_ptr_)
         return ^^void*;
+    else if constexpr (k == marshal_kind::shared_ptr_)
+        return ^^welder_sp_wire;
     else if constexpr (k == marshal_kind::optional_)
         return ^^welder_opt_wire;
-    else if constexpr (k == marshal_kind::seq_value)
+    else if constexpr (k == marshal_kind::seq_value ||
+                       k == marshal_kind::tuple_value)
         return ^^welder_seq_wire;
     else // scalar / boolean
         return bare(R);
@@ -281,8 +346,24 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
             } else {
                 return dup(std::string_view{f()});
             }
+        } else if constexpr (k == marshal_kind::unique_ptr_) {
+            // Ownership transfers: release into an owned handle (may be null).
+            auto up{f()};
+            return static_cast<void*>(up.release());
+        } else if constexpr (k == marshal_kind::shared_ptr_) {
+            // Share: box a copy of the shared_ptr; the managed view is pinned
+            // by the box (its SafeHandle frees the box, dropping the count).
+            using Sp = [:bare(R):];
+            Sp sp{f()};
+            welder_sp_wire w2{};
+            if (sp) {
+                w2.obj = sp.get();
+                w2.box = new Sp(sp);
+            }
+            return w2;
         } else if constexpr (k == marshal_kind::handle ||
-                             k == marshal_kind::seq_ref) {
+                             k == marshal_kind::seq_ref ||
+                             k == marshal_kind::map_ref) {
             using Bare = [:bare(R):];
             constexpr handle_return hr{handle_return_of(R, Rv)};
             if constexpr (hr == handle_return::view ||
@@ -341,6 +422,20 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
                 buf[i] = seq[i];
             w.data = buf; // managed side copies + welder_free's
             return w;
+        } else if constexpr (k == marshal_kind::tuple_value) {
+            const auto t{f()};
+            constexpr std::size_t n{tuple_arity(bare(R))};
+            auto* buf{static_cast<welder_opt_wire*>(
+                std::malloc(sizeof(welder_opt_wire) * n))};
+            [&]<std::size_t... J>(std::index_sequence<J...>) {
+                ((buf[J] = tuple_elem_to_slot<tuple_element_type(bare(R), J)>(
+                      std::get<J>(t))),
+                 ...);
+            }(std::make_index_sequence<n>{});
+            welder_seq_wire tw{};
+            tw.data = buf; // managed side reads the slots + welder_free's
+            tw.len = static_cast<std::int64_t>(n);
+            return tw;
         } else if constexpr (k == marshal_kind::enum_) {
             return static_cast<Wire>(f());
         } else { // scalar / boolean
@@ -499,7 +594,9 @@ auto field_get(void* self, welder_error* err) noexcept {
     auto* obj{reinterpret_cast<Obj*>(self)};
     if constexpr ((classify(std::meta::type_of(Mem)) == marshal_kind::handle ||
                    classify(std::meta::type_of(Mem)) ==
-                       marshal_kind::seq_ref) &&
+                       marshal_kind::seq_ref ||
+                   classify(std::meta::type_of(Mem)) ==
+                       marshal_kind::map_ref) &&
                   !std::meta::is_const_type(std::meta::type_of(Mem))) {
         return caught<void*>(err, [&]() -> void* {
             // Direct splice access (not &[:Mem:]): gcc-16 rejects the
@@ -629,6 +726,128 @@ void vec_clear(void* self, welder_error* err) noexcept {
         reinterpret_cast<std::vector<El>*>(self)->clear();
         return 0;
     });
+}
+
+// --- reference-semantic fixed-array support (std::array<welded, N>) ----------
+
+template <std::meta::info E, std::size_t N>
+void* arr_new(welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<void*>(
+        err, [&]() -> void* { return new std::array<El, N>{}; });
+}
+
+template <std::meta::info E, std::size_t N>
+void arr_destroy(void* self) noexcept {
+    using El = [:E:];
+    delete reinterpret_cast<std::array<El, N>*>(self);
+}
+
+template <std::meta::info E, std::size_t N>
+void* arr_get(void* self, std::int64_t i, welder_error* err) noexcept {
+    using El = [:E:];
+    return caught<void*>(err, [&]() -> void* {
+        auto& r{reinterpret_cast<std::array<El, N>*>(self)->at(
+            static_cast<std::size_t>(i))};
+        return static_cast<void*>(std::addressof(r));
+    });
+}
+
+template <std::meta::info E, std::size_t N>
+void arr_set(void* self, std::int64_t i, void* elem,
+             welder_error* err) noexcept {
+    using El = [:E:];
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<std::array<El, N>*>(self)->at(
+            static_cast<std::size_t>(i)) = *reinterpret_cast<El*>(elem);
+        return 0;
+    });
+}
+
+// --- reference-semantic map support (std::map / std::unordered_map) ----------
+
+/** The re-derived map type: ordered or unordered, DEFAULT arguments (classify
+    admits only that form). */
+template <bool Ordered, std::meta::info K, std::meta::info V>
+using map_t = [:std::meta::substitute(
+    Ordered ? ^^std::map : ^^std::unordered_map, {K, V}):];
+    // (substitute, not a spelled std::map<[:K:],[:V:]> — gcc-16 mis-substitutes
+    // splices nested in an alias template's template-argument list)
+
+template <bool O, std::meta::info K, std::meta::info V>
+void* map_new(welder_error* err) noexcept {
+    return caught<void*>(err,
+                         [&]() -> void* { return new map_t<O, K, V>(); });
+}
+
+template <bool O, std::meta::info K, std::meta::info V>
+void map_destroy(void* self) noexcept {
+    delete reinterpret_cast<map_t<O, K, V>*>(self);
+}
+
+template <bool O, std::meta::info K, std::meta::info V>
+std::int64_t map_size(void* self, welder_error* err) noexcept {
+    return caught<std::int64_t>(err, [&]() -> std::int64_t {
+        return static_cast<std::int64_t>(
+            reinterpret_cast<map_t<O, K, V>*>(self)->size());
+    });
+}
+
+template <bool O, std::meta::info K, std::meta::info V, class WireK>
+bool map_contains(void* self, WireK k, welder_error* err) noexcept {
+    return caught<bool>(err, [&]() -> bool {
+        return reinterpret_cast<map_t<O, K, V>*>(self)->contains(
+            to_cpp<K>(k));
+    });
+}
+
+/** Mapped-value read: a live view for a welded value (the wrapper pins the
+    map), the wire value otherwise. Missing key → out_of_range (`at`). */
+template <bool O, std::meta::info K, std::meta::info V, class WireK>
+auto map_get(void* self, WireK k, welder_error* err) noexcept {
+    auto* m{reinterpret_cast<map_t<O, K, V>*>(self)};
+    if constexpr (classify(V) == marshal_kind::handle) {
+        return caught<void*>(err, [&]() -> void* {
+            auto& r{m->at(to_cpp<K>(k))};
+            return static_cast<void*>(std::addressof(r));
+        });
+    } else {
+        return guarded<V>(err,
+                          [&]() -> decltype(auto) { return m->at(to_cpp<K>(k)); });
+    }
+}
+
+template <bool O, std::meta::info K, std::meta::info V, class WireK,
+          class WireV>
+void map_set(void* self, WireK k, WireV v, welder_error* err) noexcept {
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<map_t<O, K, V>*>(self)->insert_or_assign(
+            to_cpp<K>(k), to_cpp<V>(v));
+        return 0;
+    });
+}
+
+template <bool O, std::meta::info K, std::meta::info V, class WireK>
+bool map_remove(void* self, WireK k, welder_error* err) noexcept {
+    return caught<bool>(err, [&]() -> bool {
+        return reinterpret_cast<map_t<O, K, V>*>(self)->erase(to_cpp<K>(k)) >
+               0;
+    });
+}
+
+template <bool O, std::meta::info K, std::meta::info V>
+void map_clear(void* self, welder_error* err) noexcept {
+    caught<int>(err, [&]() -> int {
+        reinterpret_cast<map_t<O, K, V>*>(self)->clear();
+        return 0;
+    });
+}
+
+/** Free a boxed `shared_ptr` copy (the managed SharedBox's release). */
+template <std::meta::info T>
+void sp_free(void* box) noexcept {
+    using El = [:T:];
+    delete reinterpret_cast<std::shared_ptr<El>*>(box);
 }
 
 // --- director (C# virtual-override) support ---------------------------------

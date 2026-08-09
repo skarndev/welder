@@ -44,6 +44,15 @@ namespace csharp_cases
         public long Len;
     }
 
+    /// <summary>The by-value wire of a shared_ptr return: the object plus the boxed
+    /// shared_ptr copy pinning it.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WelderSpWire
+    {
+        public IntPtr Obj;
+        public IntPtr Box;
+    }
+
     internal static class WelderInterop
     {
         internal static void ThrowIfError(in WelderError err)
@@ -107,6 +116,9 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Holder_m_peek_0(HolderHandle self, [MarshalAs(UnmanagedType.U1)] bool a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Holder_m_item_x_0(HolderHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_f_make_point_0(int a0, int a1, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_f_tagged_0(int a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial long welder_csharp_cases_f_pair_sum_0(IntPtr a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_f_bundle_0(out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_f_reject_0(int a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Segment_destroy(IntPtr self);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Segment_new_default(out WelderError err);
@@ -170,6 +182,46 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Route_m_stop_count_0(RouteHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Route_m_reversed_0(RouteHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Route_m_total_x_0(RouteHandle self, VectorPointHandle a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Depot_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Depot_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Depot_clone(DepotHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_map_str_csharp_cases_Point_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_map_str_csharp_cases_Point_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial long welder_map_str_csharp_cases_Point_size(MapStrPointHandle self, out WelderError err);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] [return: MarshalAs(UnmanagedType.U1)] internal static partial bool welder_map_str_csharp_cases_Point_contains(MapStrPointHandle self, string k, out WelderError err);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial IntPtr welder_map_str_csharp_cases_Point_get(MapStrPointHandle self, string k, out WelderError err);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial void welder_map_str_csharp_cases_Point_set(MapStrPointHandle self, string k, PointHandle v, out WelderError err);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] [return: MarshalAs(UnmanagedType.U1)] internal static partial bool welder_map_str_csharp_cases_Point_remove(MapStrPointHandle self, string k, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_map_str_csharp_cases_Point_clear(MapStrPointHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Depot_get_sites(DepotHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Depot_set_sites(DepotHandle self, MapStrPointHandle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_umap_int_str_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_umap_int_str_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial long welder_umap_int_str_size(UMapIntStrHandle self, out WelderError err);
+        [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.U1)] internal static partial bool welder_umap_int_str_contains(UMapIntStrHandle self, int k, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_umap_int_str_get(UMapIntStrHandle self, int k, out WelderError err);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial void welder_umap_int_str_set(UMapIntStrHandle self, int k, string v, out WelderError err);
+        [LibraryImport(Lib)] [return: MarshalAs(UnmanagedType.U1)] internal static partial bool welder_umap_int_str_remove(UMapIntStrHandle self, int k, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_umap_int_str_clear(UMapIntStrHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Depot_get_labels(DepotHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Depot_set_labels(DepotHandle self, UMapIntStrHandle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Depot_m_site_count_0(DepotHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial long welder_csharp_cases_Depot_m_label_keys_0(DepotHandle self, UMapIntStrHandle a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Cable_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Cable_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Cable_clone(CableHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_arr2_csharp_cases_Point_new(out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_arr2_csharp_cases_Point_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_arr2_csharp_cases_Point_get(ArrayPointx2Handle self, long i, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_arr2_csharp_cases_Point_set(ArrayPointx2Handle self, long i, PointHandle elem, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Cable_get_ends(CableHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Cable_set_ends(CableHandle self, ArrayPointx2Handle v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Cable_m_span_x_0(CableHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_sp_csharp_cases_Point_free(IntPtr box);
+        [LibraryImport(Lib)] internal static partial WelderSpWire welder_csharp_cases_f_shared_point_0(int a0, int a1, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSpWire welder_csharp_cases_f_no_point_0(out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_f_shared_x_0(IntPtr a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_f_unique_point_0(int a0, int a1, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_init(IntPtr release, IntPtr s0, IntPtr s1);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_dir_bind(IntPtr self, IntPtr ctx, ulong mask);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Shape_destroy(IntPtr self);
@@ -1020,6 +1072,158 @@ namespace csharp_cases
         public virtual void Dispose() => _h_Route.Dispose();
     }
 
+    internal sealed class DepotHandle : SafeHandle
+    {
+        internal DepotHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Depot_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Depot : IDisposable
+    {
+        internal DepotHandle _h_Depot;
+        internal object? _owner;
+        internal bool _isDirector;
+        internal Depot(IntPtr handle, bool owns) { _h_Depot = new DepotHandle(handle, owns); }
+
+        private static IntPtr _New_default()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_Depot_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public Depot() : this(_New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Depot Clone()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_Depot_clone(_h_Depot, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Depot(_r, true);
+        }
+
+        public MapStrPoint Sites
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_csharp_cases_Depot_get_sites(_h_Depot, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new MapStrPoint(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Depot_set_sites(_h_Depot, @value._h_MapStrPoint, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+
+        public UMapIntStr Labels
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_csharp_cases_Depot_get_labels(_h_Depot, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new UMapIntStr(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Depot_set_labels(_h_Depot, @value._h_UMapIntStr, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+
+        public int SiteCount()
+        {
+            var _r = NativeMethods.welder_csharp_cases_Depot_m_site_count_0(_h_Depot, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public long LabelKeys(UMapIntStr m)
+        {
+            var _r = NativeMethods.welder_csharp_cases_Depot_m_label_keys_0(_h_Depot, m._h_UMapIntStr, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public virtual void Dispose() => _h_Depot.Dispose();
+    }
+
+    internal sealed class CableHandle : SafeHandle
+    {
+        internal CableHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Cable_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Cable : IDisposable
+    {
+        internal CableHandle _h_Cable;
+        internal object? _owner;
+        internal bool _isDirector;
+        internal Cable(IntPtr handle, bool owns) { _h_Cable = new CableHandle(handle, owns); }
+
+        private static IntPtr _New_default()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_Cable_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public Cable() : this(_New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Cable Clone()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_Cable_clone(_h_Cable, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Cable(_r, true);
+        }
+
+        public ArrayPointx2 Ends
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_csharp_cases_Cable_get_ends(_h_Cable, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new ArrayPointx2(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_Cable_set_ends(_h_Cable, @value._h_ArrayPointx2, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+
+        public int SpanX()
+        {
+            var _r = NativeMethods.welder_csharp_cases_Cable_m_span_x_0(_h_Cable, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public virtual void Dispose() => _h_Cable.Dispose();
+    }
+
     internal sealed class ShapeHandle : SafeHandle
     {
         internal ShapeHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
@@ -1386,6 +1590,210 @@ namespace csharp_cases
         public void Dispose() => _h_VectorPoint.Dispose();
     }
 
+    internal sealed class MapStrPointHandle : SafeHandle
+    {
+        internal MapStrPointHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_map_str_csharp_cases_Point_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ std::map of string to Point.</summary>
+    public sealed class MapStrPoint : IDisposable
+    {
+        internal MapStrPointHandle _h_MapStrPoint;
+        internal object? _owner;
+        internal MapStrPoint(IntPtr handle, bool owns) { _h_MapStrPoint = new MapStrPointHandle(handle, owns); }
+        public MapStrPoint() : this(_New(), true) {}
+        private static IntPtr _New()
+        {
+            IntPtr _r = NativeMethods.welder_map_str_csharp_cases_Point_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public int Count
+        {
+            get
+            {
+                var _r = NativeMethods.welder_map_str_csharp_cases_Point_size(_h_MapStrPoint, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return (int)_r;
+            }
+        }
+        public bool ContainsKey(string key)
+        {
+            var _r = NativeMethods.welder_map_str_csharp_cases_Point_contains(_h_MapStrPoint, key, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public Point this[string key]
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_map_str_csharp_cases_Point_get(_h_MapStrPoint, key, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new Point(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_map_str_csharp_cases_Point_set(_h_MapStrPoint, key, @value._h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+        public bool Remove(string key)
+        {
+            var _r = NativeMethods.welder_map_str_csharp_cases_Point_remove(_h_MapStrPoint, key, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public void Clear()
+        {
+            NativeMethods.welder_map_str_csharp_cases_Point_clear(_h_MapStrPoint, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+        }
+        public void Dispose() => _h_MapStrPoint.Dispose();
+    }
+
+    internal sealed class UMapIntStrHandle : SafeHandle
+    {
+        internal UMapIntStrHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_umap_int_str_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ std::unordered_map of int to string.</summary>
+    public sealed class UMapIntStr : IDisposable
+    {
+        internal UMapIntStrHandle _h_UMapIntStr;
+        internal object? _owner;
+        internal UMapIntStr(IntPtr handle, bool owns) { _h_UMapIntStr = new UMapIntStrHandle(handle, owns); }
+        public UMapIntStr() : this(_New(), true) {}
+        private static IntPtr _New()
+        {
+            IntPtr _r = NativeMethods.welder_umap_int_str_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public int Count
+        {
+            get
+            {
+                var _r = NativeMethods.welder_umap_int_str_size(_h_UMapIntStr, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return (int)_r;
+            }
+        }
+        public bool ContainsKey(int key)
+        {
+            var _r = NativeMethods.welder_umap_int_str_contains(_h_UMapIntStr, key, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public string this[int key]
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_umap_int_str_get(_h_UMapIntStr, key, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+                finally { NativeMethods.welder_free(_r); }
+            }
+            set
+            {
+                NativeMethods.welder_umap_int_str_set(_h_UMapIntStr, key, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+        public bool Remove(int key)
+        {
+            var _r = NativeMethods.welder_umap_int_str_remove(_h_UMapIntStr, key, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public void Clear()
+        {
+            NativeMethods.welder_umap_int_str_clear(_h_UMapIntStr, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+        }
+        public void Dispose() => _h_UMapIntStr.Dispose();
+    }
+
+    internal sealed class ArrayPointx2Handle : SafeHandle
+    {
+        internal ArrayPointx2Handle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_arr2_csharp_cases_Point_destroy(handle);
+            return true;
+        }
+    }
+
+    /// <summary>A reference-semantic C++ std::array of 2 Point (live element views; fixed size).</summary>
+    public sealed class ArrayPointx2 : IDisposable
+    {
+        internal ArrayPointx2Handle _h_ArrayPointx2;
+        internal object? _owner;
+        internal ArrayPointx2(IntPtr handle, bool owns) { _h_ArrayPointx2 = new ArrayPointx2Handle(handle, owns); }
+        public ArrayPointx2() : this(_New(), true) {}
+        private static IntPtr _New()
+        {
+            IntPtr _r = NativeMethods.welder_arr2_csharp_cases_Point_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public int Count => 2;
+        public Point this[int i]
+        {
+            get
+            {
+                IntPtr _r = NativeMethods.welder_arr2_csharp_cases_Point_get(_h_ArrayPointx2, i, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new Point(_r, false);
+                _v._owner = this;
+                return _v;
+            }
+            set
+            {
+                NativeMethods.welder_arr2_csharp_cases_Point_set(_h_ArrayPointx2, i, value._h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+        public void Dispose() => _h_ArrayPointx2.Dispose();
+    }
+
+    internal sealed class PointSharedBox : SafeHandle
+    {
+        internal PointSharedBox(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_sp_csharp_cases_Point_free(handle);
+            return true;
+        }
+    }
+
     public static class Global
     {
         public static Point? MakePoint(int x, int y)
@@ -1394,6 +1802,50 @@ namespace csharp_cases
             WelderInterop.ThrowIfError(in _e);
             if (_r == IntPtr.Zero) return null;
             return new Point(_r, true);
+        }
+
+        public unsafe static (int, string) Tagged(int v)
+        {
+            var _r = NativeMethods.welder_csharp_cases_f_tagged_0(v, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _slots = (WelderOptWire*)_r.Data;
+            var _t0 = unchecked((int)_slots[0].I);
+            string _t1;
+            {
+                IntPtr _sp = _slots[1].S;
+                try { _t1 = Marshal.PtrToStringUTF8(_sp) ?? ""; }
+                finally { NativeMethods.welder_free(_sp); }
+            }
+            NativeMethods.welder_free(_r.Data);
+            return (_t0, _t1);
+        }
+
+        public unsafe static long PairSum((int, long) p)
+        {
+            var _tw0 = stackalloc WelderOptWire[2];
+            _tw0[0] = new WelderOptWire { Has = 1, I = (long)p.Item1 };
+            _tw0[1] = new WelderOptWire { Has = 1, I = (long)p.Item2 };
+            var _r = NativeMethods.welder_csharp_cases_f_pair_sum_0((IntPtr)_tw0, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public unsafe static (int, double, string, Point) Bundle()
+        {
+            var _r = NativeMethods.welder_csharp_cases_f_bundle_0(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _slots = (WelderOptWire*)_r.Data;
+            var _t0 = unchecked((int)_slots[0].I);
+            var _t1 = unchecked((double)_slots[1].F);
+            string _t2;
+            {
+                IntPtr _sp = _slots[2].S;
+                try { _t2 = Marshal.PtrToStringUTF8(_sp) ?? ""; }
+                finally { NativeMethods.welder_free(_sp); }
+            }
+            var _t3 = new Point(_slots[3].P, true);
+            NativeMethods.welder_free(_r.Data);
+            return (_t0, _t1, _t2, _t3);
         }
 
         public static void Reject(int v)
@@ -1462,6 +1914,41 @@ namespace csharp_cases
             var _r = NativeMethods.welder_csharp_cases_f_maybe_level_0(give, out WelderError _e);
             WelderInterop.ThrowIfError(in _e);
             return _r.Has != 0 ? (Level?)(Level)_r.I : null;
+        }
+
+        public static Point? SharedPoint(int x, int y)
+        {
+            var _r = NativeMethods.welder_csharp_cases_f_shared_point_0(x, y, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            if (_r.Obj == IntPtr.Zero) return null;
+            var _v = new Point(_r.Obj, false);
+            _v._owner = new PointSharedBox(_r.Box, true);
+            return _v;
+        }
+
+        public static Point? NoPoint()
+        {
+            var _r = NativeMethods.welder_csharp_cases_f_no_point_0(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            if (_r.Obj == IntPtr.Zero) return null;
+            var _v = new Point(_r.Obj, false);
+            _v._owner = new PointSharedBox(_r.Box, true);
+            return _v;
+        }
+
+        public static int SharedX(Point? p)
+        {
+            var _r = NativeMethods.welder_csharp_cases_f_shared_x_0(p is null ? IntPtr.Zero : p._h_Point.DangerousGetHandle(), out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public static Point? UniquePoint(int x, int y)
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_f_unique_point_0(x, y, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            if (_r == IntPtr.Zero) return null;
+            return new Point(_r, true);
         }
 
         public static string DescribeShape(Shape s)

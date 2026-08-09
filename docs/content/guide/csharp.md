@@ -182,7 +182,13 @@ WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 | non-const welded-class **field** | the member's address | a live view (writes go through) |
 | `std::optional` of a leaf kind | by-value `welder_opt_wire` struct | `T?` |
 | `std::vector`/`std::array` of scalars/enums | by-value `welder_seq_wire` (copy; params pin the managed array) | `T[]` |
+| `std::pair` / `std::tuple` of leaf kinds | slot array (`welder_opt_wire[]`) | a `ValueTuple` — `(int, string)` |
 | `std::vector` of a welded class | opaque handle | a generated `Vector<Element>` wrapper — **reference semantics**, live element views |
+| `std::array<welded, N>` | opaque handle | a generated `Array<Element>x<N>` wrapper — fixed size, live element views |
+| `std::map` / `std::unordered_map` (leaf key) | opaque handle | a generated `Map`/`UMap` wrapper — reference semantics, `this[K]` live views |
+| `std::shared_ptr<welded>` return | `welder_sp_wire` (object + boxed copy) | a view pinned by a `SharedBox` (`T?`) |
+| `std::shared_ptr<welded>` param | the object's address | **borrowed** (the callee's aliasing copy does not adopt) |
+| `std::unique_ptr<welded>` return | released `void*` | the wrapper, owning (`T?`) |
 
 ## Ownership and views
 
@@ -227,13 +233,37 @@ the common case.
 Value-family containers cross by **copy** (like the Python rods' default
 `<pybind11/stl.h>` behavior): an `optional` with a leaf payload maps to `T?`,
 a scalar/enum `vector`/`array` to `T[]` (an `std::array` parameter of the
-wrong length throws `ArgumentException`). A `std::vector` of a **welded
-class** instead gets [reference semantics](containers.md) — welder's
-opaque-container model: a generated `Vector<Element>` wrapper whose `Add` /
-indexer / `Clear` write through to the C++ vector, and whose elements are
-live views pinned to it. What the [bindability gate](bindability.md) admits
-but this phase cannot yet marshal — maps, smart pointers, `variant`, nested
-wrappers, `std::array` of welded elements — fails **loudly at generation
-time** with a designed
-diagnostic naming the escape (`mark::exclude(welder::lang::cs)`), never a
-silently-corrupting `void*`. Those families land in the following phases.
+wrong length throws `ArgumentException`), and a `std::pair`/`std::tuple` of
+leaf kinds to a C# `ValueTuple` (`std::tuple<int, std::string>` →
+`(int, string)`, both directions). Containers of a **welded class** instead
+get [reference semantics](containers.md) — welder's opaque-container model,
+one generated wrapper per distinct instantiation:
+
+- `std::vector<Item>` → `VectorItem`: `Add` / indexer / `Clear` write through
+  to the C++ vector; elements are live views pinned to the wrapper.
+- `std::array<Item, N>` → `ArrayItemx<N>`: the same protocol minus the
+  size-changing ops (a constant `Count`; indexer get/set only).
+- `std::map<K, V>` / `std::unordered_map<K, V>` (with a **leaf** key —
+  scalar, string or enum — and default comparator/allocator) →
+  `Map<K><V>` / `UMap<K><V>`: `Count`, `ContainsKey`, `Remove`, `Clear` and a
+  `this[K]` indexer whose get hands out a live view for a welded mapped type
+  (a missing key throws `ArgumentOutOfRangeException`) and whose set
+  insert-or-assigns.
+
+**Smart pointers**: a `std::shared_ptr<T>` return crosses as a view of the
+object plus a boxed `shared_ptr` copy held by a generated
+`<T>SharedBox` SafeHandle — the C++ object cannot die while the C# wrapper is
+reachable, whoever else drops their reference; a null `shared_ptr` maps to
+`null`. A `shared_ptr` **parameter** is borrowed (the shim hands the callee a
+non-owning aliasing copy — the callee can use it for the call's duration but
+does not take shared ownership). A `std::unique_ptr<T>` return transfers
+ownership to the wrapper outright; a `unique_ptr` **parameter** is a designed
+generation-time error — a sink taking ownership from a GC-owned wrapper is
+ambiguous, so pass the raw object and let the C++ side copy, or exclude the
+member for C#.
+
+What the [bindability gate](bindability.md) admits but the C# rod cannot
+marshal — `std::variant` (C# has no sum type), class-keyed or
+custom-comparator maps, nested container-of-container wrappers — fails
+**loudly at generation time** with a designed diagnostic naming the escape
+(`mark::exclude(welder::lang::cs)`), never a silently-corrupting `void*`.

@@ -47,6 +47,7 @@
     @endcode
 */
 
+#include <cctype>
 #include <cstddef>
 #include <meta>
 #include <ostream>
@@ -107,6 +108,11 @@ consteval const char* shim_wire_spelling(std::meta::info type, bool is_return) {
         case marshal_kind::enum_:       return enum_wire_spell(type).c_abi;
         case marshal_kind::optional_:   return "welder_opt_wire";
         case marshal_kind::seq_value:   return "welder_seq_wire";
+        case marshal_kind::tuple_value:
+            return is_return ? "welder_seq_wire" : "const welder_opt_wire*";
+        case marshal_kind::shared_ptr_:
+            return is_return ? "welder_sp_wire" : "void*";
+        case marshal_kind::unique_ptr_: return "void*";
         default:                        return "void*"; // handle
     }
 }
@@ -231,6 +237,15 @@ std::string pinvoke_type(bool is_return) {
         return "WelderOptWire";
     else if constexpr (k == marshal_kind::seq_value)
         return "WelderSeqWire";
+    else if constexpr (k == marshal_kind::tuple_value)
+        return is_return ? "WelderSeqWire" : "IntPtr";
+    else if constexpr (k == marshal_kind::shared_ptr_)
+        return is_return ? "WelderSpWire" : "IntPtr";
+    else if constexpr (k == marshal_kind::unique_ptr_)
+        return "IntPtr";
+    else if constexpr (k == marshal_kind::map_ref)
+        return is_return ? std::string{"IntPtr"}
+                         : container_ref<bare(Type)>() + "Handle";
     else if constexpr (k == marshal_kind::seq_ref)
         return is_return ? std::string{"IntPtr"}
                          : container_ref<bare(Type)>() + "Handle";
@@ -238,6 +253,9 @@ std::string pinvoke_type(bool is_return) {
         return is_return ? std::string{"IntPtr"}
                          : type_ref<bare(Type)>() + "Handle";
 }
+
+template <std::meta::info Type, std::size_t... J>
+std::string _tuple_public_impl(std::index_sequence<J...>);
 
 /** The public C# type the wrapper API exposes for @a Type. */
 template <std::meta::info Type, class Style>
@@ -270,10 +288,110 @@ std::string public_type() {
                 scalar_spell(sequence_element(bare(Type))).cs};
             return std::string{c} + "[]";
         }
-    } else if constexpr (k == marshal_kind::seq_ref)
+    } else if constexpr (k == marshal_kind::tuple_value)
+        return _tuple_public_impl<Type>(
+            std::make_index_sequence<tuple_arity(bare(Type))>{});
+    else if constexpr (k == marshal_kind::shared_ptr_ ||
+                       k == marshal_kind::unique_ptr_)
+        return type_ref<bare(std::meta::template_arguments_of(bare(Type))[0])>() +
+               "?";
+    else if constexpr (k == marshal_kind::seq_ref ||
+                       k == marshal_kind::map_ref)
         return container_ref<bare(Type)>();
     else
         return type_ref<bare(Type)>(); // enum_ / handle
+}
+
+template <std::meta::info Type, std::size_t... J>
+std::string _tuple_public_impl(std::index_sequence<J...>) {
+    std::string out{"("};
+    std::size_t i{0};
+    ((out += (i++ ? std::string{", "} : std::string{}) +
+             public_type<tuple_element_type(bare(Type), J),
+                         ::welder::naming::none>()),
+     ...);
+    return out + ")";
+}
+
+/** One pair/tuple element's WRITE into its wire slot (the C# side). */
+template <std::meta::info E>
+std::string _tuple_slot_write(const std::string& val) {
+    constexpr marshal_kind k{classify(E)};
+    if constexpr (k == marshal_kind::utf8_string)
+        return "new WelderOptWire { Has = 1, S = "
+               "NativeMethods.welder_dup_utf8(" + val + ") }";
+    else if constexpr (k == marshal_kind::handle)
+        return "new WelderOptWire { Has = 1, P = " + val + "._h_" +
+               field_ref<bare(E)>() + ".DangerousGetHandle() }";
+    else if constexpr (k == marshal_kind::boolean)
+        return "new WelderOptWire { Has = 1, I = " + val + " ? 1 : 0 }";
+    else if constexpr (type_trait(^^std::is_floating_point_v, bare(E)))
+        return "new WelderOptWire { Has = 1, F = (double)" + val + " }";
+    else // integral scalar / enum
+        return "new WelderOptWire { Has = 1, I = (long)" + val + " }";
+}
+
+/** One pair/tuple element's READ out of its wire slot (the C# side); a string
+    element needs statements (read + free), the rest are expressions. */
+template <std::meta::info E>
+std::string _tuple_slot_read(const std::string& slot, const std::string& var,
+                             const std::string& ind) {
+    constexpr marshal_kind k{classify(E)};
+    if constexpr (k == marshal_kind::utf8_string)
+        return ind + "string " + var + ";\n" + ind + "{\n" + ind +
+               "    IntPtr _sp = " + slot + ".S;\n" + ind +
+               "    try { " + var +
+               " = Marshal.PtrToStringUTF8(_sp) ?? \"\"; }\n" + ind +
+               "    finally { NativeMethods.welder_free(_sp); }\n" + ind +
+               "}\n";
+    else if constexpr (k == marshal_kind::handle)
+        return ind + "var " + var + " = new " + type_ref<bare(E)>() + "(" +
+               slot + ".P, true);\n";
+    else if constexpr (k == marshal_kind::boolean)
+        return ind + "var " + var + " = " + slot + ".I != 0;\n";
+    else if constexpr (k == marshal_kind::enum_)
+        return ind + "var " + var + " = (" + type_ref<bare(E)>() + ")" + slot +
+               ".I;\n";
+    else if constexpr (type_trait(^^std::is_floating_point_v, bare(E))) {
+        constexpr const char* c{scalar_spell(E).cs};
+        return ind + "var " + var + " = unchecked((" + std::string{c} + ")" +
+               slot + ".F);\n";
+    } else {
+        constexpr const char* c{scalar_spell(E).cs};
+        return ind + "var " + var + " = unchecked((" + std::string{c} + ")" +
+               slot + ".I);\n";
+    }
+}
+
+template <std::meta::info Type, std::size_t... J>
+std::string _tuple_write_stmts_impl(const std::string& tw,
+                                    const std::string& name,
+                                    std::index_sequence<J...>) {
+    std::string out{"            var " + tw + " = stackalloc WelderOptWire[" +
+                    std::to_string(sizeof...(J)) + "];\n"};
+    ((out += "            " + tw + "[" + std::to_string(J) + "] = " +
+             _tuple_slot_write<tuple_element_type(bare(Type), J)>(
+                 name + ".Item" + std::to_string(J + 1)) +
+             ";\n"),
+     ...);
+    return out;
+}
+
+template <std::meta::info Type, std::size_t... J>
+std::string _tuple_read_stmts_impl(const std::string& ind,
+                                   std::index_sequence<J...>) {
+    std::string out{ind + "var _slots = (WelderOptWire*)_r.Data;\n"};
+    ((out += _tuple_slot_read<tuple_element_type(bare(Type), J)>(
+          "_slots[" + std::to_string(J) + "]", "_t" + std::to_string(J), ind)),
+     ...);
+    out += ind + "NativeMethods.welder_free(_r.Data);\n";
+    out += ind + "return (";
+    std::size_t i{0};
+    ((out += (i++ ? std::string{", "} : std::string{}) + "_t" +
+             std::to_string(J)),
+     ...);
+    out += ");\n";
+    return out;
 }
 
 /** The public C# RETURN type: like @ref public_type, plus the `?` nullable
@@ -282,7 +400,8 @@ std::string public_type() {
 template <std::meta::info R, class Style>
 std::string public_return_type() {
     if constexpr (classify(R) == marshal_kind::handle ||
-                  classify(R) == marshal_kind::seq_ref) {
+                  classify(R) == marshal_kind::seq_ref ||
+                  classify(R) == marshal_kind::map_ref) {
         if constexpr (handle_return_nullable(R))
             return public_type<R, Style>() + "?";
         else
@@ -312,8 +431,28 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
         return ind + "IntPtr _r = " + pc + ";\n" + check +
                ind + "try { return Marshal.PtrToStringUTF8(_r) ?? \"\"; }\n" +
                ind + "finally { NativeMethods.welder_free(_r); }\n";
-    else if constexpr (k == marshal_kind::handle ||
-                       k == marshal_kind::seq_ref) {
+    else if constexpr (k == marshal_kind::shared_ptr_) {
+        std::string out{ind + "var _r = " + pc + ";\n" + check};
+        out += ind + "if (_r.Obj == IntPtr.Zero) return null;\n";
+        out += ind + "var _v = new " +
+               type_ref<bare(std::meta::template_arguments_of(bare(R))[0])>() +
+               "(_r.Obj, false);\n";
+        // the boxed shared_ptr copy pins the object for the view's lifetime
+        out += ind + "_v._owner = new " +
+               field_ref<bare(std::meta::template_arguments_of(bare(R))[0])>() +
+               "SharedBox(_r.Box, true);\n";
+        out += ind + "return _v;\n";
+        return out;
+    } else if constexpr (k == marshal_kind::unique_ptr_) {
+        std::string out{ind + "IntPtr _r = " + pc + ";\n" + check};
+        out += ind + "if (_r == IntPtr.Zero) return null;\n";
+        out += ind + "return new " +
+               type_ref<bare(std::meta::template_arguments_of(bare(R))[0])>() +
+               "(_r, true);\n"; // ownership transferred (release)
+        return out;
+    } else if constexpr (k == marshal_kind::handle ||
+                       k == marshal_kind::seq_ref ||
+                       k == marshal_kind::map_ref) {
         constexpr handle_return hr{handle_return_of(R, Rv)};
         std::string out{ind + "IntPtr _r = " + pc + ";\n" + check};
         if constexpr (handle_return_nullable(R))
@@ -362,6 +501,11 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
                    "?)unchecked((" + c + ")_r.I) : null;\n";
         }
         return out;
+    } else if constexpr (k == marshal_kind::tuple_value) {
+        std::string out{ind + "var _r = " + pc + ";\n" + check};
+        out += _tuple_read_stmts_impl<R>(
+            ind, std::make_index_sequence<tuple_arity(bare(R))>{});
+        return out;
     } else if constexpr (k == marshal_kind::seq_value) {
         std::string ecs{};
         if constexpr (classify(sequence_element(bare(R))) ==
@@ -393,7 +537,8 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
     value. Mirrored structurally by `shim::field_get`. */
 consteval ::welder::rv_kind field_return_policy(std::meta::info MT) {
     return ((classify(MT) == marshal_kind::handle ||
-             classify(MT) == marshal_kind::seq_ref) &&
+             classify(MT) == marshal_kind::seq_ref ||
+             classify(MT) == marshal_kind::map_ref) &&
             !std::meta::is_const_type(MT))
                ? ::welder::rv_kind::reference_internal
                : ::welder::rv_kind::automatic;
@@ -409,6 +554,7 @@ struct call_pieces {
     std::string param_names{};    /**< `\x1f`-joined C# names (XML `<param>` keys). */
     bool has_string{false};       /**< any UTF-8 string ⇒ the Utf8 attribute variant. */
     std::string pin_open{};       /**< `fixed (...)` prefixes pinning array params. */
+    std::string pre{};            /**< Statements before the call (tuple slots). */
     bool needs_unsafe{false};     /**< pinning / raw copies ⇒ an `unsafe` wrapper. */
 };
 
@@ -462,8 +608,20 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
         else // integral scalar / enum
             cp.wrapper_args += name + ".HasValue ? new WelderOptWire { Has = 1, "
                                "I = (long)" + name + ".Value } : default";
-    } else if constexpr (classify(PT) == marshal_kind::seq_ref) {
+    } else if constexpr (classify(PT) == marshal_kind::seq_ref ||
+                         classify(PT) == marshal_kind::map_ref) {
         cp.wrapper_args += name + "._h_" + container_ref<bare(PT)>();
+    } else if constexpr (classify(PT) == marshal_kind::shared_ptr_) {
+        cp.wrapper_args +=
+            name + " is null ? IntPtr.Zero : " + name + "._h_" +
+            field_ref<bare(std::meta::template_arguments_of(bare(PT))[0])>() +
+            ".DangerousGetHandle()";
+    } else if constexpr (classify(PT) == marshal_kind::tuple_value) {
+        const std::string tw{"_tw" + i};
+        cp.pre += _tuple_write_stmts_impl<PT>(
+            tw, name, std::make_index_sequence<tuple_arity(bare(PT))>{});
+        cp.needs_unsafe = true; // stackalloc
+        cp.wrapper_args += "(IntPtr)" + tw;
     } else if constexpr (classify(PT) == marshal_kind::seq_value) {
         const std::string pin{"_pin" + i};
         std::string ecs{};
@@ -516,6 +674,34 @@ call_pieces aggregate_pieces(std::index_sequence<J...>) {
          ...);
     }
     return cp;
+}
+
+/** The exact C++ spelling of a map key/mapped-value type for the generated
+    map thunks' template arguments. Type IDENTITY matters (the shim
+    `reinterpret_cast`s the member's map through this respelling), so a
+    fundamental type keeps its own spelling (`display_string_of` — never a
+    fixed-width alias, which could name a different type), `std::string` its
+    portable alias, and a welded class/enum its qualified path. */
+consteval std::string leaf_cpp_spelling(std::meta::info T) {
+    const marshal_kind k{classify(T)};
+    if (k == marshal_kind::utf8_string)
+        return "std::string";
+    if (k == marshal_kind::handle || k == marshal_kind::enum_)
+        return qualified_cpp_name(bare(T));
+    return std::string{std::meta::display_string_of(bare(T))};
+}
+
+/** The symbol/name token a map key or mapped value contributes (leaf kinds by
+    their C# spelling, a welded class or enum by its underscore path). */
+consteval std::string map_token(std::meta::info T) {
+    const marshal_kind k{classify(T)};
+    if (k == marshal_kind::utf8_string)
+        return "str";
+    if (k == marshal_kind::boolean)
+        return "bool";
+    if (k == marshal_kind::scalar)
+        return std::string{scalar_spell(T).cs};
+    return underscore_path(bare(T));
 }
 
 /** The `[LibraryImport(Lib…)]` attribute, adding UTF-8 string marshalling when
@@ -625,8 +811,9 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
     call_args += "out WelderError _e";
     const std::string pc{"NativeMethods." + sym + "(" + call_args + ")"};
     emit_callable_docs<Fn>(wrapper_out, indent, cp);
-    constexpr bool ret_unsafe{classify(std::meta::return_type_of(Fn)) ==
-                              marshal_kind::seq_value};
+    constexpr bool ret_unsafe{
+        classify(std::meta::return_type_of(Fn)) == marshal_kind::seq_value ||
+        classify(std::meta::return_type_of(Fn)) == marshal_kind::tuple_value};
     const bool is_unsafe{cp.needs_unsafe || ret_unsafe};
     wrapper_out += indent + "public " + (is_unsafe ? "unsafe " : "") +
                    (HasSelf ? "" : "static ") +
@@ -635,6 +822,7 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
                    "{\n";
     if (!cp.pin_open.empty())
         wrapper_out += indent + "    " + cp.pin_open + "{\n";
+    wrapper_out += cp.pre;
     wrapper_out += wrapper_return_body<std::meta::return_type_of(Fn), Style,
                                        ::welder::return_policy_of(Fn, lang::cs)>(
         pc, indent + "    ", HasSelf ? "this" : "");
@@ -672,6 +860,7 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
                  helper + "(" + cp.wrapper_params + ")\n        {\n" +
                  (cp.pin_open.empty() ? "" : "            " + cp.pin_open +
                                              "{\n") +
+                 cp.pre +
                  "            IntPtr _r = NativeMethods." + sym + "(" +
                  (cp.wrapper_args.empty() ? std::string{}
                                           : cp.wrapper_args + ", ") +
@@ -975,8 +1164,7 @@ struct rod {
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         constexpr std::meta::info MT{std::meta::type_of(Mem)};
-        if constexpr (classify(std::meta::type_of(Mem)) == marshal_kind::seq_ref)
-            _ensure_vector<bare(std::meta::type_of(Mem))>(*w.doc);
+        _ensure_for<std::meta::type_of(Mem)>(*w.doc);
         constexpr bool checked{(require_marshallable(MT, true), true)};
         static_assert(checked);
         const std::string id{std::meta::identifier_of(Mem)};
@@ -1036,8 +1224,9 @@ struct rod {
             ::welder::name_of<Mem, lang::cs, Style, ::welder::ent_kind::field>()};
         w.surface_names.push_back(pname);
         emit_doc_comment(w.members, "        ", ::welder::doc_of<Mem>());
-        constexpr bool unsafe_prop{classify(std::meta::type_of(Mem)) ==
-                                   marshal_kind::seq_value};
+        constexpr bool unsafe_prop{
+            classify(std::meta::type_of(Mem)) == marshal_kind::seq_value ||
+            classify(std::meta::type_of(Mem)) == marshal_kind::tuple_value};
         w.members += "        public " +
                      std::string{unsafe_prop ? "unsafe " : ""} +
                      public_type<std::meta::type_of(Mem), Style>() + " " + pname +
@@ -1054,6 +1243,7 @@ struct rod {
                          (vcp.pin_open.empty()
                               ? std::string{}
                               : "                " + vcp.pin_open + "{\n") +
+                         vcp.pre +
                          "                NativeMethods." + setsym + "(" +
                          w.handle_field + ", " + vcp.wrapper_args +
                          ", out WelderError _e);\n"
@@ -1158,6 +1348,7 @@ struct rod {
                          (vcp.pin_open.empty()
                               ? std::string{}
                               : "                " + vcp.pin_open + "{\n") +
+                         vcp.pre +
                          "                NativeMethods." + setsym + "(" +
                          w.handle_field + ", " + vcp.wrapper_args +
                          ", out WelderError _e);\n"
@@ -1817,19 +2008,325 @@ struct rod {
             "    }\n\n";
     }
 
-    /** Collect the generated-wrapper containers a callable's signature uses. */
+    /** Generate whatever per-type scaffolding @a Type's marshalling needs:
+        a vector/array/map wrapper, or a shared_ptr box class. */
+    template <std::meta::info Type>
+    static void _ensure_for(document& doc) {
+        constexpr marshal_kind k{classify(Type)};
+        if constexpr (k == marshal_kind::seq_ref) {
+            if constexpr (is_fixed_sequence(bare(Type)))
+                _ensure_fixed<bare(Type)>(doc);
+            else
+                _ensure_vector<bare(Type)>(doc);
+        } else if constexpr (k == marshal_kind::map_ref) {
+            _ensure_map<bare(Type)>(doc);
+        } else if constexpr (k == marshal_kind::shared_ptr_) {
+            _ensure_shared<bare(
+                std::meta::template_arguments_of(bare(Type))[0])>(doc);
+        }
+    }
+
+    /** The fixed-size sibling of @ref _ensure_vector: `std::array<welded, N>`
+        — the vector protocol minus the size-changing ops (constant `Count`,
+        live-view indexer with write-through set). */
+    template <std::meta::info C>
+    static void _ensure_fixed(document& doc) {
+        static constexpr const char* key{
+            std::define_static_string(std::meta::display_string_of(C))};
+        if (!doc.claim_container(key))
+            return;
+        constexpr std::size_t n{fixed_extent(C)};
+        const std::string ns{std::to_string(n)};
+        const std::string sym{std::string{"welder_arr"} + ns + "_" +
+                              upath_v<bare(sequence_element(C))>};
+        const std::string targs{"^^" +
+                                std::string{cpp_name_v<bare(
+                                    sequence_element(C))>} +
+                                ", " + ns};
+        const std::string V{container_ref<C>()};
+        const std::string E{type_ref<bare(sequence_element(C))>()};
+        const std::string Ef{field_ref<bare(sequence_element(C))>()};
+        doc.record_type_name(key, "Array" + Ef + "x" + ns);
+        for (const char* leaf : {"_new", "_destroy", "_get", "_set"})
+            doc.record_symbol(sym + leaf);
+        doc.shim +=
+            "void* " + sym + "_new(welder_error* err) { return "
+            "wcs::shim::arr_new<" + targs + ">(err); }\n\n"
+            "void " + sym + "_destroy(void* self) { wcs::shim::arr_destroy<" +
+            targs + ">(self); }\n\n"
+            "void* " + sym + "_get(void* self, std::int64_t i, welder_error* "
+            "err) { return wcs::shim::arr_get<" + targs + ">(self, i, err); }\n\n"
+            "void " + sym + "_set(void* self, std::int64_t i, void* elem, "
+            "welder_error* err) { wcs::shim::arr_set<" + targs +
+            ">(self, i, elem, err); }\n\n";
+        doc.pinvoke +=
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_new(out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_destroy(IntPtr self);\n"
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_get(" + V + "Handle self, long i, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_set(" + V + "Handle self, long i, " + E +
+            "Handle elem, out WelderError err);\n";
+        doc.containers +=
+            "    internal sealed class " + V + "Handle : SafeHandle\n    {\n"
+            "        internal " + V + "Handle(IntPtr handle, bool owns) : "
+            "base(IntPtr.Zero, owns)\n        {\n            "
+            "SetHandle(handle);\n        }\n"
+            "        public override bool IsInvalid => handle == "
+            "IntPtr.Zero;\n"
+            "        protected override bool ReleaseHandle()\n        {\n"
+            "            NativeMethods." + sym + "_destroy(handle);\n"
+            "            return true;\n        }\n    }\n\n"
+            "    /// <summary>A reference-semantic C++ std::array of " + ns +
+            " " + E + " (live element views; fixed size).</summary>\n"
+            "    public sealed class " + V + " : IDisposable\n    {\n"
+            "        internal " + V + "Handle _h_" + V + ";\n"
+            "        internal object? _owner;\n"
+            "        internal " + V + "(IntPtr handle, bool owns) { _h_" + V +
+            " = new " + V + "Handle(handle, owns); }\n"
+            "        public " + V + "() : this(_New(), true) {}\n"
+            "        private static IntPtr _New()\n        {\n"
+            "            IntPtr _r = NativeMethods." + sym +
+            "_new(out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            return _r;\n        }\n"
+            "        public int Count => " + ns + ";\n"
+            "        public " + E + " this[int i]\n        {\n"
+            "            get\n            {\n"
+            "                IntPtr _r = NativeMethods." + sym + "_get(_h_" +
+            V + ", i, out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "                var _v = new " + E + "(_r, false);\n"
+            "                _v._owner = this;\n"
+            "                return _v;\n            }\n"
+            "            set\n            {\n"
+            "                NativeMethods." + sym + "_set(_h_" + V + ", i, "
+            "value._h_" + Ef + ", out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "            }\n        }\n"
+            "        public void Dispose() => _h_" + V + ".Dispose();\n"
+            "    }\n\n";
+    }
+
+    /** The reference-semantic map wrapper (`std::map`/`std::unordered_map`
+        with a leaf key): Count, ContainsKey, a `this[K]` indexer (a live view
+        for a welded mapped type, a value copy otherwise; insert-or-assign on
+        set), Remove, Clear. */
+    template <std::meta::info C>
+    static void _ensure_map(document& doc) {
+        static constexpr const char* key{
+            std::define_static_string(std::meta::display_string_of(C))};
+        if (!doc.claim_container(key))
+            return;
+        constexpr bool ordered{is_specialization_of(C, ^^std::map)};
+        static constexpr const char* ktok{
+            std::define_static_string(map_token(map_key_type(C)))};
+        static constexpr const char* vtok{
+            std::define_static_string(map_token(map_value_type(C)))};
+        const std::string sym{std::string{ordered ? "welder_map_" : "welder_umap_"} +
+                              ktok + "_" + vtok};
+        static constexpr const char* kcpp{std::define_static_string(
+            leaf_cpp_spelling(map_key_type(C)))};
+        static constexpr const char* vcpp{std::define_static_string(
+            leaf_cpp_spelling(map_value_type(C)))};
+        const std::string targs{std::string{ordered ? "true" : "false"} +
+                                ", ^^" + kcpp + ", ^^" + vcpp};
+        const std::string V{container_ref<C>()};
+        // Wrapper name: Map/UMap + CapKey + value name (identifier-safe).
+        std::string kname{ktok};
+        kname[0] = static_cast<char>(std::toupper(kname[0]));
+        std::string vname{};
+        if constexpr (classify(map_value_type(C)) == marshal_kind::handle ||
+                      classify(map_value_type(C)) == marshal_kind::enum_)
+            vname = field_ref<bare(map_value_type(C))>();
+        else {
+            std::string t{vtok};
+            t[0] = static_cast<char>(std::toupper(t[0]));
+            vname = t;
+        }
+        doc.record_type_name(key, std::string{ordered ? "Map" : "UMap"} +
+                                      kname + vname);
+
+        // key/value piece reuse: the SAME conversion source as params/setters
+        call_pieces kcp{};
+        append_one_param<map_key_type(C), ::welder::naming::none>(kcp, 0,
+                                                                  "key");
+        call_pieces vcp{};
+        append_one_param<map_value_type(C), ::welder::naming::none>(vcp, 1,
+                                                                    "value");
+        const std::string kwire{wire_param_v<map_key_type(C)>};
+        const std::string vwire{wire_param_v<map_value_type(C)>};
+        const std::string kpin{pinvoke_type<map_key_type(C),
+                                            ::welder::naming::none>(false)};
+        const std::string vpin{pinvoke_type<map_value_type(C),
+                                            ::welder::naming::none>(false)};
+        constexpr bool v_is_handle{classify(map_value_type(C)) ==
+                                   marshal_kind::handle};
+        const std::string vget_ret{
+            v_is_handle ? std::string{"IntPtr"}
+                        : pinvoke_type<map_value_type(C),
+                                       ::welder::naming::none>(true)};
+        const std::string vget_wire{
+            v_is_handle ? std::string{"void*"}
+                        : std::string{wire_return_v<map_value_type(C)>}};
+        for (const char* leaf : {"_new", "_destroy", "_size", "_contains",
+                                 "_get", "_set", "_remove", "_clear"})
+            doc.record_symbol(sym + leaf);
+        doc.shim +=
+            "void* " + sym + "_new(welder_error* err) { return "
+            "wcs::shim::map_new<" + targs + ">(err); }\n\n"
+            "void " + sym + "_destroy(void* self) { wcs::shim::map_destroy<" +
+            targs + ">(self); }\n\n"
+            "std::int64_t " + sym + "_size(void* self, welder_error* err) { "
+            "return wcs::shim::map_size<" + targs + ">(self, err); }\n\n"
+            "bool " + sym + "_contains(void* self, " + kwire +
+            " k, welder_error* err) { return wcs::shim::map_contains<" + targs +
+            ">(self, k, err); }\n\n" +
+            vget_wire + " " + sym + "_get(void* self, " + kwire +
+            " k, welder_error* err) { return wcs::shim::map_get<" + targs +
+            ">(self, k, err); }\n\n"
+            "void " + sym + "_set(void* self, " + kwire + " k, " + vwire +
+            " v, welder_error* err) { wcs::shim::map_set<" + targs +
+            ">(self, k, v, err); }\n\n"
+            "bool " + sym + "_remove(void* self, " + kwire +
+            " k, welder_error* err) { return wcs::shim::map_remove<" + targs +
+            ">(self, k, err); }\n\n"
+            "void " + sym + "_clear(void* self, welder_error* err) { "
+            "wcs::shim::map_clear<" + targs + ">(self, err); }\n\n";
+        const std::string kattr{import_attr(kcp.has_string)};
+        const std::string kvattr{
+            import_attr(kcp.has_string || vcp.has_string)};
+        doc.pinvoke +=
+            "        [LibraryImport(Lib)] internal static partial IntPtr " +
+            sym + "_new(out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_destroy(IntPtr self);\n"
+            "        [LibraryImport(Lib)] internal static partial long " + sym +
+            "_size(" + V + "Handle self, out WelderError err);\n"
+            "        " + kattr + " [return: MarshalAs(UnmanagedType.U1)] "
+            "internal static partial bool " + sym + "_contains(" + V +
+            "Handle self, " + kpin + " k, out WelderError err);\n"
+            "        " + kattr + " internal static partial " + vget_ret + " " +
+            sym + "_get(" + V + "Handle self, " + kpin +
+            " k, out WelderError err);\n"
+            "        " + kvattr + " internal static partial void " + sym +
+            "_set(" + V + "Handle self, " + kpin + " k, " + vpin +
+            " v, out WelderError err);\n"
+            "        " + kattr + " [return: MarshalAs(UnmanagedType.U1)] "
+            "internal static partial bool " + sym + "_remove(" + V +
+            "Handle self, " + kpin + " k, out WelderError err);\n"
+            "        [LibraryImport(Lib)] internal static partial void " + sym +
+            "_clear(" + V + "Handle self, out WelderError err);\n";
+        const std::string kpub{public_type<map_key_type(C),
+                                           ::welder::naming::none>()};
+        const std::string vpub{public_type<map_value_type(C),
+                                           ::welder::naming::none>()};
+        std::string get_body{wrapper_return_body<map_value_type(C),
+                                                 ::welder::naming::none,
+                                                 field_return_policy(
+                                                     map_value_type(C))>(
+            "NativeMethods." + sym + "_get(_h_" + V + ", " + kcp.wrapper_args +
+                ", out WelderError _e)",
+            "                ", "this")};
+        doc.containers +=
+            "    internal sealed class " + V + "Handle : SafeHandle\n    {\n"
+            "        internal " + V + "Handle(IntPtr handle, bool owns) : "
+            "base(IntPtr.Zero, owns)\n        {\n            "
+            "SetHandle(handle);\n        }\n"
+            "        public override bool IsInvalid => handle == "
+            "IntPtr.Zero;\n"
+            "        protected override bool ReleaseHandle()\n        {\n"
+            "            NativeMethods." + sym + "_destroy(handle);\n"
+            "            return true;\n        }\n    }\n\n"
+            "    /// <summary>A reference-semantic C++ " +
+            (ordered ? "std::map" : "std::unordered_map") + " of " + kpub +
+            " to " + vpub + ".</summary>\n"
+            "    public sealed class " + V + " : IDisposable\n    {\n"
+            "        internal " + V + "Handle _h_" + V + ";\n"
+            "        internal object? _owner;\n"
+            "        internal " + V + "(IntPtr handle, bool owns) { _h_" + V +
+            " = new " + V + "Handle(handle, owns); }\n"
+            "        public " + V + "() : this(_New(), true) {}\n"
+            "        private static IntPtr _New()\n        {\n"
+            "            IntPtr _r = NativeMethods." + sym +
+            "_new(out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            return _r;\n        }\n"
+            "        public int Count\n        {\n            get\n"
+            "            {\n"
+            "                var _r = NativeMethods." + sym + "_size(_h_" + V +
+            ", out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "                return (int)_r;\n            }\n        }\n"
+            "        public bool ContainsKey(" + kpub + " key)\n        {\n"
+            "            var _r = NativeMethods." + sym + "_contains(_h_" + V +
+            ", " + kcp.wrapper_args + ", out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            return _r;\n        }\n"
+            "        public " + vpub + " this[" + kpub +
+            " key]\n        {\n            get\n            {\n" + get_body +
+            "            }\n"
+            "            set\n            {\n"
+            "                NativeMethods." + sym + "_set(_h_" + V + ", " +
+            kcp.wrapper_args + vcp.wrapper_args +
+            ", out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "            }\n        }\n"
+            "        public bool Remove(" + kpub + " key)\n        {\n"
+            "            var _r = NativeMethods." + sym + "_remove(_h_" + V +
+            ", " + kcp.wrapper_args + ", out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            return _r;\n        }\n"
+            "        public void Clear()\n        {\n"
+            "            NativeMethods." + sym + "_clear(_h_" + V +
+            ", out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n        }\n"
+            "        public void Dispose() => _h_" + V + ".Dispose();\n"
+            "    }\n\n";
+    }
+
+    /** The per-class shared_ptr BOX: a SafeHandle whose release frees the
+        boxed `shared_ptr` copy pinning a shared return's object. */
+    template <std::meta::info T>
+    static void _ensure_shared(document& doc) {
+        static constexpr const char* key{std::define_static_string(
+            std::string{"sp:"} + qualified_cpp_name(T))};
+        if (!doc.claim_container(key))
+            return;
+        const std::string sym{std::string{"welder_sp_"} + upath_v<T> +
+                              "_free"};
+        // gcc-16: the variable template must be bound to a local first — a
+        // `std::string{cpp_name_v<T>}` nested in the concatenation trips the
+        // consteval-only template-body check.
+        const std::string cpp{cpp_name_v<T>};
+        doc.record_symbol(sym);
+        doc.shim += "void " + sym + "(void* box) { wcs::shim::sp_free<^^" +
+                    cpp + ">(box); }\n\n";
+        doc.pinvoke += "        [LibraryImport(Lib)] internal static partial "
+                       "void " + sym + "(IntPtr box);\n";
+        doc.containers +=
+            "    internal sealed class " + field_ref<T>() +
+            "SharedBox : SafeHandle\n    {\n"
+            "        internal " + field_ref<T>() +
+            "SharedBox(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)\n"
+            "        {\n            SetHandle(handle);\n        }\n"
+            "        public override bool IsInvalid => handle == "
+            "IntPtr.Zero;\n"
+            "        protected override bool ReleaseHandle()\n        {\n"
+            "            NativeMethods." + sym + "(handle);\n"
+            "            return true;\n        }\n    }\n\n";
+    }
+
+    /** Collect the generated scaffolding a callable's signature uses. */
     template <std::meta::info Fn>
     static void _collect_containers(document& doc) {
-        if constexpr (!std::meta::is_constructor(Fn)) {
-            if constexpr (classify(std::meta::return_type_of(Fn)) ==
-                          marshal_kind::seq_ref)
-                _ensure_vector<bare(std::meta::return_type_of(Fn))>(doc);
-        }
+        if constexpr (!std::meta::is_constructor(Fn))
+            _ensure_for<std::meta::return_type_of(Fn)>(doc);
         template for ([[maybe_unused]] constexpr auto p :
                       std::define_static_array(std::meta::parameters_of(Fn))) {
-            if constexpr (classify(std::meta::type_of(p)) ==
-                          marshal_kind::seq_ref)
-                _ensure_vector<bare(std::meta::type_of(p))>(doc);
+            _ensure_for<std::meta::type_of(p)>(doc);
         }
     }
 
@@ -2277,8 +2774,7 @@ struct rod {
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&, const char* name = nullptr) {
         constexpr std::meta::info VT{std::meta::type_of(Var)};
-        if constexpr (classify(std::meta::type_of(Var)) == marshal_kind::seq_ref)
-            _ensure_vector<bare(std::meta::type_of(Var))>(*m.doc);
+        _ensure_for<std::meta::type_of(Var)>(*m.doc);
         constexpr bool checked{(require_marshallable(VT, true), true)};
         static_assert(checked);
         constexpr std::meta::info Ns{std::meta::parent_of(Var)};
@@ -2316,8 +2812,9 @@ struct rod {
             ::welder::name_of_or<Var, lang::cs, Style,
                                  ::welder::ent_kind::variable>(name)};
         emit_doc_comment(body, "        ", ::welder::doc_of<Var>());
-        constexpr bool unsafe_var{classify(std::meta::type_of(Var)) ==
-                                  marshal_kind::seq_value};
+        constexpr bool unsafe_var{
+            classify(std::meta::type_of(Var)) == marshal_kind::seq_value ||
+            classify(std::meta::type_of(Var)) == marshal_kind::tuple_value};
         body += "        public static " +
                 std::string{unsafe_var ? "unsafe " : ""} +
                 public_type<std::meta::type_of(Var), Style>() + " " + vname +
@@ -2333,6 +2830,7 @@ struct rod {
                     (vcp.pin_open.empty()
                          ? std::string{}
                          : "                " + vcp.pin_open + "{\n") +
+                    vcp.pre +
                     "                NativeMethods." + base + "_set(" +
                     vcp.wrapper_args + ", out WelderError _e);\n"
                     "                WelderInterop.ThrowIfError(in _e);\n" +

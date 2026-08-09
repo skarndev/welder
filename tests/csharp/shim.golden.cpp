@@ -118,6 +118,12 @@ std::int32_t welder_csharp_cases_Holder_m_item_x_0(void* self, welder_error* err
 
 void* welder_csharp_cases_f_make_point_0(std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "make_point", 0)>(err, a0, a1); }
 
+welder_seq_wire welder_csharp_cases_f_tagged_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "tagged", 0)>(err, a0); }
+
+std::int64_t welder_csharp_cases_f_pair_sum_0(const welder_opt_wire* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "pair_sum", 0)>(err, a0); }
+
+welder_seq_wire welder_csharp_cases_f_bundle_0(welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "bundle", 0)>(err); }
+
 void welder_csharp_cases_f_reject_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "reject", 0)>(err, a0); }
 
 void welder_csharp_cases_Segment_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Segment>(self); }
@@ -243,6 +249,86 @@ std::int32_t welder_csharp_cases_Route_m_stop_count_0(void* self, welder_error* 
 void* welder_csharp_cases_Route_m_reversed_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Route, wcs::named_member(^^::csharp_cases::Route, "reversed", 0)>(self, err); }
 
 std::int32_t welder_csharp_cases_Route_m_total_x_0(void* self, void* a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Route, wcs::named_member(^^::csharp_cases::Route, "total_x", 0)>(self, err, a0); }
+
+void welder_csharp_cases_Depot_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Depot>(self); }
+
+void* welder_csharp_cases_Depot_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Depot>(err); }
+
+void* welder_csharp_cases_Depot_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Depot>(self, err); }
+
+void* welder_map_str_csharp_cases_Point_new(welder_error* err) { return wcs::shim::map_new<true, ^^std::string, ^^::csharp_cases::Point>(err); }
+
+void welder_map_str_csharp_cases_Point_destroy(void* self) { wcs::shim::map_destroy<true, ^^std::string, ^^::csharp_cases::Point>(self); }
+
+std::int64_t welder_map_str_csharp_cases_Point_size(void* self, welder_error* err) { return wcs::shim::map_size<true, ^^std::string, ^^::csharp_cases::Point>(self, err); }
+
+bool welder_map_str_csharp_cases_Point_contains(void* self, const char* k, welder_error* err) { return wcs::shim::map_contains<true, ^^std::string, ^^::csharp_cases::Point>(self, k, err); }
+
+void* welder_map_str_csharp_cases_Point_get(void* self, const char* k, welder_error* err) { return wcs::shim::map_get<true, ^^std::string, ^^::csharp_cases::Point>(self, k, err); }
+
+void welder_map_str_csharp_cases_Point_set(void* self, const char* k, void* v, welder_error* err) { wcs::shim::map_set<true, ^^std::string, ^^::csharp_cases::Point>(self, k, v, err); }
+
+bool welder_map_str_csharp_cases_Point_remove(void* self, const char* k, welder_error* err) { return wcs::shim::map_remove<true, ^^std::string, ^^::csharp_cases::Point>(self, k, err); }
+
+void welder_map_str_csharp_cases_Point_clear(void* self, welder_error* err) { wcs::shim::map_clear<true, ^^std::string, ^^::csharp_cases::Point>(self, err); }
+
+void* welder_csharp_cases_Depot_get_sites(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Depot, wcs::named_field(^^::csharp_cases::Depot, "sites")>(self, err); }
+
+void welder_csharp_cases_Depot_set_sites(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Depot, wcs::named_field(^^::csharp_cases::Depot, "sites")>(self, err, v); }
+
+void* welder_umap_int_str_new(welder_error* err) { return wcs::shim::map_new<false, ^^int, ^^std::string>(err); }
+
+void welder_umap_int_str_destroy(void* self) { wcs::shim::map_destroy<false, ^^int, ^^std::string>(self); }
+
+std::int64_t welder_umap_int_str_size(void* self, welder_error* err) { return wcs::shim::map_size<false, ^^int, ^^std::string>(self, err); }
+
+bool welder_umap_int_str_contains(void* self, std::int32_t k, welder_error* err) { return wcs::shim::map_contains<false, ^^int, ^^std::string>(self, k, err); }
+
+const char* welder_umap_int_str_get(void* self, std::int32_t k, welder_error* err) { return wcs::shim::map_get<false, ^^int, ^^std::string>(self, k, err); }
+
+void welder_umap_int_str_set(void* self, std::int32_t k, const char* v, welder_error* err) { wcs::shim::map_set<false, ^^int, ^^std::string>(self, k, v, err); }
+
+bool welder_umap_int_str_remove(void* self, std::int32_t k, welder_error* err) { return wcs::shim::map_remove<false, ^^int, ^^std::string>(self, k, err); }
+
+void welder_umap_int_str_clear(void* self, welder_error* err) { wcs::shim::map_clear<false, ^^int, ^^std::string>(self, err); }
+
+void* welder_csharp_cases_Depot_get_labels(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Depot, wcs::named_field(^^::csharp_cases::Depot, "labels")>(self, err); }
+
+void welder_csharp_cases_Depot_set_labels(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Depot, wcs::named_field(^^::csharp_cases::Depot, "labels")>(self, err, v); }
+
+std::int32_t welder_csharp_cases_Depot_m_site_count_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Depot, wcs::named_member(^^::csharp_cases::Depot, "site_count", 0)>(self, err); }
+
+std::int64_t welder_csharp_cases_Depot_m_label_keys_0(void* self, void* a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Depot, wcs::named_member(^^::csharp_cases::Depot, "label_keys", 0)>(self, err, a0); }
+
+void welder_csharp_cases_Cable_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Cable>(self); }
+
+void* welder_csharp_cases_Cable_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Cable>(err); }
+
+void* welder_csharp_cases_Cable_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Cable>(self, err); }
+
+void* welder_arr2_csharp_cases_Point_new(welder_error* err) { return wcs::shim::arr_new<^^::csharp_cases::Point, 2>(err); }
+
+void welder_arr2_csharp_cases_Point_destroy(void* self) { wcs::shim::arr_destroy<^^::csharp_cases::Point, 2>(self); }
+
+void* welder_arr2_csharp_cases_Point_get(void* self, std::int64_t i, welder_error* err) { return wcs::shim::arr_get<^^::csharp_cases::Point, 2>(self, i, err); }
+
+void welder_arr2_csharp_cases_Point_set(void* self, std::int64_t i, void* elem, welder_error* err) { wcs::shim::arr_set<^^::csharp_cases::Point, 2>(self, i, elem, err); }
+
+void* welder_csharp_cases_Cable_get_ends(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Cable, wcs::named_field(^^::csharp_cases::Cable, "ends")>(self, err); }
+
+void welder_csharp_cases_Cable_set_ends(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Cable, wcs::named_field(^^::csharp_cases::Cable, "ends")>(self, err, v); }
+
+std::int32_t welder_csharp_cases_Cable_m_span_x_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Cable, wcs::named_member(^^::csharp_cases::Cable, "span_x", 0)>(self, err); }
+
+void welder_sp_csharp_cases_Point_free(void* box) { wcs::shim::sp_free<^^::csharp_cases::Point>(box); }
+
+welder_sp_wire welder_csharp_cases_f_shared_point_0(std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "shared_point", 0)>(err, a0, a1); }
+
+welder_sp_wire welder_csharp_cases_f_no_point_0(welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "no_point", 0)>(err); }
+
+std::int32_t welder_csharp_cases_f_shared_x_0(void* a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "shared_x", 0)>(err, a0); }
+
+void* welder_csharp_cases_f_unique_point_0(std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases, "unique_point", 0)>(err, a0, a1); }
 
 void welder_csharp_cases_Shape_dir_init(void* release, void* s0, void* s1) {
     welder_dir_csharp_cases_Shape::wcs_tbl.release = reinterpret_cast<void (*)(void*)>(release);

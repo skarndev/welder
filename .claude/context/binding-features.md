@@ -7,7 +7,7 @@ guide has the user-facing walkthrough, this has driver hooks + test files.
 
 All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 
-**`lang::cs` coverage (branch feature/csharp, Phase 1 of 7):** the C# rod
+**`lang::cs` coverage (branch feature/csharp, Phases 1–7 + gap-closing):** the C# rod
 participates in the SAME resolution/gate for: fields (+no_reassign), ctors
 (default/declared/aggregate, Copyable→Clone), method/static/free overload groups,
 method-backed properties, enums (underlying-typed, per-enumerator docs), namespace
@@ -97,6 +97,32 @@ indexer with _owner pinning, Add/Clear, public parameterless ctor);
 signature-driven collection via _collect_containers in every rod hook
 (operators excepted — known gap). gcc16: a splice as template arg must be
 parenthesized/aliased (`using El = [:E:]` before std::vector<El>).
+Gap-closing (post-Phase-7): pair/tuple<leaf…> → tuple_value (slot-array wire:
+returns malloc a welder_opt_wire[] read per-slot; params stackalloc one; C#
+ValueTuple both ways). map/unordered_map (LEAF key — scalar/string/enum — and
+the DEFAULT-argument form only, verified by substitute comparison in
+is_default_map) → map_ref, piggybacking the handle machinery like seq_ref;
+_ensure_map<C> emits 8 thunks (welder_[u]map_<ktok>_<vtok>_* → shim::map_*
+<Ordered,^^K,^^V>; map_t derives the type via SUBSTITUTE — gcc16
+mis-substitutes splices nested in an alias template's template-arg list) + a
+Map/UMap wrapper (Count/ContainsKey/live-view this[K] via at() → OOR/
+Remove/Clear; key+value marshalling REUSES append_one_param +
+wrapper_return_body — value pieces built at index 1 carry their own leading
+", "). Template-arg respelling uses leaf_cpp_spelling (display_string_of for
+fundamentals — NEVER a fixed-width alias, identity matters through the
+reinterpret_cast; "std::string" special-cased; qualified path for
+class/enum). array<welded,N> → seq_ref + is_fixed_sequence dispatch;
+_ensure_fixed<C> = the vector protocol minus size ops (ArrayElemxN, constant
+Count, live-view indexer get/whole-element set). shared_ptr<welded> →
+shared_ptr_: returns cross as welder_sp_wire {obj, boxed-copy} → C# view
+pinned by a per-class <Elem>SharedBox SafeHandle (_ensure_shared; freed via
+welder_sp_<path>_free; gcc16: bind cpp_name_v<T> to a local before
+concatenating — a nested std::string{v<T>} trips the consteval-only
+template-body check); params BORROW (to_cpp builds a non-owning aliasing
+shared_ptr). unique_ptr<welded> returns transfer (release → owning wrapper);
+unique_ptr params are a designed require_marshallable error (GC-owned sink
+ambiguity). All new kinds route through _ensure_for<Type> (the single
+collector dispatch).
 Nested types (Phase 7): make_nested_class/make_nested_enum flush into the
 OUTER's members buffer (class_writer/enum_writer `sink`), references resolve
 to the dotted path (record_type_name now OVERWRITES, so the nested factory
@@ -109,13 +135,12 @@ C# forbids a property and a nested type sharing a name (CS0102) — the shared
 `gauge`-field/`Gauge`-type pattern must rename. CI: Linux/macOS install brew
 `dotnet` (DOTNET_ROOT resolved from the found executable — linuxbrew too);
 Windows roundtrip auto-skips until proven on a runner.
-NOT yet (a designed `diag::csharp_unmarshallable` / `static_assert` at
-generation):
-virtuals-overridden-in-C# (directors), rv::none + take_ownership-on-reference
-(rejected combos), STL containers, nested types (flat fallback is fine —
-they're not yet marshallable anyway), weld_protected members (the shim's
-`&[:Mem:]` needs public access). Details: architecture.md (the rod section) +
-tests/csharp.
+NOT marshalled by DESIGN (a `diag::csharp_unmarshallable` / `static_assert`
+at generation): std::variant (C# has no sum type), class-keyed or
+custom-comparator/allocator maps, nested container-of-container wrappers,
+unique_ptr parameters, rv::none + take_ownership-on-reference (rejected
+combos), abstract directors (P2996 cannot synthesize a class — factory-only
+escape). Details: architecture.md (the rod section) + tests/csharp.
 
 ## Data members & constructors
 Public data members (a mutable member read/write via `def_readwrite`; a **const**

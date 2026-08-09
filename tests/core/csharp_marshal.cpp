@@ -8,9 +8,12 @@
 // target, no WILL_FAIL) — needs only the compiler, no .NET.
 #include <array>
 #include <cstdint>
+#include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <welder/vocabulary.hpp>
@@ -75,6 +78,31 @@ static_assert(wcs::classify(^^std::vector<lockcases::Thing>) ==
               marshal_kind::seq_ref);
 // vector<bool> is a bitset; nesting has no wire yet.
 static_assert(wcs::classify(^^std::vector<bool>) == marshal_kind::unsupported);
+// welded-element std::array -> the fixed flavor of the reference family
+static_assert(wcs::classify(^^std::array<lockcases::Thing, 2>) ==
+              marshal_kind::seq_ref);
+static_assert(wcs::is_fixed_sequence(^^std::array<lockcases::Thing, 2>));
+static_assert(!wcs::is_fixed_sequence(^^std::vector<lockcases::Thing>));
+static_assert(wcs::fixed_extent(^^std::array<lockcases::Thing, 2>) == 2);
+// default-argument maps with a leaf key -> the reference family; a custom
+// comparator/allocator form stays unsupported
+static_assert(wcs::classify(^^std::map<std::string, lockcases::Thing>) ==
+              marshal_kind::map_ref);
+static_assert(wcs::classify(
+                  ^^std::unordered_map<std::int32_t, std::string>) ==
+              marshal_kind::map_ref);
+static_assert(wcs::classify(^^std::map<lockcases::Thing, int>) ==
+              marshal_kind::unsupported); // a class key has no leaf wire
+static_assert(
+    wcs::classify(^^std::map<int, int, std::greater<int>>) ==
+    marshal_kind::unsupported);
+// smart pointers of a welded class
+static_assert(wcs::classify(^^std::shared_ptr<lockcases::Thing>) ==
+              marshal_kind::shared_ptr_);
+static_assert(wcs::classify(^^std::unique_ptr<lockcases::Thing>) ==
+              marshal_kind::unique_ptr_);
+static_assert(wcs::classify(^^std::shared_ptr<int>) ==
+              marshal_kind::unsupported); // only welded-class payloads
 static_assert(wcs::classify(^^std::optional<std::vector<int>>) ==
               marshal_kind::unsupported);
 // classify runs AFTER the gate, whose scope-aware oracle already admitted the
@@ -98,6 +126,14 @@ static_assert(streq(wcs::enum_wire_spell(^^lockcases::Tag).cs, "ushort"));
 // --- symbol mangling ---------------------------------------------------------
 static_assert(wcs::underscore_path(^^lockcases::Thing) ==
               "lockcases_Thing");
+// the map thunks' name tokens + exact C++ template-argument respelling
+static_assert(wcs::map_token(^^std::string) == "str");
+static_assert(wcs::map_token(^^int) == "int");
+static_assert(wcs::map_token(^^lockcases::Thing) == "lockcases_Thing");
+static_assert(wcs::leaf_cpp_spelling(^^std::string) == "std::string");
+static_assert(wcs::leaf_cpp_spelling(^^int) == "int");
+static_assert(wcs::leaf_cpp_spelling(^^lockcases::Thing) ==
+              "::lockcases::Thing");
 static_assert(wcs::qualified_cpp_name(^^lockcases::Thing) ==
               "::lockcases::Thing");
 

@@ -12,7 +12,12 @@
 // vocabulary, and by the generated shim.cpp (which re-runs the same reflection).
 #include <array>
 #include <cstdint>
+#include <map>
+#include <memory>
 #include <optional>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -112,6 +117,23 @@ Holder {
 [[=welder::weld(welder::lang::cs)]]
 inline Point* make_point(std::int32_t x, std::int32_t y) {
     return new Point(x, y);
+}
+
+// --- pair/tuple value marshalling ----------------------------------------------
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::pair<std::int32_t, std::string> tagged(std::int32_t v) {
+    return {v, "n" + std::to_string(v)};
+}
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::int64_t pair_sum(const std::pair<std::int32_t, std::int64_t>& p) {
+    return p.first + p.second;
+}
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::tuple<std::int32_t, double, std::string, Point> bundle() {
+    return {7, 2.5, "seven", Point{1, 2}};
 }
 
 // --- the exception taxonomy ----------------------------------------------------
@@ -235,6 +257,50 @@ struct [[=welder::weld(welder::lang::cs)]] Route {
         return t;
     }
 };
+
+// --- reference-semantic maps + a fixed array of welded elements ----------------
+
+struct [[=welder::weld(welder::lang::cs)]] Depot {
+    Depot() = default;
+    std::map<std::string, Point> sites{};                    // live MapStrPoint
+    std::unordered_map<std::int32_t, std::string> labels{};  // live UMapIntStr
+    std::int32_t site_count() const {
+        return static_cast<std::int32_t>(sites.size());
+    }
+    std::int64_t label_keys(
+        const std::unordered_map<std::int32_t, std::string>& m) const {
+        std::int64_t t{0};
+        for (const auto& [k, v] : m)
+            t += k;
+        return t;
+    }
+};
+
+struct [[=welder::weld(welder::lang::cs)]] Cable {
+    Cable() = default;
+    std::array<Point, 2> ends{};  // -> a live, fixed-size ArrayPointx2 wrapper
+    std::int32_t span_x() const { return ends[1].x - ends[0].x; }
+};
+
+// --- smart pointers (shared_ptr shares, unique_ptr transfers) -------------------
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::shared_ptr<Point> shared_point(std::int32_t x, std::int32_t y) {
+    return std::make_shared<Point>(x, y);
+}
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::shared_ptr<Point> no_point() { return nullptr; }
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::int32_t shared_x(std::shared_ptr<Point> p) {  // borrowed, not adopted
+    return p ? p->x : -1;
+}
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::unique_ptr<Point> unique_point(std::int32_t x, std::int32_t y) {
+    return std::make_unique<Point>(x, y);
+}
 
 // --- virtuals / directors (C# subclasses overriding C++ virtuals) --------------
 

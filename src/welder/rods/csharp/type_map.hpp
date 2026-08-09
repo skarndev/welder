@@ -1,6 +1,11 @@
 #pragma once
 #include <array>    // ^^std::array (the value-sequence family)
 #include <cstddef>
+#include <map>      // ^^std::map (the reference-map family)
+#include <memory>   // ^^std::shared_ptr / ^^std::unique_ptr
+#include <tuple>    // ^^std::tuple
+#include <unordered_map>
+#include <utility>  // ^^std::pair
 #include <meta>
 #include <optional> // ^^std::optional
 #include <string>
@@ -266,6 +271,18 @@ enum class marshal_kind {
     seq_ref,     /**< `std::vector` of a WELDED class: crosses as an opaque
                       handle behind a generated reference-semantic C# wrapper
                       (live element views — welder's opaque-container model). */
+    tuple_value, /**< `std::pair`/`std::tuple` of LEAF elements: crosses by
+                      value as an array of `welder_opt_wire` slots ⇄ a C#
+                      ValueTuple. */
+    map_ref,     /**< `std::map`/`std::unordered_map` with a leaf key: an
+                      opaque handle behind a generated reference-semantic C#
+                      wrapper (live mapped views for welded values). */
+    shared_ptr_, /**< `std::shared_ptr<welded>`: params borrow (a non-owning
+                      aliasing shared_ptr); returns share (the wrapper's view
+                      is pinned by a boxed shared_ptr copy). */
+    unique_ptr_, /**< `std::unique_ptr<welded>` RETURN: ownership transfers
+                      (release → an owned wrapper). Params stay unsupported
+                      (sink semantics from a GC-owned wrapper are ambiguous). */
     unsupported  /**< Not yet representable — see @ref require_marshallable. */
 };
 
@@ -273,6 +290,39 @@ enum class marshal_kind {
 consteval bool is_specialization_of(std::meta::info type, std::meta::info tmpl) {
     return std::meta::has_template_arguments(type) &&
            std::meta::template_of(type) == tmpl;
+}
+
+/** A map's key/value types (leading two arguments). */
+consteval std::meta::info map_key_type(std::meta::info type) {
+    return std::meta::template_arguments_of(type)[0];
+}
+consteval std::meta::info map_value_type(std::meta::info type) {
+    return std::meta::template_arguments_of(type)[1];
+}
+
+/** Whether @a type is the DEFAULT-ARGUMENT form of its map template (a custom
+    comparator/hasher/allocator would make the re-derived spelling a different
+    type — those stay unsupported). */
+consteval bool is_default_map(std::meta::info type) {
+    const std::meta::info k{map_key_type(type)};
+    const std::meta::info v{map_value_type(type)};
+    if (is_specialization_of(type, ^^std::map))
+        return std::meta::dealias(std::meta::substitute(^^std::map, {k, v})) ==
+               type;
+    return std::meta::dealias(std::meta::substitute(^^std::unordered_map,
+                                                    {k, v})) == type;
+}
+
+/** `std::pair`/`std::tuple`'s @a j-th element type (all arguments are
+    elements for both). */
+consteval std::meta::info tuple_element_type(std::meta::info type,
+                                             std::size_t j) {
+    return std::meta::template_arguments_of(type)[j];
+}
+
+/** The pair/tuple arity. */
+consteval std::size_t tuple_arity(std::meta::info type) {
+    return std::meta::template_arguments_of(type).size();
 }
 
 /** `std::optional<P>`'s payload type. */
@@ -355,11 +405,55 @@ consteval marshal_kind classify(std::meta::info type) {
             if (ek == marshal_kind::scalar || ek == marshal_kind::enum_)
                 return marshal_kind::seq_value;
             // A welded-class element: reference semantics behind a generated
-            // wrapper — vector only (the fixed-size opaque wrapper is pending).
-            if (ek == marshal_kind::handle &&
-                is_specialization_of(w, ^^std::vector))
+            // wrapper (vector, or the fixed-size array wrapper).
+            if (ek == marshal_kind::handle)
                 return marshal_kind::seq_ref;
             return marshal_kind::unsupported;
+        }
+        if (is_specialization_of(w, ^^std::map) ||
+            is_specialization_of(w, ^^std::unordered_map)) {
+            const marshal_kind kk{classify(map_key_type(w))};
+            const marshal_kind vk{classify(map_value_type(w))};
+            const bool key_ok{kk == marshal_kind::scalar ||
+                              kk == marshal_kind::enum_ ||
+                              kk == marshal_kind::utf8_string};
+            const bool val_ok{vk == marshal_kind::scalar ||
+                              vk == marshal_kind::boolean ||
+                              vk == marshal_kind::enum_ ||
+                              vk == marshal_kind::utf8_string ||
+                              vk == marshal_kind::handle};
+            return key_ok && val_ok && is_default_map(w)
+                       ? marshal_kind::map_ref
+                       : marshal_kind::unsupported;
+        }
+        if (is_specialization_of(w, ^^std::shared_ptr)) {
+            return classify(std::meta::template_arguments_of(w)[0]) ==
+                           marshal_kind::handle
+                       ? marshal_kind::shared_ptr_
+                       : marshal_kind::unsupported;
+        }
+        if (is_specialization_of(w, ^^std::unique_ptr)) {
+            const auto args{std::meta::template_arguments_of(w)};
+            return classify(args[0]) == marshal_kind::handle &&
+                           std::meta::dealias(std::meta::substitute(
+                               ^^std::unique_ptr, {args[0]})) == w
+                       ? marshal_kind::unique_ptr_
+                       : marshal_kind::unsupported;
+        }
+        if (is_specialization_of(w, ^^std::pair) ||
+            is_specialization_of(w, ^^std::tuple)) {
+            const std::size_t n{tuple_arity(w)};
+            if (n < 2)
+                return marshal_kind::unsupported; // C# has no 1-tuple syntax
+            for (std::size_t j{0}; j < n; ++j) {
+                const marshal_kind ek{classify(tuple_element_type(w, j))};
+                if (ek != marshal_kind::scalar && ek != marshal_kind::boolean &&
+                    ek != marshal_kind::enum_ &&
+                    ek != marshal_kind::utf8_string &&
+                    ek != marshal_kind::handle)
+                    return marshal_kind::unsupported;
+            }
+            return marshal_kind::tuple_value;
         }
         // Every class reaching an emission hook has already passed the
         // bindability gate, whose registration oracle is SCOPE-AWARE
@@ -394,8 +488,12 @@ consteval bool is_pointer_flavor(std::meta::info type) {
     @param is_return true when @a type is a return type.
     @throws diag::csharp_unmarshallable when the type cannot cross yet. */
 consteval void require_marshallable(std::meta::info type, bool is_return) {
-    (void)is_return; // both directions currently share one coverage rule
-    if (classify(type) == marshal_kind::unsupported)
+    const marshal_kind k{classify(type)};
+    if (k == marshal_kind::unsupported)
+        throw diag::csharp_unmarshallable{};
+    // unique_ptr can only cross OUTWARD (ownership transfer via release);
+    // sinking one from a GC-owned wrapper has no sound contract.
+    if (!is_return && k == marshal_kind::unique_ptr_)
         throw diag::csharp_unmarshallable{};
 }
 
