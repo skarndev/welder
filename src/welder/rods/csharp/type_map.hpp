@@ -9,6 +9,8 @@
 #include <vector>
 
 #include <welder/bindable.hpp> // reflect layer + native-caster recursion companions
+#include <welder/carriage.hpp> // marker_resolution::counts_as_registered (classify's
+                               // handle test IS the gate's registration oracle)
 #include <welder/diag.hpp>     // csharp_unmarshallable
 
 /** @file
@@ -125,6 +127,24 @@ consteval std::string qualified_cpp_name(std::meta::info ent) {
     for (auto it{parts.rbegin()}; it != parts.rend(); ++it)
         out += "::" + *it;
     return out;
+}
+
+/** Whether @a ent's qualified name is SPELLABLE — it and every enclosing
+    class scope has an identifier (a class-template specialization segment has
+    none, so anything inside one must anchor through its welding alias). */
+consteval bool spellable(std::meta::info ent) {
+    if (!std::meta::has_identifier(ent))
+        return false;
+    for (std::meta::info p{std::meta::parent_of(ent)};
+         std::meta::is_namespace(p) ||
+         (std::meta::is_type(p) && std::meta::is_class_type(p));
+         p = std::meta::parent_of(p)) {
+        if (p == ^^::)
+            break;
+        if (!std::meta::has_identifier(p))
+            return false;
+    }
+    return true;
 }
 
 // --- the shared member-lookup layer (generator ⇄ shim agreement) ------------
@@ -341,21 +361,15 @@ consteval marshal_kind classify(std::meta::info type) {
                 return marshal_kind::seq_ref;
             return marshal_kind::unsupported;
         }
-        // Only a class this rod REGISTERS can cross as a handle; any other
-        // class (a gate-trusted third-party type, an unlisted container) is a
-        // designed diagnostic, never a silently-mistyped void*. A NESTED class
-        // registers under its enclosing welded type (the gate's registration
-        // oracle enforces the exact participation rules before we get here, so
-        // the enclosing-chain check suffices).
-        if (::welder::welded_for(w, lang::cs))
-            return marshal_kind::handle;
-        for (std::meta::info p{std::meta::parent_of(w)};
-             // is_class_type THROWS on a namespace reflection — guard it
-             std::meta::is_type(p) && std::meta::is_class_type(p);
-             p = std::meta::parent_of(p))
-            if (::welder::welded_for(p, lang::cs))
-                return marshal_kind::handle;
-        return marshal_kind::unsupported;
+        // Every class reaching an emission hook has already passed the
+        // bindability gate, whose registration oracle is SCOPE-AWARE
+        // (member/namespace aliases, nested chains) in ways a context-free
+        // classify cannot replicate — so a non-container class IS a handle.
+        // A gate-TRUSTED type that is not actually registered anywhere still
+        // cannot fail silently: its name placeholder has no registration to
+        // resolve against, so the emitted C# spells the raw C++ name and the
+        // first consumer build fails on it, loudly.
+        return marshal_kind::handle;
     }
     return marshal_kind::unsupported;
 }

@@ -100,9 +100,14 @@ consteval bool director_slot_supported(std::meta::info slot) {
     const marshal_kind rk{classify(R)};
     if (rk != marshal_kind::void_ && !leaf(rk))
         return false; // the value-container wires have no director arms yet
-    if ((rk == marshal_kind::handle || rk == marshal_kind::utf8_string) &&
-        (is_pointer_flavor(R) ||
-         type_trait(^^std::is_reference_v, R)))
+    // A POINTER class return crosses as a non-owning view (covariant clone()
+    // patterns; the C# override may return null) — the returned object's
+    // lifetime is the override's contract, as on the Python rods. References
+    // and pointer/reference strings stay out (no null, no length contract).
+    if (rk == marshal_kind::handle && type_trait(^^std::is_reference_v, R))
+        return false;
+    if (rk == marshal_kind::utf8_string &&
+        (is_pointer_flavor(R) || type_trait(^^std::is_reference_v, R)))
         return false;
     for (auto p : std::meta::parameters_of(slot))
         if (!leaf(classify(std::meta::type_of(p))))

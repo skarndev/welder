@@ -17,7 +17,7 @@ namespace resolution {
 // --- automatic policy: bind everything unless excluded ----------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Automatic {
     // bound
     int kept{0};
@@ -55,7 +55,7 @@ Automatic {
 
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
   =welder::policy::opt_in
 ]]
 OptIn {
@@ -93,7 +93,7 @@ OptIn {
 // --- read/write roundtrip (and the exact bound set) -------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Values {
     int i{0};
     double d{0.0};
@@ -106,7 +106,7 @@ Values {
 // --- access control: only public members are bound --------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Access {
     // public data -> bound
     int visible{0};
@@ -135,7 +135,7 @@ protected:
 
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
   =welder::policy::weld_protected
 ]]
 Shielded {
@@ -181,7 +181,7 @@ private:
 // surface alone
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
   =welder::policy::weld_protected(welder::lang::py)
 ]]
 ShieldedPy {
@@ -199,7 +199,7 @@ protected:
 // then need the same explicit include as public ones
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
   =welder::policy::opt_in,
   =welder::policy::weld_protected
 ]]

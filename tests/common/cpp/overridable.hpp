@@ -158,7 +158,7 @@ struct PyRobot : Robot {
 // most-derived (Tree*) signature — its trampoline redeclares that narrowed form.
 // The returned pointer is non-owning, hence the reference return policy.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::cs)]]
 Plant {
     virtual ~Plant() = default;
 
@@ -171,7 +171,7 @@ Plant {
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld(welder::lang::py, welder::lang::cs)]]
 Tree : Plant {
     [[=welder::return_policy(welder::rv::reference)]]
     Tree* parent() const override { return nullptr; }

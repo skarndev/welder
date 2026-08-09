@@ -502,16 +502,17 @@ auto field_get(void* self, welder_error* err) noexcept {
                        marshal_kind::seq_ref) &&
                   !std::meta::is_const_type(std::meta::type_of(Mem))) {
         return caught<void*>(err, [&]() -> void* {
-            // Two statements on purpose: gcc-16 rejects the spliced member's
-            // address when nested inside a larger runtime expression
-            // ("consteval-only expressions..."), but binding the reference
-            // first is fine.
-            auto& r{std::invoke(&[:Mem:], *obj)};
+            // Direct splice access (not &[:Mem:]): gcc-16 rejects the
+            // ADDRESS-OF form for protected data (and, separately, the
+            // spliced address nested in a larger expression), while plain
+            // member access works for public and protected alike — the core
+            // field_access idiom. Two statements for the second gotcha.
+            auto& r{(*obj).[:Mem:]};
             return static_cast<void*>(&r);
         });
     } else {
         return guarded<std::meta::type_of(Mem)>(
-            err, [&]() -> decltype(auto) { return std::invoke(&[:Mem:], *obj); });
+            err, [&]() -> decltype(auto) { return (*obj).[:Mem:]; });
     }
 }
 
@@ -521,7 +522,7 @@ void field_set(void* self, welder_error* err, Wire w) noexcept {
     using Obj = [:W:];
     auto* obj{reinterpret_cast<Obj*>(self)};
     guarded<^^void>(err, [&] {
-        std::invoke(&[:Mem:], *obj) =
+        (*obj).[:Mem:] =
             to_cpp<std::meta::remove_cv(std::meta::type_of(Mem))>(w);
     });
 }
@@ -701,10 +702,17 @@ auto from_wire_return(auto w) -> [:std::meta::remove_cvref(R):] {
         return s;
     } else if constexpr (k == marshal_kind::handle) {
         using Bare = [:bare(R):];
-        Bare* p{reinterpret_cast<Bare*>(w)};
-        Bare v{std::move(*p)};
-        delete p;
-        return v;
+        if constexpr (is_pointer_flavor(R)) {
+            // A pointer slot returns a VIEW: the managed override's object
+            // (or null) crosses as its raw handle — lifetime is the
+            // override's contract, exactly as on the Python rods.
+            return reinterpret_cast<Bare*>(w);
+        } else {
+            Bare* p{reinterpret_cast<Bare*>(w)};
+            Bare v{std::move(*p)};
+            delete p;
+            return v;
+        }
     } else if constexpr (k == marshal_kind::enum_) {
         using E = [:bare(R):];
         return static_cast<E>(w);

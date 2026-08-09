@@ -297,6 +297,94 @@ public class BindingTests
     }
 
     [Fact]
+    public void ResolutionShared()
+    {
+        using var sh = new resolution.Shielded();
+        Assert.Equal(42, sh.Total());
+        Assert.Equal(40, sh.Base());              // protected method bound
+        Assert.Equal(6, sh.Scale(3));             // protected overloads
+        Assert.Equal(1.0, sh.Scale(0.5), 12);
+        Assert.Equal(7, resolution.Shielded.Origin()); // protected static
+        sh.Boost = 5;                             // protected data r/w
+        Assert.Equal(5, sh.Boost);
+    }
+
+    [Fact]
+    public void TemplatesShared()
+    {
+        using (var ic = new templates_ns.IntCrate())
+        {
+            ic.Put(9);
+            Assert.Equal(9, ic.Get()); // alias-welded instantiation
+            ic.Item = 11;
+            Assert.Equal(11, ic.Item);
+        }
+        using (var wc = new templates_ns.WordCrate())
+        {
+            wc.Put("box");
+            Assert.Equal("box", wc.Get()); // a second instantiation, own name
+        }
+        using (var rc = new templates_ns.CrateOfDouble())
+            rc.Put(1.5); // weld_as on the alias names it verbatim
+        using (var ti = new templates_ns.TaggedBox())
+            Assert.Equal(0, ti.Tag); // weld_as on the TEMPLATE
+        using (var ip = new templates_ns.IntPack())
+        {
+            Assert.Equal(0, ip.Unwrap()); // third-party template via alias weld
+            using (var tw = ip.Twin())
+                Assert.Equal(0, tw.Unwrap()); // the trust-vouched signature
+            using (var lid = new templates_ns.IntPack.Lid())
+                Assert.Equal(1, lid.Fits); // nested type of the instantiation
+        }
+        using (var si = new templates_ns.IntSilo())
+        {
+            Assert.Equal(templates_ns.IntSilo.State.shut,   // enumerators
+                         si.Flip(templates_ns.IntSilo.State.open)); // verbatim
+            si.Door.Width = 6; // nested class member (cs weld_as: the
+                               // hatch/Hatch CS0102 escape), live view
+            Assert.Equal(6, si.Door.Width);
+        }
+        using (var v = new templates_ns.IntVault())
+        {
+            v.Stash(21); // weld_protected on the template, via instantiation
+            Assert.Equal(21, v.Peek());
+            Assert.Equal(21, v.Locked); // protected data bound
+        }
+    }
+
+    [Fact]
+    public void CopyingShared()
+    {
+        using (var sheet = new copying.Sheet())
+        {
+            sheet.Width = 5;
+            using (var c = sheet.Clone())
+                Assert.Equal(5, c.Width); // implicit copy ctor rides along
+        }
+        // deleted / excluded copy ctor -> no Clone() surface at all
+        Assert.Null(typeof(copying.Pinned).GetMethod("Clone"));
+        Assert.Null(typeof(copying.Sealed).GetMethod("Clone"));
+        // ...but a PY-scoped exclude leaves cs's Clone intact
+        Assert.NotNull(typeof(copying.PyBlocked).GetMethod("Clone"));
+        using (var ch = new copying.Choosy())
+            using (var c = ch.Clone())
+                Assert.Equal(3, c.Chosen); // opt_in keeps a declared copy ctor
+        Assert.NotNull(typeof(copying.Shifty).GetMethod("Clone")); // move ctor skipped
+    }
+
+    [Fact]
+    public void CovariantPointerDirectors()
+    {
+        using (var pl = new overridable.Plant())
+            Assert.True(pl.Orphan()); // base behavior: parent() == nullptr
+        using (var rooted = new RootedTreeCs())
+            Assert.False(rooted.Orphan()); // C# override returns an object ->
+                                           // C++ sees a non-null Plant*
+        using (var lone = new LoneTreeCs())
+            Assert.True(lone.Orphan()); // C# override returns null
+    }
+
+    [Fact]
     public void DirectorsDedicated()
     {
         using (var sh = new Shape())
@@ -371,6 +459,17 @@ class CsBird : overridable.Bird
     public override string Speak() => "tweet";
     public override int Legs() => 2;
     public override string Fly() => "soar";
+}
+
+class RootedTreeCs : overridable.Tree
+{
+    private readonly overridable.Tree _parent = new overridable.Tree();
+    public override overridable.Tree? Parent() => _parent;
+}
+
+class LoneTreeCs : overridable.Tree
+{
+    public override overridable.Tree? Parent() => null;
 }
 
 class CyborgCs : overridable.Robot

@@ -46,7 +46,10 @@ struct any_result {
 #define WELDER_PY_OVERRIDE_AS(slot, name, ...) \
     return ::wcs_seam::override_stub(__VA_ARGS__)
 
+#include "copying.hpp"
 #include "inheritance.hpp"
 #include "overridable.hpp"
+#include "resolution.hpp"
+#include "templates.hpp"
 #include "operators.hpp"
 #include "retpolicy.hpp"

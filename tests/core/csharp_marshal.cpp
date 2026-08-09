@@ -73,13 +73,15 @@ static_assert(wcs::classify(^^std::vector<lockcases::Tag>) ==
               marshal_kind::seq_value);
 static_assert(wcs::classify(^^std::vector<lockcases::Thing>) ==
               marshal_kind::seq_ref);
-// vector<bool> is a bitset; nesting has no wire yet; a non-welded class is
-// NEVER a silent handle.
+// vector<bool> is a bitset; nesting has no wire yet.
 static_assert(wcs::classify(^^std::vector<bool>) == marshal_kind::unsupported);
 static_assert(wcs::classify(^^std::optional<std::vector<int>>) ==
               marshal_kind::unsupported);
-static_assert(wcs::classify(^^lockcases::NotWelded) ==
-              marshal_kind::unsupported);
+// classify runs AFTER the gate, whose scope-aware oracle already admitted the
+// type — so a plain class is a handle (an unregistered one dies loudly at the
+// consumer's build on its unresolved raw-name placeholder, never a silent
+// void*).
+static_assert(wcs::classify(^^lockcases::NotWelded) == marshal_kind::handle);
 
 // --- paired scalar spellings (byte-for-byte agreement) -----------------------
 // std::int32_t & co. are using-DECLARATIONS in libstdc++ (unreflectable),
