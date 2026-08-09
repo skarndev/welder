@@ -923,7 +923,11 @@ struct rod {
         class_writer w{};
         w.doc = m.doc;
         w.cs_name = name;
-        w.cs_path = name;
+        w.cs_ns = m.cs_ns;
+        // The dotted path FROM THE ROOT namespace: what every cross-namespace
+        // reference (P/Invoke handle types, base classes, views) spells — valid
+        // from anywhere inside the root namespace, C# lookup walks outward.
+        w.cs_path = m.cs_ns.empty() ? std::string{name} : m.cs_ns + "." + name;
         w.doc_text = doc ? doc : "";
         w.cpp_qualified = cpp_name_v<Decl>;
         w.cpp_anchor = "^^" + w.cpp_qualified;
@@ -932,22 +936,30 @@ struct rod {
         // name for the render-time reconciliation. The reference spelling is
         // ^^T's own (what type_ref emits), which for an alias-welded
         // specialization differs from Decl's — record both.
-        m.doc->record_type_name(cpp_name_v<Decl>, name);
+        m.doc->record_type_name(cpp_name_v<Decl>, w.cs_path);
         if constexpr (spellable(std::meta::dealias(^^T))) {
             if (std::string{cpp_name_v<std::meta::dealias(^^T)>} !=
                 cpp_name_v<Decl>)
                 m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^T)>,
-                                        name);
+                                        w.cs_path);
         } else {
             // An alias-welded specialization: references key on the display
             // string (see type_ref).
             static constexpr const char* d{std::define_static_string(
                 std::meta::display_string_of(std::meta::dealias(^^T)))};
-            m.doc->record_type_name(d, name);
+            m.doc->record_type_name(d, w.cs_path);
         }
         w.sym_prefix = std::string{"welder_"} + upath_v<Decl>;
-        w.handle_field = std::string{"_h_"} + name;
-        w.handle_cs = std::string{name} + "Handle";
+        // Same identifier-safe rule as the nested factory: the handle FIELD
+        // sanitizes the dotted path (matching field_ref's placeholder flavor),
+        // the handle TYPE reference is the from-root dotted spelling (the
+        // declaration itself uses the leaf, beside the class).
+        std::string safe{w.cs_path};
+        for (char& c : safe)
+            if (c == '.')
+                c = '_';
+        w.handle_field = "_h_" + safe;
+        w.handle_cs = w.cs_path + "Handle";
         w.destroy_symbol = w.sym_prefix + "_destroy";
         _finish_class<T, Bases>(m, w);
         return w;
@@ -2728,8 +2740,11 @@ struct rod {
         enum_writer w{};
         w.doc = m.doc;
         w.cs_name = name;
+        w.cs_ns = m.cs_ns;
         w.doc_text = doc ? doc : "";
-        m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>, name);
+        m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
+                                m.cs_ns.empty() ? std::string{name}
+                                                : m.cs_ns + "." + name);
         constexpr const char* u{scalar_spell(
             std::meta::underlying_type(std::meta::dealias(^^E))).cs};
         w.underlying = u;
@@ -2786,7 +2801,7 @@ struct rod {
                 std::string{cpp_name_v<Ns>} + ", \"" + id + "\", " +
                 std::to_string(k) + ")>"};
             emit_callable<fn, Style, false>(*m.doc, sym,
-                                            m.doc->static_body(m.cs_class),
+                                            m.doc->section(m.cs_ns).statics,
                                             "        ", wname, expr);
         }
     }
@@ -2806,7 +2821,7 @@ struct rod {
         constexpr bool read_only{std::meta::is_const_type(VT)};
         constexpr bool is_str{classify(VT) == marshal_kind::utf8_string};
         constexpr bool is_bool{classify(VT) == marshal_kind::boolean};
-        std::string& body{m.doc->static_body(m.cs_class)};
+        std::string& body{m.doc->section(m.cs_ns).statics};
 
         m.doc->record_symbol(base + "_get");
         m.doc->shim += std::string{wire_return_v<std::meta::type_of(Var)>} + " " + base +
@@ -2862,7 +2877,10 @@ struct rod {
     }
 
     static module_type add_submodule(module_type& m, const char* name) {
-        return module_type{m.doc, name};
+        // A nested C++ namespace = a REAL nested C# namespace: extend the
+        // dotted path; the submodule's types and Global members land there.
+        return module_type{m.doc, m.cs_ns.empty() ? std::string{name}
+                                                  : m.cs_ns + "." + name};
     }
 
     static void close_module(module_type&, session&) {}
@@ -2887,9 +2905,10 @@ struct rod {
         if (o.cs_namespace.empty())
             o.cs_namespace = std::define_static_string(std::meta::identifier_of(Ns));
         doc.opts = std::move(o);
-        // Root free functions / variables land in a `Global` static class; welded
-        // types are flat in the namespace; each submodule gets its own static class.
-        module_writer m{&doc, "Global"};
+        // Every nested C++ namespace becomes a REAL nested C# namespace; each
+        // namespace's free functions / variables land in its `Global` static
+        // class (C# has no namespace-scope functions), its types beside it.
+        module_writer m{&doc, ""};
         ::welder::welder<rod, Style>::template weld_namespace<Ns>(m);
         shim << doc.render_shim();
         cs << doc.render_cs();

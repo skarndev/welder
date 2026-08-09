@@ -16,7 +16,7 @@ int main(int argc, char** argv) {
     std::ofstream cs{argc > 2 ? argv[2] : "Bindings.cs"};
     wcs::document doc{};
     doc.opts = std::move(opts);
-    wcs::module_writer m{&doc, "Global"};
+    wcs::module_writer m{&doc, ""};
     register_namespace(m);
     register_freestanding(m);
     register_foreign(m);

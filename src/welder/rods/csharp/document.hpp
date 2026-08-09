@@ -42,11 +42,15 @@ struct options {
     std::string shim_include{}; /**< The header the shim `#include`s to see the types. */
 };
 
-/** A C# `static class` collecting one C++ namespace's free functions and variables
-    (welded *types* are emitted flat in the module namespace in v1). */
-struct static_class {
-    std::string name{}; /**< The C# static-class name (the namespace identifier). */
-    std::string body{}; /**< Accumulated static members. */
+/** One C# namespace's slice of the module: a nested C++ namespace maps to a
+    REAL nested C# namespace (`geo::util` → `namespace geo.Util`), holding its
+    welded types plus one `Global` static class for its free functions and
+    variables (C# has no namespace-scope functions). The root namespace is the
+    section with an empty @ref ns. */
+struct ns_section {
+    std::string ns{};      /**< Dotted path below the root (`""` = the root). */
+    std::string types{};   /**< Wrapper class + enum declarations. */
+    std::string statics{}; /**< The namespace's `Global` static-class body. */
 };
 
 /** The growing pair of documents shared by every writer handle: the native shim and
@@ -60,9 +64,8 @@ struct document {
     std::string shim{};    /**< `extern "C"` thunk bodies. */
     std::string directors{}; /**< Director subclass definitions (before extern "C"). */
     std::string pinvoke{}; /**< `[LibraryImport]` declarations (inside NativeMethods). */
-    std::string types{};   /**< Wrapper class + enum declarations (flat in the ns). */
-    std::vector<static_class> statics{}; /**< Per-namespace function/variable holders. */
-    std::string containers{};   /**< Generated container-wrapper classes. */
+    std::vector<ns_section> sections{}; /**< Per-namespace types + Global bodies. */
+    std::string containers{};   /**< Generated container-wrapper classes (root ns). */
     std::vector<std::string> container_keys{}; /**< Dedup (one wrapper per type). */
 
     /** First-emission check for a generated container wrapper. */
@@ -141,16 +144,14 @@ struct document {
         symbols.push_back(std::move(sym));
     }
 
-    /** The accumulation buffer for the free functions/variables of the C# static
-        class named @a name (created on first use).
-        @param name the static-class name.
-        @return a reference to its members buffer. */
-    std::string& static_body(std::string_view name) {
-        for (auto& s : statics)
-            if (s.name == name)
-                return s.body;
-        statics.push_back({std::string{name}, {}});
-        return statics.back().body;
+    /** The section of C# namespace @a ns (dotted path below the root; `""` =
+        the root namespace), created on first use. */
+    ns_section& section(std::string_view ns) {
+        for (auto& s : sections)
+            if (s.ns == ns)
+                return s;
+        sections.push_back({std::string{ns}, {}, {}});
+        return sections.back();
     }
 
     /** The finished `shim.cpp` text. */
@@ -274,11 +275,30 @@ struct document {
                "StringMarshalling.Utf8)] internal static partial IntPtr "
                "welder_dup_utf8(string s);\n";
         out += "    }\n\n";
-        out += types;
+        // The root namespace's own types, the (shared) container wrappers and
+        // its Global holder, then every NESTED namespace as a real C#
+        // namespace block — `using geo.Util;` works, and same-named types in
+        // different sub-namespaces are distinct types, exactly like C++.
+        for (const auto& s : sections)
+            if (s.ns.empty())
+                out += s.types;
         out += containers;
-        for (const auto& s : statics) {
-            out += "    public static class " + s.name + "\n    {\n";
-            out += s.body;
+        for (const auto& s : sections)
+            if (s.ns.empty() && !s.statics.empty()) {
+                out += "    public static class Global\n    {\n";
+                out += s.statics;
+                out += "    }\n\n";
+            }
+        for (const auto& s : sections) {
+            if (s.ns.empty())
+                continue;
+            out += "    namespace " + s.ns + "\n    {\n";
+            out += s.types;
+            if (!s.statics.empty()) {
+                out += "    public static class Global\n    {\n";
+                out += s.statics;
+                out += "    }\n\n";
+            }
             out += "    }\n\n";
         }
         out += "}\n";
@@ -286,12 +306,13 @@ struct document {
     }
 };
 
-/** A module handle: the shared document plus the C# static-class name that this
-    namespace's free functions/variables accumulate into. Copyable (the driver's
+/** A module handle: the shared document plus this namespace's dotted C#
+    namespace path below the root (`""` = the root namespace) — the section
+    its types and `Global` members land in. Copyable (the driver's
     `add_submodule` returns one by value). */
 struct module_writer {
     document* doc{nullptr};
-    std::string cs_class{}; /**< This namespace's C# static-class name. */
+    std::string cs_ns{}; /**< Dotted C# namespace path (`""` = root). */
 };
 
 /** A class handle. Accumulates the wrapper class body (properties, methods,
@@ -304,7 +325,10 @@ struct module_writer {
 struct class_writer {
     document* doc{nullptr};
     std::string cs_name{};        /**< The C# class name (the leaf). */
-    std::string cs_path{};        /**< The dotted C# path (`Outer.Inner`). */
+    std::string cs_ns{};          /**< The enclosing C# namespace's dotted path
+                                       below the root (`""` = root). */
+    std::string cs_path{};        /**< The dotted C# path from the root
+                                       namespace (`Util.Outer.Inner`). */
     std::string cpp_anchor{};     /**< The `^^…` / lookup expression the shim
                                        anchors this type's thunks on. */
     std::string* sink{nullptr};   /**< Flush target: an outer class's members
@@ -363,6 +387,7 @@ struct class_writer {
     class_writer& operator=(class_writer&& o) noexcept {
         doc = o.doc;
         cs_name = std::move(o.cs_name);
+        cs_ns = std::move(o.cs_ns);
         cs_path = std::move(o.cs_path);
         sink = o.sink;
         doc_text = std::move(o.doc_text);
@@ -479,7 +504,7 @@ struct class_writer {
     ~class_writer() {
         if (!doc)
             return;
-        std::string& out{sink ? *sink : doc->types};
+        std::string& out{sink ? *sink : doc->section(cs_ns).types};
         // The per-class SafeHandle: ReleaseHandle calls the destroy thunk, so
         // finalization and Dispose share one release path.
         out += "    internal sealed class " + cs_name +
@@ -566,6 +591,7 @@ struct enum_writer {
     document* doc{nullptr};
     std::string* sink{nullptr}; /**< An outer class's members for a nested enum. */
     std::string cs_name{};
+    std::string cs_ns{}; /**< The enclosing C# namespace (`""` = root). */
     std::string doc_text{};
     std::string underlying{}; /**< The C# underlying-type spelling (`int`, …). */
     std::string values{};     /**< Accumulated `        Name = value,` lines. */
@@ -578,6 +604,7 @@ struct enum_writer {
         doc = o.doc;
         sink = o.sink;
         cs_name = std::move(o.cs_name);
+        cs_ns = std::move(o.cs_ns);
         doc_text = std::move(o.doc_text);
         underlying = std::move(o.underlying);
         values = std::move(o.values);
@@ -587,7 +614,7 @@ struct enum_writer {
     ~enum_writer() {
         if (!doc)
             return;
-        std::string& out{sink ? *sink : doc->types};
+        std::string& out{sink ? *sink : doc->section(cs_ns).types};
         emit_doc_comment(out, "    ", doc_text.empty() ? nullptr : doc_text.c_str());
         out += "    public enum " + cs_name + " : " + underlying + "\n    {\n";
         out += values;

@@ -107,6 +107,15 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   rename it or `weld_as` a name starting with a letter. Parameter names shed
   their leading underscores instead (`_count` → `count`) — the faithful
   camelCase, and what keeps them clear of the wrappers' generated locals.
+- **Namespaces map to real C# namespaces.** The welded root namespace is the
+  C# namespace of the generated file, and every nested C++ namespace becomes a
+  nested C# namespace — `geo::util::Circle` is `geo.Util.Circle`, and
+  `using geo.Util;` works exactly as on a hand-written .NET library. Same-named
+  types in different sub-namespaces are distinct types, just as in C++. Free
+  **functions and variables** (which C# cannot place at namespace scope) collect
+  into one `Global` static class *per namespace* — `geo.Global.Answer`,
+  `geo.Util.Global.Dist(a, b)`; add `using static geo.Util.Global;` to call
+  them bare.
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.

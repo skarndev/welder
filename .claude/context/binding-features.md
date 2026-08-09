@@ -144,7 +144,17 @@ template-body check); params BORROW (to_cpp builds a non-owning aliasing
 shared_ptr). unique_ptr<welded> returns transfer (release → owning wrapper);
 unique_ptr params are a designed require_marshallable error (GC-owned sink
 ambiguity). All new kinds route through _ensure_for<Type> (the single
-collector dispatch).
+collector dispatch). NAMESPACE MAPPING: nested C++ namespaces are REAL nested
+C# namespaces (document::ns_section per dotted path; module_writer.cs_ns;
+class/enum writers flush into their section; render_cs emits `namespace X.Y`
+blocks after the root) — types live IN their namespace (no flattening, no
+cross-namespace name collisions), free functions/variables in a per-namespace
+`Global` static class (`geo.Util.Global.Dist`; `using static` for bare
+calls). Cross-namespace references work because record_type_name registers
+the FROM-ROOT dotted path (valid anywhere inside the root namespace — C#
+lookup walks outward); handle FIELDS sanitize it (_h_Util_Circle), handle
+TYPE refs keep it dotted (Util.CircleHandle from root NativeMethods), the
+declarations themselves use the leaf beside the class.
 Nested types (Phase 7): make_nested_class/make_nested_enum flush into the
 OUTER's members buffer (class_writer/enum_writer `sink`), references resolve
 to the dotted path (record_type_name now OVERWRITES, so the nested factory

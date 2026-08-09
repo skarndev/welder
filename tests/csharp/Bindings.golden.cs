@@ -1961,7 +1961,9 @@ namespace csharp_cases
 
     }
 
-    public static class Inner
+    namespace Inner
+    {
+    public static class Global
     {
         public static int Twice(int v)
         {
@@ -1969,6 +1971,8 @@ namespace csharp_cases
             WelderInterop.ThrowIfError(in _e);
             return _r;
         }
+
+    }
 
     }
 

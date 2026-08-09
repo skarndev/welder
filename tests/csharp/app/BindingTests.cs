@@ -73,7 +73,7 @@ public class BindingTests
         Assert.Equal(43, Global.Answer);
         Assert.True(Math.Abs(Global.Golden - 1.618) < 1e-12,
                     "const variable (get-only)");
-        Assert.Equal(42, Inner.Twice(21)); // nested namespace static class
+        Assert.Equal(42, csharp_cases.Inner.Global.Twice(21)); // nested ns -> real C# namespace
         Assert.Equal(200, (byte)Level.High); // enum : byte underlying
     }
 
@@ -629,95 +629,95 @@ public class BindingTests
     [Fact]
     public void NestedShared()
     {
-        using (var r = new nested_cases.Robot())
+        using (var r = new nested_cases.nested.Robot())
         {
             Assert.Equal(3.0, r.SensorUnit.Doubled()); // live view of `sensor`
             r.SensorUnit.Range = 4.0;                  // writes through
             Assert.Equal(8.0, r.SensorUnit.Doubled());
-            r.CurrentMode = nested_cases.Robot.Mode.active;
-            Assert.Equal(nested_cases.Robot.Mode.active, r.GetMode());
-            Assert.Equal(nested_cases.Robot.Alarm.loud,
-                         r.AlarmFor(nested_cases.Robot.Mode.fault));
+            r.CurrentMode = nested_cases.nested.Robot.Mode.active;
+            Assert.Equal(nested_cases.nested.Robot.Mode.active, r.GetMode());
+            Assert.Equal(nested_cases.nested.Robot.Alarm.loud,
+                         r.AlarmFor(nested_cases.nested.Robot.Mode.fault));
         }
-        using (var s = new nested_cases.Robot.Sensor(2.5)) // standalone nested
+        using (var s = new nested_cases.nested.Robot.Sensor(2.5)) // standalone nested
             Assert.Equal(5.0, s.Doubled());
-        using (var m = new nested_cases.Machine())          // recursion
+        using (var m = new nested_cases.nested.Machine())          // recursion
             Assert.Equal(5, m.MainPart.MainBolt.Size);      // Machine.Part.Bolt
-        using (var k = new nested_cases.Panel.Knob())       // opt_in include
+        using (var k = new nested_cases.nested.Panel.Knob())       // opt_in include
             Assert.Equal(0, k.Pos);
-        using (var con = new nested_cases.Console())
+        using (var con = new nested_cases.nested.Console())
         {
             Assert.Equal(40, con.ReadDial().Reading); // vendor type via alias
             Assert.Equal(0, con.Spin().Top);          // vendor specialization
-            Assert.Equal(nested_cases.Console.Lvl.high, con.Level());
+            Assert.Equal(nested_cases.nested.Console.Lvl.high, con.Level());
         }
-        using (var ints = new nested_cases.Console.Ints(9)) // Roll<int> alias
+        using (var ints = new nested_cases.nested.Console.Ints(9)) // Roll<int> alias
             Assert.Equal(9, ints.Take());
-        using (var h = new nested_cases.Console.Heart())    // the rename escape
+        using (var h = new nested_cases.nested.Console.Heart())    // the rename escape
             Assert.Equal(300, h.Temp);
-        using (var j = new nested_cases.Rig.Jig(3))         // PROTECTED nested
+        using (var j = new nested_cases.nested.Rig.Jig(3))         // PROTECTED nested
             Assert.Equal(3, j.Slots);
-        using (var b = new nested_cases.RobotBeacon())      // manual flat escape
+        using (var b = new nested_cases.nested.RobotBeacon())      // manual flat escape
             Assert.Equal(9, b.Strength);
     }
 
     [Fact]
     public void NamespaceShared()
     {
-        Assert.Equal(5, namespace_cases.catalog.Total(2, 3)); // overload group
-        Assert.Equal(4, namespace_cases.catalog.Total(4));
-        Assert.Equal(-1, namespace_cases.catalog.Suppressed()); // py-excluded only
-        Assert.Equal(100, namespace_cases.catalog.Limit); // const -> get-only
-        Assert.Equal("catalog", namespace_cases.catalog.Tag);
-        int before = namespace_cases.catalog.Counter;
-        namespace_cases.catalog.Bump(); // C++ mutates the live global
-        Assert.Equal(before + 1, namespace_cases.catalog.Counter);
-        namespace_cases.catalog.Counter = 0; // and the property writes back
-        Assert.Equal(0, namespace_cases.catalog.Counter);
-        using (var i = new namespace_cases.Item(7))
+        Assert.Equal(5, namespace_cases.catalog.Global.Total(2, 3)); // overload group
+        Assert.Equal(4, namespace_cases.catalog.Global.Total(4));
+        Assert.Equal(-1, namespace_cases.catalog.Global.Suppressed()); // py-excluded only
+        Assert.Equal(100, namespace_cases.catalog.Global.Limit); // const -> get-only
+        Assert.Equal("catalog", namespace_cases.catalog.Global.Tag);
+        int before = namespace_cases.catalog.Global.Counter;
+        namespace_cases.catalog.Global.Bump(); // C++ mutates the live global
+        Assert.Equal(before + 1, namespace_cases.catalog.Global.Counter);
+        namespace_cases.catalog.Global.Counter = 0; // and the property writes back
+        Assert.Equal(0, namespace_cases.catalog.Global.Counter);
+        using (var i = new namespace_cases.catalog.Item(7))
             Assert.Equal(7, i.GetId());
-        using (var cat = new namespace_cases.Cat())
+        using (var cat = new namespace_cases.catalog.Cat())
             Assert.True(cat.Whiskers == 12 && cat.Legs == 4, "welded base chain");
-        using (var n = new namespace_cases.Nested()) // nested namespace type
+        using (var n = new namespace_cases.catalog.Sub.Nested()) // nested namespace type
             Assert.Equal(5, n.V);
-        using (var spy = new namespace_cases.Spy()) // secret ns py-pruned only
+        using (var spy = new namespace_cases.catalog.Secret.Spy()) // secret ns py-pruned only
             Assert.Equal(0, spy.S);
 
         // the semi-manual route (weld_function / weld_variable + renames)
-        Assert.Equal(42, namespace_cases.manual.Scale(6, 7));
-        Assert.Equal(42, namespace_cases.manual.ManualConst);
-        int mb = namespace_cases.manual.ManualCounter;
-        namespace_cases.manual.ManualBump();
-        Assert.Equal(mb + 1, namespace_cases.manual.ManualCounter);
-        Assert.Equal(2, namespace_cases.manual.renamed_fn(1)); // verbatim override
-        Assert.Equal(99, namespace_cases.manual.RENAMED_CONST);
+        Assert.Equal(42, namespace_cases.manual.Global.Scale(6, 7));
+        Assert.Equal(42, namespace_cases.manual.Global.ManualConst);
+        int mb = namespace_cases.manual.Global.ManualCounter;
+        namespace_cases.manual.Global.ManualBump();
+        Assert.Equal(mb + 1, namespace_cases.manual.Global.ManualCounter);
+        Assert.Equal(2, namespace_cases.manual.Global.renamed_fn(1)); // verbatim override
+        Assert.Equal(99, namespace_cases.manual.Global.RENAMED_CONST);
 
         // tack welding: the unmarked `foreign` library, bound greedily
-        using (var w = new namespace_cases.Widget())
+        using (var w = new namespace_cases.foreign.Widget())
         {
             Assert.Equal(6, w.Doubled());
             Assert.Equal(3, w.Stats().Uses);   // nested type under tack
-            using var w2 = new namespace_cases.Widget();
+            using var w2 = new namespace_cases.foreign.Widget();
             using var merged = w.Merged(w2);
             Assert.Equal(6, merged.Size);
         }
-        Assert.Equal(3, namespace_cases.foreign.Add(1, 2));
-        Assert.Equal(7, namespace_cases.foreign.Version);
-        using (var g = new namespace_cases.Gadget())
-            Assert.Equal(5, namespace_cases.foreign.GadgetId(g));
-        using (var a = new namespace_cases.Widget())
-        using (var b2 = new namespace_cases.Widget())
-        using (var coupled = namespace_cases.foreign.Fuse(a, b2))
+        Assert.Equal(3, namespace_cases.foreign.Global.Add(1, 2));
+        Assert.Equal(7, namespace_cases.foreign.Global.Version);
+        using (var g = new namespace_cases.foreign.Nested.Gadget())
+            Assert.Equal(5, namespace_cases.foreign.Global.GadgetId(g));
+        using (var a = new namespace_cases.foreign.Widget())
+        using (var b2 = new namespace_cases.foreign.Widget())
+        using (var coupled = namespace_cases.foreign.Global.Fuse(a, b2))
             Assert.Equal(3, coupled.Left.Size); // live field view
 
         // the protected-knob tack + the bound_into-keyed resolution
-        using (var p = new namespace_cases.Panel())
+        using (var p = new namespace_cases.foreign_protected.Panel())
         {
             Assert.Equal(14, p.Frame());
             Assert.Equal(10, p.Trim()); // protected, admitted by the knob
             Assert.Equal(4, p.Width);
         }
-        using (var d = new namespace_cases.Display())
+        using (var d = new namespace_cases.foreign_mixed.Display())
         {
             Assert.Equal(1, d.Model());
             Assert.Equal(55, d.Reading()); // admitted into Display's binding only
