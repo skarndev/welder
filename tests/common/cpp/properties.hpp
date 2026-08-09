@@ -24,7 +24,7 @@ namespace properties {
 // --- overload-style accessors: radius() / radius(double) --------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Circle {
     Circle() = default;
 
@@ -48,7 +48,7 @@ Circle {
 // --- name derivation across spelling conventions -----------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Vehicle {
     Vehicle() = default;
 
@@ -73,7 +73,7 @@ Vehicle {
 // --- explicit names + per-language scoping -----------------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Gauge {
     Gauge() = default;
 
@@ -101,7 +101,7 @@ Gauge {
 
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
   =welder::policy::opt_in
 ]]
 Padlock {
@@ -137,7 +137,7 @@ struct Labeled { // NOT welded: a mixin whose accessors flatten into Tag
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Tag : Labeled {
     Tag() = default;
     int id{0};
@@ -147,7 +147,7 @@ Tag : Labeled {
 
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
   =welder::policy::weld_protected
 ]]
 Sealed {

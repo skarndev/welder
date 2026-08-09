@@ -305,6 +305,8 @@ struct class_writer {
     document* doc{nullptr};
     std::string cs_name{};        /**< The C# class name (the leaf). */
     std::string cs_path{};        /**< The dotted C# path (`Outer.Inner`). */
+    std::string cpp_anchor{};     /**< The `^^…` / lookup expression the shim
+                                       anchors this type's thunks on. */
     std::string* sink{nullptr};   /**< Flush target: an outer class's members
                                        buffer for a NESTED type, else null =
                                        the document's types section. */

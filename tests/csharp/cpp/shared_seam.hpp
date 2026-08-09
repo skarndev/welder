@@ -19,6 +19,8 @@
     ::welder::rods::csharp::rod::add_submodule((m), (name))
 #define WELDER_TEST_WELDER \
     ::welder::welder<::welder::rods::csharp::rod, ::welder::rods::csharp::dotnet>
+// The dotnet style IS this backend's styled welder (naming.hpp's seam).
+#define WELDER_TEST_STYLED_WELDER WELDER_TEST_WELDER
 
 // The virtual-diamond MI case: the C# rod represents extra welded bases as
 // As<Base>() views, so it participates (like sol2, unlike LuaBridge3).
@@ -47,8 +49,15 @@ struct any_result {
     return ::wcs_seam::override_stub(__VA_ARGS__)
 
 #include "copying.hpp"
+#include "enums.hpp"
 #include "inheritance.hpp"
+#include "methods.hpp"
+#include "namespace.hpp"
+#include "naming.hpp"
+#include "nested.hpp"
+#include "overloads.hpp"
 #include "overridable.hpp"
+#include "properties.hpp"
 #include "resolution.hpp"
 #include "templates.hpp"
 #include "operators.hpp"

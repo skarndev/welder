@@ -41,9 +41,31 @@ A handle-typed argument site always spells `<name>._h_<placeholder>` — the
 STATIC param type picks the right level. Public ctors chain
 `: this(_New_k(args), true)` through a private static helper (out-var can't
 appear in a chained-this argument). Dispose is virtual (root) / override.
-Shared-case widening so far: retpolicy.hpp Inner/Owner (view/snapshot),
-operators.hpp + inheritance.hpp whole files (bound via
-tests/csharp/cpp/shared_seam.hpp + gen_* binding pairs).
+Shared-case widening: retpolicy.hpp Inner/Owner (view/snapshot),
+operators.hpp, inheritance.hpp, overridable.hpp, resolution.hpp,
+templates.hpp, copying.hpp (value types), methods.hpp (Counter/Calc/Vec2/
+Window/Frozen/Anchored; the lazy-NSDMI chain stays py-only), enums.hpp,
+overloads.hpp, properties.hpp (NB an EXPLICIT accessor name — getter("level")
+— is verbatim, so the C# property is lowercase `level` by design),
+naming.hpp (dotnet PascalCase + per-language weld_as scoping: the py/lua
+overrides don't cover cs, so DoPing is styled), nested.hpp and namespace.hpp
+— all via tests/csharp/cpp/shared_seam.hpp + gen_* binding pairs; nested and
+namespace use CUSTOM generator mains calling the headers' register_ helpers
+(the manual RobotBeacon escape, the semi-manual weld_function/weld_variable
+route, and the TACK-WELDING carriage over the unmarked `foreign` libraries —
+greedy, the WeldProtected knob and the bound_into-keyed resolution all work
+unchanged over the text rod). nested.hpp needed cs-scoped weld_as CS0102
+escapes on 5 fields (sensor/mode/part/bolt/dial PascalCase into their nested
+types' names). PROTECTED nested types (Rig::Jig): the shim cannot SPELL the
+qualified name (inaccessible at namespace scope), so class_writer carries a
+`cpp_anchor` EXPRESSION distinct from cpp_qualified — public types anchor
+"^^qual", protected nested ones anchor via the enumeration lookup
+`wcs::nested_type(outer_anchor, "id")` (members_of, unchecked access); every
+thunk/lookup site uses the anchor, and the owner fallback (_owner_expr)
+prefers the anchor whenever the declaring scope IS the bound type. Member
+ALIASES to vendor types (Console::Ints = Roll<int>): the nested factory's
+segment spelling comes from identifier_of(Decl) — the alias — never the
+unspellable specialization.
 Directors (Phase 5, src/welder/rods/csharp/directors.hpp): per eligible type
 (overridable_virtuals nonempty — from the hoisted NEUTRAL
 src/welder/virtuals.hpp, which rods/python/trampoline.hpp re-exports; virtual
@@ -65,8 +87,8 @@ slots resolve through the base wrapper's binding. Only BOUND public slots get
 callbacks/mask (an NVI hook or excluded virtual keeps a null table field →
 qualified fallback). Managed exceptions: callback catch-all → code 7 →
 shim::managed_exception → re-mapped at the next boundary. Not directed:
-abstract types (no construction_type nomination yet — keep py-only), covariant
-pointer-returning slots (unsupported shape → static_assert naming bind_flat).
+abstract types (P2996 cannot synthesize a class — factory-only escape,
+keep py-only).
 Shared overridable.hpp: Animal/Bird/Robot welded for cs (Shape/Plant/Tree
 stay py-only); the Py* trampolines compile under neutral stub macros in
 shared_seam.hpp.

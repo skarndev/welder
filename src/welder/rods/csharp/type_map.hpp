@@ -154,6 +154,25 @@ consteval bool spellable(std::meta::info ent) {
 
 // --- the shared member-lookup layer (generator ⇄ shim agreement) ------------
 
+/** The member TYPE of @a owner named @a name — the anchor lookup for a nested
+    class the generated shim cannot SPELL (a protected nested type's qualified
+    name is inaccessible at namespace scope; reflection enumeration is not).
+    Aliases count (a class-scope alias anchor), the aliased type is returned
+    as-is (the caller dealiases when it must).
+    @throws diag::csharp_member_lookup_mismatch when no such member type
+    exists — the generator/shim drift guard, like @ref named_member. */
+consteval std::meta::info nested_type(std::meta::info owner,
+                                      std::string_view name) {
+    for (std::meta::info m : std::meta::members_of(
+             owner, std::meta::access_context::unchecked())) {
+        if ((std::meta::is_type(m) || std::meta::is_type_alias(m)) &&
+            std::meta::has_identifier(m) &&
+            std::meta::identifier_of(m) == name)
+            return m;
+    }
+    throw diag::csharp_member_lookup_mismatch{};
+}
+
 /** The @a K-th function member of @a owner (class or namespace) named @a name,
     counting ALL same-named function declarations in declaration order —
     participation-independent, so the index is stable however the resolution

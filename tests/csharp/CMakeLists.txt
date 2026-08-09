@@ -70,6 +70,56 @@ welder_csharp_generate_bindings(welder_test_cs_copying
   OUTPUT_DIR ${_ws}/copying
   DEPENDS ${WELDER_TEST_COMMON_CPP}/copying.hpp)
 
+
+welder_csharp_generate_bindings(welder_test_cs_methods
+  SOURCES cpp/gen_methods.cpp
+  LIBRARY welder_test_cs_methods
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/methods
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/methods.hpp)
+
+welder_csharp_generate_bindings(welder_test_cs_enums
+  SOURCES cpp/gen_enums.cpp
+  LIBRARY welder_test_cs_enums
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/enums
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/enums.hpp)
+
+welder_csharp_generate_bindings(welder_test_cs_overloads
+  SOURCES cpp/gen_overloads.cpp
+  LIBRARY welder_test_cs_overloads
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/overloads
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/overloads.hpp)
+
+welder_csharp_generate_bindings(welder_test_cs_properties
+  SOURCES cpp/gen_properties.cpp
+  LIBRARY welder_test_cs_properties
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/properties
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/properties.hpp)
+
+welder_csharp_generate_bindings(welder_test_cs_naming
+  SOURCES cpp/gen_naming.cpp
+  LIBRARY welder_test_cs_naming
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/naming
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/naming.hpp)
+
+welder_csharp_generate_bindings(welder_test_cs_nested
+  SOURCES cpp/gen_nested.cpp
+  LIBRARY welder_test_cs_nested
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/nested
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/nested.hpp)
+
+welder_csharp_generate_bindings(welder_test_cs_namespace
+  SOURCES cpp/gen_namespace.cpp
+  LIBRARY welder_test_cs_namespace
+  INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/cpp ${WELDER_TEST_COMMON_CPP}
+  OUTPUT_DIR ${_ws}/namespace
+  DEPENDS ${WELDER_TEST_COMMON_CPP}/namespace.hpp)
+
 # Building the targets both regenerates the artifacts and compiles the shims —
 # the compile IS a test (the generated splices must re-derive every member).
 add_test(NAME csharp.build
@@ -77,7 +127,10 @@ add_test(NAME csharp.build
           --target welder_test_csharp welder_test_cs_retpolicy welder_test_cs_operators
                   welder_test_cs_inheritance welder_test_cs_overridable
                   welder_test_cs_resolution welder_test_cs_templates
-                  welder_test_cs_copying
+                  welder_test_cs_copying welder_test_cs_methods
+                  welder_test_cs_enums welder_test_cs_overloads
+                  welder_test_cs_properties welder_test_cs_naming
+                  welder_test_cs_nested welder_test_cs_namespace
           --config $<CONFIG>)
 set_tests_properties(csharp.build PROPERTIES FIXTURES_SETUP csharp_native)
 
@@ -139,6 +192,13 @@ file(GENERATE OUTPUT ${_app}/app.csproj CONTENT
     <Compile Include=\"${_ws}/resolution/Bindings.cs\" />
     <Compile Include=\"${_ws}/templates/Bindings.cs\" />
     <Compile Include=\"${_ws}/copying/Bindings.cs\" />
+    <Compile Include=\"${_ws}/methods/Bindings.cs\" />
+    <Compile Include=\"${_ws}/enums/Bindings.cs\" />
+    <Compile Include=\"${_ws}/overloads/Bindings.cs\" />
+    <Compile Include=\"${_ws}/properties/Bindings.cs\" />
+    <Compile Include=\"${_ws}/naming/Bindings.cs\" />
+    <Compile Include=\"${_ws}/nested/Bindings.cs\" />
+    <Compile Include=\"${_ws}/namespace/Bindings.cs\" />
     <None Include=\"$<TARGET_FILE:welder_test_csharp>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_retpolicy>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_operators>\" CopyToOutputDirectory=\"PreserveNewest\" />
@@ -147,6 +207,13 @@ file(GENERATE OUTPUT ${_app}/app.csproj CONTENT
     <None Include=\"$<TARGET_FILE:welder_test_cs_resolution>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_templates>\" CopyToOutputDirectory=\"PreserveNewest\" />
     <None Include=\"$<TARGET_FILE:welder_test_cs_copying>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_methods>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_enums>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_overloads>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_properties>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_naming>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_nested>\" CopyToOutputDirectory=\"PreserveNewest\" />
+    <None Include=\"$<TARGET_FILE:welder_test_cs_namespace>\" CopyToOutputDirectory=\"PreserveNewest\" />
   </ItemGroup>
 </Project>
 ")

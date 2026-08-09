@@ -926,6 +926,7 @@ struct rod {
         w.cs_path = name;
         w.doc_text = doc ? doc : "";
         w.cpp_qualified = cpp_name_v<Decl>;
+        w.cpp_anchor = "^^" + w.cpp_qualified;
         // References to T anywhere (params, returns, fields, operators) are
         // emitted as placeholders over the RAW spelling; register the final
         // name for the render-time reconciliation. The reference spelling is
@@ -973,7 +974,7 @@ struct rod {
                                    upath_v<std::meta::dealias(base)>};
             m.doc->record_symbol(bsym);
             m.doc->shim += "void* " + bsym + "(void* self) { return "
-                           "wcs::shim::upcast<^^" + w.cpp_qualified + ", ^^" +
+                           "wcs::shim::upcast<" + w.cpp_anchor + ", ^^" +
                            std::string{cpp_name_v<std::meta::dealias(base)>} +
                            ">(self); }\n\n";
             m.doc->pinvoke += "        [LibraryImport(Lib)] internal static "
@@ -1006,7 +1007,7 @@ struct rod {
         // The destructor thunk + its P/Invoke (the SafeHandle's release path).
         m.doc->record_symbol(w.destroy_symbol);
         m.doc->shim += "void " + w.destroy_symbol +
-                       "(void* self) { wcs::shim::destroy<^^" + w.cpp_qualified +
+                       "(void* self) { wcs::shim::destroy<" + w.cpp_anchor +
                        ">(self); }\n\n";
         m.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial void " +
                           w.destroy_symbol + "(IntPtr self);\n";
@@ -1038,9 +1039,20 @@ struct rod {
         w.doc = m.doc;
         w.cs_name = name;
         w.doc_text = doc ? doc : "";
-        static constexpr const char* tid{std::define_static_string(
-            std::meta::identifier_of(std::meta::dealias(^^T)))};
+        // The nested segment's spelling comes from the DECLARED member — the
+        // nested class itself, or the class-scope ALIAS an unspellable vendor
+        // target (a specialization) was registered through.
+        static constexpr const char* tid{
+            std::define_static_string(std::meta::identifier_of(Decl))};
         w.cpp_qualified = outer.cpp_qualified + "::" + tid;
+        // A PUBLIC nested type's qualified name is its anchor; a protected
+        // one is inaccessible at namespace scope, so the shim re-derives its
+        // reflection by enumeration instead of spelling it.
+        if constexpr (std::meta::is_public(Decl))
+            w.cpp_anchor = "^^" + w.cpp_qualified;
+        else
+            w.cpp_anchor = "std::meta::dealias(wcs::nested_type(" +
+                           outer.cpp_anchor + ", \"" + tid + "\"))";
         w.sym_prefix = outer.sym_prefix + "_" + tid;
         w.destroy_symbol = w.sym_prefix + "_destroy";
         w.sink = &outer.members;
@@ -1101,7 +1113,7 @@ struct rod {
         overload would collide with a one-argument user constructor). */
     template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(class_writer& w) {
-        const std::string anchor{"^^" + w.cpp_qualified};
+        const std::string anchor{w.cpp_anchor};
         // A director-eligible type is C#-constructed AS its director subclass
         // (the handle stays "pointer to T" — construct_as adjusts), so a C#
         // subclass can override its virtuals; unoverridden slots fall through
@@ -1161,6 +1173,17 @@ struct rod {
         }
     }
 
+    /** The lookup OWNER expression for a member declared in the scope spelled
+        @a ps: the declaring scope's own `^^` anchor for a flattened base's
+        member, else the bound type's @a anchor — which also covers members of
+        a PROTECTED nested type, whose spelled name (== @a qual) would be
+        inaccessible at the shim's namespace scope. */
+    static std::string _owner_expr(bool named_parent, const std::string& ps,
+                                   const std::string& qual,
+                                   const std::string& anchor) {
+        return (named_parent && ps != qual) ? "^^" + ps : anchor;
+    }
+
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
         constexpr std::meta::info MT{std::meta::type_of(Mem)};
@@ -1168,17 +1191,16 @@ struct rod {
         constexpr bool checked{(require_marshallable(MT, true), true)};
         static_assert(checked);
         const std::string id{std::meta::identifier_of(Mem)};
-        const std::string anchor{"^^" + w.cpp_qualified};
+        const std::string anchor{w.cpp_anchor};
         // The lookup is by the DECLARING scope (a flattened non-welded base's
         // member is not among the welded type's own members). A class-template
         // SPECIALIZATION parent has no spellable qualified name — there the
         // declaring scope IS the bound type, whose alias anchor we hold.
         constexpr bool named_parent{
             spellable(std::meta::parent_of(Mem))};
-        const std::string owner{
-            named_parent
-                ? "^^" + std::string{cpp_name_v<std::meta::parent_of(Mem)>}
-                : anchor};
+        const std::string owner{_owner_expr(
+            named_parent, cpp_name_v<std::meta::parent_of(Mem)>,
+            w.cpp_qualified, anchor)};
         const std::string lookup{"wcs::named_field(" + owner + ", \"" + id +
                                  "\")"};
         const std::string getsym{w.sym_prefix + "_get_" + id};
@@ -1269,15 +1291,15 @@ struct rod {
             std::meta::remove_cvref(std::meta::return_type_of(Getter))};
         constexpr bool checked{(require_marshallable(RT, true), true)};
         static_assert(checked);
-        const std::string anchor{"^^" + w.cpp_qualified};
+        const std::string anchor{w.cpp_anchor};
         const std::string gid{std::meta::identifier_of(Getter)};
         constexpr bool g_named_parent{
             spellable(std::meta::parent_of(Getter))};
         const std::string glookup{
             "wcs::named_member(" +
-            (g_named_parent
-                 ? "^^" + std::string{cpp_name_v<std::meta::parent_of(Getter)>}
-                 : anchor) +
+            _owner_expr(g_named_parent,
+                        cpp_name_v<std::meta::parent_of(Getter)>,
+                        w.cpp_qualified, anchor) +
             ", \"" + gid + "\", " +
             std::to_string(index_of_named_member(Getter)) + ")"};
         const std::string getsym{w.sym_prefix + "_pget_" + name};
@@ -1316,10 +1338,9 @@ struct rod {
                 spellable(std::meta::parent_of(Setter))};
             const std::string slookup{
                 "wcs::named_member(" +
-                (s_named_parent
-                     ? "^^" +
-                           std::string{cpp_name_v<std::meta::parent_of(Setter)>}
-                     : anchor) +
+                _owner_expr(s_named_parent,
+                            cpp_name_v<std::meta::parent_of(Setter)>,
+                            w.cpp_qualified, anchor) +
                 ", \"" + sid + "\", " +
                 std::to_string(index_of_named_member(Setter)) + ")"};
             const std::string setsym{w.sym_prefix + "_pset_" + name};
@@ -1373,7 +1394,7 @@ struct rod {
         const std::string name{::welder::name_of<Fns[0], lang::cs, Style,
                                                  ::welder::ent_kind::method>()};
         w.surface_names.push_back(name);
-        const std::string anchor{"^^" + w.cpp_qualified};
+        const std::string anchor{w.cpp_anchor};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             constexpr std::size_t k{index_of_named_member(fn)};
             const std::string id{std::meta::identifier_of(fn)};
@@ -1381,10 +1402,9 @@ struct rod {
                                   std::to_string(k)};
             constexpr bool named_parent{
                 spellable(std::meta::parent_of(fn))};
-            const std::string fowner{
-                named_parent
-                    ? "^^" + std::string{cpp_name_v<std::meta::parent_of(fn)>}
-                    : anchor};
+            const std::string fowner{_owner_expr(
+                named_parent, cpp_name_v<std::meta::parent_of(fn)>,
+                w.cpp_qualified, anchor)};
             const std::string expr{"wcs::shim::method<" + anchor +
                                    ", wcs::named_member(" + fowner + ", \"" +
                                    id + "\", " + std::to_string(k) + ")>"};
@@ -1557,9 +1577,9 @@ struct rod {
                 spellable(std::meta::parent_of(fn))};
             const std::string expr{
                 "wcs::shim::function<wcs::named_member(" +
-                (named_parent
-                     ? "^^" + std::string{cpp_name_v<std::meta::parent_of(fn)>}
-                     : "^^" + w.cpp_qualified) +
+                _owner_expr(named_parent,
+                            cpp_name_v<std::meta::parent_of(fn)>,
+                            w.cpp_qualified, w.cpp_anchor) +
                 ", \"" + id + "\", " + std::to_string(k) + ")>"};
             emit_callable<fn, Style, false>(*w.doc, sym, w.members, "        ",
                                             name, expr);
@@ -1607,7 +1627,7 @@ struct rod {
             operator_enum_ident(std::meta::operator_of(Fn)))};
         w.doc->shim += "const char* " + sym +
                        "(void* self, welder_error* err) { return "
-                       "wcs::shim::stringify_text<^^" + w.cpp_qualified +
+                       "wcs::shim::stringify_text<" + w.cpp_anchor +
                        ", wcs::named_operator(^^" +
                        std::string{cpp_name_v<std::meta::parent_of(Fn)>} +
                        ", std::meta::operators::" + opid + ", false, " +
@@ -1689,9 +1709,9 @@ struct rod {
         pin_params += (pin_params.empty() ? "" : ", ");
         pin_params += "out WelderError err";
         const std::string expr{
-            is_member ? "wcs::shim::method<^^" + w.cpp_qualified + ", " +
-                            _operator_lookup<Fn>("^^" + w.cpp_qualified) + ">"
-                      : "wcs::shim::function<" + _operator_lookup<Fn>("^^" + w.cpp_qualified) + ">"};
+            is_member ? "wcs::shim::method<" + w.cpp_anchor + ", " +
+                            _operator_lookup<Fn>(w.cpp_anchor) + ">"
+                      : "wcs::shim::function<" + _operator_lookup<Fn>(w.cpp_anchor) + ">"};
         w.doc->shim += std::string{
                            wire_return_v<std::meta::return_type_of(Fn)>} +
                        " " + sym + "(" + shim_params + ") { return " + expr +
@@ -1828,17 +1848,17 @@ struct rod {
         constexpr std::size_t k{index_of_operator(Fn)};
         const std::string sym{w.sym_prefix + "_cmp_" + std::to_string(k)};
         w.doc->record_symbol(sym);
-        const std::string lookup{_operator_lookup<Fn>("^^" + w.cpp_qualified)};
+        const std::string lookup{_operator_lookup<Fn>(w.cpp_anchor)};
         // The operand: spelled through the SAME consteval re-derivation the
         // generator used, so the shim's compare<> sees the identical type.
         const std::string opnd{"::welder::detail::comparison_operand(" + lookup +
-                               ", ^^" + w.cpp_qualified + ")"};
+                               ", " + w.cpp_anchor + ")"};
         w.doc->shim +=
             "std::int32_t " + sym + "(void* self, " +
             std::string{wire_param_v<::welder::detail::comparison_operand(
                 Fn, ^^T)>} +
-            " a0, welder_error* err) { return wcs::shim::compare<^^" +
-            w.cpp_qualified + ", " + opnd + ">(self, err, a0); }\n\n";
+            " a0, welder_error* err) { return wcs::shim::compare<" +
+            w.cpp_anchor + ", " + opnd + ">(self, err, a0); }\n\n";
         constexpr bool p_is_bool{
             classify(::welder::detail::comparison_operand(Fn, ^^T)) ==
             marshal_kind::boolean};

@@ -507,6 +507,222 @@ public class BindingTests
         up.Dispose(); // the C# side owns and frees it
         Assert.Equal(-1, Global.SharedX(null)); // null borrow -> C++ nullptr
     }
+
+    [Fact]
+    public void MethodsShared()
+    {
+        using (var c = new methods.Counter(10))
+        {
+            c.Increment();
+            c.Add(5);
+            Assert.Equal(16, c.Value());
+        }
+        Assert.Equal(7, methods.Counter.Version()); // static method
+        using (var calc = new methods.Calc(1))
+        {
+            Assert.Equal(3, calc.Sum(2));      // overload 1
+            Assert.Equal(6, calc.Sum(2, 3));   // overload 2
+        }
+        using (var v = new methods.Vec2(1.5, 2.5)) // synthesized field ctor
+            Assert.Equal(2.5, v.Y);
+        using (var w = new methods.Window(2, "t", 640, 480, false))
+            Assert.True(w.Samples == 2 && w.Title == "t" && !w.Resizable,
+                        "aggregate field ctor");
+        using (var f = new methods.Frozen("ice", 3))
+            Assert.True(f.Name == "ice" && f.Level == 3,
+                        "const fields readable"); // (get-only)
+        using (var a = new methods.Anchored())
+        {
+            Assert.Equal(7, a.Pinned); // no_reassign -> get-only
+            a.Writable = 5;
+            Assert.Equal(5, a.Writable);
+        }
+    }
+
+    [Fact]
+    public void EnumsShared()
+    {
+        Assert.Equal(3, (int)enums.Direction.West); // South excluded, gap kept
+        Assert.Equal(2u, (uint)enums.Signal.Red);   // unscoped, uint underlying
+        Assert.Equal(1, (int)enums.Level.Info);     // opt_in include
+        using var comp = new enums.Compass(enums.Direction.East);
+        Assert.Equal(enums.Direction.East, comp.Facing);
+        comp.Facing = enums.Direction.North;
+        Assert.Equal(enums.Direction.North, comp.Facing);
+    }
+
+    [Fact]
+    public void OverloadsShared()
+    {
+        using (var c = new overloads.Calc(5))
+        {
+            Assert.Equal(9, c.Apply(3));               // int overload
+            Assert.Equal("t:7", c.Apply("t", 2));      // lua-excluded, cs keeps
+        }
+        Assert.Equal(3, overloads.Global.Pick(3));
+        Assert.Equal("s!", overloads.Global.Pick("s")); // lua-excluded, cs keeps
+        using (var o = new overloads.OptInCtor(2, 3))   // the included ctor
+            Assert.Equal(5, o.Kept);
+        using (var f = overloads.Global.Forge(4))       // factory-only surface
+            Assert.Equal(4, f.Id);
+        using (var n = new overloads.NoDefault(6))      // declared T() excluded
+            Assert.Equal(6, n.V);
+    }
+
+    [Fact]
+    public void PropertiesShared()
+    {
+        using (var c = new properties.Circle())
+        {
+            c.Radius = 2.0; // overload-style accessor pair -> one property
+            Assert.Equal(2.0, c.Radius);
+            Assert.Equal(4.0 * 3.141592653589793, c.Area); // read-only property
+            Assert.Equal(4.0, c.Diameter()); // an ordinary method stays one
+        }
+        using (var v = new properties.Vehicle())
+        {
+            v.MaxSpeed = 90;
+            Assert.Equal(90, v.MaxSpeed);
+            v.Scale = 2.5; // mixed-convention pair, getter authoritative
+            Assert.Equal(2.5, v.Scale);
+            Assert.True(v.IsReady); // is_ predicate not stripped -> IsReady
+        }
+        using (var g = new properties.Gauge())
+        {
+            g.level = 0.75; // explicit names pair raw()/assign(); VERBATIM
+            Assert.Equal(0.75, g.level);
+            g.SetMode(2); // py-scoped accessor marks -> plain methods here
+            Assert.Equal(2, g.GetMode());
+            g.Limit = 55; // the lua-scoped setter exclusion leaves cs rw
+            Assert.Equal(55, g.Limit);
+        }
+        using (var p = new properties.Padlock())
+        {
+            p.Code = 9; // accessor marks are the opt-in
+            Assert.Equal(9, p.Code);
+            Assert.Equal(42, p.Shown());
+        }
+        using (var t = new properties.Tag())
+        {
+            t.Label = "hi"; // flattened non-welded base; fluent ret discarded
+            Assert.Equal("hi", t.Label);
+        }
+        using (var sealed_ = new properties.Sealed())
+        {
+            sealed_.Inner = 11; // protected accessors under weld_protected
+            Assert.Equal(11, sealed_.Inner);
+        }
+    }
+
+    [Fact]
+    public void NamingShared()
+    {
+        using var h = new styling.HttpClient("api");
+        Assert.Equal("api", h.BaseUrl);        // camelCase -> PascalCase
+        Assert.Equal("api/go", h.SendRequest());
+        Assert.Equal(3, h.RetryCount());
+        // weld_as(py)/weld_as(lua) do NOT cover cs -> the style applies
+        Assert.Equal("pong", h.DoPing());
+        Assert.Equal(8080, styling.HttpClient.DefaultPort());
+    }
+
+    [Fact]
+    public void NestedShared()
+    {
+        using (var r = new nested_cases.Robot())
+        {
+            Assert.Equal(3.0, r.SensorUnit.Doubled()); // live view of `sensor`
+            r.SensorUnit.Range = 4.0;                  // writes through
+            Assert.Equal(8.0, r.SensorUnit.Doubled());
+            r.CurrentMode = nested_cases.Robot.Mode.active;
+            Assert.Equal(nested_cases.Robot.Mode.active, r.GetMode());
+            Assert.Equal(nested_cases.Robot.Alarm.loud,
+                         r.AlarmFor(nested_cases.Robot.Mode.fault));
+        }
+        using (var s = new nested_cases.Robot.Sensor(2.5)) // standalone nested
+            Assert.Equal(5.0, s.Doubled());
+        using (var m = new nested_cases.Machine())          // recursion
+            Assert.Equal(5, m.MainPart.MainBolt.Size);      // Machine.Part.Bolt
+        using (var k = new nested_cases.Panel.Knob())       // opt_in include
+            Assert.Equal(0, k.Pos);
+        using (var con = new nested_cases.Console())
+        {
+            Assert.Equal(40, con.ReadDial().Reading); // vendor type via alias
+            Assert.Equal(0, con.Spin().Top);          // vendor specialization
+            Assert.Equal(nested_cases.Console.Lvl.high, con.Level());
+        }
+        using (var ints = new nested_cases.Console.Ints(9)) // Roll<int> alias
+            Assert.Equal(9, ints.Take());
+        using (var h = new nested_cases.Console.Heart())    // the rename escape
+            Assert.Equal(300, h.Temp);
+        using (var j = new nested_cases.Rig.Jig(3))         // PROTECTED nested
+            Assert.Equal(3, j.Slots);
+        using (var b = new nested_cases.RobotBeacon())      // manual flat escape
+            Assert.Equal(9, b.Strength);
+    }
+
+    [Fact]
+    public void NamespaceShared()
+    {
+        Assert.Equal(5, namespace_cases.catalog.Total(2, 3)); // overload group
+        Assert.Equal(4, namespace_cases.catalog.Total(4));
+        Assert.Equal(-1, namespace_cases.catalog.Suppressed()); // py-excluded only
+        Assert.Equal(100, namespace_cases.catalog.Limit); // const -> get-only
+        Assert.Equal("catalog", namespace_cases.catalog.Tag);
+        int before = namespace_cases.catalog.Counter;
+        namespace_cases.catalog.Bump(); // C++ mutates the live global
+        Assert.Equal(before + 1, namespace_cases.catalog.Counter);
+        namespace_cases.catalog.Counter = 0; // and the property writes back
+        Assert.Equal(0, namespace_cases.catalog.Counter);
+        using (var i = new namespace_cases.Item(7))
+            Assert.Equal(7, i.GetId());
+        using (var cat = new namespace_cases.Cat())
+            Assert.True(cat.Whiskers == 12 && cat.Legs == 4, "welded base chain");
+        using (var n = new namespace_cases.Nested()) // nested namespace type
+            Assert.Equal(5, n.V);
+        using (var spy = new namespace_cases.Spy()) // secret ns py-pruned only
+            Assert.Equal(0, spy.S);
+
+        // the semi-manual route (weld_function / weld_variable + renames)
+        Assert.Equal(42, namespace_cases.manual.Scale(6, 7));
+        Assert.Equal(42, namespace_cases.manual.ManualConst);
+        int mb = namespace_cases.manual.ManualCounter;
+        namespace_cases.manual.ManualBump();
+        Assert.Equal(mb + 1, namespace_cases.manual.ManualCounter);
+        Assert.Equal(2, namespace_cases.manual.renamed_fn(1)); // verbatim override
+        Assert.Equal(99, namespace_cases.manual.RENAMED_CONST);
+
+        // tack welding: the unmarked `foreign` library, bound greedily
+        using (var w = new namespace_cases.Widget())
+        {
+            Assert.Equal(6, w.Doubled());
+            Assert.Equal(3, w.Stats().Uses);   // nested type under tack
+            using var w2 = new namespace_cases.Widget();
+            using var merged = w.Merged(w2);
+            Assert.Equal(6, merged.Size);
+        }
+        Assert.Equal(3, namespace_cases.foreign.Add(1, 2));
+        Assert.Equal(7, namespace_cases.foreign.Version);
+        using (var g = new namespace_cases.Gadget())
+            Assert.Equal(5, namespace_cases.foreign.GadgetId(g));
+        using (var a = new namespace_cases.Widget())
+        using (var b2 = new namespace_cases.Widget())
+        using (var coupled = namespace_cases.foreign.Fuse(a, b2))
+            Assert.Equal(3, coupled.Left.Size); // live field view
+
+        // the protected-knob tack + the bound_into-keyed resolution
+        using (var p = new namespace_cases.Panel())
+        {
+            Assert.Equal(14, p.Frame());
+            Assert.Equal(10, p.Trim()); // protected, admitted by the knob
+            Assert.Equal(4, p.Width);
+        }
+        using (var d = new namespace_cases.Display())
+        {
+            Assert.Equal(1, d.Model());
+            Assert.Equal(55, d.Reading()); // admitted into Display's binding only
+        }
+    }
 }
 
 class SquareCs : Shape

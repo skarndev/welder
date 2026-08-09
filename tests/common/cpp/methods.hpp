@@ -13,7 +13,7 @@ namespace methods {
 // --- constructors + methods -------------------------------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Counter {
     int count{0};
 
@@ -50,7 +50,7 @@ Counter {
 // --- overloaded methods -----------------------------------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Calc {
     int base{0};
 
@@ -75,7 +75,7 @@ Calc {
 // alongside the default Vec2().
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Vec2 {
     double x{0.0};
     double y{0.0};
@@ -90,7 +90,7 @@ Vec2 {
 // allows no gaps, exactly like C++ default function arguments.
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Window {
     int samples{4};
     std::string title;
@@ -104,7 +104,7 @@ Window {
 // NSDMI defaults) still brace-initializes it.
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Frozen {
     const std::string name;
     const int level{1};
@@ -116,7 +116,7 @@ Frozen {
 // making it const. `writable` is the reassignable control. The runtime analogue of
 // the luacats golden's `(read-only)` note.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
 Anchored {
     Anchored() = default;
     [[=welder::mark::no_reassign]] int pinned{7};
