@@ -39,9 +39,12 @@ namespace welder::inline v0::rods::csharp {
     regardless of spelling.)
 
     @note PascalCase *normalizes* acronyms — `HTTPServer` → `HttpServer` — since words
-    are lower-cased before re-capitalization. Idiomatic C++ class names are already
-    PascalCase and pass through unchanged; reach for `[[=welder::weld_as]]` to pin an
-    exact spelling. Satisfies @ref welder::naming::name_style. */
+    are lower-cased before re-capitalization. The style presumes class names are
+    authored PascalCase already (those pass through unchanged). For a codebase where
+    that is known to hold and exact spellings must survive (`HTTPServer` staying
+    `HTTPServer`), subclass this style and override `transform_class` to pass the
+    identifier verbatim; a per-type `[[=welder::weld_as]]` pins an exact spelling
+    either way. Satisfies @ref welder::naming::name_style. */
 struct dotnet : ::welder::naming::pascal_case {
     /** Enum members → verbatim (see the type note). */
     static consteval std::string transform_enumerator(std::meta::info e) {

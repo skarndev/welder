@@ -97,8 +97,10 @@ using (var p = new Point(3, 4))       // ctor -> native new; IDisposable + SafeH
   class or string returns) are a designed shim-build error naming that escape.
 - **Nested member types** register under the outer's binding as real C#
   nested types (`Machine.State`, `Machine.Gauge`), resolving like any other
-  member — mind that C# forbids a property and a nested type sharing a name
-  (rename the member, or `weld_as` one of them).
+  member. C# forbids a member and a nested type sharing one name (CS0102) —
+  welder diagnoses the collision at generation with a designed `#error` in the
+  emitted `Bindings.cs` naming both sides and the `weld_as` escape, so the
+  first build fails with welder's message rather than a bare compiler error.
 - **Docs** ride along as full XML doc comments: `[[=welder::doc]]` →
   `<summary>`, parameter docs → `<param>`, `[[=welder::returns]]` →
   `<returns>` — visible in IDE IntelliSense.
@@ -183,14 +185,33 @@ the Python rods. A **view** wraps the same C++ object without owning it
 (`Dispose` releases nothing); under `reference_internal` — and for every
 class-typed field — the view also stores its parent in an internal `__owner`
 reference, so the parent cannot be garbage-collected (and its C++ object
-destroyed) while the view is reachable:
+destroyed) while the view is reachable. Given this C++:
+
+```cpp
+struct [[=welder::weld(welder::lang::cs)]] Item {
+    std::int32_t x{0};
+};
+
+struct [[=welder::weld(welder::lang::cs)]] Holder {
+    Item item;  // a class-typed field: binds as a live view
+
+    [[=welder::return_policy(welder::rv::reference_internal)]]
+    Item& current() { return item; }
+};
+```
+
+the C# side sees `Item`/`Holder` wrappers whose class-typed accesses alias the
+C++ objects:
 
 ```csharp
-var v = holder.Item();   // [[=welder::return_policy(rv::reference_internal)]]
-v.X = 55;                // writes the C++ member through the view
+var holder = new Holder();
+var v = holder.Current();  // reference_internal -> a live view of holder.item
+v.X = 55;                  // writes the C++ member through the view
 holder = null!;
-GC.Collect();            // holder is pinned by v.__owner — v stays valid
-seg.Start.X = 100;       // fields are live views too: writes go through
+GC.Collect();              // holder stays pinned by v.__owner — v stays valid
+
+holder = new Holder();
+holder.Item.X = 100;       // the FIELD is a live view too: writes go through
 ```
 
 A pointer return may be C# `null` (the wrapper type is `T?`); `keep_alive` is

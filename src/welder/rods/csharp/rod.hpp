@@ -794,6 +794,7 @@ struct rod {
     static class_writer make_nested_class(module_type& m, class_writer& outer,
                                           const char* name, const char* doc,
                                           std::index_sequence<I...> seq) {
+        outer.nested_names.push_back(name);
         class_writer w{make_class<T, Decl, Bases>(m, name, doc, seq)};
         w.sink = &outer.members;
         w.cs_path = outer.cs_path + "." + name;
@@ -815,6 +816,7 @@ struct rod {
     template <class E>
     static enum_writer make_nested_enum(module_type& m, class_writer& outer,
                                         const char* name, const char* doc) {
+        outer.nested_names.push_back(name);
         enum_writer w{make_enum<E>(m, name, doc)};
         w.sink = &outer.members;
         m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
@@ -953,6 +955,7 @@ struct rod {
         append_one_param<std::meta::type_of(Mem), Style>(vcp, 0, "value");
         const std::string pname{
             ::welder::name_of<Mem, lang::cs, Style, ::welder::ent_kind::field>()};
+        w.surface_names.push_back(pname);
         emit_doc_comment(w.members, "        ", ::welder::doc_of<Mem>());
         constexpr bool unsafe_prop{classify(std::meta::type_of(Mem)) ==
                                    marshal_kind::seq_value};
@@ -988,6 +991,7 @@ struct rod {
         a C# property calling them under the driver-resolved @a name. */
     template <class T, std::meta::info Getter, std::meta::info Setter>
     static void add_property(class_writer& w, const char* name) {
+        w.surface_names.push_back(name);
         _collect_containers<Getter>(*w.doc);
         if constexpr (Setter != std::meta::info{})
             _collect_containers<Setter>(*w.doc);
@@ -1088,6 +1092,7 @@ struct rod {
     static void add_method(class_writer& w) {
         const std::string name{::welder::name_of<Fns[0], lang::cs, Style,
                                                  ::welder::ent_kind::method>()};
+        w.surface_names.push_back(name);
         const std::string anchor{"^^" + w.cpp_qualified};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             constexpr std::size_t k{index_of_named_member(fn)};
@@ -1256,6 +1261,7 @@ struct rod {
         const std::string name{
             ::welder::name_of<Fns[0], lang::cs, Style,
                               ::welder::ent_kind::static_method>()};
+        w.surface_names.push_back(name);
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             constexpr std::size_t k{index_of_named_member(fn)};
             _collect_containers<fn>(*w.doc);

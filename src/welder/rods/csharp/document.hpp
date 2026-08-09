@@ -321,6 +321,13 @@ struct class_writer {
         std::size_t k;
     };
     std::vector<vslot> vslots{};
+    /** Emitted member (property/method) names and nested TYPE names: C#
+        forbids a member and a nested type sharing a name (CS0102), so the
+        flush diagnoses the collision INTO the artifact (a `#error` with a
+        designed message — the record_symbol precedent) instead of leaving the
+        consumer a bare compiler error. */
+    std::vector<std::string> surface_names{};
+    std::vector<std::string> nested_names{};
     std::string members{};        /**< Accumulated property/method/ctor text. */
 
     /** One recorded comparison-operator emission, held back until flush: C#
@@ -359,6 +366,8 @@ struct class_writer {
         is_director = o.is_director;
         director_ident = std::move(o.director_ident);
         vslots = std::move(o.vslots);
+        surface_names = std::move(o.surface_names);
+        nested_names = std::move(o.nested_names);
         members = std::move(o.members);
         comparisons = std::move(o.comparisons);
         indexer_sigs = std::move(o.indexer_sigs);
@@ -504,6 +513,16 @@ struct class_writer {
                    base_upcast_sym + "(handle), false) { " + handle_field +
                    " = new " + cs_name + "Handle(handle, owns); }\n\n";
         }
+        // The nested-type/member name collision (C# CS0102), diagnosed here
+        // with welder's message rather than left to the consumer's compiler.
+        for (const auto& n : nested_names)
+            for (const auto& m : surface_names)
+                if (n == m)
+                    out += "#error welder: the nested type '" + cs_path + "." +
+                           n + "' and a bound member of '" + cs_path +
+                           "' share the C# name '" + n +
+                           "' (C# forbids this, CS0102); rename one side with "
+                           "[[=welder::weld_as]]\n";
         out += members;
         out += _flush_comparisons();
         if (base_ref.empty())

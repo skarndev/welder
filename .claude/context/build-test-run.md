@@ -349,10 +349,13 @@ CTest names: `csharp.build` (a FIXTURES_SETUP build of the target — regenerati
 compiling the shim IS a test), `csharp.shim_golden` / `csharp.bindings_golden`
 (`cmake -E compare_files --ignore-eol` against `tests/csharp/*.golden.*` — bless by
 copying the freshly generated files from `<bindir>/tests/csharp/`),
-`csharp.roundtrip` (a `dotnet run` app: `file(GENERATE)`d csproj — TFM from the
-`WELDER_CSHARP_TFM` cache var, default net10.0, `[LibraryImport]` needs net7+ —
-compiling `app/Program.cs` + the generated `Bindings.cs`, native lib copied beside
-the exe via `$<TARGET_FILE>`), and `compile.csharp_marshal` (consteval locks over
+`csharp.roundtrip` (an **xUnit** assembly run via `dotnet test`:
+`file(GENERATE)`d csproj — TFM from the `WELDER_CSHARP_TFM` cache var, default
+net10.0, `[LibraryImport]` needs net7+ — compiling `app/BindingTests.cs` (ONE
+test class: xUnit runs a class's facts sequentially, which the shared native
+lib wants) + the generated `Bindings.cs` files; native libs copied beside the
+assembly via `$<TARGET_FILE>`; PackageReferences xunit/runner/Test.Sdk restore
+from nuget.org on first build — needs network there, NuGet caches after), and `compile.csharp_marshal` (consteval locks over
 classify/spellings/mangling/lookup layer, `tests/core/csharp_marshal.cpp`). The
 cases are a dedicated slice `tests/csharp/cpp/cases.hpp` (the golden anchor);
 widening `tests/common/cpp` with `lang::cs` is the per-phase completeness bar as

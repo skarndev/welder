@@ -84,23 +84,30 @@ endif()
 set(WELDER_CSHARP_TFM "net10.0" CACHE STRING
   "TargetFramework for the C# round-trip test app")
 
-# The managed test project. Written with file(GENERATE) so $<TARGET_FILE:...>
-# resolves to the freshly built native library, which is copied next to the app
-# exe so the default P/Invoke resolver finds it. EnableDefaultCompileItems is off
-# so only the two named sources compile (Program.cs + the generated Bindings.cs).
+# The managed test project — an xUnit test assembly run via `dotnet test`
+# (restores xunit from nuget.org on first configure-build). Written with
+# file(GENERATE) so $<TARGET_FILE:...> resolves to the freshly built native
+# libraries, copied next to the test assembly so the default P/Invoke resolver
+# finds them. EnableDefaultCompileItems is off so only the named sources
+# compile (BindingTests.cs + the generated Bindings.cs files).
 set(_app ${_ws}/app)
 file(GENERATE OUTPUT ${_app}/app.csproj CONTENT
 "<Project Sdk=\"Microsoft.NET.Sdk\">
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>${WELDER_CSHARP_TFM}</TargetFramework>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>disable</ImplicitUsings>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include=\"${CMAKE_CURRENT_SOURCE_DIR}/app/Program.cs\" />
+    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.11.1\" />
+    <PackageReference Include=\"xunit\" Version=\"2.9.2\" />
+    <PackageReference Include=\"xunit.runner.visualstudio\" Version=\"2.8.2\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include=\"${CMAKE_CURRENT_SOURCE_DIR}/app/BindingTests.cs\" />
     <Compile Include=\"${_ws}/Bindings.cs\" />
     <Compile Include=\"${_ws}/retpolicy/Bindings.cs\" />
     <Compile Include=\"${_ws}/operators/Bindings.cs\" />
@@ -126,7 +133,7 @@ if(EXISTS "${_dotnet_root}/sdk")
 endif()
 
 add_test(NAME csharp.roundtrip
-  COMMAND ${WELDER_DOTNET} run --project ${_app} -c Release)
+  COMMAND ${WELDER_DOTNET} test ${_app} -c Release)
 set_tests_properties(csharp.roundtrip PROPERTIES
   FIXTURES_REQUIRED csharp_native
   ENVIRONMENT "${_dotnet_env}")
