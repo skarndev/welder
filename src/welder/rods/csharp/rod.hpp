@@ -275,68 +275,68 @@ std::string public_return_type() {
     indentation. A welded-class result follows @ref handle_return_of for
     policy @a Rv: owned kinds wrap with `owns: true`; view kinds with
     `owns: false`, and `view_keepalive` additionally stores @a owner in the
-    view's `__owner` (preventing collection of the parent while the view
+    view's `_owner` (preventing collection of the parent while the view
     lives — the managed spelling of `reference_internal`). */
 template <std::meta::info R, class Style,
           ::welder::rv_kind Rv = ::welder::rv_kind::automatic>
 std::string wrapper_return_body(const std::string& pc, const std::string& ind,
                                 const std::string& owner = {}) {
     constexpr marshal_kind k{classify(R)};
-    const std::string check{ind + "WelderInterop.ThrowIfError(in __e);\n"};
+    const std::string check{ind + "WelderInterop.ThrowIfError(in _e);\n"};
     if constexpr (k == marshal_kind::void_)
         return ind + pc + ";\n" + check;
     else if constexpr (k == marshal_kind::utf8_string)
-        return ind + "IntPtr __r = " + pc + ";\n" + check +
-               ind + "try { return Marshal.PtrToStringUTF8(__r) ?? \"\"; }\n" +
-               ind + "finally { NativeMethods.welder_free(__r); }\n";
+        return ind + "IntPtr _r = " + pc + ";\n" + check +
+               ind + "try { return Marshal.PtrToStringUTF8(_r) ?? \"\"; }\n" +
+               ind + "finally { NativeMethods.welder_free(_r); }\n";
     else if constexpr (k == marshal_kind::handle ||
                        k == marshal_kind::seq_ref) {
         constexpr handle_return hr{handle_return_of(R, Rv)};
-        std::string out{ind + "IntPtr __r = " + pc + ";\n" + check};
+        std::string out{ind + "IntPtr _r = " + pc + ";\n" + check};
         if constexpr (handle_return_nullable(R))
-            out += ind + "if (__r == IntPtr.Zero) return null;\n";
+            out += ind + "if (_r == IntPtr.Zero) return null;\n";
         if constexpr (hr == handle_return::view ||
                       hr == handle_return::view_keepalive) {
-            out += ind + "var __v = new " + public_type<R, Style>() +
-                   "(__r, false);\n";
+            out += ind + "var _v = new " + public_type<R, Style>() +
+                   "(_r, false);\n";
             if (hr == handle_return::view_keepalive && !owner.empty())
-                out += ind + "__v.__owner = " + owner + ";\n";
-            out += ind + "return __v;\n";
+                out += ind + "_v._owner = " + owner + ";\n";
+            out += ind + "return _v;\n";
         } else {
             out += ind + "return new " + public_type<R, Style>() +
-                   "(__r, true);\n";
+                   "(_r, true);\n";
         }
         return out;
     } else if constexpr (k == marshal_kind::optional_) {
         constexpr marshal_kind pk{classify(optional_payload(bare(R)))};
-        std::string out{ind + "var __r = " + pc + ";\n" + check};
+        std::string out{ind + "var _r = " + pc + ";\n" + check};
         if constexpr (pk == marshal_kind::utf8_string) {
-            out += ind + "if (__r.Has == 0) return null;\n";
-            out += ind + "IntPtr __s = __r.S;\n";
-            out += ind + "try { return Marshal.PtrToStringUTF8(__s) ?? \"\"; }\n";
-            out += ind + "finally { NativeMethods.welder_free(__s); }\n";
+            out += ind + "if (_r.Has == 0) return null;\n";
+            out += ind + "IntPtr _s = _r.S;\n";
+            out += ind + "try { return Marshal.PtrToStringUTF8(_s) ?? \"\"; }\n";
+            out += ind + "finally { NativeMethods.welder_free(_s); }\n";
         } else if constexpr (pk == marshal_kind::handle) {
-            out += ind + "return __r.Has != 0 ? new " +
+            out += ind + "return _r.Has != 0 ? new " +
                    type_ref<bare(optional_payload(bare(R)))>() +
-                   "(__r.P, true) : null;\n";
+                   "(_r.P, true) : null;\n";
         } else if constexpr (pk == marshal_kind::boolean) {
-            out += ind + "return __r.Has != 0 ? (bool?)(__r.I != 0) : null;\n";
+            out += ind + "return _r.Has != 0 ? (bool?)(_r.I != 0) : null;\n";
         } else if constexpr (pk == marshal_kind::enum_) {
-            out += ind + "return __r.Has != 0 ? (" +
+            out += ind + "return _r.Has != 0 ? (" +
                    type_ref<bare(optional_payload(bare(R)))>() + "?)(" +
                    type_ref<bare(optional_payload(bare(R)))>() +
-                   ")__r.I : null;\n";
+                   ")_r.I : null;\n";
         } else if constexpr (type_trait(^^std::is_floating_point_v,
                                         bare(optional_payload(bare(R))))) {
             constexpr const char* c{
                 scalar_spell(optional_payload(bare(R))).cs};
-            out += ind + "return __r.Has != 0 ? (" + std::string{c} +
-                   "?)unchecked((" + c + ")__r.F) : null;\n";
+            out += ind + "return _r.Has != 0 ? (" + std::string{c} +
+                   "?)unchecked((" + c + ")_r.F) : null;\n";
         } else {
             constexpr const char* c{
                 scalar_spell(optional_payload(bare(R))).cs};
-            out += ind + "return __r.Has != 0 ? (" + std::string{c} +
-                   "?)unchecked((" + c + ")__r.I) : null;\n";
+            out += ind + "return _r.Has != 0 ? (" + std::string{c} +
+                   "?)unchecked((" + c + ")_r.I) : null;\n";
         }
         return out;
     } else if constexpr (k == marshal_kind::seq_value) {
@@ -348,19 +348,19 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
             constexpr const char* c{scalar_spell(sequence_element(bare(R))).cs};
             ecs = c;
         }
-        std::string out{ind + "var __r = " + pc + ";\n" + check};
-        out += ind + "var __out = new " + ecs + "[__r.Len];\n";
-        out += ind + "if (__r.Len != 0)\n" + ind + "{\n";
-        out += ind + "    fixed (" + ecs + "* __d = __out)\n";
-        out += ind + "        Buffer.MemoryCopy((void*)__r.Data, __d, __r.Len * "
-               "sizeof(" + ecs + "), __r.Len * sizeof(" + ecs + "));\n";
+        std::string out{ind + "var _r = " + pc + ";\n" + check};
+        out += ind + "var _out = new " + ecs + "[_r.Len];\n";
+        out += ind + "if (_r.Len != 0)\n" + ind + "{\n";
+        out += ind + "    fixed (" + ecs + "* _d = _out)\n";
+        out += ind + "        Buffer.MemoryCopy((void*)_r.Data, _d, _r.Len * "
+               "sizeof(" + ecs + "), _r.Len * sizeof(" + ecs + "));\n";
         out += ind + "}\n";
-        out += ind + "if (__r.Data != IntPtr.Zero) "
-               "NativeMethods.welder_free(__r.Data);\n";
-        out += ind + "return __out;\n";
+        out += ind + "if (_r.Data != IntPtr.Zero) "
+               "NativeMethods.welder_free(_r.Data);\n";
+        out += ind + "return _out;\n";
         return out;
     } else {
-        return ind + "var __r = " + pc + ";\n" + check + ind + "return __r;\n";
+        return ind + "var _r = " + pc + ";\n" + check + ind + "return _r;\n";
     }
 }
 
@@ -442,7 +442,7 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
     } else if constexpr (classify(PT) == marshal_kind::seq_ref) {
         cp.wrapper_args += name + "._h_" + container_ref<bare(PT)>();
     } else if constexpr (classify(PT) == marshal_kind::seq_value) {
-        const std::string pin{"__pin" + i};
+        const std::string pin{"_pin" + i};
         std::string ecs{};
         if constexpr (classify(sequence_element(bare(PT))) ==
                       marshal_kind::enum_)
@@ -599,7 +599,7 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
     if (!cp.wrapper_args.empty())
         call_args += (call_args.empty() ? "" : ", ") + cp.wrapper_args;
     call_args += (call_args.empty() ? "" : ", ");
-    call_args += "out WelderError __e";
+    call_args += "out WelderError _e";
     const std::string pc{"NativeMethods." + sym + "(" + call_args + ")"};
     emit_callable_docs<Fn>(wrapper_out, indent, cp);
     constexpr bool ret_unsafe{classify(std::meta::return_type_of(Fn)) ==
@@ -643,18 +643,18 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
     // (which initializes every base level's upcast handle), so construction
     // works identically for roots and derived classes. The static helper
     // exists because a chained `this(...)` argument cannot use `out var`.
-    const std::string helper{"__New" + sym.substr(sym.rfind("_new") + 4)};
+    const std::string helper{"_New" + sym.substr(sym.rfind("_new") + 4)};
     w.members += "        private static " +
                  std::string{cp.needs_unsafe ? "unsafe " : ""} + "IntPtr " +
                  helper + "(" + cp.wrapper_params + ")\n        {\n" +
                  (cp.pin_open.empty() ? "" : "            " + cp.pin_open +
                                              "{\n") +
-                 "            IntPtr __r = NativeMethods." + sym + "(" +
+                 "            IntPtr _r = NativeMethods." + sym + "(" +
                  (cp.wrapper_args.empty() ? std::string{}
                                           : cp.wrapper_args + ", ") +
-                 "out WelderError __e);\n"
-                 "            WelderInterop.ThrowIfError(in __e);\n"
-                 "            return __r;\n" +
+                 "out WelderError _e);\n"
+                 "            WelderInterop.ThrowIfError(in _e);\n"
+                 "            return _r;\n" +
                  (cp.pin_open.empty() ? "" : "            }\n") +
                  "        }\n";
     // Re-list the wrapper parameter NAMES for the chained call.
@@ -665,7 +665,7 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
     }
     w.members += "        public " + w.cs_name + "(" + cp.wrapper_params +
                  ") : this(" + helper + "(" + names + "), true) {" +
-                 (w.is_director ? " __DirBind(); " : "") + "}\n\n";
+                 (w.is_director ? " _DirBind(); " : "") + "}\n\n";
 }
 
 /** The C#/.NET rod: a stateless policy satisfying @ref welder::rod that emits a
@@ -753,19 +753,19 @@ struct rod {
                              " base surface (a non-owning view).</summary>\n"
                              "        public " + bref + " As" + bref +
                              "()\n        {\n"
-                             "            IntPtr __p = NativeMethods." + bsym +
+                             "            IntPtr _p = NativeMethods." + bsym +
                              "(" + w.handle_field + ".DangerousGetHandle());\n"
                              "            GC.KeepAlive(this);\n"
-                             "            var __v = new " + bref +
-                             "(__p, false);\n"
-                             "            __v.__owner = this;\n"
-                             "            return __v;\n        }\n\n";
+                             "            var _v = new " + bref +
+                             "(_p, false);\n"
+                             "            _v._owner = this;\n"
+                             "            return _v;\n        }\n\n";
             }
             ++base_i;
         }
         if constexpr (director_eligible(std::meta::dealias(^^T))) {
             w.is_director = true;
-            w.director_ident = std::string{"__wcs_dir_"} + upath_v<Decl>;
+            w.director_ident = std::string{"welder_dir_"} + upath_v<Decl>;
             _emit_director<T>(m, w);
         }
         // The destructor thunk + its P/Invoke (the SafeHandle's release path).
@@ -890,10 +890,10 @@ struct rod {
                          "constructor).</summary>\n"
                          "        public " + w.cs_name + " Clone()\n"
                          "        {\n"
-                         "            IntPtr __r = NativeMethods." + sym +
-                         "(" + w.handle_field + ", out WelderError __e);\n"
-                         "            WelderInterop.ThrowIfError(in __e);\n"
-                         "            return new " + w.cs_name + "(__r, true);\n"
+                         "            IntPtr _r = NativeMethods." + sym +
+                         "(" + w.handle_field + ", out WelderError _e);\n"
+                         "            WelderInterop.ThrowIfError(in _e);\n"
+                         "            return new " + w.cs_name + "(_r, true);\n"
                          "        }\n\n";
         }
     }
@@ -967,7 +967,7 @@ struct rod {
                                          field_return_policy(
                                              std::meta::type_of(Mem))>(
             "NativeMethods." + getsym + "(" + w.handle_field +
-                ", out WelderError __e)",
+                ", out WelderError _e)",
             "                ", "this");
         w.members += "            }\n";
         if constexpr (!read_only) {
@@ -977,8 +977,8 @@ struct rod {
                               : "                " + vcp.pin_open + "{\n") +
                          "                NativeMethods." + setsym + "(" +
                          w.handle_field + ", " + vcp.wrapper_args +
-                         ", out WelderError __e);\n"
-                         "                WelderInterop.ThrowIfError(in __e);\n" +
+                         ", out WelderError _e);\n"
+                         "                WelderInterop.ThrowIfError(in _e);\n" +
                          (vcp.pin_open.empty() ? std::string{}
                                                : "                }\n") +
                          "            }\n";
@@ -1029,7 +1029,7 @@ struct rod {
                                          ::welder::return_policy_of(
                                              Getter, lang::cs)>(
             "NativeMethods." + getsym + "(" + w.handle_field +
-                ", out WelderError __e)",
+                ", out WelderError _e)",
             "                ", "this");
         w.members += "            }\n";
         if constexpr (Setter != std::meta::info{}) {
@@ -1071,8 +1071,8 @@ struct rod {
                               : "                " + vcp.pin_open + "{\n") +
                          "                NativeMethods." + setsym + "(" +
                          w.handle_field + ", " + vcp.wrapper_args +
-                         ", out WelderError __e);\n"
-                         "                WelderInterop.ThrowIfError(in __e);\n" +
+                         ", out WelderError _e);\n"
+                         "                WelderInterop.ThrowIfError(in _e);\n" +
                          (vcp.pin_open.empty() ? std::string{}
                                                : "                }\n") +
                          "            }\n";
@@ -1139,7 +1139,7 @@ struct rod {
   protected:
     /** Emit virtual slot @a Fn: the ordinary (virtual-dispatch) thunk, a
         qualified base-call thunk, and a `public virtual` wrapper branching on
-        `__isDirector`. Records the slot's C# name for the director
+        `_isDirector`. Records the slot's C# name for the director
         scaffolding's placeholders. */
     template <std::meta::info Fn, class Style>
     static void _emit_virtual_method(class_writer& w, const std::string& name,
@@ -1198,11 +1198,11 @@ struct rod {
                     std::string{
                         wire_return_v<std::meta::return_type_of(Fn)>} +
                     " " + bsym + "(" +
-                    shim_params + ") {\n    auto* __o = reinterpret_cast<" +
+                    shim_params + ") {\n    auto* _o = reinterpret_cast<" +
                     w.cpp_qualified +
                     "*>(self);\n    return wcs::shim::guarded<"
                     "::std::meta::return_type_of(" +
-                    idx + ")>(err, [&]() -> decltype(auto) { return __o->" +
+                    idx + ")>(err, [&]() -> decltype(auto) { return _o->" +
                     w.cpp_qualified + "::" + fid + "(" + conv +
                     "); });\n}\n\n";
             }
@@ -1229,12 +1229,12 @@ struct rod {
                                   (cp.wrapper_args.empty()
                                        ? std::string{}
                                        : ", " + cp.wrapper_args) +
-                                  ", out WelderError __e"};
+                                  ", out WelderError _e"};
             w.members += "        public virtual " +
                          public_return_type<std::meta::return_type_of(Fn),
                                             Style>() +
                          " " + name + "(" + cp.wrapper_params +
-                         ")\n        {\n            if (__isDirector)\n"
+                         ")\n        {\n            if (_isDirector)\n"
                          "            {\n";
             w.members += wrapper_return_body<std::meta::return_type_of(Fn),
                                              Style,
@@ -1329,7 +1329,7 @@ struct rod {
         w.members += "        public override string ToString()\n        {\n";
         w.members += wrapper_return_body<^^std::string, ::welder::naming::none>(
             "NativeMethods." + sym + "(" + w.handle_field +
-                ", out WelderError __e)",
+                ", out WelderError _e)",
             "            ");
         w.members += "        }\n\n";
     }
@@ -1427,7 +1427,7 @@ struct rod {
                                              ::welder::naming::none,
                                              ::welder::return_policy_of(
                                                  Fn, lang::cs)>(
-                "NativeMethods." + sym + "(" + args + ", out WelderError __e)",
+                "NativeMethods." + sym + "(" + args + ", out WelderError _e)",
                 "            ", "this");
             w.members += "        }\n\n";
         } else if constexpr (oi.kind == cs_op_kind::indexer) {
@@ -1445,7 +1445,7 @@ struct rod {
                                              ::welder::return_policy_of(
                                                  Fn, lang::cs)>(
                 "NativeMethods." + sym + "(" + w.handle_field + ", " +
-                    cp.wrapper_args + ", out WelderError __e)",
+                    cp.wrapper_args + ", out WelderError _e)",
                 "                ", "this");
             w.members += "            }\n        }\n\n";
         } else {
@@ -1486,7 +1486,7 @@ struct rod {
             std::string body{wrapper_return_body<
                 std::meta::return_type_of(Fn), ::welder::naming::none,
                 ::welder::return_policy_of(Fn, lang::cs)>(
-                "NativeMethods." + sym + "(" + args + ", out WelderError __e)",
+                "NativeMethods." + sym + "(" + args + ", out WelderError _e)",
                 "            ")};
             if constexpr (oi.kind == cs_op_kind::comparison) {
                 // Binary always; the pairing ledger decides operator-vs-named
@@ -1513,7 +1513,7 @@ struct rod {
                     ::welder::return_policy_of(Fn, lang::cs)>(
                     "NativeMethods." + sym + "(" +
                         (is_member ? "v._h_" + field_ref<^^T>() : std::string{"v"}) +
-                        ", out WelderError __e)",
+                        ", out WelderError _e)",
                     "            ");
                 w.members += "        }\n\n";
             } else {
@@ -1580,25 +1580,25 @@ struct rod {
                                        field_ref<^^T>()};
             std::string other{reversed ? "l" : "r"};
             other += rhs_field;
-            c.body = "            var __c = NativeMethods." + sym + "(" +
+            c.body = "            var _c = NativeMethods." + sym + "(" +
                      self_arg + ", " + other +
-                     ", out WelderError __e);\n"
-                     "            WelderInterop.ThrowIfError(in __e);\n"
+                     ", out WelderError _e);\n"
+                     "            WelderInterop.ThrowIfError(in _e);\n"
                      "            return " + cond + ";\n";
             if (!w._have_comparison(c.op, c.lhs, c.rhs))
                 w.comparisons.push_back(std::move(c));
         };
-        if constexpr (!Covered[0]) record("<", false, "__c == -1");
-        if constexpr (!Covered[1]) record("<=", false, "__c == -1 || __c == 0");
-        if constexpr (!Covered[2]) record(">", false, "__c == 1");
-        if constexpr (!Covered[3]) record(">=", false, "__c == 0 || __c == 1");
+        if constexpr (!Covered[0]) record("<", false, "_c == -1");
+        if constexpr (!Covered[1]) record("<=", false, "_c == -1 || _c == 0");
+        if constexpr (!Covered[2]) record(">", false, "_c == 1");
+        if constexpr (!Covered[3]) record(">=", false, "_c == 0 || _c == 1");
         if (hetero) {
             // The reversed operand order (C++'s rewritten `5 < obj`): the
             // relation flips around the same thunk.
-            if constexpr (!Covered[2]) record("<", true, "__c == 1");
-            if constexpr (!Covered[3]) record("<=", true, "__c == 0 || __c == 1");
-            if constexpr (!Covered[0]) record(">", true, "__c == -1");
-            if constexpr (!Covered[1]) record(">=", true, "__c == -1 || __c == 0");
+            if constexpr (!Covered[2]) record("<", true, "_c == 1");
+            if constexpr (!Covered[3]) record("<=", true, "_c == 0 || _c == 1");
+            if constexpr (!Covered[0]) record(">", true, "_c == -1");
+            if constexpr (!Covered[1]) record(">=", true, "_c == -1 || _c == 0");
         }
     }
 
@@ -1673,42 +1673,42 @@ struct rod {
             " (live element views).</summary>\n"
             "    public sealed class " + V + " : IDisposable\n    {\n"
             "        internal " + V + "Handle _h_" + V + ";\n"
-            "        internal object? __owner;\n"
+            "        internal object? _owner;\n"
             "        internal " + V + "(IntPtr handle, bool owns) { _h_" + V +
             " = new " + V + "Handle(handle, owns); }\n"
-            "        public " + V + "() : this(__New(), true) {}\n"
-            "        private static IntPtr __New()\n        {\n"
-            "            IntPtr __r = NativeMethods." + sym +
-            "_new(out WelderError __e);\n"
-            "            WelderInterop.ThrowIfError(in __e);\n"
-            "            return __r;\n        }\n"
+            "        public " + V + "() : this(_New(), true) {}\n"
+            "        private static IntPtr _New()\n        {\n"
+            "            IntPtr _r = NativeMethods." + sym +
+            "_new(out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n"
+            "            return _r;\n        }\n"
             "        public int Count\n        {\n            get\n"
             "            {\n"
-            "                var __r = NativeMethods." + sym + "_size(_h_" + V +
-            ", out WelderError __e);\n"
-            "                WelderInterop.ThrowIfError(in __e);\n"
-            "                return (int)__r;\n            }\n        }\n"
+            "                var _r = NativeMethods." + sym + "_size(_h_" + V +
+            ", out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "                return (int)_r;\n            }\n        }\n"
             "        public " + E + " this[int i]\n        {\n"
             "            get\n            {\n"
-            "                IntPtr __r = NativeMethods." + sym + "_get(_h_" +
-            V + ", i, out WelderError __e);\n"
-            "                WelderInterop.ThrowIfError(in __e);\n"
-            "                var __v = new " + E + "(__r, false);\n"
-            "                __v.__owner = this;\n"
-            "                return __v;\n            }\n"
+            "                IntPtr _r = NativeMethods." + sym + "_get(_h_" +
+            V + ", i, out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
+            "                var _v = new " + E + "(_r, false);\n"
+            "                _v._owner = this;\n"
+            "                return _v;\n            }\n"
             "            set\n            {\n"
             "                NativeMethods." + sym + "_set(_h_" + V + ", i, "
-            "value._h_" + Ef + ", out WelderError __e);\n"
-            "                WelderInterop.ThrowIfError(in __e);\n"
+            "value._h_" + Ef + ", out WelderError _e);\n"
+            "                WelderInterop.ThrowIfError(in _e);\n"
             "            }\n        }\n"
             "        public void Add(" + E + " item)\n        {\n"
             "            NativeMethods." + sym + "_add(_h_" + V + ", item._h_" +
-            Ef + ", out WelderError __e);\n"
-            "            WelderInterop.ThrowIfError(in __e);\n        }\n"
+            Ef + ", out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n        }\n"
             "        public void Clear()\n        {\n"
             "            NativeMethods." + sym + "_clear(_h_" + V +
-            ", out WelderError __e);\n"
-            "            WelderInterop.ThrowIfError(in __e);\n        }\n"
+            ", out WelderError _e);\n"
+            "            WelderInterop.ThrowIfError(in _e);\n        }\n"
             "        public void Dispose() => _h_" + V + ".Dispose();\n"
             "    }\n\n";
     }
@@ -1732,7 +1732,7 @@ struct rod {
     /** Emit the whole director apparatus for welded virtual type @a T: the
         C++ director subclass (into the document's `directors` section), its
         registration/bind thunks, and the managed scaffolding (callbacks, the
-        override mask, `__DirBind`). See `directors.hpp` for the model. */
+        override mask, `_DirBind`). See `directors.hpp` for the model. */
     template <class T>
     static void _emit_director(module_type& m, class_writer& w) {
         static constexpr auto slots{
@@ -1746,13 +1746,13 @@ struct rod {
         // Plain (uninitialized) members + a value-initialized static: an NSDMI
         // in the nested table would be required before the enclosing class is
         // complete (the static member's {} sits in-class).
-        std::string tbl{"    struct __wcs_table_t {\n"
+        std::string tbl{"    struct wcs_table_t {\n"
                         "        void (*release)(void*);\n"};
         d += "struct " + dir + " final : " + qual + " {\n";
         d += "    using " + qual + "::" + qual.substr(qual.rfind(':') + 1) +
              ";\n";
-        d += "    void* __wcs_ctx{nullptr};\n";
-        d += "    std::uint64_t __wcs_mask{0};\n";
+        d += "    void* wcs_ctx{nullptr};\n";
+        d += "    std::uint64_t wcs_mask{0};\n";
         std::string overrides{};
         std::size_t k{0};
         template for (constexpr auto slot : slots) {
@@ -1813,26 +1813,26 @@ struct rod {
             static constexpr const char* quals{
                 std::define_static_string(slot_qualifiers(slot))};
             overrides += ")" + std::string{quals} + " override {\n";
-            overrides += "        if (__wcs_ctx && (__wcs_mask & (1ull << " +
-                         ks + ")) && __wcs_tbl.s" + ks + ") {\n";
-            overrides += "            welder_error __e{0, nullptr};\n";
+            overrides += "        if (wcs_ctx && (wcs_mask & (1ull << " +
+                         ks + ")) && wcs_tbl.s" + ks + ") {\n";
+            overrides += "            welder_error _e{0, nullptr};\n";
             constexpr bool voidret{
                 classify(std::meta::return_type_of(slot)) ==
                 marshal_kind::void_};
             if constexpr (voidret) {
-                overrides += "            __wcs_tbl.s" + ks + "(__wcs_ctx" +
-                             wire_args + ", &__e);\n";
-                overrides += "            if (__e.code != 0) "
-                             "wcs::shim::rethrow_managed(&__e);\n";
+                overrides += "            wcs_tbl.s" + ks + "(wcs_ctx" +
+                             wire_args + ", &_e);\n";
+                overrides += "            if (_e.code != 0) "
+                             "wcs::shim::rethrow_managed(&_e);\n";
                 overrides += "            return;\n";
             } else {
-                overrides += "            auto __r = __wcs_tbl.s" + ks +
-                             "(__wcs_ctx" + wire_args + ", &__e);\n";
-                overrides += "            if (__e.code != 0) "
-                             "wcs::shim::rethrow_managed(&__e);\n";
+                overrides += "            auto _r = wcs_tbl.s" + ks +
+                             "(wcs_ctx" + wire_args + ", &_e);\n";
+                overrides += "            if (_e.code != 0) "
+                             "wcs::shim::rethrow_managed(&_e);\n";
                 overrides += "            return wcs::shim::from_wire_return<"
                              "::std::meta::return_type_of(" +
-                             idx + ")>(__r);\n";
+                             idx + ")>(_r);\n";
             }
             overrides += "        }\n";
             if constexpr (std::meta::is_pure_virtual(slot)) {
@@ -1852,10 +1852,10 @@ struct rod {
             w.vslots.push_back(class_writer::vslot{sname, vsig, k});
             ++k;
         }
-        tbl += "    };\n    static inline __wcs_table_t __wcs_tbl{};\n";
+        tbl += "    };\n    static inline wcs_table_t wcs_tbl{};\n";
         d += tbl;
-        d += "    ~" + dir + "() override { if (__wcs_ctx && __wcs_tbl.release) "
-             "__wcs_tbl.release(__wcs_ctx); }\n";
+        d += "    ~" + dir + "() override { if (wcs_ctx && wcs_tbl.release) "
+             "wcs_tbl.release(wcs_ctx); }\n";
         d += overrides;
         d += "};\n\n";
         m.doc->directors += d;
@@ -1867,14 +1867,14 @@ struct rod {
         m.doc->record_symbol(bind_sym);
         std::string init_params{"void* release"};
         std::string init_body{"    " + dir +
-                              "::__wcs_tbl.release = "
+                              "::wcs_tbl.release = "
                               "reinterpret_cast<void (*)(void*)>(release);\n"};
         std::string cs_init_params{"IntPtr release"};
         std::string cs_init_args{
             "                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, "
-            "void>)&__Release"};
+            "void>)&_Release"};
         std::string cs_slots{};      // the [UnmanagedCallersOnly] thunks
-        std::string cs_mask{};       // the __OverrideMask body lines
+        std::string cs_mask{};       // the _OverrideMask body lines
         k = 0;
         template for (constexpr auto slot : slots) {
             // Only a slot that is BOUND for cs gets a callback + mask entry: a
@@ -1889,10 +1889,10 @@ struct rod {
                 const std::string ks{std::to_string(k)};
                 std::string wires{};
                 std::string cs_wires{};      // C# fnptr generic args (params)
-                std::string cs_params{};     // __SlotK parameter list
+                std::string cs_params{};     // _SlotK parameter list
                 std::string conv{};          // arg conversions
                 std::string call_args{};
-                std::string typeofs{};       // __OverrideMask GetMethod types
+                std::string typeofs{};       // _OverrideMask GetMethod types
                 std::size_t j{0};
                 template for (constexpr auto p : std::define_static_array(
                                   std::meta::parameters_of(slot))) {
@@ -1919,16 +1919,16 @@ struct rod {
                         call_args += "a" + js + " != 0";
                         typeofs += sep + "typeof(bool)";
                     } else if constexpr (pk == marshal_kind::utf8_string) {
-                        conv += "                string __a" + js +
+                        conv += "                string _a" + js +
                                 " = Marshal.PtrToStringUTF8(a" + js +
                                 ") ?? \"\";\n";
-                        call_args += "__a" + js;
+                        call_args += "_a" + js;
                         typeofs += sep + "typeof(string)";
                     } else if constexpr (pk == marshal_kind::handle) {
-                        conv += "                var __a" + js + " = new " +
+                        conv += "                var _a" + js + " = new " +
                                 type_ref<bare(std::meta::type_of(p))>() +
                                 "(a" + js + ", false);\n";
-                        call_args += "__a" + js;
+                        call_args += "_a" + js;
                         typeofs += sep + "typeof(" +
                                    type_ref<bare(std::meta::type_of(p))>() +
                                    ")";
@@ -1939,7 +1939,7 @@ struct rod {
                     ++j;
                 }
                 init_params += ", void* s" + ks;
-                init_body += "    " + dir + "::__wcs_tbl.s" + ks +
+                init_body += "    " + dir + "::wcs_tbl.s" + ks +
                              " = reinterpret_cast<" +
                              std::string{wire_return_v<
                                  std::meta::return_type_of(slot)>} +
@@ -1962,7 +1962,7 @@ struct rod {
                                 "unmanaged[Cdecl]<IntPtr, " +
                                 cs_wires + "WelderError*, " +
                                 (cs_ret == "void" ? "void" : cs_ret) +
-                                ">)&__Slot" + ks;
+                                ">)&_Slot" + ks;
                 // the method-name placeholder add_method resolves at render
                 static constexpr const char* ssig{std::define_static_string(
                     std::meta::display_string_of(std::meta::type_of(slot)))};
@@ -1973,16 +1973,16 @@ struct rod {
                 cs_slots +=
                     "        [UnmanagedCallersOnly(CallConvs = new[] { "
                     "typeof(CallConvCdecl) })]\n"
-                    "        private static unsafe " + cs_ret + " __Slot" + ks +
-                    "(IntPtr __ctx" + (cs_params.empty() ? "" : ", " + cs_params) +
-                    ", WelderError* __err)\n        {\n"
+                    "        private static unsafe " + cs_ret + " _Slot" + ks +
+                    "(IntPtr _ctx" + (cs_params.empty() ? "" : ", " + cs_params) +
+                    ", WelderError* _err)\n        {\n"
                     "            try\n            {\n"
-                    "                var __self = (" + w.cs_name +
-                    "?)GCHandle.FromIntPtr(__ctx).Target;\n"
-                    "                if (__self is null) throw new "
+                    "                var _self = (" + w.cs_name +
+                    "?)GCHandle.FromIntPtr(_ctx).Target;\n"
+                    "                if (_self is null) throw new "
                     "InvalidOperationException(\"welder: director target "
                     "collected\");\n" + conv;
-                const std::string mcall{"__self." + mname + "(" + call_args +
+                const std::string mcall{"_self." + mname + "(" + call_args +
                                         ")"};
                 if constexpr (rk == marshal_kind::void_) {
                     cs_slots += "                " + mcall + ";\n";
@@ -1996,34 +1996,34 @@ struct rod {
                 } else if constexpr (rk == marshal_kind::handle) {
                     // Clone through the return class's copy thunk so the copy
                     // exists before the managed temporary can be collected.
-                    cs_slots += "                var __ret = " + mcall + ";\n";
-                    cs_slots += "                IntPtr __c = "
+                    cs_slots += "                var _ret = " + mcall + ";\n";
+                    cs_slots += "                IntPtr _c = "
                                 "NativeMethods.welder_" +
                                 std::string{upath_v<bare(
                                     std::meta::return_type_of(slot))>} +
-                                "_clone(__ret._h_" +
+                                "_clone(_ret._h_" +
                                 field_ref<bare(std::meta::return_type_of(slot))>() +
-                                ", out WelderError __e2);\n"
+                                ", out WelderError _e2);\n"
                                 "                "
-                                "WelderInterop.ThrowIfError(in __e2);\n"
-                                "                GC.KeepAlive(__ret);\n"
-                                "                return __c;\n";
+                                "WelderInterop.ThrowIfError(in _e2);\n"
+                                "                GC.KeepAlive(_ret);\n"
+                                "                return _c;\n";
                 } else {
                     cs_slots += "                return " + mcall + ";\n";
                 }
                 cs_slots +=
-                    "            }\n            catch (Exception __ex)\n"
+                    "            }\n            catch (Exception _ex)\n"
                     "            {\n"
-                    "                __err->Code = 7;\n"
-                    "                __err->Message = "
-                    "NativeMethods.welder_dup_utf8(__ex.Message);\n" +
+                    "                _err->Code = 7;\n"
+                    "                _err->Message = "
+                    "NativeMethods.welder_dup_utf8(_ex.Message);\n" +
                     std::string{cs_ret == "void"
                                     ? "                return;\n"
                                     : "                return default;\n"} +
                     "            }\n        }\n";
-                cs_mask += "            if (__NotWrapper(__t.GetMethod(\"" +
+                cs_mask += "            if (_NotWrapper(_t.GetMethod(\"" +
                            mname + "\", new Type[] { " + typeofs +
-                           " })?.DeclaringType)) __m |= 1UL << " + ks + ";\n";
+                           " })?.DeclaringType)) _m |= 1UL << " + ks + ";\n";
             }
             ++k;
         }
@@ -2031,9 +2031,9 @@ struct rod {
                        init_body + "}\n\n";
         m.doc->shim += "void " + bind_sym +
                        "(void* self, void* ctx, std::uint64_t mask) {\n"
-                       "    if (auto* __d = dynamic_cast<" + dir +
+                       "    if (auto* _d = dynamic_cast<" + dir +
                        "*>(reinterpret_cast<" + qual +
-                       "*>(self))) { __d->__wcs_ctx = ctx; __d->__wcs_mask = "
+                       "*>(self))) { _d->wcs_ctx = ctx; _d->wcs_mask = "
                        "mask; }\n}\n\n";
         m.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
                           "void " + init_sym + "(" + cs_init_params + ");\n";
@@ -2046,36 +2046,36 @@ struct rod {
         static constexpr auto ancestors{std::define_static_array(
             welded_ancestors(std::meta::dealias(^^T)))};
         template for (constexpr auto a : ancestors) {
-            anc += " && __d != typeof(" + type_ref<std::meta::dealias(a)>() +
+            anc += " && _d != typeof(" + type_ref<std::meta::dealias(a)>() +
                    ")";
         }
         w.members +=
-            "        private static bool __cbInit;\n"
-            "        private static unsafe void __EnsureCallbacks()\n"
-            "        {\n            if (__cbInit) return;\n"
-            "            __cbInit = true;\n"
+            "        private static bool _cbInit;\n"
+            "        private static unsafe void _EnsureCallbacks()\n"
+            "        {\n            if (_cbInit) return;\n"
+            "            _cbInit = true;\n"
             "            NativeMethods." + init_sym + "(\n" + cs_init_args +
             ");\n        }\n"
             "        [UnmanagedCallersOnly(CallConvs = new[] { "
             "typeof(CallConvCdecl) })]\n"
-            "        private static void __Release(IntPtr ctx) => "
+            "        private static void _Release(IntPtr ctx) => "
             "GCHandle.FromIntPtr(ctx).Free();\n" +
             cs_slots +
-            "        private static ulong __OverrideMask(Type __t)\n"
-            "        {\n            ulong __m = 0;\n"
-            "            if (__t == typeof(" + w.cs_name +
-            ")) return __m;\n" + cs_mask +
-            "            return __m;\n        }\n"
-            "        private static bool __NotWrapper(Type? __d) =>\n"
-            "            __d is not null && __d != typeof(" + w.cs_name + ")" +
+            "        private static ulong _OverrideMask(Type _t)\n"
+            "        {\n            ulong _m = 0;\n"
+            "            if (_t == typeof(" + w.cs_name +
+            ")) return _m;\n" + cs_mask +
+            "            return _m;\n        }\n"
+            "        private static bool _NotWrapper(Type? _d) =>\n"
+            "            _d is not null && _d != typeof(" + w.cs_name + ")" +
             anc + ";\n"
-            "        private void __DirBind()\n        {\n"
-            "            __isDirector = true;\n"
-            "            __EnsureCallbacks();\n"
+            "        private void _DirBind()\n        {\n"
+            "            _isDirector = true;\n"
+            "            _EnsureCallbacks();\n"
             "            NativeMethods." + bind_sym + "(\n                " +
             w.handle_field + ".DangerousGetHandle(),\n                "
             "GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Weak)),\n"
-            "                __OverrideMask(GetType()));\n"
+            "                _OverrideMask(GetType()));\n"
             "            GC.KeepAlive(this);\n        }\n\n";
     }
 
@@ -2201,7 +2201,7 @@ struct rod {
                 public_type<std::meta::type_of(Var), Style>() + " " + vname +
                 "\n        {\n            get\n            {\n";
         body += wrapper_return_body<std::meta::type_of(Var), Style>(
-            "NativeMethods." + base + "_get(out WelderError __e)",
+            "NativeMethods." + base + "_get(out WelderError _e)",
             "                ");
         body += "            }\n";
         if constexpr (!read_only) {
@@ -2212,8 +2212,8 @@ struct rod {
                          ? std::string{}
                          : "                " + vcp.pin_open + "{\n") +
                     "                NativeMethods." + base + "_set(" +
-                    vcp.wrapper_args + ", out WelderError __e);\n"
-                    "                WelderInterop.ThrowIfError(in __e);\n" +
+                    vcp.wrapper_args + ", out WelderError _e);\n"
+                    "                WelderInterop.ThrowIfError(in _e);\n" +
                     (vcp.pin_open.empty() ? std::string{}
                                           : "                }\n") +
                     "            }\n";

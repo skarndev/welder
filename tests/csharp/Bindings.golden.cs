@@ -233,46 +233,46 @@ namespace csharp_cases
     public class Point : IDisposable
     {
         internal PointHandle _h_Point;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Point(IntPtr handle, bool owns) { _h_Point = new PointHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Point() : this(__New_default(), true) {}
+        public Point() : this(_New_default(), true) {}
 
-        private static IntPtr __New_1(int x_, int y_)
+        private static IntPtr _New_1(int x_, int y_)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_new_1(x_, y_, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_new_1(x_, y_, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Point(int x_, int y_) : this(__New_1(x_, y_), true) {}
+        public Point(int x_, int y_) : this(_New_1(x_, y_), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Point Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_clone(_h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Point(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_clone(_h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Point(_r, true);
         }
 
         public int X
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Point_get_x(_h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Point_get_x(_h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Point_set_x(_h_Point, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Point_set_x(_h_Point, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -280,14 +280,14 @@ namespace csharp_cases
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Point_get_y(_h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Point_get_y(_h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Point_set_y(_h_Point, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Point_set_y(_h_Point, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -295,100 +295,100 @@ namespace csharp_cases
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Point_get_stamp(_h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Point_get_stamp(_h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
         }
 
         public int Sum()
         {
-            var __r = NativeMethods.welder_csharp_cases_Point_m_sum_0(_h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Point_m_sum_0(_h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public void Offset(int dx, int dy)
         {
-            NativeMethods.welder_csharp_cases_Point_m_offset_0(_h_Point, dx, dy, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_csharp_cases_Point_m_offset_0(_h_Point, dx, dy, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
 
         public void Offset(int d)
         {
-            NativeMethods.welder_csharp_cases_Point_m_offset_1(_h_Point, d, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_csharp_cases_Point_m_offset_1(_h_Point, d, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
 
         public string Label()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_m_label_0(_h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-            finally { NativeMethods.welder_free(__r); }
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_m_label_0(_h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+            finally { NativeMethods.welder_free(_r); }
         }
 
         public Color Hue()
         {
-            var __r = NativeMethods.welder_csharp_cases_Point_m_hue_0(_h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Point_m_hue_0(_h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public Point Translated(int dx, int dy)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_m_translated_0(_h_Point, dx, dy, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Point(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_m_translated_0(_h_Point, dx, dy, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Point(_r, true);
         }
 
         public static Point Origin()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_s_origin_0(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Point(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_s_origin_0(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Point(_r, true);
         }
 
         public void Explode()
         {
-            NativeMethods.welder_csharp_cases_Point_m_explode_0(_h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_csharp_cases_Point_m_explode_0(_h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
 
         public int Depth
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Point_pget_Depth(_h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Point_pget_Depth(_h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Point_pset_Depth(_h_Point, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Point_pset_Depth(_h_Point, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public static Point operator +(Point l, Point r)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Point_op_plus_b_0(l._h_Point, r._h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Point(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Point_op_plus_b_0(l._h_Point, r._h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Point(_r, true);
         }
 
         public static bool operator ==(Point? l, Point? r)
         {
             if (ReferenceEquals(l, r)) return true;
             if (l is null || r is null) return false;
-            var __r = NativeMethods.welder_csharp_cases_Point_op_equals_equals_b_0(l._h_Point, r._h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Point_op_equals_equals_b_0(l._h_Point, r._h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public static bool operator !=(Point? l, Point? r) => !(l == r);
 
-        public override bool Equals(object? obj) => obj is Point __o && this == __o;
+        public override bool Equals(object? obj) => obj is Point _o && this == _o;
         /// <summary>Reference-identity hash (the C++ type has no hash to mirror).</summary>
         public override int GetHashCode() => base.GetHashCode();
 
@@ -412,46 +412,46 @@ namespace csharp_cases
     public class Size : IDisposable
     {
         internal SizeHandle _h_Size;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Size(IntPtr handle, bool owns) { _h_Size = new SizeHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Size_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Size_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Size() : this(__New_default(), true) {}
+        public Size() : this(_New_default(), true) {}
 
-        private static IntPtr __New_agg(int width, int height)
+        private static IntPtr _New_agg(int width, int height)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Size_new_agg(width, height, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Size_new_agg(width, height, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Size(int width, int height) : this(__New_agg(width, height), true) {}
+        public Size(int width, int height) : this(_New_agg(width, height), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Size Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Size_clone(_h_Size, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Size(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Size_clone(_h_Size, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Size(_r, true);
         }
 
         public int Width
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Size_get_width(_h_Size, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Size_get_width(_h_Size, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Size_set_width(_h_Size, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Size_set_width(_h_Size, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -459,14 +459,14 @@ namespace csharp_cases
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Size_get_height(_h_Size, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Size_get_height(_h_Size, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Size_set_height(_h_Size, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Size_set_height(_h_Size, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -490,56 +490,56 @@ namespace csharp_cases
     public class Holder : IDisposable
     {
         internal HolderHandle _h_Holder;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Holder(IntPtr handle, bool owns) { _h_Holder = new HolderHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Holder_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Holder_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Holder() : this(__New_default(), true) {}
+        public Holder() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Holder Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Holder_clone(_h_Holder, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Holder(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Holder_clone(_h_Holder, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Holder(_r, true);
         }
 
         public Point Item()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Holder_m_item_0(_h_Holder, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            var __v = new Point(__r, false);
-            __v.__owner = this;
-            return __v;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Holder_m_item_0(_h_Holder, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _v = new Point(_r, false);
+            _v._owner = this;
+            return _v;
         }
 
         public Point ItemCopy()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Holder_m_item_copy_0(_h_Holder, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Point(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Holder_m_item_copy_0(_h_Holder, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Point(_r, true);
         }
 
         public Point? Peek(bool give)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Holder_m_peek_0(_h_Holder, give, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            if (__r == IntPtr.Zero) return null;
-            var __v = new Point(__r, false);
-            return __v;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Holder_m_peek_0(_h_Holder, give, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            if (_r == IntPtr.Zero) return null;
+            var _v = new Point(_r, false);
+            return _v;
         }
 
         public int ItemX()
         {
-            var __r = NativeMethods.welder_csharp_cases_Holder_m_item_x_0(_h_Holder, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Holder_m_item_x_0(_h_Holder, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public virtual void Dispose() => _h_Holder.Dispose();
@@ -562,48 +562,48 @@ namespace csharp_cases
     public class Segment : IDisposable
     {
         internal SegmentHandle _h_Segment;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Segment(IntPtr handle, bool owns) { _h_Segment = new SegmentHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Segment_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Segment_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Segment() : this(__New_default(), true) {}
+        public Segment() : this(_New_default(), true) {}
 
-        private static IntPtr __New_1(Point a, Point b)
+        private static IntPtr _New_1(Point a, Point b)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Segment_new_1(a._h_Point, b._h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Segment_new_1(a._h_Point, b._h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Segment(Point a, Point b) : this(__New_1(a, b), true) {}
+        public Segment(Point a, Point b) : this(_New_1(a, b), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Segment Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Segment_clone(_h_Segment, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Segment(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Segment_clone(_h_Segment, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Segment(_r, true);
         }
 
         public Point Start
         {
             get
             {
-                IntPtr __r = NativeMethods.welder_csharp_cases_Segment_get_start(_h_Segment, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                var __v = new Point(__r, false);
-                __v.__owner = this;
-                return __v;
+                IntPtr _r = NativeMethods.welder_csharp_cases_Segment_get_start(_h_Segment, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new Point(_r, false);
+                _v._owner = this;
+                return _v;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Segment_set_start(_h_Segment, @value._h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Segment_set_start(_h_Segment, @value._h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -611,31 +611,31 @@ namespace csharp_cases
         {
             get
             {
-                IntPtr __r = NativeMethods.welder_csharp_cases_Segment_get_end(_h_Segment, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                var __v = new Point(__r, false);
-                __v.__owner = this;
-                return __v;
+                IntPtr _r = NativeMethods.welder_csharp_cases_Segment_get_end(_h_Segment, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new Point(_r, false);
+                _v._owner = this;
+                return _v;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Segment_set_end(_h_Segment, @value._h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Segment_set_end(_h_Segment, @value._h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public int Span()
         {
-            var __r = NativeMethods.welder_csharp_cases_Segment_m_span_0(_h_Segment, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Segment_m_span_0(_h_Segment, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public bool Degenerate()
         {
-            var __r = NativeMethods.welder_csharp_cases_Segment_m_degenerate_0(_h_Segment, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Segment_m_degenerate_0(_h_Segment, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public virtual void Dispose() => _h_Segment.Dispose();
@@ -658,47 +658,47 @@ namespace csharp_cases
     public class Animal : IDisposable
     {
         internal AnimalHandle _h_Animal;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Animal(IntPtr handle, bool owns) { _h_Animal = new AnimalHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Animal_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Animal_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Animal() : this(__New_default(), true) {}
+        public Animal() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Animal Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Animal_clone(_h_Animal, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Animal(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Animal_clone(_h_Animal, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Animal(_r, true);
         }
 
         public int Age
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Animal_get_age(_h_Animal, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Animal_get_age(_h_Animal, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Animal_set_age(_h_Animal, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Animal_set_age(_h_Animal, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public string Kind()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Animal_m_kind_0(_h_Animal, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-            finally { NativeMethods.welder_free(__r); }
+            IntPtr _r = NativeMethods.welder_csharp_cases_Animal_m_kind_0(_h_Animal, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+            finally { NativeMethods.welder_free(_r); }
         }
 
         public virtual void Dispose() => _h_Animal.Dispose();
@@ -721,38 +721,38 @@ namespace csharp_cases
     public class Legged : IDisposable
     {
         internal LeggedHandle _h_Legged;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Legged(IntPtr handle, bool owns) { _h_Legged = new LeggedHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Legged_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Legged_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Legged() : this(__New_default(), true) {}
+        public Legged() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Legged Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Legged_clone(_h_Legged, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Legged(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Legged_clone(_h_Legged, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Legged(_r, true);
         }
 
         public int Legs
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Legged_get_legs(_h_Legged, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Legged_get_legs(_h_Legged, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Legged_set_legs(_h_Legged, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Legged_set_legs(_h_Legged, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -781,35 +781,35 @@ namespace csharp_cases
         /// <summary>This object's Legged base surface (a non-owning view).</summary>
         public Legged AsLegged()
         {
-            IntPtr __p = NativeMethods.welder_csharp_cases_Dog_as_csharp_cases_Legged(_h_Dog.DangerousGetHandle());
+            IntPtr _p = NativeMethods.welder_csharp_cases_Dog_as_csharp_cases_Legged(_h_Dog.DangerousGetHandle());
             GC.KeepAlive(this);
-            var __v = new Legged(__p, false);
-            __v.__owner = this;
-            return __v;
+            var _v = new Legged(_p, false);
+            _v._owner = this;
+            return _v;
         }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Dog_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Dog_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Dog() : this(__New_default(), true) {}
+        public Dog() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Dog Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Dog_clone(_h_Dog, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Dog(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Dog_clone(_h_Dog, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Dog(_r, true);
         }
 
         public string Bark()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Dog_m_bark_0(_h_Dog, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-            finally { NativeMethods.welder_free(__r); }
+            IntPtr _r = NativeMethods.welder_csharp_cases_Dog_m_bark_0(_h_Dog, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+            finally { NativeMethods.welder_free(_r); }
         }
 
         public override void Dispose() { _h_Dog.Dispose(); base.Dispose(); }
@@ -832,46 +832,46 @@ namespace csharp_cases
     public class Basket : IDisposable
     {
         internal BasketHandle _h_Basket;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Basket(IntPtr handle, bool owns) { _h_Basket = new BasketHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Basket_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Basket_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Basket() : this(__New_default(), true) {}
+        public Basket() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Basket Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Basket_clone(_h_Basket, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Basket(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Basket_clone(_h_Basket, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Basket(_r, true);
         }
 
         public unsafe int[] Nums
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Basket_get_nums(_h_Basket, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                var __out = new int[__r.Len];
-                if (__r.Len != 0)
+                var _r = NativeMethods.welder_csharp_cases_Basket_get_nums(_h_Basket, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _out = new int[_r.Len];
+                if (_r.Len != 0)
                 {
-                    fixed (int* __d = __out)
-                        Buffer.MemoryCopy((void*)__r.Data, __d, __r.Len * sizeof(int), __r.Len * sizeof(int));
+                    fixed (int* _d = _out)
+                        Buffer.MemoryCopy((void*)_r.Data, _d, _r.Len * sizeof(int), _r.Len * sizeof(int));
                 }
-                if (__r.Data != IntPtr.Zero) NativeMethods.welder_free(__r.Data);
-                return __out;
+                if (_r.Data != IntPtr.Zero) NativeMethods.welder_free(_r.Data);
+                return _out;
             }
             set
             {
-                fixed (int* __pin0 = @value) {
-                NativeMethods.welder_csharp_cases_Basket_set_nums(_h_Basket, new WelderSeqWire { Data = (IntPtr)__pin0, Len = @value.Length }, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                fixed (int* _pin0 = @value) {
+                NativeMethods.welder_csharp_cases_Basket_set_nums(_h_Basket, new WelderSeqWire { Data = (IntPtr)_pin0, Len = @value.Length }, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
                 }
             }
         }
@@ -880,63 +880,63 @@ namespace csharp_cases
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Basket_get_label(_h_Basket, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                if (__r.Has == 0) return null;
-                IntPtr __s = __r.S;
-                try { return Marshal.PtrToStringUTF8(__s) ?? ""; }
-                finally { NativeMethods.welder_free(__s); }
+                var _r = NativeMethods.welder_csharp_cases_Basket_get_label(_h_Basket, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                if (_r.Has == 0) return null;
+                IntPtr _s = _r.S;
+                try { return Marshal.PtrToStringUTF8(_s) ?? ""; }
+                finally { NativeMethods.welder_free(_s); }
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Basket_set_label(_h_Basket, @value is null ? default : new WelderOptWire { Has = 1, S = NativeMethods.welder_dup_utf8(@value) }, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Basket_set_label(_h_Basket, @value is null ? default : new WelderOptWire { Has = 1, S = NativeMethods.welder_dup_utf8(@value) }, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public int? Find(int v)
         {
-            var __r = NativeMethods.welder_csharp_cases_Basket_m_find_0(_h_Basket, v, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r.Has != 0 ? (int?)unchecked((int)__r.I) : null;
+            var _r = NativeMethods.welder_csharp_cases_Basket_m_find_0(_h_Basket, v, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r.Has != 0 ? (int?)unchecked((int)_r.I) : null;
         }
 
         public unsafe long Total(int[] extra)
         {
-            fixed (int* __pin0 = extra) {
-            var __r = NativeMethods.welder_csharp_cases_Basket_m_total_0(_h_Basket, new WelderSeqWire { Data = (IntPtr)__pin0, Len = extra.Length }, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            fixed (int* _pin0 = extra) {
+            var _r = NativeMethods.welder_csharp_cases_Basket_m_total_0(_h_Basket, new WelderSeqWire { Data = (IntPtr)_pin0, Len = extra.Length }, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
             }
         }
 
         public unsafe double[] Triple()
         {
-            var __r = NativeMethods.welder_csharp_cases_Basket_m_triple_0(_h_Basket, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            var __out = new double[__r.Len];
-            if (__r.Len != 0)
+            var _r = NativeMethods.welder_csharp_cases_Basket_m_triple_0(_h_Basket, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            var _out = new double[_r.Len];
+            if (_r.Len != 0)
             {
-                fixed (double* __d = __out)
-                    Buffer.MemoryCopy((void*)__r.Data, __d, __r.Len * sizeof(double), __r.Len * sizeof(double));
+                fixed (double* _d = _out)
+                    Buffer.MemoryCopy((void*)_r.Data, _d, _r.Len * sizeof(double), _r.Len * sizeof(double));
             }
-            if (__r.Data != IntPtr.Zero) NativeMethods.welder_free(__r.Data);
-            return __out;
+            if (_r.Data != IntPtr.Zero) NativeMethods.welder_free(_r.Data);
+            return _out;
         }
 
         public unsafe void SetTriple(double[] a)
         {
-            fixed (double* __pin0 = a) {
-            NativeMethods.welder_csharp_cases_Basket_m_set_triple_0(_h_Basket, new WelderSeqWire { Data = (IntPtr)__pin0, Len = a.Length }, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            fixed (double* _pin0 = a) {
+            NativeMethods.welder_csharp_cases_Basket_m_set_triple_0(_h_Basket, new WelderSeqWire { Data = (IntPtr)_pin0, Len = a.Length }, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public double TripSum()
         {
-            var __r = NativeMethods.welder_csharp_cases_Basket_m_trip_sum_0(_h_Basket, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Basket_m_trip_sum_0(_h_Basket, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public virtual void Dispose() => _h_Basket.Dispose();
@@ -959,62 +959,62 @@ namespace csharp_cases
     public class Route : IDisposable
     {
         internal RouteHandle _h_Route;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Route(IntPtr handle, bool owns) { _h_Route = new RouteHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Route_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Route_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Route() : this(__New_default(), true) {}
+        public Route() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Route Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Route_clone(_h_Route, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Route(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Route_clone(_h_Route, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Route(_r, true);
         }
 
         public VectorPoint Stops
         {
             get
             {
-                IntPtr __r = NativeMethods.welder_csharp_cases_Route_get_stops(_h_Route, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                var __v = new VectorPoint(__r, false);
-                __v.__owner = this;
-                return __v;
+                IntPtr _r = NativeMethods.welder_csharp_cases_Route_get_stops(_h_Route, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new VectorPoint(_r, false);
+                _v._owner = this;
+                return _v;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Route_set_stops(_h_Route, @value._h_VectorPoint, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Route_set_stops(_h_Route, @value._h_VectorPoint, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public int StopCount()
         {
-            var __r = NativeMethods.welder_csharp_cases_Route_m_stop_count_0(_h_Route, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Route_m_stop_count_0(_h_Route, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public VectorPoint Reversed()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Route_m_reversed_0(_h_Route, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new VectorPoint(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Route_m_reversed_0(_h_Route, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new VectorPoint(_r, true);
         }
 
         public int TotalX(VectorPoint pts)
         {
-            var __r = NativeMethods.welder_csharp_cases_Route_m_total_x_0(_h_Route, pts._h_VectorPoint, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_Route_m_total_x_0(_h_Route, pts._h_VectorPoint, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public virtual void Dispose() => _h_Route.Dispose();
@@ -1037,131 +1037,131 @@ namespace csharp_cases
     public class Shape : IDisposable
     {
         internal ShapeHandle _h_Shape;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Shape(IntPtr handle, bool owns) { _h_Shape = new ShapeHandle(handle, owns); }
 
-        private static bool __cbInit;
-        private static unsafe void __EnsureCallbacks()
+        private static bool _cbInit;
+        private static unsafe void _EnsureCallbacks()
         {
-            if (__cbInit) return;
-            __cbInit = true;
+            if (_cbInit) return;
+            _cbInit = true;
             NativeMethods.welder_csharp_cases_Shape_dir_init(
-                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&__Release,
-                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, WelderError*, IntPtr>)&__Slot0,
-                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, WelderError*, int>)&__Slot1);
+                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, void>)&_Release,
+                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, WelderError*, IntPtr>)&_Slot0,
+                (IntPtr)(delegate* unmanaged[Cdecl]<IntPtr, WelderError*, int>)&_Slot1);
         }
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static void __Release(IntPtr ctx) => GCHandle.FromIntPtr(ctx).Free();
+        private static void _Release(IntPtr ctx) => GCHandle.FromIntPtr(ctx).Free();
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static unsafe IntPtr __Slot0(IntPtr __ctx, WelderError* __err)
+        private static unsafe IntPtr _Slot0(IntPtr _ctx, WelderError* _err)
         {
             try
             {
-                var __self = (Shape?)GCHandle.FromIntPtr(__ctx).Target;
-                if (__self is null) throw new InvalidOperationException("welder: director target collected");
-                return NativeMethods.welder_dup_utf8(__self.Name());
+                var _self = (Shape?)GCHandle.FromIntPtr(_ctx).Target;
+                if (_self is null) throw new InvalidOperationException("welder: director target collected");
+                return NativeMethods.welder_dup_utf8(_self.Name());
             }
-            catch (Exception __ex)
+            catch (Exception _ex)
             {
-                __err->Code = 7;
-                __err->Message = NativeMethods.welder_dup_utf8(__ex.Message);
+                _err->Code = 7;
+                _err->Message = NativeMethods.welder_dup_utf8(_ex.Message);
                 return default;
             }
         }
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        private static unsafe int __Slot1(IntPtr __ctx, WelderError* __err)
+        private static unsafe int _Slot1(IntPtr _ctx, WelderError* _err)
         {
             try
             {
-                var __self = (Shape?)GCHandle.FromIntPtr(__ctx).Target;
-                if (__self is null) throw new InvalidOperationException("welder: director target collected");
-                return __self.Sides();
+                var _self = (Shape?)GCHandle.FromIntPtr(_ctx).Target;
+                if (_self is null) throw new InvalidOperationException("welder: director target collected");
+                return _self.Sides();
             }
-            catch (Exception __ex)
+            catch (Exception _ex)
             {
-                __err->Code = 7;
-                __err->Message = NativeMethods.welder_dup_utf8(__ex.Message);
+                _err->Code = 7;
+                _err->Message = NativeMethods.welder_dup_utf8(_ex.Message);
                 return default;
             }
         }
-        private static ulong __OverrideMask(Type __t)
+        private static ulong _OverrideMask(Type _t)
         {
-            ulong __m = 0;
-            if (__t == typeof(Shape)) return __m;
-            if (__NotWrapper(__t.GetMethod("Name", new Type[] {  })?.DeclaringType)) __m |= 1UL << 0;
-            if (__NotWrapper(__t.GetMethod("Sides", new Type[] {  })?.DeclaringType)) __m |= 1UL << 1;
-            return __m;
+            ulong _m = 0;
+            if (_t == typeof(Shape)) return _m;
+            if (_NotWrapper(_t.GetMethod("Name", new Type[] {  })?.DeclaringType)) _m |= 1UL << 0;
+            if (_NotWrapper(_t.GetMethod("Sides", new Type[] {  })?.DeclaringType)) _m |= 1UL << 1;
+            return _m;
         }
-        private static bool __NotWrapper(Type? __d) =>
-            __d is not null && __d != typeof(Shape);
-        private void __DirBind()
+        private static bool _NotWrapper(Type? _d) =>
+            _d is not null && _d != typeof(Shape);
+        private void _DirBind()
         {
-            __isDirector = true;
-            __EnsureCallbacks();
+            _isDirector = true;
+            _EnsureCallbacks();
             NativeMethods.welder_csharp_cases_Shape_dir_bind(
                 _h_Shape.DangerousGetHandle(),
                 GCHandle.ToIntPtr(GCHandle.Alloc(this, GCHandleType.Weak)),
-                __OverrideMask(GetType()));
+                _OverrideMask(GetType()));
             GC.KeepAlive(this);
         }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Shape_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Shape_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Shape() : this(__New_default(), true) { __DirBind(); }
+        public Shape() : this(_New_default(), true) { _DirBind(); }
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Shape Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Shape_clone(_h_Shape, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Shape(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Shape_clone(_h_Shape, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Shape(_r, true);
         }
 
         public virtual string Name()
         {
-            if (__isDirector)
+            if (_isDirector)
             {
-                IntPtr __r = NativeMethods.welder_csharp_cases_Shape_m_name_0_base(_h_Shape, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-                finally { NativeMethods.welder_free(__r); }
+                IntPtr _r = NativeMethods.welder_csharp_cases_Shape_m_name_0_base(_h_Shape, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+                finally { NativeMethods.welder_free(_r); }
             }
             else
             {
-                IntPtr __r = NativeMethods.welder_csharp_cases_Shape_m_name_0(_h_Shape, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-                finally { NativeMethods.welder_free(__r); }
+                IntPtr _r = NativeMethods.welder_csharp_cases_Shape_m_name_0(_h_Shape, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+                finally { NativeMethods.welder_free(_r); }
             }
         }
 
         public virtual int Sides()
         {
-            if (__isDirector)
+            if (_isDirector)
             {
-                var __r = NativeMethods.welder_csharp_cases_Shape_m_sides_0_base(_h_Shape, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Shape_m_sides_0_base(_h_Shape, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             else
             {
-                var __r = NativeMethods.welder_csharp_cases_Shape_m_sides_0(_h_Shape, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Shape_m_sides_0(_h_Shape, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
         }
 
         public string Describe()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Shape_m_describe_0(_h_Shape, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-            finally { NativeMethods.welder_free(__r); }
+            IntPtr _r = NativeMethods.welder_csharp_cases_Shape_m_describe_0(_h_Shape, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+            finally { NativeMethods.welder_free(_r); }
         }
 
         public virtual void Dispose() => _h_Shape.Dispose();
@@ -1184,8 +1184,8 @@ namespace csharp_cases
     public class Machine : IDisposable
     {
         internal MachineHandle _h_Machine;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Machine(IntPtr handle, bool owns) { _h_Machine = new MachineHandle(handle, owns); }
 
     public enum State : byte
@@ -1211,80 +1211,80 @@ namespace csharp_cases
     public class Gauge : IDisposable
     {
         internal GaugeHandle _h_Machine_Gauge;
-        internal object? __owner;
-        internal bool __isDirector;
+        internal object? _owner;
+        internal bool _isDirector;
         internal Gauge(IntPtr handle, bool owns) { _h_Machine_Gauge = new GaugeHandle(handle, owns); }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_Gauge_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Machine_Gauge_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Gauge() : this(__New_default(), true) {}
+        public Gauge() : this(_New_default(), true) {}
 
-        private static IntPtr __New_1(int v)
+        private static IntPtr _New_1(int v)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_Gauge_new_1(v, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Machine_Gauge_new_1(v, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Gauge(int v) : this(__New_1(v), true) {}
+        public Gauge(int v) : this(_New_1(v), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Gauge Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_Gauge_clone(_h_Machine_Gauge, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Gauge(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Machine_Gauge_clone(_h_Machine_Gauge, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Gauge(_r, true);
         }
 
         public int Value
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Machine_Gauge_get_value(_h_Machine_Gauge, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Machine_Gauge_get_value(_h_Machine_Gauge, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Machine_Gauge_set_value(_h_Machine_Gauge, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Machine_Gauge_set_value(_h_Machine_Gauge, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public virtual void Dispose() => _h_Machine_Gauge.Dispose();
     }
 
-        private static IntPtr __New_default()
+        private static IntPtr _New_default()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_new_default(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_csharp_cases_Machine_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
-        public Machine() : this(__New_default(), true) {}
+        public Machine() : this(_New_default(), true) {}
 
         /// <summary>Copy this instance (the C++ copy constructor).</summary>
         public Machine Clone()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_clone(_h_Machine, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Machine(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Machine_clone(_h_Machine, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Machine(_r, true);
         }
 
         public Machine.State Power
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_Machine_get_power(_h_Machine, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_Machine_get_power(_h_Machine, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Machine_set_power(_h_Machine, @value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Machine_set_power(_h_Machine, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -1292,30 +1292,30 @@ namespace csharp_cases
         {
             get
             {
-                IntPtr __r = NativeMethods.welder_csharp_cases_Machine_get_dial(_h_Machine, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                var __v = new Machine.Gauge(__r, false);
-                __v.__owner = this;
-                return __v;
+                IntPtr _r = NativeMethods.welder_csharp_cases_Machine_get_dial(_h_Machine, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new Machine.Gauge(_r, false);
+                _v._owner = this;
+                return _v;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_Machine_set_dial(_h_Machine, @value._h_Machine_Gauge, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_Machine_set_dial(_h_Machine, @value._h_Machine_Gauge, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
         public void TurnOn()
         {
-            NativeMethods.welder_csharp_cases_Machine_m_turn_on_0(_h_Machine, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_csharp_cases_Machine_m_turn_on_0(_h_Machine, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
 
         public Machine.Gauge Peak()
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_Machine_m_peak_0(_h_Machine, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return new Machine.Gauge(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_Machine_m_peak_0(_h_Machine, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Machine.Gauge(_r, true);
         }
 
         public virtual void Dispose() => _h_Machine.Dispose();
@@ -1339,49 +1339,49 @@ namespace csharp_cases
     public sealed class VectorPoint : IDisposable
     {
         internal VectorPointHandle _h_VectorPoint;
-        internal object? __owner;
+        internal object? _owner;
         internal VectorPoint(IntPtr handle, bool owns) { _h_VectorPoint = new VectorPointHandle(handle, owns); }
-        public VectorPoint() : this(__New(), true) {}
-        private static IntPtr __New()
+        public VectorPoint() : this(_New(), true) {}
+        private static IntPtr _New()
         {
-            IntPtr __r = NativeMethods.welder_vec_csharp_cases_Point_new(out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            IntPtr _r = NativeMethods.welder_vec_csharp_cases_Point_new(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
         public int Count
         {
             get
             {
-                var __r = NativeMethods.welder_vec_csharp_cases_Point_size(_h_VectorPoint, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return (int)__r;
+                var _r = NativeMethods.welder_vec_csharp_cases_Point_size(_h_VectorPoint, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return (int)_r;
             }
         }
         public Point this[int i]
         {
             get
             {
-                IntPtr __r = NativeMethods.welder_vec_csharp_cases_Point_get(_h_VectorPoint, i, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                var __v = new Point(__r, false);
-                __v.__owner = this;
-                return __v;
+                IntPtr _r = NativeMethods.welder_vec_csharp_cases_Point_get(_h_VectorPoint, i, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                var _v = new Point(_r, false);
+                _v._owner = this;
+                return _v;
             }
             set
             {
-                NativeMethods.welder_vec_csharp_cases_Point_set(_h_VectorPoint, i, value._h_Point, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_vec_csharp_cases_Point_set(_h_VectorPoint, i, value._h_Point, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
         public void Add(Point item)
         {
-            NativeMethods.welder_vec_csharp_cases_Point_add(_h_VectorPoint, item._h_Point, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_vec_csharp_cases_Point_add(_h_VectorPoint, item._h_Point, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
         public void Clear()
         {
-            NativeMethods.welder_vec_csharp_cases_Point_clear(_h_VectorPoint, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_vec_csharp_cases_Point_clear(_h_VectorPoint, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
         public void Dispose() => _h_VectorPoint.Dispose();
     }
@@ -1390,46 +1390,46 @@ namespace csharp_cases
     {
         public static Point? MakePoint(int x, int y)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_f_make_point_0(x, y, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            if (__r == IntPtr.Zero) return null;
-            return new Point(__r, true);
+            IntPtr _r = NativeMethods.welder_csharp_cases_f_make_point_0(x, y, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            if (_r == IntPtr.Zero) return null;
+            return new Point(_r, true);
         }
 
         public static void Reject(int v)
         {
-            NativeMethods.welder_csharp_cases_f_reject_0(v, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
+            NativeMethods.welder_csharp_cases_f_reject_0(v, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
         }
 
         /// <summary>Add two numbers.</summary>
         public static int Add(int a, int b)
         {
-            var __r = NativeMethods.welder_csharp_cases_f_add_0(a, b, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_f_add_0(a, b, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public static string Greet(string name)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_f_greet_0(name, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-            finally { NativeMethods.welder_free(__r); }
+            IntPtr _r = NativeMethods.welder_csharp_cases_f_greet_0(name, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+            finally { NativeMethods.welder_free(_r); }
         }
 
         public static int Answer
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_v_answer_get(out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_v_answer_get(out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
             set
             {
-                NativeMethods.welder_csharp_cases_v_answer_set(@value, out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
+                NativeMethods.welder_csharp_cases_v_answer_set(@value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
             }
         }
 
@@ -1437,39 +1437,39 @@ namespace csharp_cases
         {
             get
             {
-                var __r = NativeMethods.welder_csharp_cases_v_golden_get(out WelderError __e);
-                WelderInterop.ThrowIfError(in __e);
-                return __r;
+                var _r = NativeMethods.welder_csharp_cases_v_golden_get(out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
             }
         }
 
         public static int AgeOf(Animal a)
         {
-            var __r = NativeMethods.welder_csharp_cases_f_age_of_0(a._h_Animal, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_f_age_of_0(a._h_Animal, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
         public static Point? MaybePoint(bool give)
         {
-            var __r = NativeMethods.welder_csharp_cases_f_maybe_point_0(give, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r.Has != 0 ? new Point(__r.P, true) : null;
+            var _r = NativeMethods.welder_csharp_cases_f_maybe_point_0(give, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r.Has != 0 ? new Point(_r.P, true) : null;
         }
 
         public static Level? MaybeLevel(bool give)
         {
-            var __r = NativeMethods.welder_csharp_cases_f_maybe_level_0(give, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r.Has != 0 ? (Level?)(Level)__r.I : null;
+            var _r = NativeMethods.welder_csharp_cases_f_maybe_level_0(give, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r.Has != 0 ? (Level?)(Level)_r.I : null;
         }
 
         public static string DescribeShape(Shape s)
         {
-            IntPtr __r = NativeMethods.welder_csharp_cases_f_describe_shape_0(s._h_Shape, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            try { return Marshal.PtrToStringUTF8(__r) ?? ""; }
-            finally { NativeMethods.welder_free(__r); }
+            IntPtr _r = NativeMethods.welder_csharp_cases_f_describe_shape_0(s._h_Shape, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
+            finally { NativeMethods.welder_free(_r); }
         }
 
     }
@@ -1478,9 +1478,9 @@ namespace csharp_cases
     {
         public static int Twice(int v)
         {
-            var __r = NativeMethods.welder_csharp_cases_inner_f_twice_0(v, out WelderError __e);
-            WelderInterop.ThrowIfError(in __e);
-            return __r;
+            var _r = NativeMethods.welder_csharp_cases_inner_f_twice_0(v, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
         }
 
     }

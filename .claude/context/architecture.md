@@ -422,7 +422,7 @@ Phase-gated: what the gate admits but the marshalling layer cannot yet carry
 is policy-mapped (type_map.hpp `handle_return_of`, consumed by BOTH sides):
 owned copy/move, adopted pointer, or a non-owning view — `reference_internal`
 (and every non-const class-typed field) pins the parent via the view's
-managed `__owner`. (`welder::rods` is deliberately a grouping
+managed `_owner`. (`welder::rods` is deliberately a grouping
 namespace with room for non-rod helpers alongside the rods, e.g. `welder::rods::python`
 / `welder::rods::lua`.)
 

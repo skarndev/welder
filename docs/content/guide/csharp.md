@@ -183,7 +183,7 @@ WELDER_CSHARP_MAIN(mymod, "mymod.hpp", "mymod_native")
 The [`return_policy`](return-policies.md) annotation is honored exactly as on
 the Python rods. A **view** wraps the same C++ object without owning it
 (`Dispose` releases nothing); under `reference_internal` — and for every
-class-typed field — the view also stores its parent in an internal `__owner`
+class-typed field — the view also stores its parent in an internal `_owner`
 reference, so the parent cannot be garbage-collected (and its C++ object
 destroyed) while the view is reachable. Given this C++:
 
@@ -208,7 +208,7 @@ var holder = new Holder();
 var v = holder.Current();  // reference_internal -> a live view of holder.item
 v.X = 55;                  // writes the C++ member through the view
 holder = null!;
-GC.Collect();              // holder stays pinned by v.__owner — v stays valid
+GC.Collect();              // holder stays pinned by v._owner — v stays valid
 
 holder = new Holder();
 holder.Item.X = 100;       // the FIELD is a live view too: writes go through

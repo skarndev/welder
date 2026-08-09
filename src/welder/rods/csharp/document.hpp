@@ -457,7 +457,7 @@ struct class_writer {
         const std::string self_ph{std::string{"\x01"} + cpp_qualified + "\x02"};
         if (_have_comparison("==", self_ph, self_ph)) {
             out += "        public override bool Equals(object? obj) => obj is " +
-                   cs_name + " __o && this == __o;\n";
+                   cs_name + " _o && this == _o;\n";
             out += "        /// <summary>Reference-identity hash (the C++ type "
                    "has no hash to mirror).</summary>\n";
             out += "        public override int GetHashCode() => "
@@ -498,10 +498,10 @@ struct class_writer {
             // The reference_internal anchor: a view stores its parent here so
             // the parent cannot be collected while the view lives. Declared on
             // the hierarchy root only (derived levels inherit it).
-            out += "        internal object? __owner;\n";
+            out += "        internal object? _owner;\n";
             // Whether this instance was constructed from C# (a director): its
             // virtual-slot methods then take the qualified base-call path.
-            out += "        internal bool __isDirector;\n";
+            out += "        internal bool _isDirector;\n";
             out += "        internal " + cs_name + "(IntPtr handle, bool owns) { " +
                    handle_field + " = new " + cs_name +
                    "Handle(handle, owns); }\n\n";

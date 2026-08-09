@@ -14,8 +14,8 @@ method-backed properties, enums (underlying-typed, per-enumerator docs), namespa
 variables, submodules, docs; the FULL exception taxonomy (welder_error out-param →
 BCL exception mapping) and the rv:: ownership mapping (handle_return_of in
 type_map.hpp: value/&/copy → owned heap-copy, ptr default/take_ownership →
-adopted, reference → view, reference_internal → view + C# __owner pinning; a
-non-const class-typed FIELD is a live view with __owner, mirroring
+adopted, reference → view, reference_internal → view + C# _owner pinning; a
+non-const class-typed FIELD is a live view with _owner, mirroring
 def_readwrite's reference_internal; pointer returns nullable `T?`). keep_alive =
 documented-ignored (like the Lua rods). Operators (Phase 3): the full add_operator/add_comparisons/add_stringifier
 set — static C# operators (member + anchored/reflected free entries, per-overload
@@ -36,10 +36,10 @@ internal (IntPtr,bool) ctor through compiled upcast thunks
 (shim::upcast<From,To> = static_cast → MI/virtual offsets exact; the diamond
 case runs with WELDER_TEST_MULTIPLE_INHERITANCE defined in shared_seam.hpp).
 First welded base = the C# base class; further bases = As<Base>() non-owning
-views (__owner-pinned); non-welded bases flatten via the carriage as usual.
+views (_owner-pinned); non-welded bases flatten via the carriage as usual.
 A handle-typed argument site always spells `<name>._h_<placeholder>` — the
 STATIC param type picks the right level. Public ctors chain
-`: this(__New_k(args), true)` through a private static helper (out-var can't
+`: this(_New_k(args), true)` through a private static helper (out-var can't
 appear in a chained-this argument). Dispose is virtual (root) / override.
 Shared-case widening so far: retpolicy.hpp Inner/Owner (view/snapshot),
 operators.hpp + inheritance.hpp whole files (bound via
@@ -53,9 +53,9 @@ re-derived wcs::director_slot(^^T,k), converting through shim::to_wire_arg /
 from_wire_return — a class-by-value return is CLONED managed-side through the
 class's _clone thunk before crossing, avoiding the GC race). C#-constructed
 instances always construct the director (construct_as keeps the handle
-T-adjusted); ctors chain __DirBind() (weak GCHandle ctx + reflection-computed
-override mask; __NotWrapper excludes the welded ancestor wrappers). Wrapper
-slot methods are `public virtual` + origin-branched: __isDirector → the
+T-adjusted); ctors chain _DirBind() (weak GCHandle ctx + reflection-computed
+override mask; _NotWrapper excludes the welded ancestor wrappers). Wrapper
+slot methods are `public virtual` + origin-branched: _isDirector → the
 qualified base-call thunk `sym_base` (guarded<> over a text-emitted
 `__o->T::name(to_cpp<...>(a))` — this is what terminates base.Method());
 else the ordinary virtual thunk. Slot↔method matching is RUNTIME (class_writer
@@ -93,7 +93,7 @@ name "Vector"+<elem placeholder> resolves via the render pass's RESCAN
 generates once per instantiation (document::claim_container): 7 thunks
 (welder_vec_<elem>_new/destroy/size/get/set/add/clear → shim::vec_* templates,
 bounds-checked at() → OOR) + the C# wrapper (SafeHandle, Count, live-view
-indexer with __owner pinning, Add/Clear, public parameterless ctor);
+indexer with _owner pinning, Add/Clear, public parameterless ctor);
 signature-driven collection via _collect_containers in every rod hook
 (operators excepted — known gap). gcc16: a splice as template arg must be
 parenthesized/aliased (`using El = [:E:]` before std::vector<El>).
