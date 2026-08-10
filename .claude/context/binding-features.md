@@ -140,6 +140,25 @@ Real-library gap-closing (found by pointing the rod at wowlib, whose whole API i
 STILL UNMARSHALLABLE (wowlib excludes ~10 members for cs): nested containers
 (`vector<vector<T>>`, `vector<array<T,N>>`) and `vector<std::string>` — the
 latter needs a pointer-array wire the rod does not emit yet.
+TWO BUGS from ONE blind spot — a class-template SPECIALIZATION has no identifier:
+- `named_field`/`named_member` searched only the anchor's OWN members. The rod
+  anchors on the DECLARING scope, falling back to the bound type when that scope
+  is unspellable — but the old comment's claim that the declaring scope then IS
+  the bound type is false for a non-welded base that is itself a specialization
+  (`M2Root<V> : DataPreWotlk<V>`), which is wowlib's whole shape. 318 inherited
+  members failed the shim's own drift guard. Now falls back to `public_bases`,
+  derived-first, PER SCOPE (not a merged sequence): `index_of_named_member`
+  counts within the declaring class, so a base must be indexed the same way, and
+  a name declared in the derived scope must STOP the search rather than reach for
+  a same-named base overload. Shim-side consteval only — emits no text, so
+  goldens cannot move.
+- `underscore_path` drops identifier-less segments, so every specialization in a
+  namespace collapsed onto one C symbol and the generated vector/array/shared_ptr
+  thunks duplicated (welder's own `#error` guard caught it, 315x). New
+  `symbol_token` = underscore_path when spellable, else the display string
+  (which spells the template args) sanitized to `[A-Za-z0-9_]`; `symtok_v` is the
+  variable-template form, used by the 3 symbol sites whose entity can be a
+  specialization. Spellable entities unchanged → goldens byte-identical.
 Reference vectors (Phase 6b): vector<welded> → marshal_kind::seq_ref, which
 PIGGYBACKS the whole handle machinery (to_cpp deref, guarded's
 handle_return_of ownership incl. views, live non-const field views,
