@@ -135,7 +135,39 @@ try { boundary.At(99); }
 catch (ArgumentOutOfRangeException ex) { Console.WriteLine(ex.Message); }
 ```
 
-## How the shim stays correct: splice, don't respell
+### `std::expected` becomes the exception channel
+
+A library that returns `std::expected<T, E>` rather than throwing does **not**
+get a result object in C#: .NET's failure channel *is* the exception, and the
+wire already carries one. So `std::expected<T, E>` crosses as plain `T`, and the
+error branch throws — the whole generator sees a `Result<T>`-returning method as
+a `T`-returning one, and only the shim knows the difference.
+
+```cpp
+template <class T> using Result = std::expected<T, Fault>;
+
+struct [[=welder::weld]] Crate {
+    Result<std::int32_t> checked_weight() const;   // C#: int CheckedWeight()
+    Result<void>         validate() const;         // C#: void Validate()
+    Result<Crate>        clone_heavier() const;    // C#: Crate CloneHeavier()
+};
+```
+
+```csharp
+int w = crate.CheckedWeight();          // value branch: just the value
+try { crate.Validate(); }
+catch (WelderNativeException ex) { Console.WriteLine(ex.Message); }
+```
+
+The error type is yours, so welder has to be *told* how to render it. It takes
+the first spelling `E` actually offers, most specific first: an ADL
+**`to_string(e)`** (the customization point — define one beside your error type
+and it wins), a `.what()`, direct string-ness, a `std::formatter`, or an
+`operator<<`. A type offering none of these is a designed compile error naming
+the fix rather than a silent "operation failed".
+
+`std::expected` in **parameter** position is not marshalled — a fallible value
+travelling *into* a call has no managed counterpart; pass the payload instead.
 
 The generated `shim.cpp` is compiled **with reflection enabled** against the
 same welded header. Each thunk body is a one-liner delegating into a compiled
@@ -204,6 +236,10 @@ CI matrix. The end-to-end walkthrough is cookbook recipe
 | arithmetic scalars | fixed-width (`std::int32_t`, …) | `int` / `byte` / `double` / … |
 | `bool` | `bool` | `bool` (`[MarshalAs(U1)]`) |
 | `std::string` / `string_view` / `char*` | UTF-8 `const char*` in; malloc'd out (freed via `welder_free`) | `string` |
+| `std::filesystem::path` | the same UTF-8 `const char*` (out via `u8string()`) | `string` |
+| `std::byte` | `std::uint8_t` | `byte` (so a `vector<byte>` is a `byte[]`) |
+| `std::expected<T, E>` | the wire of `T`; the error branch **throws** | `T` — see [below](#stdexpected-becomes-the-exception-channel) |
+| `std::span<T>` **parameter** | `welder_seq_wire` over the pinned managed array | `T[]` — **inbound only** |
 | welded enum | its underlying type | the mirrored `enum` |
 | welded class (param) | opaque `void*` | the wrapper (its `SafeHandle`) |
 | welded class (value/`&` return, default or `rv::copy`) | owned `void*` (heap copy — pybind11's `automatic`) | the wrapper, owning |
@@ -303,8 +339,16 @@ generation-time error — a sink taking ownership from a GC-owned wrapper is
 ambiguous, so pass the raw object and let the C++ side copy, or exclude the
 member for C#.
 
+A **`std::span`** is the mirror image of `unique_ptr`: inbound only. As a
+parameter it is exactly the pinned managed array a scalar/enum sequence already
+passes, which is a span's contract — the view is valid for the call. As a
+**return or a field** it would hand C# a view of a buffer it neither owns nor can
+observe the lifetime of, so it is refused there.
+
 What the [bindability gate](bindability.md) admits but the C# rod cannot
 marshal — `std::variant` (C# has no sum type), class-keyed or
-custom-comparator maps, nested container-of-container wrappers — fails
+custom-comparator maps, nested container-of-container wrappers
+(`vector<vector<T>>`, `vector<array<T, N>>`), a `vector<std::string>` (the
+pointer-array wire is not emitted yet), an outbound `std::span` — fails
 **loudly at generation time** with a designed diagnostic naming the escape
 (`mark::exclude(welder::lang::cs)`), never a silently-corrupting `void*`.
