@@ -3,8 +3,12 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <concepts>   // expected_error_text's rendering ladder
 #include <exception>
+#include <filesystem> // dup_utf8's path overload
+#include <format>     // expected_error_text's std::formattable rung
 #include <functional>
+#include <sstream>    // expected_error_text's operator<< rung
 #include <meta>
 #include <new>
 #include <stdexcept>
@@ -115,6 +119,31 @@ inline char* dup(std::string_view s) noexcept {
     return p;
 }
 
+/** Duplicate a `utf8_string`-kind C++ value into the malloc'd wire buffer.
+
+    Overloaded rather than folded into @ref dup because the family is not one
+    type: `std::string` / `std::string_view` / `char*` all convert to
+    `std::string_view` directly, while a `std::filesystem::path` does not — it
+    must be *asked* for its text. `u8string()` is the portable UTF-8 spelling
+    (POSIX `native()` is already UTF-8, but Windows' is UTF-16 and `string()`
+    would narrow it through the active code page, mangling non-ASCII paths); the
+    `char8_t` buffer is byte-identical to the `char` one the wire carries.
+    One constrained template rather than two overloads: `std::string` converts to
+    BOTH `std::string_view` and `std::filesystem::path`, so an overload pair is
+    ambiguous for the commonest case.
+    @tparam S the C++ type of the value (deduced).
+    @param s  the value to marshal out. */
+template <class S>
+inline char* dup_utf8(const S& s) noexcept {
+    if constexpr (std::is_same_v<std::remove_cvref_t<S>, std::filesystem::path>) {
+        const std::u8string u8{s.u8string()};
+        return dup(std::string_view{reinterpret_cast<const char*>(u8.data()),
+                                    u8.size()});
+    } else {
+        return dup(std::string_view{s});
+    }
+}
+
 /** Reset @a err to success (every thunk's first act). */
 inline void clear(welder_error* err) noexcept {
     if (err) {
@@ -211,7 +240,7 @@ welder_opt_wire tuple_elem_to_slot(const auto& v) {
     welder_opt_wire s{};
     s.has = 1;
     if constexpr (k == marshal_kind::utf8_string)
-        s.s = dup(std::string_view{v});
+        s.s = dup_utf8(v);
     else if constexpr (k == marshal_kind::handle) {
         using Bare = [:bare(E):];
         s.p = new Bare(v);
@@ -323,18 +352,93 @@ consteval std::meta::info wire_return_type() {
     else if constexpr (k == marshal_kind::seq_value ||
                        k == marshal_kind::tuple_value)
         return ^^welder_seq_wire;
+    else if constexpr (bare(R) == std::meta::dealias(^^std::byte))
+        // A scalar by classification, but a SCOPED ENUM by the language: it
+        // will not implicitly convert to the `std::uint8_t` the generator
+        // spelled, so name that width here and let the cast be explicit.
+        // Its UNDERLYING type, not `^^std::uint8_t` — that name is a
+        // using-declaration in libstdc++, which `^^` cannot reflect.
+        return std::meta::underlying_type(bare(R));
     else // scalar / boolean
         return bare(R);
 }
 
+/** The exception message for the error branch of a `std::expected`.
+
+    `std::expected`'s error type is a user type welder knows nothing about, so
+    this picks the first spelling the type actually offers, in decreasing order of
+    specificity: an explicit ADL `to_string(e)` (the customization point — define
+    one beside your error type and it wins), a `.what()` (an exception-shaped
+    error), direct string-ness, a `std::formatter`, or an `operator<<`. A type
+    offering none of these is a **designed compile error** naming the fix, rather
+    than a silently useless "operation failed".
+    @tparam E the error type.
+    @param e  the error value. */
+template <class E>
+std::string expected_error_text(const E& e) {
+    if constexpr (requires { { to_string(e) } -> std::convertible_to<std::string>; })
+        return std::string{to_string(e)};
+    else if constexpr (requires { { e.what() } -> std::convertible_to<std::string>; })
+        return std::string{e.what()};
+    else if constexpr (std::convertible_to<E, std::string_view>)
+        return std::string{std::string_view{e}};
+    else if constexpr (std::formattable<E, char>)
+        return std::format("{}", e);
+    else if constexpr (requires(std::ostringstream& os) { os << e; }) {
+        std::ostringstream os{};
+        os << e;
+        return os.str();
+    } else {
+        static_assert(
+            false,
+            "welder: the error type of this std::expected cannot be rendered as "
+            "a message, so the C#/.NET exception it becomes would carry none. "
+            "Give it an ADL to_string(e), a .what(), a std::formatter or an "
+            "operator<< — or mark::exclude the member for lang::cs.");
+    }
+}
+
+/** Throw the error branch of a `std::expected` as the exception the thunk's
+    catch chain converts into the managed error slot. `std::runtime_error` lands
+    on @ref error_code::std_exception → `WelderNativeException` managed-side,
+    carrying @ref expected_error_text. */
+template <class E>
+[[noreturn]] void throw_expected_error(const E& e) {
+    throw std::runtime_error{expected_error_text(e)};
+}
+
 /** Run @a f under the error contract: convert the C++ result (type @a R,
     under return policy @a Rv for a welded-class result) to its wire form,
-    inside the @ref caught boundary. */
+    inside the @ref caught boundary.
+
+    A `std::expected` result is **unwrapped** here and only here: the value
+    branch continues as a plain @a T return (every downstream spelling already
+    saw @a T — `classify`/`bare` peel the wrapper), and the error branch throws,
+    reaching the managed side through the `welder_error` slot the thunk already
+    carries. That is why C# sees `T Method()` rather than a result object: .NET's
+    failure channel *is* the exception. */
 template <std::meta::info R, ::welder::rv_kind Rv = ::welder::rv_kind::automatic,
           class F>
 auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
     using Wire = [:wire_return_type<R>():];
     constexpr marshal_kind k{classify(R)};
+    if constexpr (is_expected(R)) {
+        // Re-enter with the peeled value type; the inner call's wire type is the
+        // same one by construction (wire_return_type classifies, and classify
+        // peels), so this returns exactly Wire.
+        constexpr std::meta::info V{peel_expected(R)};
+        // BY VALUE, never `decltype(auto)`: the payload lives inside the local
+        // expected, so deducing a reference to `*r` would hand the outer
+        // marshalling a dangling reference the moment this lambda returns.
+        using VT = [:std::meta::remove_cvref(V):];
+        return guarded<V, Rv>(err, [&f]() -> VT {
+            auto r{f()};
+            if (!r.has_value())
+                throw_expected_error(r.error());
+            if constexpr (!std::is_void_v<VT>)
+                return std::move(*r);
+        });
+    } else
     return caught<Wire>(err, [&]() -> Wire {
         if constexpr (k == marshal_kind::void_) {
             f();
@@ -345,7 +449,7 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
                 const char* r{f()};
                 return r ? dup(r) : nullptr;
             } else {
-                return dup(std::string_view{f()});
+                return dup_utf8(f());
             }
         } else if constexpr (k == marshal_kind::unique_ptr_) {
             // Ownership transfers: release into an owned handle (may be null).
@@ -402,7 +506,7 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
             if (o.has_value()) {
                 w.has = 1;
                 if constexpr (pk == marshal_kind::utf8_string)
-                    w.s = dup(std::string_view{*o}); // managed side frees
+                    w.s = dup_utf8(*o); // managed side frees
                 else if constexpr (pk == marshal_kind::handle) {
                     using Bare = [:bare(optional_payload(bare(R))):];
                     w.p = new Bare(*o); // an OWNED copy managed-side

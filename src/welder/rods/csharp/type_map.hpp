@@ -1,6 +1,8 @@
 #pragma once
 #include <array>    // ^^std::array (the value-sequence family)
 #include <cstddef>
+#include <expected>   // ^^std::expected (the fallible-result family)
+#include <filesystem> // ^^std::filesystem::path (a UTF-8 string on the wire)
 #include <map>      // ^^std::map (the reference-map family)
 #include <memory>   // ^^std::shared_ptr / ^^std::unique_ptr
 #include <tuple>    // ^^std::tuple
@@ -8,6 +10,7 @@
 #include <utility>  // ^^std::pair
 #include <meta>
 #include <optional> // ^^std::optional
+#include <span>     // ^^std::span (the inbound-only sequence)
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -280,7 +283,8 @@ enum class marshal_kind {
     void_,       /**< `void` (return only). */
     scalar,      /**< An arithmetic type passed by value. */
     boolean,     /**< `bool` — one byte, `[MarshalAs(U1)]` on the managed side. */
-    utf8_string, /**< `std::string` / `std::string_view` / `char*` — UTF-8. */
+    utf8_string, /**< `std::string` / `std::string_view` / `char*` /
+                      `std::filesystem::path` — UTF-8. */
     enum_,       /**< A welded enum: crosses as its underlying value (`enum : <u>`). */
     handle,      /**< A welded class: crosses as an opaque `void*`/`IntPtr`. */
     optional_,   /**< `std::optional` of a leaf kind: crosses by value as the
@@ -359,6 +363,14 @@ consteval bool is_fixed_sequence(std::meta::info type) {
     return is_specialization_of(type, ^^std::array);
 }
 
+/** Whether @a type (cv/ref stripped) is a `std::span` — the non-owning sequence,
+    admitted in parameter position only. @see require_marshallable */
+consteval bool is_span(std::meta::info type) {
+    return is_specialization_of(
+        std::meta::dealias(std::meta::substitute(^^std::remove_cvref_t, {type})),
+        ^^std::span);
+}
+
 /** `std::array<T, N>`'s extent N. */
 consteval std::size_t fixed_extent(std::meta::info type) {
     return std::meta::extract<std::size_t>(
@@ -370,9 +382,56 @@ consteval bool type_trait(std::meta::info trait_var, std::meta::info t) {
     return std::meta::extract<bool>(std::meta::substitute(trait_var, {t}));
 }
 
-/** The cv/ref/pointer-stripped bare type of @a type. */
+/** Is @a type (after cv/ref stripping) a `std::expected` — the fallible-result
+    family that crosses as its VALUE type, the error branch becoming a thrown
+    exception? @param type a reflection of the (possibly cv/ref) type. */
+consteval bool is_expected(std::meta::info type) {
+    namespace m = std::meta;
+    return is_specialization_of(
+        m::dealias(m::substitute(^^std::remove_cvref_t, {type})), ^^std::expected);
+}
+
+/** The value type of the `std::expected` @a type — its first template argument.
+    @param type a reflection of the (possibly cv/ref) expected. */
+consteval std::meta::info expected_value_type(std::meta::info type) {
+    namespace m = std::meta;
+    return m::template_arguments_of(
+        m::dealias(m::substitute(^^std::remove_cvref_t, {type})))[0];
+}
+
+/** The error type of the `std::expected` @a type — its second template argument.
+    @param type a reflection of the (possibly cv/ref) expected. */
+consteval std::meta::info expected_error_type(std::meta::info type) {
+    namespace m = std::meta;
+    return m::template_arguments_of(
+        m::dealias(m::substitute(^^std::remove_cvref_t, {type})))[1];
+}
+
+/** Peel a `std::expected` down to the type that actually crosses the boundary.
+
+    `std::expected<T, E>` is not a *shape* on the wire — it is a **calling
+    convention**: the value branch crosses as `T`, the error branch is thrown and
+    surfaces managed-side as an exception (the wire's `welder_error` slot, which
+    every thunk already carries). Peeling here — in `bare`, hence in `classify`
+    and therefore in every downstream spelling — is what makes a
+    `std::expected<Foo, Err>`-returning method look exactly like a `Foo`-returning
+    one to the whole generator; only the shim's return marshalling
+    (`shim::guarded`) knows the difference, because only it has to unwrap.
+    Recursive, so a doubly-wrapped expected still lands on its payload.
+    @param type a reflection of the (possibly cv/ref) type.
+    @return the peeled value type, or @a type unchanged when it is not expected. */
+consteval std::meta::info peel_expected(std::meta::info type) {
+    std::meta::info w{type};
+    while (is_expected(w))
+        w = expected_value_type(w);
+    return w;
+}
+
+/** The cv/ref/pointer-stripped bare type of @a type — with any `std::expected`
+    wrapper peeled first (@ref peel_expected). */
 consteval std::meta::info bare(std::meta::info type) {
     namespace m = std::meta;
+    type = peel_expected(type);
     m::info w{m::dealias(m::substitute(^^std::remove_cvref_t, {type}))};
     if (type_trait(^^std::is_pointer_v, w))
         w = m::dealias(m::substitute(
@@ -387,10 +446,15 @@ consteval std::meta::info bare(std::meta::info type) {
     @return its marshalling classification. */
 consteval marshal_kind classify(std::meta::info type) {
     namespace m = std::meta;
+    // A std::expected crosses as its value type (the error branch throws), so
+    // peel before anything else — including the void test, which `Result<void>`
+    // must reach.
+    type = peel_expected(type);
     if (m::dealias(type) == ^^void)
         return marshal_kind::void_;
     const m::info w{bare(type)};
-    if (w == m::dealias(^^std::string) || w == m::dealias(^^std::string_view))
+    if (w == m::dealias(^^std::string) || w == m::dealias(^^std::string_view) ||
+        w == m::dealias(^^std::filesystem::path))
         return marshal_kind::utf8_string;
     if (type_trait(^^std::is_pointer_v,
                    m::dealias(m::substitute(^^std::remove_cvref_t, {type})))) {
@@ -401,6 +465,13 @@ consteval marshal_kind classify(std::meta::info type) {
     }
     if (w == ^^bool)
         return marshal_kind::boolean;
+    // std::byte is a scoped enum, but it is the standard spelling of "a raw
+    // byte", not a program-defined enumeration a rod should mirror: C# already
+    // has that type, spelled `byte`. Classifying it as a scalar is what makes
+    // `std::vector<std::byte>` (every binary-file API's payload) cross as the
+    // `byte[]` a .NET caller expects, instead of demanding it be welded.
+    if (w == m::dealias(^^std::byte))
+        return marshal_kind::scalar;
     if (m::is_enum_type(w))
         return marshal_kind::enum_;
     if (m::is_arithmetic_type(w))
@@ -418,7 +489,8 @@ consteval marshal_kind classify(std::meta::info type) {
                        : marshal_kind::unsupported;
         }
         if (is_specialization_of(w, ^^std::vector) ||
-            is_specialization_of(w, ^^std::array)) {
+            is_specialization_of(w, ^^std::array) ||
+            is_specialization_of(w, ^^std::span)) {
             const marshal_kind ek{classify(sequence_element(w))};
             // NOT bool: std::vector<bool> is a bitset, not contiguous bools.
             if (ek == marshal_kind::scalar || ek == marshal_kind::enum_)
@@ -514,6 +586,14 @@ consteval void require_marshallable(std::meta::info type, bool is_return) {
     // sinking one from a GC-owned wrapper has no sound contract.
     if (!is_return && k == marshal_kind::unique_ptr_)
         throw diag::csharp_unmarshallable{};
+    // std::span is INBOUND-ONLY, the mirror image of unique_ptr. As a parameter
+    // it is exactly what the seq_value wire already does — the managed array is
+    // pinned for the call and the span views it, which is a span's contract. As
+    // a RETURN or a FIELD it is a borrow of a buffer the managed side does not
+    // own and cannot observe the lifetime of, so it would hand C# a dangling
+    // view the moment the C++ owner reallocated or died.
+    if (is_return && is_span(type))
+        throw diag::csharp_unmarshallable{};
 }
 
 /** How a welded-class RETURN crosses, resolved from its category (value /
@@ -607,12 +687,20 @@ consteval scalar_spelling enum_wire_spell(std::meta::info type) {
 /** Whether the backend converts @a U without welder registering a type: scalars and
     strings. Classes and enums are program-defined, so they must be welded (crossing
     as a handle / a mirrored `enum`) — mirrors the other rods' oracles.
+
+    `std::filesystem::path` counts as a string: .NET spells filesystem paths as
+    `string` (`System.IO.Path` is a static helper over strings, not a path type),
+    so a path crosses as UTF-8 text exactly like `std::string` — the same call the
+    Python rods' framework casters make. `std::byte` counts as a scalar: it is the
+    standard *raw byte*, and C# spells that `byte` (@ref classify).
     @tparam U the type to classify. */
 template <class U>
 inline constexpr bool is_native_dotnet =
     (std::is_arithmetic_v<U> && !std::is_enum_v<std::remove_cvref_t<U>>) ||
+    std::is_same_v<std::remove_cv_t<U>, std::byte> ||
     std::is_same_v<std::remove_cv_t<U>, std::string> ||
     std::is_same_v<std::remove_cv_t<U>, std::string_view> ||
+    std::is_same_v<std::remove_cv_t<U>, std::filesystem::path> ||
     std::is_same_v<std::remove_cv_t<std::remove_pointer_t<std::remove_cvref_t<U>>>,
                    char>;
 
