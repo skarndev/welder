@@ -104,6 +104,42 @@ add_variable setters). Classify's handle arm is now STRICT: only
 welded_for(cs) classes are handles — a gate-trusted third-party class or
 unlisted container is a designed diagnostic (was a silent void* before 6a).
 Director slots stay leaf-kind-only.
+Real-library gap-closing (found by pointing the rod at wowlib, whose whole API is
+`Result<T>`-returning and whose fs layer speaks paths and byte buffers):
+- `std::filesystem::path` → utf8_string kind. Out-marshalling goes through a
+  `dup_utf8` TEMPLATE, not an overload pair — `std::string` converts to BOTH
+  `string_view` and `path`, so overloads are ambiguous for the common case; the
+  path arm uses `u8string()` (Windows `native()` is UTF-16 and `string()` would
+  narrow through the active code page).
+- `std::expected<T,E>` is peeled IN `bare()`, hence in `classify()` and every
+  downstream spelling — the generator never learns it exists. Only
+  `shim::guarded` branches on `is_expected(R)`, re-entering with the peeled V and
+  an unwrap lambda. That lambda MUST return by value (`[:remove_cvref(V):]`), not
+  `decltype(auto)`: the payload lives in the local expected, so deducing a
+  reference to `*r` dangles (cost one debug cycle — scalars came back garbage).
+  Error text: `expected_error_text` ladder — ADL `to_string` → `.what()` →
+  string-ness → `std::formattable` → `operator<<` → designed static_assert.
+- `std::byte` classifies as SCALAR (arm placed before the enum arm), so
+  `vector<byte>` is `byte[]`. `wire_return_type` must name its UNDERLYING type:
+  `^^std::uint8_t` is ill-formed (libstdc++ spells it with a using-DECLARATION,
+  which `^^` refuses), and a scoped enum will not implicitly convert to the
+  `std::uint8_t` the generator spelled.
+- `std::span<T>` joins the seq_value arm, but `require_marshallable` rejects it
+  when `is_return` (fields are checked with is_return=true too) — inbound only,
+  the mirror image of unique_ptr.
+- GATE (`bindable.hpp`): `expected` and `span` get their own branches AFTER the
+  `has_native_caster` check, deliberately NOT `stl_wrappers` rows. A row makes
+  EVERY rod recurse into the element, and the Python rods reach both families
+  through whole-type casters (nanobind converts neither a bare `std::byte`
+  element nor a project's `Result<T>`), so a row would break them. Behind the
+  caster check the Python path is unchanged — verified: both C# goldens
+  regenerate byte-identical and all 15 tests/core TUs still compile.
+- `weld` is now a constexpr OBJECT (mask 0 = all languages), so a bare
+  `[[=welder::weld]]` is the language-agnostic spelling and `weld(langs…)` still
+  scopes. `weld_mask_admits` (reflect.hpp) is the single reader.
+STILL UNMARSHALLABLE (wowlib excludes ~10 members for cs): nested containers
+(`vector<vector<T>>`, `vector<array<T,N>>`) and `vector<std::string>` — the
+latter needs a pointer-array wire the rod does not emit yet.
 Reference vectors (Phase 6b): vector<welded> → marshal_kind::seq_ref, which
 PIGGYBACKS the whole handle machinery (to_cpp deref, guarded's
 handle_return_of ownership incl. views, live non-const field views,
