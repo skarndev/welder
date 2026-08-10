@@ -155,6 +155,41 @@ consteval bool spellable(std::meta::info ent) {
     return true;
 }
 
+/** An identifier-safe token that is UNIQUE per type, for a generated C symbol.
+
+    @ref underscore_path alone is not unique: it skips any scope segment without
+    an identifier, and a class-template **specialization** has none — so every
+    specialization declared in one namespace collapses onto the same token, and
+    the container/shared-ptr thunks built from it become duplicate C symbols
+    (`std::vector<MapChunk<vanilla>>` and `std::vector<MapChunk<wotlk>>` both
+    landed on `welder_vec_..._adt_detail_*`). For an unspellable entity the
+    display string is used instead — it spells the template arguments, so it
+    distinguishes the specializations — sanitized to identifier characters.
+    Spellable entities keep the readable underscore path unchanged.
+    @param ent a reflection of the type.
+    @return the token: `[A-Za-z0-9_]+`, distinct for distinct types. */
+consteval std::string symbol_token(std::meta::info ent) {
+    if (spellable(ent))
+        return underscore_path(ent);
+    std::string out{};
+    bool last_us{true}; // suppress a leading underscore run
+    for (char c : std::meta::display_string_of(ent)) {
+        const bool ok{(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                      (c >= '0' && c <= '9') || c == '_'};
+        if (ok) {
+            out += c;
+            last_us = false;
+        } else if (!last_us) {
+            out += '_';
+            last_us = true;
+        }
+    }
+    while (!out.empty() && out.back() == '_')
+        out.pop_back();
+    return out;
+}
+
+
 // --- the shared member-lookup layer (generator ⇄ shim agreement) ------------
 
 /** The member TYPE of @a owner named @a name — the anchor lookup for a nested
@@ -189,18 +224,40 @@ consteval std::meta::info nested_type(std::meta::info owner,
     @return the member's reflection.
     @throws diag::csharp_member_lookup_mismatch when no such member exists —
     the header drifted since generation, so the shim build fails loudly. */
-consteval std::meta::info named_member(std::meta::info owner,
-                                       std::string_view name, std::size_t k) {
+consteval std::optional<std::meta::info> find_named_member(std::meta::info owner,
+                                                           std::string_view name,
+                                                           std::size_t k) {
     std::size_t seen{0};
+    bool declared_here{false};
     for (std::meta::info m :
          std::meta::members_of(owner, std::meta::access_context::unchecked())) {
         if (std::meta::is_function(m) && std::meta::has_identifier(m) &&
             std::meta::identifier_of(m) == name) {
+            declared_here = true;
             if (seen == k)
                 return m;
             ++seen;
         }
     }
+    // The name IS declared in this scope: @a k indexes it, and running out is
+    // real drift — do not go looking for a same-named base member, which would
+    // silently bind the wrong overload.
+    if (declared_here || !std::meta::is_class_type(owner))
+        return std::nullopt;
+    // Not declared here, so it is a FLATTENED base member (welder binds a
+    // non-welded base's members onto the derived type). Recurse per scope, not
+    // over a merged sequence: @ref index_of_named_member counts within the
+    // member's own declaring class, so the base must be indexed the same way.
+    for (std::meta::info b : ::welder::public_bases(owner))
+        if (auto found{find_named_member(b, name, k)})
+            return found;
+    return std::nullopt;
+}
+
+consteval std::meta::info named_member(std::meta::info owner,
+                                       std::string_view name, std::size_t k) {
+    if (auto found{find_named_member(owner, name, k)})
+        return *found;
     throw diag::csharp_member_lookup_mismatch{};
 }
 
@@ -255,8 +312,8 @@ consteval std::size_t index_of_ctor(std::meta::info ctor) {
 
 /** The nonstatic data member of @a owner named @a name (unique — fields cannot
     overload), or the namespace-scope variable for a namespace @a owner. */
-consteval std::meta::info named_field(std::meta::info owner,
-                                      std::string_view name) {
+consteval std::optional<std::meta::info> find_named_field(std::meta::info owner,
+                                                          std::string_view name) {
     for (std::meta::info m :
          std::meta::members_of(owner, std::meta::access_context::unchecked())) {
         if ((std::meta::is_nonstatic_data_member(m) ||
@@ -264,6 +321,22 @@ consteval std::meta::info named_field(std::meta::info owner,
             std::meta::has_identifier(m) && std::meta::identifier_of(m) == name)
             return m;
     }
+    // A FLATTENED base's field: welder binds a non-welded base's members onto
+    // the derived type, and the generator anchors the lookup on the derived
+    // type whenever the declaring scope has no spellable name (a class-template
+    // specialization base — `M2Root<V> : DataPreWotlk<V>`). Derived-first, so a
+    // shadowing field still wins.
+    if (std::meta::is_class_type(owner))
+        for (std::meta::info b : ::welder::public_bases(owner))
+            if (auto found{find_named_field(b, name)})
+                return found;
+    return std::nullopt;
+}
+
+consteval std::meta::info named_field(std::meta::info owner,
+                                      std::string_view name) {
+    if (auto found{find_named_field(owner, name)})
+        return *found;
     throw diag::csharp_member_lookup_mismatch{};
 }
 

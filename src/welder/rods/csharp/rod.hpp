@@ -95,6 +95,14 @@ template <std::meta::info Ent>
 inline constexpr const char* upath_v =
     std::define_static_string(underscore_path(Ent));
 
+/** @ref symbol_token as a constant-initialized variable template: @ref upath_v's
+    collision-free sibling, for a symbol whose @a Ent may be a class-template
+    SPECIALIZATION (a container element, a `shared_ptr` payload). Identical to
+    `upath_v` for anything spellable. */
+template <std::meta::info Ent>
+inline constexpr const char* symtok_v =
+    std::define_static_string(symbol_token(Ent));
+
 /** The fixed-width C ABI wire spelling the shim signature uses for @a type.
     Marshallability was already enforced (@ref require_marshallable) by the
     caller, so `unsupported` cannot reach this. */
@@ -2017,7 +2025,7 @@ struct rod {
         if (!doc.claim_container(key))
             return;
         const std::string sym{std::string{"welder_vec_"} +
-                              upath_v<bare(sequence_element(C))>};
+                              symtok_v<bare(sequence_element(C))>};
         const std::string eq{"^^" +
                              std::string{cpp_name_v<bare(sequence_element(C))>}};
         const std::string V{container_ref<C>()};
@@ -2317,7 +2325,7 @@ struct rod {
         constexpr std::size_t n{fixed_extent(C)};
         const std::string ns{std::to_string(n)};
         const std::string sym{std::string{"welder_arr"} + ns + "_" +
-                              upath_v<bare(sequence_element(C))>};
+                              symtok_v<bare(sequence_element(C))>};
         const std::string targs{"^^" +
                                 std::string{cpp_name_v<bare(
                                     sequence_element(C))>} +
@@ -2574,7 +2582,7 @@ struct rod {
             std::string{"sp:"} + qualified_cpp_name(T))};
         if (!doc.claim_container(key))
             return;
-        const std::string sym{std::string{"welder_sp_"} + upath_v<T> +
+        const std::string sym{std::string{"welder_sp_"} + symtok_v<T> +
                               "_free"};
         // gcc-16: the variable template must be bound to a local first — a
         // `std::string{cpp_name_v<T>}` nested in the concatenation trips the
