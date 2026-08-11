@@ -135,16 +135,27 @@ inline constexpr const char* wire_return_v = shim_wire_spelling(T, true);
     to `p<j>` for an unnamed parameter). LEADING UNDERSCORES ARE STRIPPED —
     both the more faithful camelCase rendering of `_count`, and what keeps the
     wrapper's parameter scope disjoint from the generated `_`-prefixed locals
-    (`_e`, `_r`, …): after this, every parameter name begins with a letter (or
-    the `@` keyword escape), so it cannot shadow them. */
+    (`_e`, `_r`, …), which it cannot then shadow.
+
+    Stripping is SKIPPED where it would not leave a legal identifier: `_04` — a
+    client-struct offset used as a member name — would become `04`, which C#
+    rejects as a parameter name, and `__` would vanish entirely. Those keep their
+    underscores; they are still legal C#, and they still cannot collide with the
+    generated locals, every one of which is an underscore followed by a LETTER.
+    (The old comment claimed the post-strip name always begins with a letter.
+    That was an assertion, not an invariant — `_04` produced `uint 04` and the
+    generated file would not parse.) */
 consteval std::string param_ident(std::meta::info param, std::size_t j) {
     if (std::meta::has_identifier(param)) {
-        std::string_view id{std::meta::identifier_of(param)};
+        const std::string_view raw{std::meta::identifier_of(param)};
+        std::string_view id{raw};
         while (!id.empty() && id.front() == '_')
             id.remove_prefix(1);
-        if (!id.empty())
+        if (!id.empty() && !(id.front() >= '0' && id.front() <= '9'))
             return ::welder::naming::restyle(
                 id, ::welder::naming::case_kind::camel);
+        if (!raw.empty())
+            return std::string{raw};
     }
     std::string s{"p"};
     s += static_cast<char>('0' + (j / 10) % 10);
