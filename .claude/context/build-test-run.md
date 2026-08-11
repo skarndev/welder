@@ -327,7 +327,13 @@ The C# backend generates from reflection like luacats — but emits TWO coordina
 artifacts (`shim.cpp` + `Bindings.cs`) and needs a shared-library build for the
 shim. Generation + the native build + the golden gates need **only the compiler**,
 so `welder::csharp` is an unconditional INTERFACE target and `tests/csharp/` sits
-at the top level of tests/ (like luacats). Only the behavioral round-trip needs a
+at the top level of tests/ (like luacats). **The whole tests/ tree is added on
+`WELDER_BUILD_TESTS` alone** — it used to also require a Python backend
+(`AND (WELDER_BUILD_PYBIND11 OR WELDER_BUILD_NANOBIND)`), which made the C#,
+LuaCATS, doxyfilter and compile-only checks unreachable for anyone building a
+single non-Python rod; the per-backend gates live *inside* tests/CMakeLists.txt
+(python/ and lua/ are the only conditional subdirectories). Only the behavioral
+round-trip needs a
 **.NET SDK**: `find_program(dotnet)`-gated (skip with a status message; set
 `WELDER_DOTNET` to override). On the Homebrew macOS install the test sets
 `DOTNET_ROOT=/opt/homebrew/opt/dotnet/libexec` itself (the dotnet CLI needs it).

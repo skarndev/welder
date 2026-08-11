@@ -196,7 +196,12 @@ if(WELDER_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()
 
-if(WELDER_BUILD_TESTS AND (WELDER_BUILD_PYBIND11 OR WELDER_BUILD_NANOBIND))
+# The test tree gates itself per backend: the compile-only core checks, the
+# doxyfilter, LuaCATS and C#/.NET trees need only the compiler, and python/ and
+# lua/ are added inside only when their backends are on. So this must NOT be
+# gated on a Python backend — doing so made the C# tests unreachable for anyone
+# building the C# rod alone.
+if(WELDER_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
