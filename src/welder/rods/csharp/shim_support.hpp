@@ -224,7 +224,7 @@ auto tuple_elem_from_slot(const welder_opt_wire& s) {
         std::free(const_cast<char*>(s.s));
         return v;
     } else if constexpr (k == marshal_kind::handle) {
-        return Bare{*reinterpret_cast<Bare*>(s.p)}; // borrowed: copy in
+        return Bare{*static_cast<Bare*>(s.p)}; // borrowed: copy in
     } else if constexpr (type_trait(^^std::is_floating_point_v, ^^Bare)) {
         return static_cast<Bare>(s.f);
     } else { // integral scalar / bool / enum
@@ -263,15 +263,15 @@ constexpr decltype(auto) to_cpp(auto&& w) {
         // Borrow: a non-owning aliasing shared_ptr over the wrapper's object.
         using Sp = [:bare(P):];
         using El = typename Sp::element_type;
-        return Sp{Sp{}, reinterpret_cast<El*>(w)};
+        return Sp{Sp{}, static_cast<El*>(w)};
     } else if constexpr (k == marshal_kind::handle ||
                          k == marshal_kind::seq_ref ||
                          k == marshal_kind::map_ref) {
         using Bare = [:bare(P):];
         if constexpr (is_pointer_flavor(P))
-            return reinterpret_cast<Bare*>(w);
+            return static_cast<Bare*>(w);
         else
-            return *reinterpret_cast<Bare*>(w);
+            return *static_cast<Bare*>(w);
     } else if constexpr (k == marshal_kind::enum_) {
         using E = [:bare(P):];
         return static_cast<E>(w);
@@ -293,7 +293,7 @@ constexpr decltype(auto) to_cpp(auto&& w) {
             return o;
         } else if constexpr (pk == marshal_kind::handle) {
             using Bare = [:bare(optional_payload(bare(P))):];
-            return Opt{*reinterpret_cast<Bare*>(w.p)}; // borrowed: copy in
+            return Opt{*static_cast<Bare*>(w.p)}; // borrowed: copy in
         } else if constexpr (type_trait(^^std::is_floating_point_v,
                                         ^^Pay)) {
             return Opt{static_cast<Pay>(w.f)};
@@ -572,7 +572,7 @@ constexpr decltype(auto) _invoke_wired(Tup&& wire, std::index_sequence<J...>,
 template <std::meta::info W, std::meta::info Fn, class... Wire>
 auto method(void* self, welder_error* err, Wire... w) noexcept {
     using Obj = [:W:];
-    auto* obj{reinterpret_cast<Obj*>(self)};
+    auto* obj{static_cast<Obj*>(self)};
     return guarded<std::meta::return_type_of(Fn),
                    ::welder::return_policy_of(Fn, lang::cs)>(
         err, [&]() -> decltype(auto) {
@@ -630,7 +630,7 @@ void* construct_as(welder_error* err, Wire... w) noexcept {
             return static_cast<[:W:]*>(new [:Dir:]());
         else
             return static_cast<[:W:]*>(
-                reinterpret_cast<[:Dir:]*>(_construct_wired<Dir, Ctor>(
+                static_cast<[:Dir:]*>(_construct_wired<Dir, Ctor>(
                     std::forward_as_tuple(w...),
                     std::index_sequence_for<Wire...>{})));
     });
@@ -677,7 +677,7 @@ template <std::meta::info W>
 void* clone(void* self, welder_error* err) noexcept {
     using Obj = [:W:];
     return caught<void*>(err, [&]() -> void* {
-        return new Obj(*reinterpret_cast<const Obj*>(self));
+        return new Obj(*static_cast<const Obj*>(self));
     });
 }
 
@@ -685,7 +685,7 @@ void* clone(void* self, welder_error* err) noexcept {
     a throwing destructor would terminate, exactly as it should. */
 template <std::meta::info W>
 void destroy(void* self) noexcept {
-    delete reinterpret_cast<[:W:]*>(self);
+    delete static_cast<[:W:]*>(self);
 }
 
 /** A data-member getter thunk body (@a W as in @ref method). A **non-const
@@ -703,7 +703,7 @@ auto field_get(void* self, welder_error* err) noexcept {
     // (segfault at the `(*obj).[:Mem:]` below, for W = a class-template
     // specialization whose base arrives through a std::conditional_t alias).
     using Owner = [:std::meta::parent_of(Mem):];
-    auto* obj{static_cast<Owner*>(reinterpret_cast<Obj*>(self))};
+    auto* obj{static_cast<Owner*>(static_cast<Obj*>(self))};
     if constexpr ((classify(std::meta::type_of(Mem)) == marshal_kind::handle ||
                    classify(std::meta::type_of(Mem)) ==
                        marshal_kind::seq_ref ||
@@ -729,7 +729,7 @@ auto field_get(void* self, welder_error* err) noexcept {
 template <std::meta::info W, std::meta::info Mem, class Wire>
 void field_set(void* self, welder_error* err, Wire w) noexcept {
     using Obj = [:W:];
-    auto* obj{reinterpret_cast<Obj*>(self)};
+    auto* obj{static_cast<Obj*>(self)};
     guarded<^^void>(err, [&] {
         (*obj).[:Mem:] =
             to_cpp<std::meta::remove_cv(std::meta::type_of(Mem))>(w);
@@ -746,7 +746,7 @@ void field_set(void* self, welder_error* err, Wire w) noexcept {
 template <std::meta::info W, std::meta::info P, class Wire>
 std::int32_t compare(void* self, welder_error* err, Wire w) noexcept {
     using Obj = [:W:];
-    auto* obj{reinterpret_cast<Obj*>(self)};
+    auto* obj{static_cast<Obj*>(self)};
     return caught<std::int32_t>(err, [&]() -> std::int32_t {
         const auto c{*obj <=> to_cpp<P>(w)};
         if (c < 0)
@@ -765,7 +765,7 @@ std::int32_t compare(void* self, welder_error* err, Wire w) noexcept {
 template <std::meta::info W, std::meta::info Fn>
 const char* stringify_text(void* self, welder_error* err) noexcept {
     using Obj = [:W:];
-    auto* obj{reinterpret_cast<Obj*>(self)};
+    auto* obj{static_cast<Obj*>(self)};
     return caught<const char*>(err, [&]() -> const char* {
         return dup(::welder::detail::stringify<Obj, Fn>(*obj));
     });
@@ -784,7 +784,7 @@ void* vec_new(welder_error* err) noexcept {
 template <std::meta::info E>
 void vec_destroy(void* self) noexcept {
     using El = [:E:];
-    delete reinterpret_cast<std::vector<El>*>(self);
+    delete static_cast<std::vector<El>*>(self);
 }
 
 template <std::meta::info E>
@@ -792,7 +792,7 @@ std::int64_t vec_size(void* self, welder_error* err) noexcept {
     using El = [:E:];
     return caught<std::int64_t>(err, [&]() -> std::int64_t {
         return static_cast<std::int64_t>(
-            reinterpret_cast<std::vector<El>*>(self)->size());
+            static_cast<std::vector<El>*>(self)->size());
     });
 }
 
@@ -802,7 +802,7 @@ template <std::meta::info E>
 void* vec_get(void* self, std::int64_t i, welder_error* err) noexcept {
     using El = [:E:];
     return caught<void*>(err, [&]() -> void* {
-        auto& r{reinterpret_cast<std::vector<El>*>(self)->at(
+        auto& r{static_cast<std::vector<El>*>(self)->at(
             static_cast<std::size_t>(i))};
         return static_cast<void*>(std::addressof(r));
     });
@@ -814,8 +814,8 @@ void vec_set(void* self, std::int64_t i, void* elem,
              welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<std::vector<El>*>(self)->at(
-            static_cast<std::size_t>(i)) = *reinterpret_cast<El*>(elem);
+        static_cast<std::vector<El>*>(self)->at(
+            static_cast<std::size_t>(i)) = *static_cast<El*>(elem);
         return 0;
     });
 }
@@ -825,8 +825,8 @@ template <std::meta::info E>
 void vec_add(void* self, void* elem, welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<std::vector<El>*>(self)->push_back(
-            *reinterpret_cast<El*>(elem));
+        static_cast<std::vector<El>*>(self)->push_back(
+            *static_cast<El*>(elem));
         return 0;
     });
 }
@@ -835,7 +835,7 @@ template <std::meta::info E>
 void vec_clear(void* self, welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<std::vector<El>*>(self)->clear();
+        static_cast<std::vector<El>*>(self)->clear();
         return 0;
     });
 }
@@ -849,7 +849,7 @@ void* vec_data(void* self, welder_error* err) noexcept {
     using El = [:E:];
     return caught<void*>(err, [&]() -> void* {
         return static_cast<void*>(
-            reinterpret_cast<std::vector<El>*>(self)->data());
+            static_cast<std::vector<El>*>(self)->data());
     });
 }
 
@@ -859,7 +859,7 @@ template <std::meta::info E, class W>
 void vec_push(void* self, W v, welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<std::vector<El>*>(self)->push_back(
+        static_cast<std::vector<El>*>(self)->push_back(
             static_cast<El>(v));
         return 0;
     });
@@ -872,8 +872,8 @@ void vec_fill(void* self, const void* data, std::int64_t len,
               welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
-        const El* d{reinterpret_cast<const El*>(data)};
-        reinterpret_cast<std::vector<El>*>(self)->assign(
+        const El* d{static_cast<const El*>(data)};
+        static_cast<std::vector<El>*>(self)->assign(
             d, d + static_cast<std::size_t>(len));
         return 0;
     });
@@ -884,7 +884,7 @@ void* arr_data(void* self, welder_error* err) noexcept {
     using El = [:E:];
     return caught<void*>(err, [&]() -> void* {
         return static_cast<void*>(
-            reinterpret_cast<std::array<El, N>*>(self)->data());
+            static_cast<std::array<El, N>*>(self)->data());
     });
 }
 
@@ -898,8 +898,8 @@ void arr_fill(void* self, const void* data, std::int64_t len,
         if (static_cast<std::size_t>(len) != N)
             throw std::invalid_argument{
                 "welder: expected a sequence of length " + std::to_string(N)};
-        const El* d{reinterpret_cast<const El*>(data)};
-        std::copy(d, d + N, reinterpret_cast<std::array<El, N>*>(self)->begin());
+        const El* d{static_cast<const El*>(data)};
+        std::copy(d, d + N, static_cast<std::array<El, N>*>(self)->begin());
         return 0;
     });
 }
@@ -909,7 +909,7 @@ template <std::meta::info C, std::meta::info Mem>
 void* field_addr(void* self, welder_error* err) noexcept {
     using Cls = [:C:];
     return caught<void*>(err, [&]() -> void* {
-        auto& r{reinterpret_cast<Cls*>(self)->[:Mem:]};
+        auto& r{static_cast<Cls*>(self)->[:Mem:]};
         return static_cast<void*>(std::addressof(r));
     });
 }
@@ -920,10 +920,10 @@ template <std::meta::info C, std::meta::info Mem>
 void field_assign(void* self, void* src, welder_error* err) noexcept {
     using Cls = [:C:];
     caught<int>(err, [&]() -> int {
-        using MT = std::remove_cvref_t<decltype(reinterpret_cast<Cls*>(self)
+        using MT = std::remove_cvref_t<decltype(static_cast<Cls*>(self)
                                                     ->[:Mem:])>;
-        reinterpret_cast<Cls*>(self)->[:Mem:] =
-            *reinterpret_cast<MT*>(src);
+        static_cast<Cls*>(self)->[:Mem:] =
+            *static_cast<MT*>(src);
         return 0;
     });
 }
@@ -940,14 +940,14 @@ void* arr_new(welder_error* err) noexcept {
 template <std::meta::info E, std::size_t N>
 void arr_destroy(void* self) noexcept {
     using El = [:E:];
-    delete reinterpret_cast<std::array<El, N>*>(self);
+    delete static_cast<std::array<El, N>*>(self);
 }
 
 template <std::meta::info E, std::size_t N>
 void* arr_get(void* self, std::int64_t i, welder_error* err) noexcept {
     using El = [:E:];
     return caught<void*>(err, [&]() -> void* {
-        auto& r{reinterpret_cast<std::array<El, N>*>(self)->at(
+        auto& r{static_cast<std::array<El, N>*>(self)->at(
             static_cast<std::size_t>(i))};
         return static_cast<void*>(std::addressof(r));
     });
@@ -958,8 +958,8 @@ void arr_set(void* self, std::int64_t i, void* elem,
              welder_error* err) noexcept {
     using El = [:E:];
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<std::array<El, N>*>(self)->at(
-            static_cast<std::size_t>(i)) = *reinterpret_cast<El*>(elem);
+        static_cast<std::array<El, N>*>(self)->at(
+            static_cast<std::size_t>(i)) = *static_cast<El*>(elem);
         return 0;
     });
 }
@@ -982,21 +982,21 @@ void* map_new(welder_error* err) noexcept {
 
 template <bool O, std::meta::info K, std::meta::info V>
 void map_destroy(void* self) noexcept {
-    delete reinterpret_cast<map_t<O, K, V>*>(self);
+    delete static_cast<map_t<O, K, V>*>(self);
 }
 
 template <bool O, std::meta::info K, std::meta::info V>
 std::int64_t map_size(void* self, welder_error* err) noexcept {
     return caught<std::int64_t>(err, [&]() -> std::int64_t {
         return static_cast<std::int64_t>(
-            reinterpret_cast<map_t<O, K, V>*>(self)->size());
+            static_cast<map_t<O, K, V>*>(self)->size());
     });
 }
 
 template <bool O, std::meta::info K, std::meta::info V, class WireK>
 bool map_contains(void* self, WireK k, welder_error* err) noexcept {
     return caught<bool>(err, [&]() -> bool {
-        return reinterpret_cast<map_t<O, K, V>*>(self)->contains(
+        return static_cast<map_t<O, K, V>*>(self)->contains(
             to_cpp<K>(k));
     });
 }
@@ -1005,7 +1005,7 @@ bool map_contains(void* self, WireK k, welder_error* err) noexcept {
     map), the wire value otherwise. Missing key → out_of_range (`at`). */
 template <bool O, std::meta::info K, std::meta::info V, class WireK>
 auto map_get(void* self, WireK k, welder_error* err) noexcept {
-    auto* m{reinterpret_cast<map_t<O, K, V>*>(self)};
+    auto* m{static_cast<map_t<O, K, V>*>(self)};
     if constexpr (classify(V) == marshal_kind::handle) {
         return caught<void*>(err, [&]() -> void* {
             auto& r{m->at(to_cpp<K>(k))};
@@ -1021,7 +1021,7 @@ template <bool O, std::meta::info K, std::meta::info V, class WireK,
           class WireV>
 void map_set(void* self, WireK k, WireV v, welder_error* err) noexcept {
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<map_t<O, K, V>*>(self)->insert_or_assign(
+        static_cast<map_t<O, K, V>*>(self)->insert_or_assign(
             to_cpp<K>(k), to_cpp<V>(v));
         return 0;
     });
@@ -1030,7 +1030,7 @@ void map_set(void* self, WireK k, WireV v, welder_error* err) noexcept {
 template <bool O, std::meta::info K, std::meta::info V, class WireK>
 bool map_remove(void* self, WireK k, welder_error* err) noexcept {
     return caught<bool>(err, [&]() -> bool {
-        return reinterpret_cast<map_t<O, K, V>*>(self)->erase(to_cpp<K>(k)) >
+        return static_cast<map_t<O, K, V>*>(self)->erase(to_cpp<K>(k)) >
                0;
     });
 }
@@ -1038,7 +1038,7 @@ bool map_remove(void* self, WireK k, welder_error* err) noexcept {
 template <bool O, std::meta::info K, std::meta::info V>
 void map_clear(void* self, welder_error* err) noexcept {
     caught<int>(err, [&]() -> int {
-        reinterpret_cast<map_t<O, K, V>*>(self)->clear();
+        static_cast<map_t<O, K, V>*>(self)->clear();
         return 0;
     });
 }
@@ -1047,7 +1047,7 @@ void map_clear(void* self, welder_error* err) noexcept {
 template <std::meta::info T>
 void sp_free(void* box) noexcept {
     using El = [:T:];
-    delete reinterpret_cast<std::shared_ptr<El>*>(box);
+    delete static_cast<std::shared_ptr<El>*>(box);
 }
 
 // --- director (C# virtual-override) support ---------------------------------
@@ -1125,9 +1125,9 @@ auto from_wire_return(auto w) -> [:std::meta::remove_cvref(R):] {
             // A pointer slot returns a VIEW: the managed override's object
             // (or null) crosses as its raw handle — lifetime is the
             // override's contract, exactly as on the Python rods.
-            return reinterpret_cast<Bare*>(w);
+            return static_cast<Bare*>(w);
         } else {
-            Bare* p{reinterpret_cast<Bare*>(w)};
+            Bare* p{static_cast<Bare*>(w)};
             Bare v{std::move(*p)};
             delete p;
             return v;
@@ -1148,7 +1148,7 @@ template <std::meta::info From, std::meta::info To>
 void* upcast(void* self) noexcept {
     if (!self)
         return nullptr;
-    return static_cast<[:To:]*>(reinterpret_cast<[:From:]*>(self));
+    return static_cast<[:To:]*>(static_cast<[:From:]*>(self));
 }
 
 /** A namespace-variable getter thunk body. */

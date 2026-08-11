@@ -1598,7 +1598,7 @@ struct rod {
                     std::string{
                         wire_return_v<std::meta::return_type_of(Fn)>} +
                     " " + bsym + "(" +
-                    shim_params + ") {\n    auto* _o = reinterpret_cast<" +
+                    shim_params + ") {\n    auto* _o = static_cast<" +
                     w.cpp_qualified +
                     "*>(self);\n    return wcs::shim::guarded<"
                     "::std::meta::return_type_of(" +
@@ -2938,7 +2938,7 @@ struct rod {
         m.doc->shim += "void " + bind_sym +
                        "(void* self, void* ctx, std::uint64_t mask) {\n"
                        "    if (auto* _d = dynamic_cast<" + dir +
-                       "*>(reinterpret_cast<" + qual +
+                       "*>(static_cast<" + qual +
                        "*>(self))) { _d->wcs_ctx = ctx; _d->wcs_mask = "
                        "mask; }\n}\n\n";
         m.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
