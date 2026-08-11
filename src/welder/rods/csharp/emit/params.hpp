@@ -72,8 +72,62 @@ struct call_pieces {
     std::string param_names{};    /**< `\x1f`-joined C# names (XML `<param>` keys). */
     bool has_string{false};       /**< any UTF-8 string ⇒ the Utf8 attribute variant. */
     std::string pin_open{};       /**< `fixed (...)` prefixes pinning array params. */
-    std::string pre{};            /**< Statements before the call (tuple slots). */
+    std::string pre{};            /**< Statements before the call (tuple slots,
+                                       staged string arrays). */
+    std::string post{};           /**< Statements that must run AFTER the call
+                                       whatever happens — freeing what @ref pre
+                                       allocated. Emitted as a `finally`. */
     bool needs_unsafe{false};     /**< pinning / raw copies ⇒ an `unsafe` wrapper. */
+
+    /** Wrap a call @a body in whatever staging this parameter list needs:
+        the `fixed (…)` pinning block, the @ref pre statements, and — when
+        anything must be released — a `try`/`finally` carrying @ref post.
+
+        Every call site goes through this, so a parameter kind that needs
+        staging cannot be silently dropped by one of them (an operator taking a
+        tuple used to emit a reference to a `stackalloc` that was never
+        emitted).
+        @param body the call statements, already indented.
+        @param ind  the indentation of the wrapping block.
+        @return the wrapped statements. */
+    std::string wrap(const std::string& body, const std::string& ind) const {
+        std::string out{};
+        if (!pin_open.empty())
+            out += ind + pin_open + "{\n";
+        out += indent_lines(pre, ind);
+        if (post.empty()) {
+            out += body;
+        } else {
+            out += ind + "try\n" + ind + "{\n" + body + ind + "}\n" + ind +
+                   "finally\n" + ind + "{\n" +
+                   indent_lines(post, ind + "    ") + ind + "}\n";
+        }
+        if (!pin_open.empty())
+            out += ind + "}\n";
+        return out;
+    }
+
+  private:
+    /** Prefix every non-empty line of @a text with @a pad. @ref pre and
+        @ref post are stored WITHOUT indentation precisely so that one staged
+        statement reads correctly at whatever depth its call site sits.
+        @param text the statements.
+        @param pad  the indentation to apply.
+        @return the indented statements. */
+    static std::string indent_lines(const std::string& text,
+                                    const std::string& pad) {
+        std::string out{};
+        for (std::size_t b{0}; b < text.size();) {
+            std::size_t e{text.find('\n', b)};
+            if (e == std::string::npos)
+                e = text.size();
+            if (e > b)
+                out += pad + text.substr(b, e - b);
+            out += '\n';
+            b = e + 1;
+        }
+        return out;
+    }
 };
 
 /** Append one parameter (C++ type @a PT, position @a j, C# name @a csname) to
@@ -140,6 +194,13 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
             tw, name, std::make_index_sequence<tuple_arity(bare(PT))>{});
         cp.needs_unsafe = true; // stackalloc
         cp.wrapper_args += "(IntPtr)" + tw;
+    } else if constexpr (classify(PT) == marshal_kind::seq_string) {
+        // A string array is not blittable: stage an unmanaged array of UTF-8
+        // buffers for the call and release it in the finally.
+        const std::string sw{"_sw" + i};
+        cp.pre += "var " + sw + " = WelderInterop.ToUtf8Seq(" + name + ");\n";
+        cp.post += "WelderInterop.FreeUtf8Seq(" + sw + ");\n";
+        cp.wrapper_args += sw;
     } else if constexpr (classify(PT) == marshal_kind::seq_value) {
         const std::string pin{"_pin" + i};
         std::string ecs{};

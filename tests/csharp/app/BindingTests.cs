@@ -302,6 +302,27 @@ public class BindingTests
     }
 
     [Fact]
+    public void StringSequences()
+    {
+        using var c = new Catalog();
+        Assert.Empty(c.Entries);
+        c.Entries = new[] { "alpha", "beta" }; // string[] in
+        Assert.Equal(2, c.EntryCount());       // reached C++
+        Assert.Equal(new[] { "alpha", "beta" }, c.Entries); // and back out
+        Assert.Equal(new[] { "x!", "y!" }, c.Shout(new[] { "x", "y" }));
+        Assert.Equal(new[] { "", "" }, c.Pair); // a fixed sequence
+        c.Pair = new[] { "left", "right" };
+        Assert.Equal(new[] { "left", "right" }, c.Pair);
+        // A wrong-length managed array is the same designed error the scalar
+        // fixed-sequence path raises.
+        Assert.Throws<ArgumentException>(() => c.Pair = new[] { "only" });
+        Assert.Equal(new[] { "two", "words" }, Global.SplitWords("two words"));
+        Assert.Empty(Global.SplitWords(""));   // empty crosses as an empty array
+        Assert.Equal(new[] { "über", "naïve" },
+                     Global.SplitWords("über naïve")); // UTF-8 round-trip
+    }
+
+    [Fact]
     public void FlattenedOverloadGroup()
     {
         // WoodCrate declares Weigh() and inherits Weigh(units) from its

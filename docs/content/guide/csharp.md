@@ -249,6 +249,7 @@ CI matrix. The end-to-end walkthrough is cookbook recipe
 | `std::optional` of a leaf kind | by-value `welder_opt_wire` struct | `T?` |
 | `std::vector`/`std::array` of scalars/enums (params/returns) | by-value `welder_seq_wire` (copy; params pin the managed array) | `T[]` |
 | `std::vector`/`std::array` of scalars/enums (**non-const field**) | the member's address | a live wrapper — `Add`/indexer write through; `AsSpan()` is a **zero-copy `Span<T>`** over the C++ buffer |
+| `std::vector`/`std::array` of **strings** | `welder_seq_wire` over an array of per-element UTF-8 buffers | `string[]` (a copy, in both directions — including as a field) |
 | `std::pair` / `std::tuple` of leaf kinds | slot array (`welder_opt_wire[]`) | a `ValueTuple` — `(int, string)` |
 | `std::vector` of a welded class | opaque handle | a generated `Vector<Element>` wrapper — **reference semantics**, live element views |
 | `std::array<welded, N>` | opaque handle | a generated `Array<Element>x<N>` wrapper — fixed size, live element views |
@@ -312,7 +313,20 @@ buffer protocol; valid until a size-changing operation or `Dispose`, exactly
 a C++ iterator's rule), and which converts implicitly from `T[]` so
 whole-property assignment (`obj.Nums = new[] {1, 2};`) still reads naturally.
 A `const` member keeps the `T[]` copy (writing through its span would be
-undefined behavior). Containers of a **welded class** instead
+undefined behavior).
+
+A **sequence of strings** (`std::vector<std::string>`,
+`std::array<std::string, N>`) crosses as a plain C# `string[]` — a copy in
+every position, fields included. There is no live wrapper for it and none is
+wanted: `std::string` is not blittable, so there is no C++ buffer a `Span<T>`
+could view, and each element crosses as its own UTF-8 buffer inside a pointer
+array (`welder_seq_wire`'s `data`). Which side frees is fixed: an outbound
+sequence is allocated natively and released by the managed reader, an inbound
+one is staged managed-side and released in a `finally` after the call. A
+`std::span<std::string>` parameter stays a designed error — a span would have
+to *view* that pointer array as `std::string`, which it is not.
+
+Containers of a **welded class** instead
 get [reference semantics](containers.md) — welder's opaque-container model,
 one generated wrapper per distinct instantiation:
 

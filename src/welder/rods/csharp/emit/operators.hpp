@@ -125,15 +125,18 @@ void emit_operator(class_writer& w) {
         std::string args{w.handle_field +
                          (cp.wrapper_args.empty() ? "" : ", " + cp.wrapper_args)};
         w.members += "        public " +
+                     std::string{cp.needs_unsafe ? "unsafe " : ""} +
                      public_return_type<std::meta::return_type_of(Fn),
                                         ::welder::naming::none>() +
                      " Invoke(" + cp.wrapper_params + ")\n        {\n";
-        w.members += wrapper_return_body<std::meta::return_type_of(Fn),
-                                         ::welder::naming::none,
-                                         ::welder::return_policy_of(
-                                             Fn, lang::cs)>(
-            "NativeMethods." + sym + "(" + args + ", out WelderError _e)",
-            "            ", "this");
+        w.members += cp.wrap(
+            wrapper_return_body<std::meta::return_type_of(Fn),
+                                ::welder::naming::none,
+                                ::welder::return_policy_of(Fn, lang::cs)>(
+                "NativeMethods." + sym + "(" + args + ", out WelderError _e)",
+                std::string{"            "} + (cp.post.empty() ? "" : "    "),
+                "this"),
+            "            ");
         w.members += "        }\n\n";
     } else if constexpr (oi.kind == cs_op_kind::indexer) {
         if (std::find(w.indexer_sigs.begin(), w.indexer_sigs.end(),
@@ -141,17 +144,21 @@ void emit_operator(class_writer& w) {
             return; // const/non-const C++ pair -> one C# indexer
         w.indexer_sigs.push_back(cp.wrapper_params);
         w.members += "        public " +
+                     std::string{cp.needs_unsafe ? "unsafe " : ""} +
                      public_return_type<std::meta::return_type_of(Fn),
                                         ::welder::naming::none>() +
                      " this[" + cp.wrapper_params +
                      "]\n        {\n            get\n            {\n";
-        w.members += wrapper_return_body<std::meta::return_type_of(Fn),
-                                         ::welder::naming::none,
-                                         ::welder::return_policy_of(
-                                             Fn, lang::cs)>(
-            "NativeMethods." + sym + "(" + w.handle_field + ", " +
-                cp.wrapper_args + ", out WelderError _e)",
-            "                ", "this");
+        w.members += cp.wrap(
+            wrapper_return_body<std::meta::return_type_of(Fn),
+                                ::welder::naming::none,
+                                ::welder::return_policy_of(Fn, lang::cs)>(
+                "NativeMethods." + sym + "(" + w.handle_field + ", " +
+                    cp.wrapper_args + ", out WelderError _e)",
+                std::string{"                "} +
+                    (cp.post.empty() ? "" : "    "),
+                "this"),
+            "                ");
         w.members += "            }\n        }\n\n";
     } else {
         // A static operator. Operand list: member -> (T l, P r) / (T v);
@@ -188,10 +195,12 @@ void emit_operator(class_writer& w) {
             params += (params.empty() ? "" : ", ");
             params += op_types[i] + " " + op_names[i];
         }
-        std::string body{wrapper_return_body<
-            std::meta::return_type_of(Fn), ::welder::naming::none,
-            ::welder::return_policy_of(Fn, lang::cs)>(
-            "NativeMethods." + sym + "(" + args + ", out WelderError _e)",
+        std::string body{cp.wrap(
+            wrapper_return_body<std::meta::return_type_of(Fn),
+                                ::welder::naming::none,
+                                ::welder::return_policy_of(Fn, lang::cs)>(
+                "NativeMethods." + sym + "(" + args + ", out WelderError _e)",
+                std::string{"            "} + (cp.post.empty() ? "" : "    ")),
             "            ")};
         if constexpr (oi.kind == cs_op_kind::comparison) {
             // Binary always; the pairing ledger decides operator-vs-named
@@ -207,22 +216,28 @@ void emit_operator(class_writer& w) {
                 w.comparisons.push_back(std::move(c));
         } else if constexpr (oi.kind == cs_op_kind::unary) {
             w.members += "        public static " +
+                         std::string{cp.needs_unsafe ? "unsafe " : ""} +
                          public_return_type<std::meta::return_type_of(Fn),
                                             ::welder::naming::none>() +
                          " operator " + oi.symbol + "(" + op_types[0] +
                          " v)\n        {\n";
             // The single operand is named `l`/`v` per shape; rebuild the
             // call with `v`.
-            w.members += wrapper_return_body<
-                std::meta::return_type_of(Fn), ::welder::naming::none,
-                ::welder::return_policy_of(Fn, lang::cs)>(
-                "NativeMethods." + sym + "(" +
-                    (is_member ? "v._h_" + field_ref<^^T>() : std::string{"v"}) +
-                    ", out WelderError _e)",
+            w.members += cp.wrap(
+                wrapper_return_body<std::meta::return_type_of(Fn),
+                                    ::welder::naming::none,
+                                    ::welder::return_policy_of(Fn, lang::cs)>(
+                    "NativeMethods." + sym + "(" +
+                        (is_member ? "v._h_" + field_ref<^^T>()
+                                   : std::string{"v"}) +
+                        ", out WelderError _e)",
+                    std::string{"            "} +
+                        (cp.post.empty() ? "" : "    ")),
                 "            ");
             w.members += "        }\n\n";
         } else {
             w.members += "        public static " +
+                         std::string{cp.needs_unsafe ? "unsafe " : ""} +
                          public_return_type<std::meta::return_type_of(Fn),
                                             ::welder::naming::none>() +
                          " operator " + oi.symbol + "(" + params +

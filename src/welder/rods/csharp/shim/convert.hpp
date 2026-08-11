@@ -144,6 +144,28 @@ constexpr decltype(auto) to_cpp(auto&& w) {
         } else {
             return Seq(d, d + w.len);
         }
+    } else if constexpr (k == marshal_kind::seq_string) {
+        using Seq = [:bare(P):];
+        using E = [:std::meta::remove_cvref(sequence_element(bare(P))):];
+        const char* const* d{static_cast<const char* const*>(w.data)};
+        const auto at{[d](std::size_t i) {
+            return E{d[i] ? d[i] : ""};
+        }};
+        if constexpr (is_fixed_sequence(bare(P))) {
+            Seq a{};
+            if (static_cast<std::size_t>(w.len) != a.size())
+                throw std::invalid_argument{
+                    "welder: sequence length does not match std::array extent"};
+            for (std::size_t i{0}; i < a.size(); ++i)
+                a[i] = at(i);
+            return a;
+        } else {
+            Seq v{};
+            v.reserve(static_cast<std::size_t>(w.len));
+            for (std::size_t i{0}; i < static_cast<std::size_t>(w.len); ++i)
+                v.push_back(at(i));
+            return v;
+        }
     } else if constexpr (k == marshal_kind::tuple_value) {
         using Tup = [:bare(P):];
         const welder_opt_wire* s{static_cast<const welder_opt_wire*>(w)};
@@ -178,6 +200,7 @@ consteval std::meta::info wire_return_type() {
     else if constexpr (k == marshal_kind::optional_)
         return ^^welder_opt_wire;
     else if constexpr (k == marshal_kind::seq_value ||
+                       k == marshal_kind::seq_string ||
                        k == marshal_kind::tuple_value)
         return ^^welder_seq_wire;
     else if constexpr (bare(R) == std::meta::dealias(^^std::byte))
@@ -361,6 +384,19 @@ auto guarded(welder_error* err, F&& f) noexcept -> [:wire_return_type<R>():] {
             for (std::size_t i{0}; i < seq.size(); ++i)
                 buf[i] = seq[i];
             w.data = buf; // managed side copies + welder_free's
+            return w;
+        } else if constexpr (k == marshal_kind::seq_string) {
+            // One malloc'd buffer per element, in a malloc'd pointer array;
+            // the managed side reads each, frees each, then frees the array.
+            const auto seq{f()}; // materialize
+            welder_seq_wire w{};
+            w.len = static_cast<std::int64_t>(seq.size());
+            auto** buf{static_cast<char**>(
+                std::malloc(sizeof(char*) * (seq.size() ? seq.size() : 1)))};
+            std::size_t i{0};
+            for (const auto& e : seq)
+                buf[i++] = dup_utf8(e);
+            w.data = buf;
             return w;
         } else if constexpr (k == marshal_kind::tuple_value) {
             const auto t{f()};

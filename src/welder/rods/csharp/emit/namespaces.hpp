@@ -106,16 +106,13 @@ void emit_variable(module_writer& m, const char* name) {
     if constexpr (!read_only) {
         call_pieces vcp{};
         append_one_param<std::meta::type_of(Var), Style>(vcp, 0, "value");
+        const std::string sind{vcp.post.empty() ? "                "
+                                                : "                    "};
         body += "            set\n            {\n" +
-                (vcp.pin_open.empty()
-                     ? std::string{}
-                     : "                " + vcp.pin_open + "{\n") +
-                vcp.pre +
-                "                NativeMethods." + base + "_set(" +
-                vcp.wrapper_args + ", out WelderError _e);\n"
-                "                WelderInterop.ThrowIfError(in _e);\n" +
-                (vcp.pin_open.empty() ? std::string{}
-                                      : "                }\n") +
+                vcp.wrap(sind + "NativeMethods." + base + "_set(" +
+                             vcp.wrapper_args + ", out WelderError _e);\n" +
+                             sind + "WelderInterop.ThrowIfError(in _e);\n",
+                         "                ") +
                 "            }\n";
     }
     body += "        }\n\n";

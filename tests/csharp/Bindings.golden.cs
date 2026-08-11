@@ -73,6 +73,41 @@ namespace csharp_cases
                 _ => (Exception)new WelderNativeException(err.Code, msg),
             };
         }
+
+        /// <summary>Stage a string[] as an unmanaged array of UTF-8 buffers.</summary>
+        internal static WelderSeqWire ToUtf8Seq(string[] a)
+        {
+            var _w = new WelderSeqWire { Data = IntPtr.Zero, Len = a is null ? 0 : a.Length };
+            if (a is null || a.Length == 0) return _w;
+            _w.Data = Marshal.AllocHGlobal(IntPtr.Size * a.Length);
+            for (int i = 0; i < a.Length; i++)
+                Marshal.WriteIntPtr(_w.Data, i * IntPtr.Size,
+                    NativeMethods.welder_dup_utf8(a[i] ?? ""));
+            return _w;
+        }
+
+        /// <summary>Release what ToUtf8Seq staged.</summary>
+        internal static void FreeUtf8Seq(WelderSeqWire w)
+        {
+            if (w.Data == IntPtr.Zero) return;
+            for (long i = 0; i < w.Len; i++)
+                NativeMethods.welder_free(Marshal.ReadIntPtr(w.Data, (int)(i * IntPtr.Size)));
+            Marshal.FreeHGlobal(w.Data);
+        }
+
+        /// <summary>Read a returned string sequence, freeing every element buffer and the array.</summary>
+        internal static string[] FromUtf8Seq(WelderSeqWire w)
+        {
+            var _out = new string[w.Len];
+            for (long i = 0; i < w.Len; i++)
+            {
+                IntPtr _p = Marshal.ReadIntPtr(w.Data, (int)(i * IntPtr.Size));
+                _out[i] = Marshal.PtrToStringUTF8(_p) ?? "";
+                NativeMethods.welder_free(_p);
+            }
+            if (w.Data != IntPtr.Zero) NativeMethods.welder_free(w.Data);
+            return _out;
+        }
     }
 
     internal static partial class NativeMethods
@@ -270,6 +305,16 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_set_dial(MachineHandle self, Machine.GaugeHandle v, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_m_turn_on_0(MachineHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_m_peak_0(MachineHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Catalog_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Catalog_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Catalog_clone(CatalogHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_Catalog_get_entries(CatalogHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Catalog_set_entries(CatalogHandle self, WelderSeqWire v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_Catalog_get_pair(CatalogHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Catalog_set_pair(CatalogHandle self, WelderSeqWire v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial WelderSeqWire welder_csharp_cases_Catalog_m_shout_0(CatalogHandle self, WelderSeqWire a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_Catalog_m_entry_count_0(CatalogHandle self, out WelderError err);
+        [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial WelderSeqWire welder_csharp_cases_f_split_words_0(string a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_WoodCrate_destroy(IntPtr self);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_WoodCrate_new_default(out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_WoodCrate_clone(WoodCrateHandle self, out WelderError err);
@@ -1581,6 +1626,114 @@ namespace csharp_cases
         public virtual void Dispose() => _h_Machine.Dispose();
     }
 
+    internal sealed class CatalogHandle : SafeHandle
+    {
+        internal CatalogHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_Catalog_destroy(handle);
+            return true;
+        }
+    }
+
+    public class Catalog : IDisposable
+    {
+        internal CatalogHandle _h_Catalog;
+        internal object? _owner;
+        internal bool _isDirector;
+        internal Catalog(IntPtr handle, bool owns) { _h_Catalog = new CatalogHandle(handle, owns); }
+
+        private static IntPtr _New_default()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_Catalog_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public Catalog() : this(_New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public Catalog Clone()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_Catalog_clone(_h_Catalog, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new Catalog(_r, true);
+        }
+
+        public string[] Entries
+        {
+            get
+            {
+                var _r = NativeMethods.welder_csharp_cases_Catalog_get_entries(_h_Catalog, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return WelderInterop.FromUtf8Seq(_r);
+            }
+            set
+            {
+                var _sw0 = WelderInterop.ToUtf8Seq(@value);
+                try
+                {
+                    NativeMethods.welder_csharp_cases_Catalog_set_entries(_h_Catalog, _sw0, out WelderError _e);
+                    WelderInterop.ThrowIfError(in _e);
+                }
+                finally
+                {
+                    WelderInterop.FreeUtf8Seq(_sw0);
+                }
+            }
+        }
+
+        public string[] Pair
+        {
+            get
+            {
+                var _r = NativeMethods.welder_csharp_cases_Catalog_get_pair(_h_Catalog, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return WelderInterop.FromUtf8Seq(_r);
+            }
+            set
+            {
+                var _sw0 = WelderInterop.ToUtf8Seq(@value);
+                try
+                {
+                    NativeMethods.welder_csharp_cases_Catalog_set_pair(_h_Catalog, _sw0, out WelderError _e);
+                    WelderInterop.ThrowIfError(in _e);
+                }
+                finally
+                {
+                    WelderInterop.FreeUtf8Seq(_sw0);
+                }
+            }
+        }
+
+        public string[] Shout(string[] @in)
+        {
+            var _sw0 = WelderInterop.ToUtf8Seq(@in);
+            try
+            {
+                var _r = NativeMethods.welder_csharp_cases_Catalog_m_shout_0(_h_Catalog, _sw0, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return WelderInterop.FromUtf8Seq(_r);
+            }
+            finally
+            {
+                WelderInterop.FreeUtf8Seq(_sw0);
+            }
+        }
+
+        public int EntryCount()
+        {
+            var _r = NativeMethods.welder_csharp_cases_Catalog_m_entry_count_0(_h_Catalog, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public virtual void Dispose() => _h_Catalog.Dispose();
+    }
+
     internal sealed class WoodCrateHandle : SafeHandle
     {
         internal WoodCrateHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
@@ -2295,6 +2448,13 @@ namespace csharp_cases
             WelderInterop.ThrowIfError(in _e);
             try { return Marshal.PtrToStringUTF8(_r) ?? ""; }
             finally { NativeMethods.welder_free(_r); }
+        }
+
+        public static string[] SplitWords(string text)
+        {
+            var _r = NativeMethods.welder_csharp_cases_f_split_words_0(text, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return WelderInterop.FromUtf8Seq(_r);
         }
 
     }

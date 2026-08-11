@@ -8,9 +8,11 @@
 // target, no WILL_FAIL) — needs only the compiler, no .NET.
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -78,6 +80,20 @@ static_assert(wcs::classify(^^std::vector<lockcases::Thing>) ==
               marshal_kind::seq_ref);
 // vector<bool> is a bitset; nesting has no wire yet.
 static_assert(wcs::classify(^^std::vector<bool>) == marshal_kind::unsupported);
+// A string sequence is its own kind: not blittable, so the wire is an array of
+// per-element UTF-8 buffers rather than one buffer. Every string spelling
+// qualifies, in both the growable and the fixed flavor — but NOT a span, which
+// would have to view `const char*` as its element type.
+static_assert(wcs::classify(^^std::vector<std::string>) ==
+              marshal_kind::seq_string);
+static_assert(wcs::classify(^^const std::vector<std::string>&) ==
+              marshal_kind::seq_string);
+static_assert(wcs::classify(^^std::array<std::string, 2>) ==
+              marshal_kind::seq_string);
+static_assert(wcs::classify(^^std::vector<std::filesystem::path>) ==
+              marshal_kind::seq_string);
+static_assert(wcs::classify(^^std::span<const std::string>) ==
+              marshal_kind::unsupported);
 // welded-element std::array -> the fixed flavor of the reference family
 static_assert(wcs::classify(^^std::array<lockcases::Thing, 2>) ==
               marshal_kind::seq_ref);

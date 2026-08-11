@@ -75,9 +75,9 @@ template <std::meta::info Type, std::size_t... J>
 std::string tuple_write_stmts(const std::string& tw,
                                     const std::string& name,
                                     std::index_sequence<J...>) {
-    std::string out{"            var " + tw + " = stackalloc WelderOptWire[" +
+    std::string out{"var " + tw + " = stackalloc WelderOptWire[" +
                     std::to_string(sizeof...(J)) + "];\n"};
-    ((out += "            " + tw + "[" + std::to_string(J) + "] = " +
+    ((out += tw + "[" + std::to_string(J) + "] = " +
              tuple_slot_write<tuple_element_type(bare(Type), J)>(
                  name + ".Item" + std::to_string(J + 1)) +
              ";\n"),

@@ -120,14 +120,12 @@ void emit_callable(document& doc, const std::string& sym, std::string& wrapper_o
                    public_return_type<std::meta::return_type_of(Fn), Style>() +
                    " " + wrapper_name + "(" + cp.wrapper_params + ")\n" + indent +
                    "{\n";
-    if (!cp.pin_open.empty())
-        wrapper_out += indent + "    " + cp.pin_open + "{\n";
-    wrapper_out += cp.pre;
-    wrapper_out += wrapper_return_body<std::meta::return_type_of(Fn), Style,
-                                       ::welder::return_policy_of(Fn, lang::cs)>(
-        pc, indent + "    ", HasSelf ? "this" : "");
-    if (!cp.pin_open.empty())
-        wrapper_out += indent + "    }\n";
+    wrapper_out += cp.wrap(
+        wrapper_return_body<std::meta::return_type_of(Fn), Style,
+                            ::welder::return_policy_of(Fn, lang::cs)>(
+            pc, indent + "    " + (cp.post.empty() ? "" : "    "),
+            HasSelf ? "this" : ""),
+        indent + "    ");
     wrapper_out += indent + "}\n\n";
 }
 
@@ -155,19 +153,19 @@ inline void emit_ctor(class_writer& w, const call_pieces& cp,
     // works identically for roots and derived classes. The static helper
     // exists because a chained `this(...)` argument cannot use `out var`.
     const std::string helper{"_New" + sym.substr(sym.rfind("_new") + 4)};
+    const std::string cbody{
+        std::string{cp.post.empty() ? "            " : "                "} +
+        "IntPtr _r = NativeMethods." + sym + "(" +
+        (cp.wrapper_args.empty() ? std::string{} : cp.wrapper_args + ", ") +
+        "out WelderError _e);\n" +
+        (cp.post.empty() ? "            " : "                ") +
+        "WelderInterop.ThrowIfError(in _e);\n" +
+        (cp.post.empty() ? "            " : "                ") +
+        "return _r;\n"};
     w.members += "        private static " +
                  std::string{cp.needs_unsafe ? "unsafe " : ""} + "IntPtr " +
                  helper + "(" + cp.wrapper_params + ")\n        {\n" +
-                 (cp.pin_open.empty() ? "" : "            " + cp.pin_open +
-                                             "{\n") +
-                 cp.pre +
-                 "            IntPtr _r = NativeMethods." + sym + "(" +
-                 (cp.wrapper_args.empty() ? std::string{}
-                                          : cp.wrapper_args + ", ") +
-                 "out WelderError _e);\n"
-                 "            WelderInterop.ThrowIfError(in _e);\n"
-                 "            return _r;\n" +
-                 (cp.pin_open.empty() ? "" : "            }\n") +
+                 cp.wrap(cbody, "            ") +
                  "        }\n";
     // Re-list the wrapper parameter NAMES for the chained call.
     std::string names{};

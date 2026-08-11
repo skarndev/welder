@@ -118,17 +118,14 @@ void emit_field(class_writer& w) {
         "                ", "this");
     w.members += "            }\n";
     if constexpr (!read_only) {
+        const std::string sind{vcp.post.empty() ? "                "
+                                                : "                    "};
         w.members += "            set\n            {\n" +
-                     (vcp.pin_open.empty()
-                          ? std::string{}
-                          : "                " + vcp.pin_open + "{\n") +
-                     vcp.pre +
-                     "                NativeMethods." + setsym + "(" +
-                     w.handle_field + ", " + vcp.wrapper_args +
-                     ", out WelderError _e);\n"
-                     "                WelderInterop.ThrowIfError(in _e);\n" +
-                     (vcp.pin_open.empty() ? std::string{}
-                                           : "                }\n") +
+                     vcp.wrap(sind + "NativeMethods." + setsym + "(" +
+                                  w.handle_field + ", " + vcp.wrapper_args +
+                                  ", out WelderError _e);\n" + sind +
+                                  "WelderInterop.ThrowIfError(in _e);\n",
+                              "                ") +
                      "            }\n";
     }
     w.members += "        }\n\n";
@@ -275,17 +272,14 @@ void emit_property(class_writer& w, const char* name) {
         call_pieces vcp{};
         append_one_param<first_param_type(Setter), ::welder::naming::none>(
             vcp, 0, "value");
+        const std::string sind{vcp.post.empty() ? "                "
+                                                : "                    "};
         w.members += "            set\n            {\n" +
-                     (vcp.pin_open.empty()
-                          ? std::string{}
-                          : "                " + vcp.pin_open + "{\n") +
-                     vcp.pre +
-                     "                NativeMethods." + setsym + "(" +
-                     w.handle_field + ", " + vcp.wrapper_args +
-                     ", out WelderError _e);\n"
-                     "                WelderInterop.ThrowIfError(in _e);\n" +
-                     (vcp.pin_open.empty() ? std::string{}
-                                           : "                }\n") +
+                     vcp.wrap(sind + "NativeMethods." + setsym + "(" +
+                                  w.handle_field + ", " + vcp.wrapper_args +
+                                  ", out WelderError _e);\n" + sind +
+                                  "WelderInterop.ThrowIfError(in _e);\n",
+                              "                ") +
                      "            }\n";
     }
     w.members += "        }\n\n";

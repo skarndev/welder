@@ -339,6 +339,45 @@ struct [[=welder::weld(welder::lang::cs)]] Machine {
     Gauge peak() const { return Gauge{99}; }
 };
 
+// --- string sequences (std::vector/std::array of strings <-> C# string[]) ------
+
+struct [[=welder::weld(welder::lang::cs)]] Catalog {
+    Catalog() = default;
+    /** The entries, crossing as a `string[]` copy in both directions. */
+    std::vector<std::string> entries{};
+    /** A FIXED string sequence: the managed array's length is checked. */
+    std::array<std::string, 2> pair{};
+    /** Takes and returns a string sequence (the param direction stages the
+        buffers, the return direction hands ownership to the managed side). */
+    std::vector<std::string> shout(const std::vector<std::string>& in) const {
+        std::vector<std::string> out{};
+        for (const std::string& s : in)
+            out.push_back(s + "!");
+        return out;
+    }
+    std::int32_t entry_count() const {
+        return static_cast<std::int32_t>(entries.size());
+    }
+};
+
+[[=welder::weld(welder::lang::cs)]]
+inline std::vector<std::string> split_words(const std::string& text) {
+    std::vector<std::string> out{};
+    std::string cur{};
+    for (char c : text) {
+        if (c == ' ') {
+            if (!cur.empty())
+                out.push_back(cur);
+            cur.clear();
+        } else {
+            cur += c;
+        }
+    }
+    if (!cur.empty())
+        out.push_back(cur);
+    return out;
+}
+
 // --- an overload group mixing a DECLARED and a FLATTENED member ---------------
 //
 // `Crate<Wood>` declares `weigh()` and inherits `weigh(units)` from its

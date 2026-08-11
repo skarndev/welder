@@ -121,6 +121,11 @@ std::string wrapper_return_body(const std::string& pc, const std::string& ind,
         out += tuple_read_stmts<R>(
             ind, std::make_index_sequence<tuple_arity(bare(R))>{});
         return out;
+    } else if constexpr (k == marshal_kind::seq_string) {
+        // Each element is its own UTF-8 buffer; the helper reads, frees each,
+        // then frees the pointer array itself.
+        return ind + "var _r = " + pc + ";\n" + check + ind +
+               "return WelderInterop.FromUtf8Seq(_r);\n";
     } else if constexpr (k == marshal_kind::seq_value) {
         std::string ecs{};
         if constexpr (classify(sequence_element(bare(R))) ==

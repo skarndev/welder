@@ -182,6 +182,25 @@ symbol namespacing also closes a second latent collision the note missed: a
 flattened member of a SPELLABLE base had an unambiguous lookup but the same
 `_m_<id>_<k>` symbol as a derived member of that name. Case: csharp_cases::
 WoodCrate (cases.hpp) + BindingTests.FlattenedOverloadGroup.
+String sequences (2026-08-11): vector/array<std::string|string_view|
+filesystem::path> -> marshal_kind::seq_string <-> C# string[]. NOT seq_value: no
+blittable buffer, so welder_seq_wire.data is an ARRAY OF POINTERS, one malloc'd
+UTF-8 buffer per element. Ownership by direction — OUT: guarded mallocs the
+pointer array + dup_utf8 per element, WelderInterop.FromUtf8Seq reads/frees each
+then the array; IN: WelderInterop.ToUtf8Seq stages an AllocHGlobal array of
+welder_dup_utf8 buffers, FreeUtf8Seq releases it in a finally. span<string> is a
+designed unsupported (a span would have to view `const char*` as std::string).
+Fields are COPIES too (no live wrapper — there is no buffer for AsSpan). The
+three helpers are emitted once, in WelderInterop (document/artifacts.hpp).
+The staging needed a call_pieces::post + call_pieces::wrap(body, ind) — ONE
+wrapper that emits pin_open/pre/try-finally — now used by EVERY call site
+(emit_callable, emit_ctor, both field setters, the namespace-variable setter,
+and the four operator shapes). That closed a latent bug on the way: the operator
+emitters never emitted cp.pre/cp.pin_open at all, so an operator taking a tuple
+or a scalar array referenced a stackalloc/fixed that was never written. pre/post
+are now stored WITHOUT indentation and indented by wrap() at the call site's
+depth. Case: csharp_cases::Catalog (+ split_words) + BindingTests.StringSequences
+(UTF-8 round-trip, empty, wrong-length fixed array -> ArgumentException).
 Reference vectors (Phase 6b): vector<welded> → marshal_kind::seq_ref, which
 PIGGYBACKS the whole handle machinery (to_cpp deref, guarded's
 handle_return_of ownership incl. views, live non-const field views,

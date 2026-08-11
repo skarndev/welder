@@ -41,6 +41,7 @@ consteval const char* shim_wire_spelling(std::meta::info type, bool is_return) {
         case marshal_kind::enum_:       return enum_wire_spell(type).c_abi;
         case marshal_kind::optional_:   return "welder_opt_wire";
         case marshal_kind::seq_value:   return "welder_seq_wire";
+        case marshal_kind::seq_string:  return "welder_seq_wire";
         case marshal_kind::tuple_value:
             return is_return ? "welder_seq_wire" : "const welder_opt_wire*";
         case marshal_kind::shared_ptr_:
@@ -73,7 +74,8 @@ std::string pinvoke_type(bool is_return) {
         return type_ref<bare(Type)>();
     else if constexpr (k == marshal_kind::optional_)
         return "WelderOptWire";
-    else if constexpr (k == marshal_kind::seq_value)
+    else if constexpr (k == marshal_kind::seq_value ||
+                       k == marshal_kind::seq_string)
         return "WelderSeqWire";
     else if constexpr (k == marshal_kind::tuple_value)
         return is_return ? "WelderSeqWire" : "IntPtr";
@@ -125,6 +127,8 @@ std::string public_type() {
                 scalar_spell(sequence_element(bare(Type))).cs};
             return std::string{c} + "[]";
         }
+    } else if constexpr (k == marshal_kind::seq_string) {
+        return "string[]";
     } else if constexpr (k == marshal_kind::tuple_value)
         return tuple_public_type<Type>(
             std::make_index_sequence<tuple_arity(bare(Type))>{});

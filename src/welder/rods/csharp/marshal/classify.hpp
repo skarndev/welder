@@ -41,6 +41,9 @@ enum class marshal_kind {
                       fixed `welder_opt_wire` struct ⇄ C# `T?`. */
     seq_value,   /**< `std::vector`/`std::array` of scalar/enum elements:
                       crosses by VALUE (a copy) as `welder_seq_wire` ⇄ `T[]`. */
+    seq_string,  /**< `std::vector`/`std::array` of UTF-8 strings: crosses by
+                      VALUE (a copy) as a `welder_seq_wire` over an array of
+                      per-element UTF-8 buffers ⇄ C# `string[]`. */
     seq_ref,     /**< `std::vector` of a WELDED class: crosses as an opaque
                       handle behind a generated reference-semantic C# wrapper
                       (live element views — welder's opaque-container model). */
@@ -113,6 +116,15 @@ consteval marshal_kind classify(std::meta::info type) {
             // NOT bool: std::vector<bool> is a bitset, not contiguous bools.
             if (ek == marshal_kind::scalar || ek == marshal_kind::enum_)
                 return marshal_kind::seq_value;
+            // A string element is not blittable, so there is no single buffer
+            // to copy: the wire carries an array of per-element UTF-8 buffers
+            // instead, which the receiving side owns. A std::span cannot join
+            // in — it would have to VIEW that array as its element type, and
+            // `const char*` is not `std::string`.
+            if (ek == marshal_kind::utf8_string)
+                return is_specialization_of(w, ^^std::span)
+                           ? marshal_kind::unsupported
+                           : marshal_kind::seq_string;
             // A welded-class element: reference semantics behind a generated
             // wrapper (vector, or the fixed-size array wrapper).
             if (ek == marshal_kind::handle)
