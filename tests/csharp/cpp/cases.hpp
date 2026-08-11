@@ -339,6 +339,39 @@ struct [[=welder::weld(welder::lang::cs)]] Machine {
     Gauge peak() const { return Gauge{99}; }
 };
 
+// --- nested value sequences (a sequence whose element is a sequence) ----------
+//
+// The elements are separate allocations, so there is no flat buffer to copy:
+// the outer crosses by REFERENCE, and each element is a live view of the inner
+// sequence's own generated wrapper. All three inner shapes are covered — a
+// jagged scalar sequence, a fixed-size scalar one, and a sequence of a welded
+// class (which recurses into the vector generator).
+
+struct [[=welder::weld(welder::lang::cs)]] Terrain {
+    Terrain() = default;
+    /** Per-layer alpha maps — the jagged case. */
+    std::vector<std::vector<std::uint8_t>> layers{};
+    /** Per-vertex bone indices — a FIXED inner sequence. */
+    std::vector<std::array<std::uint8_t, 4>> bones{};
+    /** A nested sequence of a WELDED element (the recursive case). */
+    std::vector<std::vector<Point>> clusters{};
+
+    /** Reads through the C++ side, so a managed write is observable. */
+    std::int32_t weight(std::int32_t layer, std::int32_t i) const {
+        return layers.at(static_cast<std::size_t>(layer))
+            .at(static_cast<std::size_t>(i));
+    }
+    std::int32_t bone(std::int32_t vertex, std::int32_t i) const {
+        return bones.at(static_cast<std::size_t>(vertex))[
+            static_cast<std::size_t>(i)];
+    }
+    std::int32_t cluster_x(std::int32_t c, std::int32_t i) const {
+        return clusters.at(static_cast<std::size_t>(c))
+            .at(static_cast<std::size_t>(i))
+            .x;
+    }
+};
+
 // --- string sequences (std::vector/std::array of strings <-> C# string[]) ------
 
 struct [[=welder::weld(welder::lang::cs)]] Catalog {

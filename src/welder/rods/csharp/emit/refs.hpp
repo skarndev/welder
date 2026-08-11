@@ -196,4 +196,39 @@ member_scope member_scope_of(const std::string& qual, const std::string& anchor,
     return out;
 }
 
+/** The C++ spelling of a container's ELEMENT, as the shim's template argument.
+
+    A welded element defers to the anchor registry (@ref anchor_ref) — it may be
+    an alias-welded specialization with no qualified name of its own. Everything
+    else spells itself, recursively: a nested sequence rebuilds its own
+    `::std::vector<…>` / `::std::array<…, N>` spelling around its element, so a
+    jagged `vector<vector<uint8_t>>` names the exact inner type its thunks
+    operate on. Type IDENTITY matters here (the shim casts the member through
+    this respelling), so a fundamental keeps its own spelling rather than a
+    fixed-width alias, which could name a different type.
+    @tparam C a reflection of the (bare) element type.
+    @return the C++ spelling, possibly carrying anchor placeholders. */
+template <std::meta::info C>
+std::string element_cpp_spelling() {
+    constexpr marshal_kind k{classify(C)};
+    if constexpr (k == marshal_kind::handle || k == marshal_kind::enum_) {
+        return anchor_ref<bare(C)>();
+    } else if constexpr (k == marshal_kind::utf8_string) {
+        return "::std::string";
+    } else if constexpr (k == marshal_kind::seq_value ||
+                         k == marshal_kind::seq_ref) {
+        const std::string e{element_cpp_spelling<
+            std::meta::remove_cvref(sequence_element(bare(C)))>()};
+        if constexpr (is_fixed_sequence(bare(C)))
+            return "::std::array<" + e + ", " +
+                   std::to_string(fixed_extent(bare(C))) + ">";
+        else
+            return "::std::vector<" + e + ">";
+    } else { // scalar / boolean
+        static constexpr const char* d{
+            std::define_static_string(std::meta::display_string_of(bare(C)))};
+        return d;
+    }
+}
+
 } // namespace welder::inline v0::rods::csharp

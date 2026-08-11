@@ -302,6 +302,37 @@ public class BindingTests
     }
 
     [Fact]
+    public void NestedSequences()
+    {
+        using var t = new Terrain();
+        var layers = t.Layers;                  // a live wrapper over the member
+        layers.Add(new byte[] { 1, 2, 3 });     // implicit byte[] -> VectorByte
+        layers.Add(new byte[] { 9 });
+        Assert.Equal(2, layers.Count);
+        Assert.Equal(3, layers[0].Count);       // a live view of the inner vector
+        layers[0].AsSpan()[2] = 42;             // zero-copy write through BOTH
+        Assert.Equal(42, t.Weight(0, 2));       // ...observed from C++
+        Assert.Equal(new byte[] { 1, 2, 42 }, layers[0].ToArray());
+
+        var bones = t.Bones;                    // a FIXED inner sequence
+        bones.Add(new byte[] { 4, 5, 6, 7 });
+        Assert.Equal(4, bones[0].Count);
+        bones[0][3] = 11;
+        Assert.Equal(11, t.Bone(0, 3));
+        // The inner length is fixed, so a wrong-length source is an error.
+        Assert.Throws<ArgumentException>(() => bones.Add(new byte[] { 1 }));
+
+        var clusters = t.Clusters;              // a nested sequence of a WELDED
+        var group = new VectorPoint();          // element (recursion)
+        using (var p = new Point(5, 6))
+            group.Add(p);
+        clusters.Add(group);
+        Assert.Equal(1, clusters[0].Count);
+        clusters[0][0].X = 8;                   // live all the way down
+        Assert.Equal(8, t.ClusterX(0, 0));
+    }
+
+    [Fact]
     public void StringSequences()
     {
         using var c = new Catalog();

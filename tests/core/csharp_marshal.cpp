@@ -94,6 +94,24 @@ static_assert(wcs::classify(^^std::vector<std::filesystem::path>) ==
               marshal_kind::seq_string);
 static_assert(wcs::classify(^^std::span<const std::string>) ==
               marshal_kind::unsupported);
+// A NESTED sequence: the elements are separate allocations, so the outer can
+// only cross by reference — every nesting shape lands on seq_ref, and the inner
+// one keeps its own classification (which is what gets it a wrapper).
+static_assert(wcs::classify(^^std::vector<std::vector<std::uint8_t>>) ==
+              marshal_kind::seq_ref);
+static_assert(wcs::classify(^^std::vector<std::array<std::uint8_t, 4>>) ==
+              marshal_kind::seq_ref);
+static_assert(wcs::classify(^^std::vector<std::vector<lockcases::Thing>>) ==
+              marshal_kind::seq_ref);
+static_assert(wcs::classify(^^std::array<std::vector<int>, 2>) ==
+              marshal_kind::seq_ref);
+static_assert(wcs::classify(^^std::vector<std::vector<std::vector<int>>>) ==
+              marshal_kind::seq_ref); // recursion, not a special case
+// ...but a string inner has no wrapper to view, and a span cannot own an outer.
+static_assert(wcs::classify(^^std::vector<std::vector<std::string>>) ==
+              marshal_kind::unsupported);
+static_assert(wcs::classify(^^std::span<const std::vector<int>>) ==
+              marshal_kind::unsupported);
 // welded-element std::array -> the fixed flavor of the reference family
 static_assert(wcs::classify(^^std::array<lockcases::Thing, 2>) ==
               marshal_kind::seq_ref);

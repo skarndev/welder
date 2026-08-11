@@ -5,6 +5,7 @@
 #include <string>
 
 #include <welder/rods/csharp/document.hpp>
+#include <welder/rods/csharp/emit/containers/element.hpp>
 #include <welder/rods/csharp/emit/params.hpp>
 #include <welder/rods/csharp/emit/refs.hpp>
 #include <welder/rods/csharp/emit/returns.hpp>
@@ -21,7 +22,8 @@
 
 namespace welder::inline v0::rods::csharp {
 
-/** The fixed-size sibling of @ref ensure_vector: `std::array<welded, N>`
+/** The fixed-size sibling of @ref ensure_vector: `std::array<welded, N>` (or
+    of a nested sequence)
     — the vector protocol minus the size-changing ops (constant `Count`,
     live-view indexer with write-through set). */
 template <std::meta::info C>
@@ -32,13 +34,15 @@ void ensure_fixed(document& doc) {
         return;
     constexpr std::size_t n{fixed_extent(C)};
     const std::string ns{std::to_string(n)};
-    const std::string sym{std::string{"welder_arr"} + ns + "_" +
-                          symtok_v<bare(sequence_element(C))>};
-    const std::string targs{"^^" + anchor_ref<bare(sequence_element(C))>() +
-                            ", " + ns};
+    constexpr std::meta::info El{
+        std::meta::remove_cvref(sequence_element(C))};
+    constexpr bool welded_elem{classify(El) == marshal_kind::handle};
+    ensure_element_wrapper<El>(doc);
+    const std::string sym{std::string{"welder_arr"} + ns + "_" + symtok_v<El>};
+    const std::string targs{"^^" + element_cpp_spelling<El>() + ", " + ns};
     const std::string V{container_ref<C>()};
-    const std::string E{type_ref<bare(sequence_element(C))>()};
-    const std::string Ef{field_ref<bare(sequence_element(C))>()};
+    const std::string E{welded_elem ? type_ref<El>() : container_ref<El>()};
+    const std::string Ef{welded_elem ? field_ref<El>() : container_ref<El>()};
     doc.record_type_name(key, "Array" + Ef + "x" + ns);
     for (const char* leaf : {"_new", "_destroy", "_get", "_set"})
         doc.record_symbol(sym + leaf);

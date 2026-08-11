@@ -5,6 +5,7 @@
 #include <string>
 
 #include <welder/rods/csharp/document.hpp>
+#include <welder/rods/csharp/emit/containers/element.hpp>
 #include <welder/rods/csharp/emit/params.hpp>
 #include <welder/rods/csharp/emit/refs.hpp>
 #include <welder/rods/csharp/emit/returns.hpp>
@@ -25,23 +26,33 @@
 
 namespace welder::inline v0::rods::csharp {
 
-/** Generate the reference-semantic wrapper for `std::vector<welded>`
-    container type @a C (once per distinct instantiation): the native op
-    thunks (delegating into `shim::vec_*`), their P/Invokes, the rename
-    registration and the C# wrapper class (live element views pinned to
-    the vector wrapper — welder's opaque-container model). */
+
+
+/** Generate the reference-semantic wrapper for `std::vector<welded>` — or for
+    a vector whose element is ITSELF a sequence — container type @a C (once per
+    distinct instantiation): the native op thunks (delegating into
+    `shim::vec_*`), their P/Invokes, the rename registration and the C# wrapper
+    class (live element views pinned to the vector wrapper — welder's
+    opaque-container model).
+    @tparam C a reflection of the vector specialization.
+    @param doc the growing document. */
 template <std::meta::info C>
 void ensure_vector(document& doc) {
     static constexpr const char* key{
         std::define_static_string(std::meta::display_string_of(C))};
     if (!doc.claim_container(key))
         return;
-    const std::string sym{std::string{"welder_vec_"} +
-                          symtok_v<bare(sequence_element(C))>};
-    const std::string eq{"^^" + anchor_ref<bare(sequence_element(C))>()};
+    constexpr std::meta::info El{
+        std::meta::remove_cvref(sequence_element(C))};
+    // A container element is referred to by its own generated wrapper (whose
+    // name is an identifier already), a welded one by its type reference.
+    constexpr bool welded_elem{classify(El) == marshal_kind::handle};
+    ensure_element_wrapper<El>(doc);
+    const std::string sym{std::string{"welder_vec_"} + symtok_v<El>};
+    const std::string eq{"^^" + element_cpp_spelling<El>()};
     const std::string V{container_ref<C>()};
-    const std::string E{type_ref<bare(sequence_element(C))>()};
-    const std::string Ef{field_ref<bare(sequence_element(C))>()};
+    const std::string E{welded_elem ? type_ref<El>() : container_ref<El>()};
+    const std::string Ef{welded_elem ? field_ref<El>() : container_ref<El>()};
     // The wrapper's NAME must be an identifier, so it derives from the
     // element's identifier-safe form (a nested element's dots sanitize).
     doc.record_type_name(key, "Vector" + Ef);

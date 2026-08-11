@@ -50,6 +50,25 @@ namespace welder::inline v0::rods::csharp {
 
 
 
+/** @copydoc welder::rods::csharp::ensure_element_wrapper */
+template <std::meta::info E>
+void ensure_element_wrapper(document& doc) {
+    constexpr marshal_kind k{classify(E)};
+    if constexpr (k == marshal_kind::seq_value) {
+        // A scalar/enum sequence: the live-field wrapper (Count, indexer,
+        // AsSpan) is exactly what an outer container's element view wants.
+        ensure_scalar_seq<bare(E)>(doc);
+    } else if constexpr (k == marshal_kind::seq_ref) {
+        if constexpr (is_fixed_sequence(bare(E)))
+            ensure_fixed<bare(E)>(doc);
+        else
+            ensure_vector<bare(E)>(doc);
+    } else if constexpr (k == marshal_kind::map_ref) {
+        ensure_map<bare(E)>(doc);
+    }
+    // A welded class element already has its own binding; nothing to generate.
+}
+
 /** Generate whatever per-type scaffolding @a Type's marshalling needs:
     a vector/array/map wrapper, or a shared_ptr box class. */
 template <std::meta::info Type>

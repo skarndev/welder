@@ -182,6 +182,27 @@ symbol namespacing also closes a second latent collision the note missed: a
 flattened member of a SPELLABLE base had an unambiguous lookup but the same
 `_m_<id>_<k>` symbol as a derived member of that name. Case: csharp_cases::
 WoodCrate (cases.hpp) + BindingTests.FlattenedOverloadGroup.
+Nested value sequences (2026-08-11): a sequence whose ELEMENT is a sequence
+(vector<vector<T>>, vector<array<T,N>>, array<vector<T>,N>, recursively) now
+classifies as seq_ref — the elements are separate allocations, so there is no
+flat buffer for the seq_value wire and the outer can only cross by reference.
+It PIGGYBACKS the existing seq_ref machinery entirely (to_cpp deref, guarded
+ownership, live non-const field views, the vec_*/arr_* thunks — vec_set/vec_add
+copy-assign an inner container exactly as they do a welded element). Three
+changes made it work: (1) classify admits seq_value/seq_ref elements (NOT
+seq_string — no wrapper to view — and never for a span outer); (2)
+element_cpp_spelling<E> (emit/refs.hpp) builds the shim's template argument
+recursively (::std::vector<::std::array<unsigned char, 4>>), deferring to
+anchor_ref only for welded/enum leaves — ensure_vector/ensure_fixed now use it
+for ALL elements, which is identical to the old anchor_ref for welded ones;
+(3) ensure_element_wrapper<E> (declared in emit/containers/element.hpp, defined
+beside ensure_for) generates the INNER wrapper first — scalar/enum inner ->
+ensure_scalar_seq (so the inner keeps its zero-copy AsSpan), welded/nested inner
+-> ensure_vector/ensure_fixed recursively. The element's C#/handle spelling is
+container_ref (already an identifier) instead of type_ref/field_ref. Names
+compose through the render pass's rescan: VectorVectorByte, VectorArrayBytex4,
+VectorVectorPoint. Case: csharp_cases::Terrain + BindingTests.NestedSequences
+(span write through two levels observed from C++; fixed-inner length error).
 String sequences (2026-08-11): vector/array<std::string|string_view|
 filesystem::path> -> marshal_kind::seq_string <-> C# string[]. NOT seq_value: no
 blittable buffer, so welder_seq_wire.data is an ARRAY OF POINTERS, one malloc'd

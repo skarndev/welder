@@ -44,9 +44,10 @@ enum class marshal_kind {
     seq_string,  /**< `std::vector`/`std::array` of UTF-8 strings: crosses by
                       VALUE (a copy) as a `welder_seq_wire` over an array of
                       per-element UTF-8 buffers ⇄ C# `string[]`. */
-    seq_ref,     /**< `std::vector` of a WELDED class: crosses as an opaque
-                      handle behind a generated reference-semantic C# wrapper
-                      (live element views — welder's opaque-container model). */
+    seq_ref,     /**< `std::vector`/`std::array` whose element is a WELDED
+                      class or ITSELF a sequence: crosses as an opaque handle
+                      behind a generated reference-semantic C# wrapper (live
+                      element views — welder's opaque-container model). */
     tuple_value, /**< `std::pair`/`std::tuple` of LEAF elements: crosses by
                       value as an array of `welder_opt_wire` slots ⇄ a C#
                       ValueTuple. */
@@ -128,6 +129,15 @@ consteval marshal_kind classify(std::meta::info type) {
             // A welded-class element: reference semantics behind a generated
             // wrapper (vector, or the fixed-size array wrapper).
             if (ek == marshal_kind::handle)
+                return marshal_kind::seq_ref;
+            // A NESTED sequence (jagged `vector<vector<T>>`, or
+            // `vector<array<T, N>>`) is the same story for a different reason:
+            // the elements are separate allocations, so there is no flat buffer
+            // to copy — the outer can only cross by reference, handing out a
+            // live view of each inner sequence's own wrapper. A span cannot
+            // own the outer, and a string inner has no wrapper to view.
+            if ((ek == marshal_kind::seq_value || ek == marshal_kind::seq_ref) &&
+                !is_specialization_of(w, ^^std::span))
                 return marshal_kind::seq_ref;
             return marshal_kind::unsupported;
         }

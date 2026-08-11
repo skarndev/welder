@@ -253,6 +253,7 @@ CI matrix. The end-to-end walkthrough is cookbook recipe
 | `std::pair` / `std::tuple` of leaf kinds | slot array (`welder_opt_wire[]`) | a `ValueTuple` — `(int, string)` |
 | `std::vector` of a welded class | opaque handle | a generated `Vector<Element>` wrapper — **reference semantics**, live element views |
 | `std::array<welded, N>` | opaque handle | a generated `Array<Element>x<N>` wrapper — fixed size, live element views |
+| a sequence whose element is a **sequence** (`vector<vector<T>>`, `vector<array<T, N>>`) | opaque handle | a generated wrapper whose elements are live views of the INNER sequence's wrapper |
 | `std::map` / `std::unordered_map` (leaf key) | opaque handle | a generated `Map`/`UMap` wrapper — reference semantics, `this[K]` live views |
 | `std::shared_ptr<welded>` return | `welder_sp_wire` (object + boxed copy) | a view pinned by a `SharedBox` (`T?`) |
 | `std::shared_ptr<welded>` param | the object's address | **borrowed** (the callee's aliasing copy does not adopt) |
@@ -334,6 +335,15 @@ one generated wrapper per distinct instantiation:
   to the C++ vector; elements are live views pinned to the wrapper.
 - `std::array<Item, N>` → `ArrayItemx<N>`: the same protocol minus the
   size-changing ops (a constant `Count`; indexer get/set only).
+- a **nested** sequence — `std::vector<std::vector<std::uint8_t>>`,
+  `std::vector<std::array<std::uint8_t, 4>>`, `std::vector<std::vector<Item>>` —
+  → `VectorVectorByte`, `VectorArrayBytex4`, `VectorVectorItem`: the same
+  protocol, with each element a live view of the *inner* sequence's own
+  wrapper. So the inner scalar sequence still hands out its zero-copy
+  `AsSpan()`, and a write through it reaches the C++ container:
+  `terrain.Layers[0].AsSpan()[2] = 42;`. Nesting is recursive, not a special
+  case; only a `std::vector<std::string>` inner is refused (there is no wrapper
+  for a string sequence — it is a `string[]` copy).
 - `std::map<K, V>` / `std::unordered_map<K, V>` (with a **leaf** key —
   scalar, string or enum — and default comparator/allocator) →
   `Map<K><V>` / `UMap<K><V>`: `Count`, `ContainsKey`, `Remove`, `Clear` and a

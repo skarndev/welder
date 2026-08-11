@@ -438,6 +438,94 @@ void welder_csharp_cases_Machine_m_turn_on_0(void* self, welder_error* err) { re
 
 void* welder_csharp_cases_Machine_m_peak_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Machine, wcs::named_member(^^::csharp_cases::Machine, "peak", 0)>(self, err); }
 
+void welder_csharp_cases_Terrain_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Terrain>(self); }
+
+void* welder_csharp_cases_Terrain_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Terrain>(err); }
+
+void* welder_csharp_cases_Terrain_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::Terrain>(self, err); }
+
+void* welder_vecs_byte_new(welder_error* err) { return wcs::shim::vec_new<^^unsigned char>(err); }
+
+void welder_vecs_byte_destroy(void* self) { wcs::shim::vec_destroy<^^unsigned char>(self); }
+
+void* welder_vecs_byte_data(void* self, welder_error* err) { return wcs::shim::vec_data<^^unsigned char>(self, err); }
+
+void welder_vecs_byte_fill(void* self, const void* data, std::int64_t len, welder_error* err) { wcs::shim::vec_fill<^^unsigned char>(self, data, len, err); }
+
+std::int64_t welder_vecs_byte_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^unsigned char>(self, err); }
+
+void welder_vecs_byte_push(void* self, std::uint8_t v, welder_error* err) { wcs::shim::vec_push<^^unsigned char>(self, v, err); }
+
+void welder_vecs_byte_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^unsigned char>(self, err); }
+
+void* welder_vec_std_vector_unsigned_char_new(welder_error* err) { return wcs::shim::vec_new<^^::std::vector<unsigned char>>(err); }
+
+void welder_vec_std_vector_unsigned_char_destroy(void* self) { wcs::shim::vec_destroy<^^::std::vector<unsigned char>>(self); }
+
+std::int64_t welder_vec_std_vector_unsigned_char_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^::std::vector<unsigned char>>(self, err); }
+
+void* welder_vec_std_vector_unsigned_char_get(void* self, std::int64_t i, welder_error* err) { return wcs::shim::vec_get<^^::std::vector<unsigned char>>(self, i, err); }
+
+void welder_vec_std_vector_unsigned_char_set(void* self, std::int64_t i, void* elem, welder_error* err) { wcs::shim::vec_set<^^::std::vector<unsigned char>>(self, i, elem, err); }
+
+void welder_vec_std_vector_unsigned_char_add(void* self, void* elem, welder_error* err) { wcs::shim::vec_add<^^::std::vector<unsigned char>>(self, elem, err); }
+
+void welder_vec_std_vector_unsigned_char_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^::std::vector<unsigned char>>(self, err); }
+
+void* welder_csharp_cases_Terrain_get_layers(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Terrain, wcs::named_field(^^::csharp_cases::Terrain, "layers")>(self, err); }
+
+void welder_csharp_cases_Terrain_set_layers(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Terrain, wcs::named_field(^^::csharp_cases::Terrain, "layers")>(self, err, v); }
+
+void* welder_arrs_byte_4_new(welder_error* err) { return wcs::shim::arr_new<^^unsigned char, 4>(err); }
+
+void welder_arrs_byte_4_destroy(void* self) { wcs::shim::arr_destroy<^^unsigned char, 4>(self); }
+
+void* welder_arrs_byte_4_data(void* self, welder_error* err) { return wcs::shim::arr_data<^^unsigned char, 4>(self, err); }
+
+void welder_arrs_byte_4_fill(void* self, const void* data, std::int64_t len, welder_error* err) { wcs::shim::arr_fill<^^unsigned char, 4>(self, data, len, err); }
+
+void* welder_vec_std_array_unsigned_char_4_new(welder_error* err) { return wcs::shim::vec_new<^^::std::array<unsigned char, 4>>(err); }
+
+void welder_vec_std_array_unsigned_char_4_destroy(void* self) { wcs::shim::vec_destroy<^^::std::array<unsigned char, 4>>(self); }
+
+std::int64_t welder_vec_std_array_unsigned_char_4_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^::std::array<unsigned char, 4>>(self, err); }
+
+void* welder_vec_std_array_unsigned_char_4_get(void* self, std::int64_t i, welder_error* err) { return wcs::shim::vec_get<^^::std::array<unsigned char, 4>>(self, i, err); }
+
+void welder_vec_std_array_unsigned_char_4_set(void* self, std::int64_t i, void* elem, welder_error* err) { wcs::shim::vec_set<^^::std::array<unsigned char, 4>>(self, i, elem, err); }
+
+void welder_vec_std_array_unsigned_char_4_add(void* self, void* elem, welder_error* err) { wcs::shim::vec_add<^^::std::array<unsigned char, 4>>(self, elem, err); }
+
+void welder_vec_std_array_unsigned_char_4_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^::std::array<unsigned char, 4>>(self, err); }
+
+void* welder_csharp_cases_Terrain_get_bones(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Terrain, wcs::named_field(^^::csharp_cases::Terrain, "bones")>(self, err); }
+
+void welder_csharp_cases_Terrain_set_bones(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Terrain, wcs::named_field(^^::csharp_cases::Terrain, "bones")>(self, err, v); }
+
+void* welder_vec_std_vector_csharp_cases_Point_new(welder_error* err) { return wcs::shim::vec_new<^^::std::vector<::csharp_cases::Point>>(err); }
+
+void welder_vec_std_vector_csharp_cases_Point_destroy(void* self) { wcs::shim::vec_destroy<^^::std::vector<::csharp_cases::Point>>(self); }
+
+std::int64_t welder_vec_std_vector_csharp_cases_Point_size(void* self, welder_error* err) { return wcs::shim::vec_size<^^::std::vector<::csharp_cases::Point>>(self, err); }
+
+void* welder_vec_std_vector_csharp_cases_Point_get(void* self, std::int64_t i, welder_error* err) { return wcs::shim::vec_get<^^::std::vector<::csharp_cases::Point>>(self, i, err); }
+
+void welder_vec_std_vector_csharp_cases_Point_set(void* self, std::int64_t i, void* elem, welder_error* err) { wcs::shim::vec_set<^^::std::vector<::csharp_cases::Point>>(self, i, elem, err); }
+
+void welder_vec_std_vector_csharp_cases_Point_add(void* self, void* elem, welder_error* err) { wcs::shim::vec_add<^^::std::vector<::csharp_cases::Point>>(self, elem, err); }
+
+void welder_vec_std_vector_csharp_cases_Point_clear(void* self, welder_error* err) { wcs::shim::vec_clear<^^::std::vector<::csharp_cases::Point>>(self, err); }
+
+void* welder_csharp_cases_Terrain_get_clusters(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::Terrain, wcs::named_field(^^::csharp_cases::Terrain, "clusters")>(self, err); }
+
+void welder_csharp_cases_Terrain_set_clusters(void* self, void* v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::Terrain, wcs::named_field(^^::csharp_cases::Terrain, "clusters")>(self, err, v); }
+
+std::int32_t welder_csharp_cases_Terrain_m_weight_0(void* self, std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Terrain, wcs::named_member(^^::csharp_cases::Terrain, "weight", 0)>(self, err, a0, a1); }
+
+std::int32_t welder_csharp_cases_Terrain_m_bone_0(void* self, std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Terrain, wcs::named_member(^^::csharp_cases::Terrain, "bone", 0)>(self, err, a0, a1); }
+
+std::int32_t welder_csharp_cases_Terrain_m_cluster_x_0(void* self, std::int32_t a0, std::int32_t a1, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Terrain, wcs::named_member(^^::csharp_cases::Terrain, "cluster_x", 0)>(self, err, a0, a1); }
+
 void welder_csharp_cases_Catalog_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::Catalog>(self); }
 
 void* welder_csharp_cases_Catalog_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::Catalog>(err); }
