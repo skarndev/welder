@@ -61,7 +61,7 @@ qualified name (inaccessible at namespace scope), so class_writer carries a
 `cpp_anchor` EXPRESSION distinct from cpp_qualified — public types anchor
 "^^qual", protected nested ones anchor via the enumeration lookup
 `wcs::nested_type(outer_anchor, "id")` (members_of, unchecked access); every
-thunk/lookup site uses the anchor, and the owner fallback (_owner_expr)
+thunk/lookup site uses the anchor, and the owner fallback (owner_expr)
 prefers the anchor whenever the declaring scope IS the bound type. Member
 ALIASES to vendor types (Console::Ints = Roll<int>): the nested factory's
 segment spelling comes from identifier_of(Decl) — the alias — never the
@@ -165,7 +165,7 @@ mixes a member DECLARED in the bound type with one FLATTENED IN from a base, and
 BOTH declaring scopes are unspellable specializations (`WDL<V>::read(fs,key)` +
 inherited `ChunkedFile<WDL<V>>::read(span)`), the two collapse onto one C symbol
 and one lookup. `index_of_named_member` counts within the DECLARING scope, so
-both are index 0, and `_owner_expr` falls back to the bound-type anchor for both
+both are index 0, and `owner_expr` falls back to the bound-type anchor for both
 — `..._m_read_0` is emitted twice, and `named_member(anchor,"read",0)` resolves
 both to the derived one (wrong arity → invoke_result failure). The duplicate
 `#error` fires, so it is loud, never silent. THE FIX is to index over the same
@@ -183,12 +183,12 @@ wrapper_return_body) — the only extras are the name mapping and the wrapper
 class. Names: container rename KEYS are display_string_of (qualified_cpp_name
 would collapse every instantiation to ::std::vector); the registered final
 name "Vector"+<elem placeholder> resolves via the render pass's RESCAN
-(apply_type_renames no longer skips past substitutions). rod::_ensure_vector<C>
+(apply_type_renames no longer skips past substitutions). ensure_vector<C>
 generates once per instantiation (document::claim_container): 7 thunks
 (welder_vec_<elem>_new/destroy/size/get/set/add/clear → shim::vec_* templates,
 bounds-checked at() → OOR) + the C# wrapper (SafeHandle, Count, live-view
 indexer with _owner pinning, Add/Clear, public parameterless ctor);
-signature-driven collection via _collect_containers in every rod hook
+signature-driven collection via collect_containers in every rod hook
 (add_operator included). gcc16: a splice as template arg must be
 parenthesized/aliased (`using El = [:E:]` before std::vector<El>).
 Gap-closing (post-Phase-7): pair/tuple<leaf…> → tuple_value (slot-array wire:
@@ -196,7 +196,7 @@ returns malloc a welder_opt_wire[] read per-slot; params stackalloc one; C#
 ValueTuple both ways). map/unordered_map (LEAF key — scalar/string/enum — and
 the DEFAULT-argument form only, verified by substitute comparison in
 is_default_map) → map_ref, piggybacking the handle machinery like seq_ref;
-_ensure_map<C> emits 8 thunks (welder_[u]map_<ktok>_<vtok>_* → shim::map_*
+ensure_map<C> emits 8 thunks (welder_[u]map_<ktok>_<vtok>_* → shim::map_*
 <Ordered,^^K,^^V>; map_t derives the type via SUBSTITUTE — gcc16
 mis-substitutes splices nested in an alias template's template-arg list) + a
 Map/UMap wrapper (Count/ContainsKey/live-view this[K] via at() → OOR/
@@ -206,24 +206,24 @@ wrapper_return_body — value pieces built at index 1 carry their own leading
 fundamentals — NEVER a fixed-width alias, identity matters through the
 reinterpret_cast; "std::string" special-cased; qualified path for
 class/enum). array<welded,N> → seq_ref + is_fixed_sequence dispatch;
-_ensure_fixed<C> = the vector protocol minus size ops (ArrayElemxN, constant
+ensure_fixed<C> = the vector protocol minus size ops (ArrayElemxN, constant
 Count, live-view indexer get/whole-element set). shared_ptr<welded> →
 shared_ptr_: returns cross as welder_sp_wire {obj, boxed-copy} → C# view
-pinned by a per-class <Elem>SharedBox SafeHandle (_ensure_shared; freed via
+pinned by a per-class <Elem>SharedBox SafeHandle (ensure_shared; freed via
 welder_sp_<path>_free; gcc16: bind cpp_name_v<T> to a local before
 concatenating — a nested std::string{v<T>} trips the consteval-only
 template-body check); params BORROW (to_cpp builds a non-owning aliasing
 shared_ptr). unique_ptr<welded> returns transfer (release → owning wrapper);
 unique_ptr params are a designed require_marshallable error (GC-owned sink
-ambiguity). All new kinds route through _ensure_for<Type> (the single
+ambiguity). All new kinds route through ensure_for<Type> (the single
 collector dispatch). NAMESPACE MAPPING: nested C++ namespaces are REAL nested
 C# namespaces (document::ns_section per dotted path; module_writer.cs_ns;
 class/enum writers flush into their section; render_cs emits `namespace X.Y`
 blocks after the root) — types live IN their namespace (no flattening, no
 cross-namespace name collisions), free functions/variables in a per-namespace
 `Global` static class (`geo.Util.Global.Dist`; `using static` for bare
-calls). SCALAR/ENUM sequence FIELDS (non-const): _add_scalar_seq_field +
-_ensure_scalar_seq — live wrapper (welder_vecs_<tok>_*/welder_arrs_<tok>_<N>_*
+calls). SCALAR/ENUM sequence FIELDS (non-const): emit_scalar_seq_field +
+ensure_scalar_seq — live wrapper (welder_vecs_<tok>_*/welder_arrs_<tok>_<N>_*
 thunks: new/destroy/data/fill + size/push/clear for vectors; shim
 field_addr/field_assign for the property), AsSpan() = zero-copy Span<T> over
 data() (docs say: valid until size change/Dispose), implicit T[] conversion

@@ -67,12 +67,45 @@ src/welder/
       luacats/module.hpp    the WELDER_LUACATS_MAIN generator-main() macro; include only for a stub-generator TU
       luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
       luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
-    csharp/
-      rod.hpp             C#/.NET rod: text-emitting welder::rod (welder::rods::csharp::rod, lang::cs) emitting TWO coordinated artifacts per pass — extern "C" shim.cpp (one-line thunks delegating into shim_support, spliced reflections) + [LibraryImport] Bindings.cs (SafeHandle wrappers, natural C# overloads, XML docs); overload groups get per-overload indexed symbols; whole-module generate<^^Ns>(shim_os, cs_os, options)
-      shim_support.hpp    the compiled marshalling library the GENERATED shim includes: wire conversion (to_cpp / guarded), exact-overload invocation via &[:Fn:], the welder_error out-param contract (catch-all, code 0 = success), heap-copy handle returns; global-scope struct welder_error (the wire type the extern "C" signatures spell)
-      type_map.hpp        classify/marshal_kind (scalar/bool/string/enum/handle), paired C-ABI+C# scalar spellings (scalar_spell/enum_wire_spell), symbol mangling (underscore_path), the SHARED member-lookup layer (named_member/ctor_at/named_field + index inverses — generator<->shim agreement; a drifted header throws diag::csharp_member_lookup_mismatch at shim build), require_marshallable (phase gate → diag::csharp_unmarshallable), is_native_dotnet oracle
-      document.hpp        the two-stream document (shim/pinvoke/types/statics buffers + symbol-collision check) + RAII writers; renders the C# error scaffolding (WelderError/WelderInterop/WelderNativeException) and one SafeHandle subclass per class
+    csharp/               (split by LAYER 2026-08-11 — rod.hpp/shim_support.hpp/type_map.hpp
+                           had grown to 3231/1169/780 lines; the three keep their names as
+                           UMBRELLA includes, so every documented include path still works)
+      rod.hpp             C#/.NET rod: text-emitting welder::rod (welder::rods::csharp::rod, lang::cs) emitting TWO coordinated artifacts per pass — extern "C" shim.cpp (one-line thunks delegating into shim_support, spliced reflections) + [LibraryImport] Bindings.cs (SafeHandle wrappers, natural C# overloads, XML docs); overload groups get per-overload indexed symbols; whole-module generate<^^Ns>(shim_os, cs_os, options). NOW A HOOK TABLE ONLY (~340 lines): every hook one-line-forwards into emit/*
+      text.hpp            pure string helpers, no reflection: emit_doc_comment/one_line (XML docs), cs_escape (C# keywords), import_attr, split_param_names, capitalized
+      reflect/symbols.hpp underscore_path (C-symbol prefix), qualified_cpp_name (the shim's ^^ anchors), spellable (has a writable qualified name?), symbol_token (UNIQUE per type — display string for a specialization)
+      reflect/lookup.hpp  the SHARED member-lookup layer (named_member/ctor_at/named_field/nested_type + index inverses — generator<->shim agreement; a drifted header throws diag::csharp_member_lookup_mismatch at shim build)
+      marshal/families.hpp  the std type families as consteval predicates/accessors (optional/vector/array/span/map/pair/tuple/shared_ptr/unique_ptr/expected) + bare/peel_expected/type_trait/is_pointer_flavor
+      marshal/classify.hpp  marshal_kind + classify (THE decision point every spelling branches on) + is_handle_like/is_container_ref + require_marshallable (phase gate → diag::csharp_unmarshallable)
+      marshal/spellings.hpp paired C-ABI+C# scalar spellings (scalar_spell/enum_wire_spell), leaf_cpp_spelling/map_token, the is_native_dotnet oracle
+      marshal/ownership.hpp rv:: → handle_return resolution (copy/move/adopt/view/view_keepalive), handle_return_nullable, field_return_policy
+      type_map.hpp        UMBRELLA over text.hpp + reflect/* + marshal/* (the documented "C# type machinery" include)
+      shim/wire.hpp       the global-scope wire structs the extern "C" signatures spell (welder_error/welder_opt_wire/welder_sp_wire/welder_seq_wire), the error_code taxonomy, dup/dup_utf8, managed_exception, and caught (THE catch boundary)
+      shim/convert.hpp    wire ⇄ C++ conversion: to_cpp (per declared param type), wire_return_type, guarded (result → wire, under the error contract; unwraps std::expected), expected_error_text's rendering ladder
+      shim/entities.hpp   one thunk body per bound entity kind: method/function/construct*/clone/destroy/field_get/field_set/field_addr/field_assign/compare/stringify_text/upcast/var_get/var_set
+      shim/containers.hpp the generated container wrappers' operations: vec_*/arr_*/map_*/sp_free
+      shim/director_wire.hpp  the director callback's direction: to_wire_arg (owning holders) / from_wire_return
+      shim_support.hpp    UMBRELLA over shim/* (+ operators.hpp/directors.hpp) — the ONE include a generated shim.cpp needs
+      document/artifacts.hpp  the two-artifact document (shim/pinvoke/per-namespace types+statics/containers buffers + symbol-collision check + the \x01..\x06 placeholder registries and their render passes) + module_writer; renders the C# error scaffolding (WelderError/WelderInterop/WelderNativeException)
+      document/class_writer.hpp  the RAII class handle: member accumulation, the comparison-PAIRING ledger (C# needs ==/!=, </>, <=/>= in pairs), the CS0102 + reserved-underscore diagnostics, one SafeHandle subclass per class
+      document/enum_writer.hpp   the RAII enum handle (enum : <underlying>; per-enumerator docs)
+      document.hpp        UMBRELLA over document/*
+      emit/refs.hpp       the constant-init variable templates (cpp_name_v/ident_v/upath_v/symtok_v/styled_v — the gcc-16 consteval-in-runtime-expression workaround) + the 4 placeholder flavors (type_ref/field_ref/anchor_ref/container_ref) + owner_expr
+      emit/spellings.hpp  one type, three spellings: shim_wire_spelling (C ABI), pinvoke_type (managed P/Invoke), public_type/public_return_type (the idiomatic wrapper surface)
+      emit/tuples.hpp     the pair/tuple slot read/write statement builders
+      emit/params.hpp     call_pieces (the FIVE spellings one parameter needs at once) + append_one_param — the ONE inbound-conversion source shared by params, setters, operands and map keys/values
+      emit/returns.hpp    wrapper_return_body — the managed return path (guarded's mirror; where rv:: becomes owns:true / a view / a pinned _owner)
+      emit/callables.hpp  emit_callable / emit_ctor / emit_callable_docs — the thunk+P/Invoke+wrapper TRIPLE, keyed by one symbol
+      emit/classes.hpp    open_class / open_nested_class / open_enum / open_nested_enum (the four identities: C# path, C++ spelling, symbol prefix, handle field) + finish_class (base upcast thunks, As<Base>() views, director hookup, destroy thunk)
+      emit/constructors.hpp  emit_constructors (default/declared/aggregate/Clone; director-constructed via construct_as; the internal (IntPtr,bool) chaining)
+      emit/fields.hpp     emit_field / emit_scalar_seq_field (live Span<T> fields) / emit_property (accessor pairs)
+      emit/methods.hpp    emit_method_group / emit_virtual_method (origin-branched director dispatch) / emit_static_method_group / emit_stringifier
+      emit/operators.hpp  operator_lookup/operator_sym + emit_operator (by cs_op_kind) + emit_comparison_set (<=> → the relational set over one compare thunk)
+      emit/containers.hpp ensure_for + collect_containers (the per-signature sweep), over containers/{vector,fixed,scalar_seq,map,shared}.hpp — one generated wrapper per distinct instantiation, keyed by display string
+      emit/directors.hpp  emit_director: the C++ director subclass + dir_init/dir_bind thunks + the [UnmanagedCallersOnly] callbacks + _OverrideMask
+      emit/namespaces.hpp emit_function_group / emit_variable (onto the namespace's Global static class)
       naming.hpp          welder::rods::csharp::dotnet name style (PascalCase; enumerators verbatim — the pep8 pattern)
+      operators.hpp       the C++-operator → C# map (cs_op_kind/cs_operator) + named_operator (the operator half of the lookup layer)
+      directors.hpp       director eligibility + the overridable-slot set (over <welder/virtuals.hpp>) + director_slot (the shim's re-derivation)
       module.hpp          the WELDER_CSHARP_MAIN(ns, header, lib) generator-main() macro (argv[1]=shim.cpp, argv[2]=Bindings.cs)
     CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats, welder::trampolines, welder::opaque_containers, welder::csharp
 src/CMakeLists.txt      target: welder::headers (the header-only core; the C++20 `welder::module` wrapper was removed — see gcc16-toolchain.md)
