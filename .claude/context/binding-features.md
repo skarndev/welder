@@ -159,23 +159,29 @@ TWO BUGS from ONE blind spot — a class-template SPECIALIZATION has no identifi
   (which spells the template args) sanitized to `[A-Za-z0-9_]`; `symtok_v` is the
   variable-template form, used by the 3 symbol sites whose entity can be a
   specialization. Spellable entities unchanged → goldens byte-identical.
-KNOWN OPEN BUG (same blind spot, NOT yet fixed — wowlib works around it by
-excluding `ChunkedFile::read(span)`/`write()` for cs): when an overload group
-mixes a member DECLARED in the bound type with one FLATTENED IN from a base, and
-BOTH declaring scopes are unspellable specializations (`WDL<V>::read(fs,key)` +
-inherited `ChunkedFile<WDL<V>>::read(span)`), the two collapse onto one C symbol
-and one lookup. `index_of_named_member` counts within the DECLARING scope, so
-both are index 0, and `owner_expr` falls back to the bound-type anchor for both
-— `..._m_read_0` is emitted twice, and `named_member(anchor,"read",0)` resolves
-both to the derived one (wrong arity → invoke_result failure). The duplicate
-`#error` fires, so it is loud, never silent. THE FIX is to index over the same
-flattened sequence the lookup searches, which means the generator must know the
-ANCHOR type at compile time — `add_method<Fns, Style>` currently does not get it
-(`class_writer` carries only runtime strings), so it needs the carriage to pass
-`BoundInto` through to the rod's add_* hooks. Alternative without an interface
-change: emit a scope discriminator (`symbol_token(parent_of(fn))`) into both the
-symbol and a `base_scope(anchor, "<token>")` lookup — but that moves goldens for
-every specialization-declared method.
+FIXED (2026-08-11) — the same blind spot, one level up: an overload group that
+mixes a member DECLARED in the bound type with one FLATTENED IN from a base
+(`WDL<V>::read(fs,key)` + inherited `ChunkedFile<WDL<V>>::read(span)`) used to
+collapse onto ONE symbol and ONE lookup when both declaring scopes were
+unspellable specializations — `index_of_named_member` counts within the DECLARING
+scope, so both are index 0, and owner_expr falls back to the bound-type anchor for
+both. (Loud, never silent: the duplicate-symbol #error fired.) Note the two do NOT
+arrive in one add_method call — the flattened member is a separate group — so a
+group-local dedup cannot see it. THE FIX is per-member and needs no interface
+change: class_writer now carries `type_token` (symbol_token of the bound type, set
+in open_class/open_nested_class where ^^T is in hand), and `member_scope_of<Fn>`
+(emit/refs.hpp) compares it with symbol_token(parent_of(Fn)). Equal = declared
+here → spelled exactly as before (zero golden movement). Different = FLATTENED →
+the symbol is namespaced `_at_<scope-token>` and, when the scope has no spellable
+name, the lookup goes through `wcs::base_scope(anchor, "<token>")` (reflect/
+lookup.hpp: walks the public base chain derived-first for the scope whose
+symbol_token matches, throws csharp_member_lookup_mismatch on drift). Applied at
+all four sites (methods, static methods, fields, accessor pairs — the property
+symbol is already keyed by the unique C# name, so only its owner changes). The
+symbol namespacing also closes a second latent collision the note missed: a
+flattened member of a SPELLABLE base had an unambiguous lookup but the same
+`_m_<id>_<k>` symbol as a derived member of that name. Case: csharp_cases::
+WoodCrate (cases.hpp) + BindingTests.FlattenedOverloadGroup.
 Reference vectors (Phase 6b): vector<welded> → marshal_kind::seq_ref, which
 PIGGYBACKS the whole handle machinery (to_cpp deref, guarded's
 handle_return_of ownership incl. views, live non-const field views,

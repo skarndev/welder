@@ -1,6 +1,8 @@
 #pragma once
+#include <cstddef>
 #include <meta>
 #include <string>
+#include <vector>
 
 #include <welder/naming.hpp>               // name_of + ent_kind
 #include <welder/rods/csharp/type_map.hpp> // classify / spellings / symbols
@@ -145,6 +147,53 @@ inline std::string owner_expr(bool named_parent, const std::string& ps,
                                const std::string& qual,
                                const std::string& anchor) {
     return (named_parent && ps != qual) ? "^^" + ps : anchor;
+}
+
+/** Where a bound member's lookup must be anchored, and how its C symbol must be
+    namespaced. @see member_scope_of */
+struct member_scope {
+    std::string owner{};  /**< The lookup's owner expression. */
+    std::string suffix{}; /**< The symbol suffix — empty, or `_at_<token>`. */
+};
+
+/** Resolve the anchoring of member @a Fn, given the bound type's identities.
+
+    A member DECLARED in the bound type anchors on the bound type, and is spelled
+    exactly as it always has been. A member FLATTENED IN from a non-welded base
+    is the interesting case: it is bound onto the derived type but declared
+    elsewhere, and two things follow.
+
+    Its C symbol is **namespaced by the declaring scope**, because
+    @ref index_of_named_member counts within that scope: a derived `weigh()` and
+    an inherited `weigh(units)` are both index 0, so without the scope in the
+    symbol they collide (welder's duplicate-symbol `#error` caught this; nothing
+    was ever silent).
+
+    Its lookup anchors on the declaring scope — directly when that scope has a
+    spellable qualified name, and otherwise through
+    @ref welder::rods::csharp::base_scope, which walks the base chain to the one
+    scope with the matching token. That second path is what a class-template
+    specialization needs: it has no name to write down, so the bound type's
+    anchor is the only starting point.
+    @tparam Fn a reflection of the member.
+    @param qual       the bound type's `::`-qualified C++ name.
+    @param anchor     the bound type's `^^…` anchor expression.
+    @param type_token the bound type's @ref symbol_token.
+    @return the owner expression and symbol suffix to emit. */
+template <std::meta::info Fn>
+member_scope member_scope_of(const std::string& qual, const std::string& anchor,
+                             const std::string& type_token) {
+    constexpr bool named_parent{spellable(std::meta::parent_of(Fn))};
+    const std::string tok{symtok_v<std::meta::parent_of(Fn)>};
+    member_scope out{};
+    out.owner = owner_expr(named_parent, cpp_name_v<std::meta::parent_of(Fn)>,
+                           qual, anchor);
+    if (tok != type_token) { // flattened in from a base
+        out.suffix = "_at_" + tok;
+        if constexpr (!named_parent)
+            out.owner = "wcs::base_scope(" + anchor + ", \"" + tok + "\")";
+    }
+    return out;
 }
 
 } // namespace welder::inline v0::rods::csharp

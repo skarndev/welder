@@ -53,18 +53,15 @@ void emit_field(class_writer& w) {
     const std::string id{std::meta::identifier_of(Mem)};
     const std::string anchor{w.cpp_anchor};
     // The lookup is by the DECLARING scope (a flattened non-welded base's
-    // member is not among the welded type's own members). A class-template
-    // SPECIALIZATION parent has no spellable qualified name — there the
-    // declaring scope IS the bound type, whose alias anchor we hold.
-    constexpr bool named_parent{
-        spellable(std::meta::parent_of(Mem))};
-    const std::string owner{owner_expr(
-        named_parent, cpp_name_v<std::meta::parent_of(Mem)>,
-        w.cpp_qualified, anchor)};
-    const std::string lookup{"wcs::named_field(" + owner + ", \"" + id +
+    // member is not among the welded type's own members), and a flattened
+    // member's symbol is namespaced by that scope — a base field shadowed by a
+    // derived one of the same name would otherwise emit two identical symbols.
+    const member_scope ms{member_scope_of<Mem>(w.cpp_qualified, anchor,
+                                               w.type_token)};
+    const std::string lookup{"wcs::named_field(" + ms.owner + ", \"" + id +
                              "\")"};
-    const std::string getsym{w.sym_prefix + "_get_" + id};
-    const std::string setsym{w.sym_prefix + "_set_" + id};
+    const std::string getsym{w.sym_prefix + "_get_" + id + ms.suffix};
+    const std::string setsym{w.sym_prefix + "_set_" + id + ms.suffix};
     constexpr bool read_only{std::meta::is_const_type(MT) ||
                              ::welder::member_no_reassign(Mem, lang::cs)};
     constexpr bool is_str{classify(MT) == marshal_kind::utf8_string};
@@ -148,15 +145,12 @@ void emit_scalar_seq_field(class_writer& w) {
     ensure_scalar_seq<bare(MT)>(*w.doc);
     const std::string id{std::meta::identifier_of(Mem)};
     const std::string anchor{w.cpp_anchor};
-    constexpr bool named_parent{
-        spellable(std::meta::parent_of(Mem))};
-    const std::string owner{owner_expr(
-        named_parent, cpp_name_v<std::meta::parent_of(Mem)>,
-        w.cpp_qualified, anchor)};
-    const std::string lookup{"wcs::named_field(" + owner + ", \"" + id +
+    const member_scope ms{member_scope_of<Mem>(w.cpp_qualified, anchor,
+                                               w.type_token)};
+    const std::string lookup{"wcs::named_field(" + ms.owner + ", \"" + id +
                              "\")"};
-    const std::string getsym{w.sym_prefix + "_get_" + id};
-    const std::string setsym{w.sym_prefix + "_set_" + id};
+    const std::string getsym{w.sym_prefix + "_get_" + id + ms.suffix};
+    const std::string setsym{w.sym_prefix + "_set_" + id + ms.suffix};
     constexpr bool read_only{::welder::member_no_reassign(Mem, lang::cs)};
     const std::string V{container_ref<bare(MT)>()};
     w.doc->record_symbol(getsym);
@@ -216,13 +210,9 @@ void emit_property(class_writer& w, const char* name) {
     static_assert(checked);
     const std::string anchor{w.cpp_anchor};
     const std::string gid{std::meta::identifier_of(Getter)};
-    constexpr bool g_named_parent{
-        spellable(std::meta::parent_of(Getter))};
     const std::string glookup{
         "wcs::named_member(" +
-        owner_expr(g_named_parent,
-                    cpp_name_v<std::meta::parent_of(Getter)>,
-                    w.cpp_qualified, anchor) +
+        member_scope_of<Getter>(w.cpp_qualified, anchor, w.type_token).owner +
         ", \"" + gid + "\", " +
         std::to_string(index_of_named_member(Getter)) + ")"};
     const std::string getsym{w.sym_prefix + "_pget_" + name};
@@ -257,13 +247,10 @@ void emit_property(class_writer& w, const char* name) {
         constexpr bool pchecked{(require_marshallable(PT, false), true)};
         static_assert(pchecked);
         const std::string sid{std::meta::identifier_of(Setter)};
-        constexpr bool s_named_parent{
-            spellable(std::meta::parent_of(Setter))};
         const std::string slookup{
             "wcs::named_member(" +
-            owner_expr(s_named_parent,
-                        cpp_name_v<std::meta::parent_of(Setter)>,
-                        w.cpp_qualified, anchor) +
+            member_scope_of<Setter>(w.cpp_qualified, anchor, w.type_token)
+                .owner +
             ", \"" + sid + "\", " +
             std::to_string(index_of_named_member(Setter)) + ")"};
         const std::string setsym{w.sym_prefix + "_pset_" + name};

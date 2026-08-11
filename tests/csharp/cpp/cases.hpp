@@ -339,6 +339,37 @@ struct [[=welder::weld(welder::lang::cs)]] Machine {
     Gauge peak() const { return Gauge{99}; }
 };
 
+// --- an overload group mixing a DECLARED and a FLATTENED member ---------------
+//
+// `Crate<Wood>` declares `weigh()` and inherits `weigh(units)` from its
+// NON-WELDED base, whose members flatten onto it — so both reach one C# overload
+// group. The point of the case is that BOTH declaring scopes are class-template
+// SPECIALIZATIONS: neither has a qualified name a second translation unit could
+// write down, so the emitted thunks cannot anchor on their own scopes and both
+// overloads are index 0 within theirs. Without a scope discriminator the two
+// collapse onto one C symbol and one lookup (welder's duplicate-symbol #error
+// caught it; nothing was ever silent).
+
+/** A third-party-shaped base template: no weld of its own, so its members
+    flatten onto whatever derives and welds. */
+template <class Tag>
+struct CrateBase {
+    /** Weigh @a units of contents. */
+    std::int32_t weigh(std::int32_t units) const { return units * 2; }
+};
+
+/** The tag type the instantiation below is keyed on (never welded). */
+struct Wood {};
+
+template <class Tag>
+struct [[=welder::weld(welder::lang::cs)]] Crate : CrateBase<Tag> {
+    /** Weigh the empty crate. */
+    std::int32_t weigh() const { return 41; }
+    std::int32_t stamped{7};
+};
+
+using WoodCrate = Crate<Wood>;
+
 // --- a nested namespace (a static-class scope) --------------------------------
 
 namespace inner {

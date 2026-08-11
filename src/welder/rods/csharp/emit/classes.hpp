@@ -59,6 +59,7 @@ class_writer open_class(module_writer& m, const char* name, const char* doc) {
     w.doc_text = doc ? doc : "";
     w.cpp_qualified = cpp_name_v<Decl>;
     w.cpp_anchor = "^^" + w.cpp_qualified;
+    w.type_token = symtok_v<std::meta::dealias(^^T)>;
     // References to T anywhere (params, returns, fields, operators) are
     // emitted as placeholders over the RAW spelling; register the final
     // name for the render-time reconciliation. The reference spelling is
@@ -179,6 +180,7 @@ class_writer open_nested_class(module_writer& m, class_writer& outer,
     static constexpr const char* tid{
         std::define_static_string(std::meta::identifier_of(Decl))};
     w.cpp_qualified = outer.cpp_qualified + "::" + tid;
+    w.type_token = symtok_v<std::meta::dealias(^^T)>;
     // A PUBLIC nested type's qualified name is its anchor; a protected
     // one is inaccessible at namespace scope, so the shim re-derives its
     // reflection by enumeration instead of spelling it.

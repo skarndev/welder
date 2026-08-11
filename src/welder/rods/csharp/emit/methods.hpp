@@ -163,15 +163,12 @@ void emit_method_group(class_writer& w) {
     template for (constexpr auto fn : std::define_static_array(Fns)) {
         constexpr std::size_t k{index_of_named_member(fn)};
         const std::string id{std::meta::identifier_of(fn)};
+        const member_scope ms{member_scope_of<fn>(w.cpp_qualified, anchor,
+                                                  w.type_token)};
         const std::string sym{w.sym_prefix + "_m_" + id + "_" +
-                              std::to_string(k)};
-        constexpr bool named_parent{
-            spellable(std::meta::parent_of(fn))};
-        const std::string fowner{owner_expr(
-            named_parent, cpp_name_v<std::meta::parent_of(fn)>,
-            w.cpp_qualified, anchor)};
+                              std::to_string(k) + ms.suffix};
         const std::string expr{"wcs::shim::method<" + anchor +
-                               ", wcs::named_member(" + fowner + ", \"" +
+                               ", wcs::named_member(" + ms.owner + ", \"" +
                                id + "\", " + std::to_string(k) + ")>"};
         static constexpr const char* fsig{std::define_static_string(
             std::meta::display_string_of(std::meta::type_of(fn)))};

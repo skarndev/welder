@@ -270,6 +270,13 @@ namespace csharp_cases
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_set_dial(MachineHandle self, Machine.GaugeHandle v, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_csharp_cases_Machine_m_turn_on_0(MachineHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_Machine_m_peak_0(MachineHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_WoodCrate_destroy(IntPtr self);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_WoodCrate_new_default(out WelderError err);
+        [LibraryImport(Lib)] internal static partial IntPtr welder_csharp_cases_WoodCrate_clone(WoodCrateHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_WoodCrate_m_weigh_0_at_csharp_cases_CrateBase_csharp_cases_Wood(WoodCrateHandle self, int a0, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_WoodCrate_get_stamped(WoodCrateHandle self, out WelderError err);
+        [LibraryImport(Lib)] internal static partial void welder_csharp_cases_WoodCrate_set_stamped(WoodCrateHandle self, int v, out WelderError err);
+        [LibraryImport(Lib)] internal static partial int welder_csharp_cases_WoodCrate_m_weigh_0(WoodCrateHandle self, out WelderError err);
         [LibraryImport(Lib)] internal static partial int welder_csharp_cases_inner_f_twice_0(int a0, out WelderError err);
         [LibraryImport(Lib)] internal static partial void welder_free(IntPtr p);
         [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)] internal static partial IntPtr welder_dup_utf8(string s);
@@ -1572,6 +1579,75 @@ namespace csharp_cases
         }
 
         public virtual void Dispose() => _h_Machine.Dispose();
+    }
+
+    internal sealed class WoodCrateHandle : SafeHandle
+    {
+        internal WoodCrateHandle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)
+        {
+            SetHandle(handle);
+        }
+        public override bool IsInvalid => handle == IntPtr.Zero;
+        protected override bool ReleaseHandle()
+        {
+            NativeMethods.welder_csharp_cases_WoodCrate_destroy(handle);
+            return true;
+        }
+    }
+
+    public class WoodCrate : IDisposable
+    {
+        internal WoodCrateHandle _h_WoodCrate;
+        internal object? _owner;
+        internal bool _isDirector;
+        internal WoodCrate(IntPtr handle, bool owns) { _h_WoodCrate = new WoodCrateHandle(handle, owns); }
+
+        private static IntPtr _New_default()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_WoodCrate_new_default(out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+        public WoodCrate() : this(_New_default(), true) {}
+
+        /// <summary>Copy this instance (the C++ copy constructor).</summary>
+        public WoodCrate Clone()
+        {
+            IntPtr _r = NativeMethods.welder_csharp_cases_WoodCrate_clone(_h_WoodCrate, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return new WoodCrate(_r, true);
+        }
+
+        public int Weigh(int units)
+        {
+            var _r = NativeMethods.welder_csharp_cases_WoodCrate_m_weigh_0_at_csharp_cases_CrateBase_csharp_cases_Wood(_h_WoodCrate, units, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public int Stamped
+        {
+            get
+            {
+                var _r = NativeMethods.welder_csharp_cases_WoodCrate_get_stamped(_h_WoodCrate, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+                return _r;
+            }
+            set
+            {
+                NativeMethods.welder_csharp_cases_WoodCrate_set_stamped(_h_WoodCrate, @value, out WelderError _e);
+                WelderInterop.ThrowIfError(in _e);
+            }
+        }
+
+        public int Weigh()
+        {
+            var _r = NativeMethods.welder_csharp_cases_WoodCrate_m_weigh_0(_h_WoodCrate, out WelderError _e);
+            WelderInterop.ThrowIfError(in _e);
+            return _r;
+        }
+
+        public virtual void Dispose() => _h_WoodCrate.Dispose();
     }
 
     internal sealed class VectorIntHandle : SafeHandle

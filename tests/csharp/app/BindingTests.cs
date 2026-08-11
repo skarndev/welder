@@ -302,6 +302,21 @@ public class BindingTests
     }
 
     [Fact]
+    public void FlattenedOverloadGroup()
+    {
+        // WoodCrate declares Weigh() and inherits Weigh(units) from its
+        // non-welded base. Both declaring scopes are class-template
+        // specializations, so neither thunk can anchor on its own scope: the
+        // inherited one is namespaced by its declaring scope and looked up
+        // through it. Calling BOTH is the assertion — before the fix the two
+        // collapsed onto one symbol and one lookup.
+        using var c = new WoodCrate();
+        Assert.Equal(41, c.Weigh());     // declared in the bound type
+        Assert.Equal(14, c.Weigh(7));    // flattened in from the base
+        Assert.Equal(7, c.Stamped);
+    }
+
+    [Fact]
     public void ReferenceVectors()
     {
         using var rt = new Route();

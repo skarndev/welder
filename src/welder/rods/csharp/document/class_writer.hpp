@@ -55,6 +55,10 @@ struct class_writer {
                                        the document's types section. */
     std::string doc_text{};       /**< The class summary doc. */
     std::string cpp_qualified{};  /**< The `::`-qualified C++ type (anchor spelling). */
+    std::string type_token{};     /**< The bound type's @ref welder::rods::csharp::symbol_token
+                                       — what tells a member DECLARED here from
+                                       one flattened in from a base, whose
+                                       declaring scope may have no name at all. */
     std::string sym_prefix{};     /**< The `welder_<path>` C-symbol prefix. */
     std::string destroy_symbol{}; /**< The `welder_…_destroy` symbol. */
     std::string handle_field{};   /**< This level's handle field (`_h_<Class>`). */
@@ -111,6 +115,7 @@ struct class_writer {
         sink = o.sink;
         doc_text = std::move(o.doc_text);
         cpp_qualified = std::move(o.cpp_qualified);
+        type_token = std::move(o.type_token);
         cpp_anchor = std::move(o.cpp_anchor);
         sym_prefix = std::move(o.sym_prefix);
         destroy_symbol = std::move(o.destroy_symbol);

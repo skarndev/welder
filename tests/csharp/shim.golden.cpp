@@ -438,6 +438,20 @@ void welder_csharp_cases_Machine_m_turn_on_0(void* self, welder_error* err) { re
 
 void* welder_csharp_cases_Machine_m_peak_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::Machine, wcs::named_member(^^::csharp_cases::Machine, "peak", 0)>(self, err); }
 
+void welder_csharp_cases_WoodCrate_destroy(void* self) { wcs::shim::destroy<^^::csharp_cases::WoodCrate>(self); }
+
+void* welder_csharp_cases_WoodCrate_new_default(welder_error* err) { return wcs::shim::default_construct<^^::csharp_cases::WoodCrate>(err); }
+
+void* welder_csharp_cases_WoodCrate_clone(void* self, welder_error* err) { return wcs::shim::clone<^^::csharp_cases::WoodCrate>(self, err); }
+
+std::int32_t welder_csharp_cases_WoodCrate_m_weigh_0_at_csharp_cases_CrateBase_csharp_cases_Wood(void* self, std::int32_t a0, welder_error* err) { return wcs::shim::method<^^::csharp_cases::WoodCrate, wcs::named_member(wcs::base_scope(^^::csharp_cases::WoodCrate, "csharp_cases_CrateBase_csharp_cases_Wood"), "weigh", 0)>(self, err, a0); }
+
+std::int32_t welder_csharp_cases_WoodCrate_get_stamped(void* self, welder_error* err) { return wcs::shim::field_get<^^::csharp_cases::WoodCrate, wcs::named_field(^^::csharp_cases::WoodCrate, "stamped")>(self, err); }
+
+void welder_csharp_cases_WoodCrate_set_stamped(void* self, std::int32_t v, welder_error* err) { return wcs::shim::field_set<^^::csharp_cases::WoodCrate, wcs::named_field(^^::csharp_cases::WoodCrate, "stamped")>(self, err, v); }
+
+std::int32_t welder_csharp_cases_WoodCrate_m_weigh_0(void* self, welder_error* err) { return wcs::shim::method<^^::csharp_cases::WoodCrate, wcs::named_member(^^::csharp_cases::WoodCrate, "weigh", 0)>(self, err); }
+
 std::int32_t welder_csharp_cases_inner_f_twice_0(std::int32_t a0, welder_error* err) { return wcs::shim::function<wcs::named_member(^^::csharp_cases::inner, "twice", 0)>(err, a0); }
 
 void welder_free(void* p) { std::free(p); }

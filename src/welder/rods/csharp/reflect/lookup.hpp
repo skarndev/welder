@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include <welder/bindable.hpp> // public_bases (the flattened-member walk)
+#include <welder/rods/csharp/reflect/symbols.hpp> // symbol_token (base_scope)
 #include <welder/diag.hpp>     // csharp_member_lookup_mismatch
 
 /** @file
@@ -202,6 +203,48 @@ consteval std::optional<std::meta::info> find_named_field(std::meta::info owner,
 consteval std::meta::info named_field(std::meta::info owner,
                                       std::string_view name) {
     if (auto found{find_named_field(owner, name)})
+        return *found;
+    throw diag::csharp_member_lookup_mismatch{};
+}
+
+/** The scope at or below @a scope whose @ref symbol_token is @a token, searched
+    derived-first through the public base chain.
+    @param scope a reflection of the class (or an alias to one) to search from.
+    @param token the target scope's @ref symbol_token.
+    @return the matching scope's reflection, or `nullopt`. */
+consteval std::optional<std::meta::info> find_base_scope(std::meta::info scope,
+                                                         std::string_view token) {
+    const std::meta::info s{std::meta::dealias(scope)};
+    if (symbol_token(s) == token)
+        return s;
+    for (std::meta::info b : ::welder::public_bases(s))
+        if (auto found{find_base_scope(b, token)})
+            return found;
+    return std::nullopt;
+}
+
+/** The **scope discriminator** for an overload group that mixes a member
+    declared in the bound type with one flattened in from a base.
+
+    The ordinary lookups key on the declaring scope's own `^^` anchor, which
+    only exists for a scope with a spellable qualified name. When it has none —
+    a class-template specialization — the generator falls back to the bound
+    type's anchor; and when BOTH scopes of a group do that, two different
+    overloads become the same `(owner, index)` key, because
+    @ref index_of_named_member counts within each declaring scope. This walks
+    from the bound type's anchor to the one scope whose token matches, so the
+    index that follows is unambiguous again.
+
+    Only emitted for a group where the collision actually occurs, so no
+    unambiguous lookup changes shape.
+    @param anchor a reflection of the bound type (or its welding alias).
+    @param token  the declaring scope's @ref symbol_token.
+    @return the declaring scope's reflection.
+    @throws diag::csharp_member_lookup_mismatch when no scope in the chain
+    matches — the header drifted since generation. */
+consteval std::meta::info base_scope(std::meta::info anchor,
+                                     std::string_view token) {
+    if (auto found{find_base_scope(anchor, token)})
         return *found;
     throw diag::csharp_member_lookup_mismatch{};
 }
