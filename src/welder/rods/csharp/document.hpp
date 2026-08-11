@@ -95,6 +95,54 @@ struct document {
         type_names.emplace_back(std::move(raw), std::move(styled));
     }
 
+    /** raw type key → the `::qualified` C++ spelling the SHIM must use to name
+        that type, filled by make_class/make_enum from the welding declaration.
+
+        The C#-name registry above cannot serve this — the shim needs C++, not
+        C#. Nor can `qualified_cpp_name(T)`, for a class-template
+        SPECIALIZATION: that walk collects identifiers, a specialization has
+        none, so it silently yields the enclosing NAMESPACE and the shim splices
+        `^^ns::detail` (not a type). The spellable name such a type does have is
+        its namespace-scope welding ALIAS — precisely what make_class receives as
+        `Decl`. Recording it here is what lets the container generators, which
+        see only the container type and never the alias, name their element.
+        @see rod::anchor_ref */
+    std::vector<std::pair<std::string, std::string>> type_anchors{};
+
+    /** Register the shim's C++ spelling for raw type key @a raw. */
+    void record_type_anchor(std::string raw, std::string cpp) {
+        for (auto& [r, a] : type_anchors)
+            if (r == raw) {
+                a = std::move(cpp);
+                return;
+            }
+        type_anchors.emplace_back(std::move(raw), std::move(cpp));
+    }
+
+    /** Resolve every `\x05raw\x06` anchor placeholder in @a text against
+        @ref type_anchors. Applied to the SHIM only: these are C++ spellings,
+        which have no business in the emitted C#. An unmatched placeholder keeps
+        its raw spelling, so the shim build fails loudly rather than silently
+        splicing the wrong entity. */
+    std::string apply_type_anchors(std::string text) const {
+        std::size_t b1{0};
+        while ((b1 = text.find('\x05', b1)) != std::string::npos) {
+            const std::size_t b2{text.find('\x06', b1 + 1)};
+            if (b2 == std::string::npos)
+                break;
+            const std::string raw{text.substr(b1 + 1, b2 - b1 - 1)};
+            std::string sub{raw};
+            for (const auto& [r, a] : type_anchors)
+                if (r == raw) {
+                    sub = a;
+                    break;
+                }
+            text.replace(b1, b2 - b1 + 1, sub);
+            b1 += sub.size(); // anchors never nest
+        }
+        return text;
+    }
+
     /** Resolve every placeholder in @a text against @ref type_names: the
         `\x01raw\x02` flavor substitutes the registered C# name verbatim
         (`Outer.Inner` for a nested type), the `\x03raw\x04` flavor its
@@ -178,7 +226,7 @@ struct document {
                "const char* welder_dup_utf8(const char* s) { return "
                "wcs::shim::dup(s ? s : \"\"); }\n\n";
         out += "} // extern \"C\"\n";
-        return out;
+        return apply_type_anchors(std::move(out));
     }
 
     /** The finished `Bindings.cs` text. */

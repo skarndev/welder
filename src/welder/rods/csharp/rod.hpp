@@ -204,6 +204,31 @@ std::string field_ref() {
     }
 }
 
+/** A welded class/enum reference in a SHIM-ANCHOR position: the `\x05…\x06`
+    placeholder the shim render resolves to the type's **C++** spelling.
+
+    Deferred rather than spelled on the spot, because the spot may not be able to
+    spell it. `qualified_cpp_name` is only correct for a type that HAS a
+    qualified name; an alias-welded class-template specialization does not, and
+    eagerly spelling one yields its enclosing NAMESPACE — which then reaches the
+    shim as `^^ns::detail` and is not a type at all. make_class knows the answer
+    (its `Decl` IS the welding alias) and records it; everything needing a C++
+    anchor without holding that declaration — the container and smart-pointer
+    generators, which see only `std::vector<E>` — emits this instead and lets the
+    render pass fill it in. Keyed exactly like @ref type_ref, so the name and
+    anchor registries share one key space.
+    @see document::apply_type_anchors */
+template <std::meta::info Bare>
+std::string anchor_ref() {
+    if constexpr (spellable(Bare))
+        return std::string{"\x05"} + cpp_name_v<Bare> + "\x06";
+    else {
+        static constexpr const char* d{
+            std::define_static_string(std::meta::display_string_of(Bare))};
+        return std::string{"\x05"} + d + "\x06";
+    }
+}
+
 /** The managed type the P/Invoke declaration uses for @a Type. @a is_return
     switches a string between its `in` (`string`) and `out` (`IntPtr`,
     caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
@@ -945,17 +970,27 @@ struct rod {
         // ^^T's own (what type_ref emits), which for an alias-welded
         // specialization differs from Decl's — record both.
         m.doc->record_type_name(cpp_name_v<Decl>, w.cs_path);
+        // The SHIM's C++ spelling for this type, under the same keys. Decl is
+        // the spellable one (the welding alias for a specialization), so it is
+        // the anchor everything downstream must splice. @see anchor_ref
+        m.doc->record_type_anchor(cpp_name_v<Decl>, w.cpp_qualified);
         if constexpr (spellable(std::meta::dealias(^^T))) {
             if (std::string{cpp_name_v<std::meta::dealias(^^T)>} !=
-                cpp_name_v<Decl>)
+                cpp_name_v<Decl>) {
                 m.doc->record_type_name(cpp_name_v<std::meta::dealias(^^T)>,
                                         w.cs_path);
+                m.doc->record_type_anchor(cpp_name_v<std::meta::dealias(^^T)>,
+                                          w.cpp_qualified);
+            }
         } else {
             // An alias-welded specialization: references key on the display
-            // string (see type_ref).
+            // string (see type_ref). This is THE case the anchor registry
+            // exists for — the display string is all a container generator has,
+            // and it is not a spelling the shim can use.
             static constexpr const char* d{std::define_static_string(
                 std::meta::display_string_of(std::meta::dealias(^^T)))};
             m.doc->record_type_name(d, w.cs_path);
+            m.doc->record_type_anchor(d, w.cpp_qualified);
         }
         w.sym_prefix = std::string{"welder_"} + upath_v<Decl>;
         // Same identifier-safe rule as the nested factory: the handle FIELD
@@ -2026,8 +2061,7 @@ struct rod {
             return;
         const std::string sym{std::string{"welder_vec_"} +
                               symtok_v<bare(sequence_element(C))>};
-        const std::string eq{"^^" +
-                             std::string{cpp_name_v<bare(sequence_element(C))>}};
+        const std::string eq{"^^" + anchor_ref<bare(sequence_element(C))>()};
         const std::string V{container_ref<C>()};
         const std::string E{type_ref<bare(sequence_element(C))>()};
         const std::string Ef{field_ref<bare(sequence_element(C))>()};
@@ -2326,9 +2360,7 @@ struct rod {
         const std::string ns{std::to_string(n)};
         const std::string sym{std::string{"welder_arr"} + ns + "_" +
                               symtok_v<bare(sequence_element(C))>};
-        const std::string targs{"^^" +
-                                std::string{cpp_name_v<bare(
-                                    sequence_element(C))>} +
+        const std::string targs{"^^" + anchor_ref<bare(sequence_element(C))>() +
                                 ", " + ns};
         const std::string V{container_ref<C>()};
         const std::string E{type_ref<bare(sequence_element(C))>()};
@@ -2418,8 +2450,20 @@ struct rod {
             leaf_cpp_spelling(map_key_type(C)))};
         static constexpr const char* vcpp{std::define_static_string(
             leaf_cpp_spelling(map_value_type(C)))};
+        // A welded key/value defers to the anchor registry (it may be an
+        // alias-welded specialization); scalars and strings spell themselves.
+        const std::string kanch{
+            classify(map_key_type(C)) == marshal_kind::handle ||
+                    classify(map_key_type(C)) == marshal_kind::enum_
+                ? anchor_ref<bare(map_key_type(C))>()
+                : std::string{kcpp}};
+        const std::string vanch{
+            classify(map_value_type(C)) == marshal_kind::handle ||
+                    classify(map_value_type(C)) == marshal_kind::enum_
+                ? anchor_ref<bare(map_value_type(C))>()
+                : std::string{vcpp}};
         const std::string targs{std::string{ordered ? "true" : "false"} +
-                                ", ^^" + kcpp + ", ^^" + vcpp};
+                                ", ^^" + kanch + ", ^^" + vanch};
         const std::string V{container_ref<C>()};
         // Wrapper name: Map/UMap + CapKey + value name (identifier-safe).
         std::string kname{ktok};
@@ -2584,10 +2628,10 @@ struct rod {
             return;
         const std::string sym{std::string{"welder_sp_"} + symtok_v<T> +
                               "_free"};
-        // gcc-16: the variable template must be bound to a local first — a
-        // `std::string{cpp_name_v<T>}` nested in the concatenation trips the
-        // consteval-only template-body check.
-        const std::string cpp{cpp_name_v<T>};
+        // Deferred like the container elements: a shared_ptr payload can be
+        // an alias-welded specialization, which has no qualified name to spell
+        // here. @see anchor_ref
+        const std::string cpp{anchor_ref<T>()};
         doc.record_symbol(sym);
         doc.shim += "void " + sym + "(void* box) { wcs::shim::sp_free<^^" +
                     cpp + ">(box); }\n\n";
