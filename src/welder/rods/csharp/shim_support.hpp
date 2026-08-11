@@ -696,7 +696,14 @@ void destroy(void* self) noexcept {
 template <std::meta::info W, std::meta::info Mem>
 auto field_get(void* self, welder_error* err) noexcept {
     using Obj = [:W:];
-    auto* obj{reinterpret_cast<Obj*>(self)};
+    // Reach the member through its DECLARING class, not through W. For a member
+    // W declares itself these are the same type and static_cast is a no-op; for
+    // one FLATTENED IN from a base it is the explicit base adjustment the splice
+    // would otherwise have to infer -- and inferring it is what gcc-16 ICEs on
+    // (segfault at the `(*obj).[:Mem:]` below, for W = a class-template
+    // specialization whose base arrives through a std::conditional_t alias).
+    using Owner = [:std::meta::parent_of(Mem):];
+    auto* obj{static_cast<Owner*>(reinterpret_cast<Obj*>(self))};
     if constexpr ((classify(std::meta::type_of(Mem)) == marshal_kind::handle ||
                    classify(std::meta::type_of(Mem)) ==
                        marshal_kind::seq_ref ||
