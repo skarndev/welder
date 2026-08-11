@@ -1,13 +1,17 @@
-# Task: two gaps blocking a real library's C# bindings
+# Task: what wowlib still cannot bind to C#
 
-Context: the C# rod was pointed at **wowlib** (`~/WoWModding/Projects/wowlib`), a
-large reflection-heavy library — the whole version matrix of WoW file formats,
-every fallible call returning `std::expected`. Seven bugs were found and fixed on
-`feature/csharp` already (see `git log`, and `.claude/context/binding-features.md`
-for the running notes). Two remain, and they are what stops wowlib's C# module
-from linking.
+The C# rod now builds wowlib end to end — `libwowlib_native.dylib` (10.3 MB, 6368
+thunks) plus a 4.3 MB `Bindings.cs` that compiles, and a C# app that opens a real
+3.3.5a MPQ chain, reads `DBFilesClient\Map.dbc`, and catches a `FileNotFound`
+carrying wowlib's error text. Ten bugs were found and fixed getting there (see
+`git log` on `feature/csharp` and `.claude/context/binding-features.md`).
 
-Reproducing: wowlib builds the whole thing with
+What remains is **twelve members wowlib has to exclude for `lang::cs`**. Three
+missing marshalling families and one rod bug account for all of them. They are
+listed below in impact order — the first family is the one that costs real
+capability.
+
+## Reproducing
 
 ```bash
 cd ~/WoWModding/Projects/wowlib
@@ -17,165 +21,133 @@ cmake -S . -B build/csharp -G Ninja -DCMAKE_CXX_COMPILER=g++-16 \
 cmake --build build/csharp --target wowlib_cs
 ```
 
-The generator TU takes ~7 min and ~3 GB; it currently SUCCEEDS, emitting a 4.4 MB
-`Bindings.cs` and a 1.6 MB `shim.cpp`. Iterate on the shim alone — it reaches the
-first error in well under a minute:
+To see a gap's real diagnostic, delete the relevant
+`=welder::mark::exclude(welder::lang::cs),` line and rebuild. The generator TU is
+~7 min / ~3 GB; iterate on the shim alone with
+`cd build/csharp && ninja -j1 bindings/CMakeFiles/wowlib_cs.dir/csharp/shim.cpp.o`.
 
-```bash
-cd build/csharp && ninja -j1 bindings/CMakeFiles/wowlib_cs.dir/csharp/shim.cpp.o
-```
-
-Guard rails for both tasks — all must still hold:
+Guard rails — all must hold after any change:
 
 ```bash
 cd ~/WoWModding/Projects/welder
-# goldens must regenerate BYTE-IDENTICAL unless the task says otherwise
 g++-16 -std=c++26 -freflection -O0 -Isrc -Itests/csharp/cpp -Itests/common/cpp \
   tests/csharp/cpp/gen.cpp -o /tmp/gen && /tmp/gen /tmp/shim.cpp /tmp/Bindings.cs
-diff /tmp/shim.cpp tests/csharp/shim.golden.cpp
-diff /tmp/Bindings.cs tests/csharp/Bindings.golden.cs
-# the emitted shim must compile
+diff /tmp/shim.cpp tests/csharp/shim.golden.cpp        # byte-identical, or a
+diff /tmp/Bindings.cs tests/csharp/Bindings.golden.cs  # deliberate, reviewed move
 g++-16 -std=c++26 -freflection -fsyntax-only -Isrc -Itests/csharp/cpp -Itests/common/cpp /tmp/shim.cpp
-# consteval locks
 for f in tests/core/*.cpp; do g++-16 -std=c++26 -freflection -fsyntax-only \
   -Isrc -Itests/common/cpp -Itests/csharp/cpp "$f" || echo "FAIL $f"; done
 ```
 
-Note welder's own test suite is gated behind a Python backend
-(`WELDER_BUILD_TESTS AND (PYBIND11 OR NANOBIND)` in the top-level CMakeLists), so
-the C# tests cannot be reached without one — worth fixing separately, the C# tests
-need neither.
+welder's own C# tests are unreachable without a Python backend enabled
+(`WELDER_BUILD_TESTS AND (PYBIND11 OR NANOBIND)` in the top-level CMakeLists),
+though they need neither — worth fixing while you are in here.
 
 ---
 
-## Task 1 — container element anchors for unspellable specializations
+## 1. Nested value sequences — `vector<vector<T>>` and `vector<array<T, N>>`
 
-**84 of the 85 remaining shim errors.** One root cause.
+**8 of the 12 exclusions, and the ones that cost capability.** Both shapes are one
+missing family: a sequence whose element is itself a value sequence.
 
-```
-shim_support.hpp: In instantiation of 'void* …shim::vec_new(welder_error*)
-  [with std::meta::info E = ^^wowlib::formats::wmo::group::chunks::detail]':
-shim_support.hpp:779:18: error: 'wowlib::formats::wmo::group::chunks::detail'
-  is not usable in a splice type
-```
+| member | type | what C# loses |
+|---|---|---|
+| `MapChunk::alpha_maps` | `vector<vector<uint8_t>>` | **ADT terrain texture blending** — the per-layer 64×64 alpha maps |
+| `M2Track<T>::values` | `vector<vector<T>>` | **M2 animation keyframe values** (per sequence) |
+| `M2Track<T>::timestamps` | `vector<vector<uint32_t>>` | M2 animation keyframe times |
+| `M2TrackBase::timestamps` | `vector<vector<uint32_t>>` | event-track trigger times |
+| `M2SkinProfile::bones` | `vector<array<uint8_t, 4>>` | **per-vertex bone indices** — no skinning |
+| `M2ChunkedFile::texture_ac` | `vector<array<uint8_t, 2>>` | TXAC texture-transform flags (niche) |
+| `WDTParticulates::point_groups` | `vector<vector<ParticulatePoint>>` | MPV particulate volumes (niche, BfA+) |
+| `WDTParticulates::bound_groups` | `vector<vector<ParticulateBounds>>` | MPV particulate bounds (niche, BfA+) |
 
-`E` is a **namespace**, not a type. Distinct bad anchors observed:
-`adt::detail`, `m2::root::record`, `m2::root::record::detail`, `m2::skin::detail`,
-`wmo::group::detail`, `wmo::group::chunks::detail`.
+Without these a C# consumer can open a map tile but not read its texture
+blending, and can load a model but not its animations or skinning — which is most
+of what a viewer or editor exists to do. This is the one to do first.
 
-**Why.** `rod::_ensure_vector<C>` (rod.hpp ~2029) spells the element anchor as
+**Why it fails.** `classify`'s sequence arm (`type_map.hpp`) admits an element
+that is `scalar`/`enum_` (→ `seq_value`, a flat blittable buffer) or `handle`
+(→ `seq_ref`, an opaque wrapper). A `vector<T>` or `array<T,N>` element is
+neither, so it falls through to `unsupported`. `welder_seq_wire` describes ONE
+contiguous buffer the managed side copies wholesale; a vector of vectors is a
+vector of separate allocations.
 
-```cpp
-const std::string eq{"^^" + std::string{cpp_name_v<bare(sequence_element(C))>}};
-```
+**Note the inner element is always leaf-ish here** — scalars, or small welded
+structs (`ParticulatePoint`). A general nested-container design is not required
+to unlock the table above; one level of nesting over a `seq_value`-able inner
+element covers every row.
 
-`cpp_name_v` is `qualified_cpp_name`, which walks parents collecting identifiers.
-A class-template **specialization has no identifier**, so it contributes nothing
-and the walk yields only the enclosing namespace path. The same mistake is at
-`_ensure_array` (~2329, `targs`) and should be checked for `_ensure_map` (~2415)
-and the `shared_ptr` box (~2585).
+**Acceptance.** Round-trip both shapes (jagged `vector<vector<T>>` and fixed
+`vector<array<T,N>>`), including empty outer, empty inner, and mutation through
+whatever the C# side exposes; then delete the eight excludes and confirm the
+members bind and carry correct data for a real ADT and M2.
 
-This is the third instance of one blind spot. The other two are already fixed and
-are worth reading first as precedent: `symbol_token`/`symtok_v` (commit
-`5c439fb`) for the C-symbol half, and `find_named_field`/`find_named_member` for
-the lookup half.
+## 2. `vector<std::string>` → `string[]`
 
-**The mechanism that already works.** A welded class does not have this problem
-because `make_class<T, Decl, …>` is handed `Decl` — the namespace-scope **welding
-alias** (`^^wowlib::formats::adt::ADTTbc`), which IS spellable — and sets
-`w.cpp_qualified = cpp_name_v<Decl>`. `_ensure_vector<C>` has only the container
-type and never sees that alias.
+| member | cost |
+|---|---|
+| `FileSystem::enumerate_paths()` | **the only file-listing call in wowlib** — a C# caller can read any file it can already name, but cannot discover what a client contains |
+| `RoundtripReport::unknown_chunks` | audit reporting only |
 
-**What to decide.** How the container generation reaches the element's alias
-anchor. Options, roughly in order of how much machinery they reuse:
+`string[]` is an entirely ordinary .NET type, so this is welder being incomplete
+rather than an impedance mismatch. Same root cause as above — the element is not
+blittable, so `welder_seq_wire`'s single-buffer model does not fit; here `data`
+wants to be a `const char**` with per-element ownership on both sides (free every
+element AND the array). The generator work is emitting a per-element marshalling
+loop where `seq_value` currently emits a bulk copy (`wrapper_return_body` /
+`append_one_param`).
 
-- Register the anchor spelling alongside the C# name. `make_class` already calls
-  `doc.record_type_name(key, …)` keyed on `display_string_of`; add a parallel
-  anchor registry and have `_ensure_*` emit a placeholder that the existing
-  render-pass rescan resolves — the same deferral `container_ref`/`type_ref`
-  already use (`\x01…\x02`, `\x03…\x04`). Watch ordering: containers are
-  collected during the signature sweep, which may run before the element class is
-  bound; the render pass is what makes that safe.
-- Have the shim derive the type instead of spelling it — e.g. reach it through a
-  member it appears in (`type_of(named_field(^^OwnerAlias, "field"))`). Avoids
-  the alias entirely but needs an owner, which the container generator also does
-  not currently have.
-- Pass the element's `Decl` down into container collection (`_collect_containers`
-  in every rod hook), which is the most invasive but the most direct.
+## 3. Overload groups mixing a declared and a flattened member
 
-**Acceptance.** wowlib's shim compiles past all 84; goldens byte-identical (the
-existing cases use spellable elements, so nothing should move); add a test case
-with an alias-welded specialization used as a `std::vector` element, which is the
-shape none of `tests/csharp/cpp/cases.hpp` or `tests/common/cpp/templates.hpp`
-currently covers.
+| member | cost |
+|---|---|
+| `ChunkedFile::read(span<const byte>)` | no parse-from-memory in C# |
+| `ChunkedFile::write()` | no serialize-to-memory in C# |
 
----
+A **rod bug**, not a missing type. These are flattened onto every versioned
+entity, which also welds a per-version `read(fs, key)` / `write(fs, key)` for
+`cs` — so C# sees two `read` overloads whose declaring scopes are BOTH
+class-template specializations. Those have no spellable name, so `_owner_expr`
+falls back to the bound-type anchor for both and `index_of_named_member` counts
+within each declaring scope, making both index 0: two thunks named
+`..._m_read_0`, and a lookup that resolves both to the same member. welder's
+duplicate-symbol `#error` catches it, so nothing is silent.
 
-## Task 2 — `std::vector<std::string>` marshalling
+**The fix** is to index overloads over the same flattened sequence the shim-side
+lookup searches (own members, then bases). That needs the generator to know the
+ANCHOR type at compile time, which `add_method<Fns, Style>` does not get today —
+`class_writer` carries only runtime strings — so the carriage would have to pass
+`BoundInto` through to the rod's `add_*` hooks. The cheaper alternative is to emit
+a scope discriminator (`symbol_token(parent_of(fn))`) into both the symbol and a
+`base_scope(anchor, "<token>")` lookup, but that moves goldens for every
+specialization-declared method.
 
-Not blocking the build (wowlib excludes the members), but it costs real API:
-`FileSystem::enumerate_paths()` is the **only** file-listing call in wowlib, so a
-C# caller can read any file it can already name but cannot discover what a client
-contains. `RoundtripReport::unknown_chunks` is the other casualty. `string[]` is
-an entirely ordinary .NET type, so this is welder being incomplete rather than an
-impedance mismatch.
-
-**Why it fails.** `type_map.hpp` `classify`, the sequence arm:
-
-```cpp
-const marshal_kind ek{classify(sequence_element(w))};
-if (ek == scalar || ek == enum_) return seq_value;   // flat, blittable
-if (ek == handle)                return seq_ref;     // opaque wrapper
-return unsupported;                                  // utf8_string lands here
-```
-
-The wire is the obstacle: `welder_seq_wire { void* data; int64 len; }` describes
-ONE contiguous blittable buffer that C# `Buffer.MemoryCopy`s wholesale. A
-`std::vector<std::string>` is not blittable — each element is its own allocation.
-
-**Shape of the work.**
-
-- A string-sequence kind (new `marshal_kind`, or `seq_value` plus a flag).
-- Wire: reuse `welder_seq_wire` with `data` as `const char**`.
-- Shim return: malloc an array of `char*`, `dup_utf8` each element. Ownership is
-  the fiddly part — the managed side must free every element AND the array.
-- Shim param: managed pins an array of UTF-8 pointers; rebuild a
-  `std::vector<std::string>`. Mirror how `seq_value` params pin (`call_pieces`
-  `pin_open` / `needs_unsafe`).
-- Generator: `public_type` → `"string[]"`, `pinvoke_type` → `WelderSeqWire`, and
-  — the real work — `wrapper_return_body` / `append_one_param` must emit a
-  per-element marshalling loop where `seq_value` currently emits a bulk copy.
-
-**Acceptance.** A round-trip case covering `vector<string>` return and parameter,
-empty vector, embedded non-ASCII (the UTF-8 path), and no leaks on either side;
-then drop the two `mark::exclude(welder::lang::cs)` in wowlib
-(`fs/filesystem.hpp` `enumerate_paths`, `audit/roundtrip.hpp` `unknown_chunks`)
-and confirm they bind.
+The fs-level `read`/`write` are the pair C# keeps meanwhile — they are the only
+way to load the multi-file entities (WMO groups, M2 satellites, split ADTs).
 
 ---
 
-## Already fixed, do not redo
+## Not gaps: two renames C# genuinely requires
 
-- gcc-16 **ICE** (segfault) splicing a flattened base member through the bound
-  type — worked around in commit `837d3e3` by reaching the member through
-  `parent_of(Mem)`. It is a plain compiler bug, reduced to 23 lines with neither
-  welder nor wowlib involved: it needs BOTH a pointer type that is a splice of a
-  class-TEMPLATE specialization AND a spliced member declared in a BASE; drop
-  either and it compiles. Deterministic, independent of stack limit (8 MB and
-  64 MB) and of optimization level. The reproducer and a Bugzilla draft are kept
-  OUTSIDE this repo, at `~/WoWModding/gcc-splice-base-member-ice/`. Do not remove
-  the workaround while the bug stands.
-- The other five families and two specialization bugs — see `git log` on
-  `feature/csharp` and `.claude/context/binding-features.md`.
+These are welder's diagnostics working, and are already resolved in wowlib with
+`weld_as` scoped to `lang::cs`, so the Python and Lua names are untouched. Listed
+so nobody "fixes" them in welder.
 
-## Known open, lower priority
+- `SMOFog::Fog` (nested type) vs its `fog` member — both style to `Fog`, and C#
+  forbids a type and member sharing a name (CS0102). The TYPE is renamed
+  (`FogBand`), keeping the natural property spelling.
+- `SMTextureColorGrading::_04` — a leading underscore survives PascalCase, and
+  that namespace is reserved for welder's generated scaffolding. Renamed
+  `Unknown04`. (The related welder bug — the aggregate ctor emitting `uint 04` —
+  IS fixed; `weld_as` does not reach parameter names, which derive from the field
+  identifiers.)
 
-An overload group mixing a member declared in the bound type with one flattened
-from an unspellable-specialization base collapses onto one C symbol
-(`..._m_read_0` twice) and one lookup. wowlib works around it by excluding
-`ChunkedFile::read(span)`/`write()` for `cs`. `index_of_named_member` counts
-within the DECLARING scope while the anchor falls back to the bound type; the fix
-is to index over the same flattened sequence the lookup searches, which needs the
-generator to know the anchor type at compile time — `add_method<Fns, Style>` does
-not get it today (`class_writer` carries only runtime strings), so the carriage
-would have to pass `BoundInto` through to the rod's `add_*` hooks.
+## Also worth knowing
+
+- The gcc-16 ICE welder works around in `field_get` is a live compiler bug. A
+  23-line reproducer and a Bugzilla draft live OUTSIDE this repo at
+  `~/WoWModding/gcc-splice-base-member-ice/`. Do not remove the workaround.
+- `keep_alive` is documented-ignored on this rod, as on the Lua rods.
+- `std::variant`, class-keyed maps and custom-comparator maps remain
+  unmarshallable by design/deferral; wowlib does not use them, so they cost
+  nothing here.
