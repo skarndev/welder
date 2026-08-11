@@ -158,10 +158,13 @@ and confirm they bind.
 
 - gcc-16 **ICE** (segfault) splicing a flattened base member through the bound
   type — worked around in commit `837d3e3` by reaching the member through
-  `parent_of(Mem)`. Deterministic, independent of stack limit (tested 8 MB and
-  64 MB); reduced cases of the same shape do NOT reproduce, so it is a workaround
-  and the underlying gcc bug is still unreported. Worth a minimal reproducer and
-  an upstream report if anyone can reduce it.
+  `parent_of(Mem)`. It is a plain compiler bug, reduced to 23 lines with neither
+  welder nor wowlib involved: it needs BOTH a pointer type that is a splice of a
+  class-TEMPLATE specialization AND a spliced member declared in a BASE; drop
+  either and it compiles. Deterministic, independent of stack limit (8 MB and
+  64 MB) and of optimization level. The reproducer and a Bugzilla draft are kept
+  OUTSIDE this repo, at `~/WoWModding/gcc-splice-base-member-ice/`. Do not remove
+  the workaround while the bug stands.
 - The other five families and two specialization bugs — see `git log` on
   `feature/csharp` and `.claude/context/binding-features.md`.
 
