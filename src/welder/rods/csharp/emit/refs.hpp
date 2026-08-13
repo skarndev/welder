@@ -40,21 +40,27 @@
 namespace welder::inline v0::rods::csharp {
 
 /** The `::`-qualified C++ name of class/enum/namespace @a T as a runtime-usable
-    static C string. Only instantiated for entities with a spellable path. */
+    static C string. Only instantiated for entities with a spellable path.
+    @tparam T the entity's reflection. */
 template <std::meta::info T>
 inline constexpr const char* cpp_name_v =
     std::define_static_string(qualified_cpp_name(T));
 
-/** The styled C# name of entity @a E (kind @a K) under name style @a Style. */
+/** The styled C# name of entity @a E (kind @a K) under name style @a Style.
+    @tparam E     the entity's reflection.
+    @tparam Style the name style.
+    @tparam K     the entity kind the style's per-kind hook keys on. */
 template <std::meta::info E, class Style, ::welder::ent_kind K>
 inline constexpr const char* styled_v = ::welder::name_of<E, lang::cs, Style, K>();
 
-/** The identifier of entity @a E as a runtime-usable static C string. */
+/** The identifier of entity @a E as a runtime-usable static C string.
+    @tparam E the entity's reflection. */
 template <std::meta::info E>
 inline constexpr const char* ident_v =
     std::define_static_string(std::meta::identifier_of(E));
 
-/** The `welder_<underscore-path>` C-symbol prefix of namespace/type @a Ent. */
+/** The `welder_<underscore-path>` C-symbol prefix of namespace/type @a Ent.
+    @tparam Ent the entity's reflection. */
 template <std::meta::info Ent>
 inline constexpr const char* upath_v =
     std::define_static_string(underscore_path(Ent));
@@ -62,7 +68,8 @@ inline constexpr const char* upath_v =
 /** @ref symbol_token as a constant-initialized variable template: @ref upath_v's
     collision-free sibling, for a symbol whose @a Ent may be a class-template
     SPECIALIZATION (a container element, a `shared_ptr` payload). Identical to
-    `upath_v` for anything spellable. */
+    `upath_v` for anything spellable.
+    @tparam Ent the entity's reflection. */
 template <std::meta::info Ent>
 inline constexpr const char* symtok_v =
     std::define_static_string(symbol_token(Ent));
@@ -71,7 +78,9 @@ inline constexpr const char* symtok_v =
     would collapse every instantiation to `::std::vector`. The final C# name
     ("Vector" + the element's name) is registered at collection
     (@ref welder::rods::csharp::ensure_vector) and itself contains the element placeholder,
-    which the render pass's rescan resolves. */
+    which the render pass's rescan resolves.
+    @tparam C a reflection of the (bare) container specialization.
+    @return the `\x01display\x02` placeholder text. */
 template <std::meta::info C>
 std::string container_ref() {
     static constexpr const char* d{
@@ -81,7 +90,9 @@ std::string container_ref() {
 
 /** A welded class/enum reference in a HANDLE-FIELD position: the
     identifier-safe placeholder flavor (a nested type's dotted name sanitizes
-    to underscores at render). */
+    to underscores at render).
+    @tparam Bare a reflection of the bare referenced type.
+    @return the `\x03raw\x04` placeholder text. */
 template <std::meta::info Bare>
 std::string field_ref() {
     if constexpr (spellable(Bare))
@@ -106,6 +117,8 @@ std::string field_ref() {
     generators, which see only `std::vector<E>` — emits this instead and lets the
     render pass fill it in. Keyed exactly like @ref type_ref, so the name and
     anchor registries share one key space.
+    @tparam Bare a reflection of the bare referenced type.
+    @return the `\x05raw\x06` placeholder text.
     @see document::apply_type_anchors */
 template <std::meta::info Bare>
 std::string anchor_ref() {
@@ -118,14 +131,12 @@ std::string anchor_ref() {
     }
 }
 
-/** The managed type the P/Invoke declaration uses for @a Type. @a is_return
-    switches a string between its `in` (`string`) and `out` (`IntPtr`,
-    caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
-    subclass (premature-collection safety on the call), a return as `IntPtr`. */
 /** A welded class/enum REFERENCE as a render-time placeholder: the final C#
     name is reconciled from the document's rename map at render() (filled by
     make_class/make_enum), so reference spelling never depends on declaration
-    order or on a Style reaching the hook (add_operator has none). */
+    order or on a Style reaching the hook (add_operator has none).
+    @tparam Bare a reflection of the bare referenced type.
+    @return the `\x01raw\x02` placeholder text. */
 template <std::meta::info Bare>
 std::string type_ref() {
     if constexpr (spellable(Bare))
@@ -142,7 +153,12 @@ std::string type_ref() {
     @a ps: the declaring scope's own `^^` anchor for a flattened base's
     member, else the bound type's @a anchor — which also covers members of
     a PROTECTED nested type, whose spelled name (== @a qual) would be
-    inaccessible at the shim's namespace scope. */
+    inaccessible at the shim's namespace scope.
+    @param named_parent whether the declaring scope has a spellable name.
+    @param ps     the declaring scope's `::`-qualified spelling.
+    @param qual   the bound type's `::`-qualified spelling.
+    @param anchor the bound type's `^^…` anchor expression.
+    @return the owner expression the lookup call splices. */
 inline std::string owner_expr(bool named_parent, const std::string& ps,
                                const std::string& qual,
                                const std::string& anchor) {

@@ -42,7 +42,7 @@ namespace welder::inline v0::rods::csharp {
     explicit "finish class" hook, so RAII is the finalizer. Move-only so a
     moved-from temporary does not double-flush. */
 struct class_writer {
-    document* doc{nullptr};
+    document* doc{nullptr};       /**< The shared document (null = moved-from). */
     std::string cs_name{};        /**< The C# class name (the leaf). */
     std::string cs_ns{};          /**< The enclosing C# namespace's dotted path
                                        below the root (`""` = root). */
@@ -77,7 +77,7 @@ struct class_writer {
         const char* sig;  /**< Its function type's display string. */
         std::size_t k;    /**< Its slot index. */
     };
-    std::vector<vslot> vslots{};
+    std::vector<vslot> vslots{};  /**< The type's overridable slots (director). */
     /** Emitted member (property/method) names and nested TYPE names: C#
         forbids a member and a nested type sharing a name (CS0102), so the
         flush diagnoses the collision INTO the artifact (a `#error` with a

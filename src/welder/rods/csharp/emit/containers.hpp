@@ -48,9 +48,8 @@
 
 namespace welder::inline v0::rods::csharp {
 
-
-
-/** @copydoc welder::rods::csharp::ensure_element_wrapper */
+// The definition of the forward declaration in containers/element.hpp (which
+// carries the doc comment): dispatch by the element's marshal kind.
 template <std::meta::info E>
 void ensure_element_wrapper(document& doc) {
     constexpr marshal_kind k{classify(E)};
@@ -70,7 +69,9 @@ void ensure_element_wrapper(document& doc) {
 }
 
 /** Generate whatever per-type scaffolding @a Type's marshalling needs:
-    a vector/array/map wrapper, or a shared_ptr box class. */
+    a vector/array/map wrapper, or a shared_ptr box class.
+    @tparam Type a reflection of the type as it appears in a member/signature.
+    @param doc the growing document. */
 template <std::meta::info Type>
 void ensure_for(document& doc) {
     constexpr marshal_kind k{classify(Type)};
@@ -87,10 +88,13 @@ void ensure_for(document& doc) {
     }
 }
 
-
-
-
-/** Collect the generated scaffolding a callable's signature uses. */
+/** Collect the generated scaffolding a callable's signature uses: one
+    @ref ensure_for per parameter type and (for a non-constructor) the return
+    type — the sweep every emission hook calls before writing a signature, so
+    the wrapper a parameter or return needs always exists by the time it is
+    referenced.
+    @tparam Fn a reflection of the callable.
+    @param doc the growing document. */
 template <std::meta::info Fn>
 void collect_containers(document& doc) {
     if constexpr (!std::meta::is_constructor(Fn))

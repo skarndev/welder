@@ -30,7 +30,11 @@ namespace welder::inline v0::rods::csharp {
 
 /** The fixed-width C ABI wire spelling the shim signature uses for @a type.
     Marshallability was already enforced (@ref require_marshallable) by the
-    caller, so `unsupported` cannot reach this. */
+    caller, so `unsupported` cannot reach this.
+    @param type      the param/return type reflection.
+    @param is_return true when spelling a return position (tuple and
+                     shared_ptr wires differ by direction).
+    @return the C-ABI type spelling. */
 consteval const char* shim_wire_spelling(std::meta::info type, bool is_return) {
     switch (classify(type)) {
         case marshal_kind::void_:       return "void";
@@ -51,15 +55,25 @@ consteval const char* shim_wire_spelling(std::meta::info type, bool is_return) {
     }
 }
 
-/** @ref shim_wire_spelling as constant-initialized variable templates. */
+/** @ref shim_wire_spelling in PARAMETER position, as a constant-initialized
+    variable template (the gcc-16 consteval-in-runtime-expression workaround —
+    see `<welder/rods/csharp/emit/refs.hpp>`).
+    @tparam T the parameter type reflection. */
 template <std::meta::info T>
 inline constexpr const char* wire_param_v = shim_wire_spelling(T, false);
+/** @ref shim_wire_spelling in RETURN position (same workaround).
+    @tparam T the return type reflection. */
 template <std::meta::info T>
 inline constexpr const char* wire_return_v = shim_wire_spelling(T, true);
 /** The managed type the P/Invoke declaration uses for @a Type. @a is_return
     switches a string between its `in` (`string`) and `out` (`IntPtr`,
     caller-freed) forms; a welded-class parameter is typed as its `SafeHandle`
-    subclass (premature-collection safety on the call), a return as `IntPtr`. */
+    subclass (premature-collection safety on the call), a return as `IntPtr`.
+    @tparam Type  the param/return type reflection.
+    @tparam Style the name style (unused by the wire spellings themselves,
+                  threaded for the type references).
+    @param is_return true when spelling a return position.
+    @return the P/Invoke-declaration type (may carry reference placeholders). */
 template <std::meta::info Type, class Style>
 std::string pinvoke_type(bool is_return) {
     constexpr marshal_kind k{classify(Type)};
@@ -96,7 +110,11 @@ std::string pinvoke_type(bool is_return) {
 template <std::meta::info Type, std::size_t... J>
 std::string tuple_public_type(std::index_sequence<J...>);
 
-/** The public C# type the wrapper API exposes for @a Type. */
+/** The public C# type the wrapper API exposes for @a Type (`T?`, `T[]`, a
+    ValueTuple, a generated container wrapper's name, …).
+    @tparam Type  the param/return type reflection.
+    @tparam Style the name style.
+    @return the idiomatic C# spelling (may carry reference placeholders). */
 template <std::meta::info Type, class Style>
 std::string public_type() {
     constexpr marshal_kind k{classify(Type)};
@@ -142,6 +160,11 @@ std::string public_type() {
     else
         return type_ref<bare(Type)>(); // enum_ / handle
 }
+/** The C# ValueTuple spelling of pair/tuple @a Type — `(int, string)` — one
+    @ref public_type per element.
+    @tparam Type the pair/tuple type reflection.
+    @tparam J    the element indices (`std::make_index_sequence`).
+    @return the parenthesized ValueTuple spelling. */
 template <std::meta::info Type, std::size_t... J>
 std::string tuple_public_type(std::index_sequence<J...>) {
     std::string out{"("};
@@ -154,7 +177,10 @@ std::string tuple_public_type(std::index_sequence<J...>) {
 }
 /** The public C# RETURN type: like @ref public_type, plus the `?` nullable
     marker for a pointer-flavor welded-class return (a C++ `nullptr` maps to
-    C# `null`). */
+    C# `null`).
+    @tparam R     the return type reflection.
+    @tparam Style the name style.
+    @return the idiomatic C# return spelling. */
 template <std::meta::info R, class Style>
 std::string public_return_type() {
     if constexpr (classify(R) == marshal_kind::handle ||

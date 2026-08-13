@@ -27,13 +27,22 @@
 namespace welder::inline v0::rods::csharp {
 
 /** The wrapper statements converting the checked P/Invoke result into the
-    managed return value. @a pc is the P/Invoke call expression (without the
-    trailing error arg — appended here so every call is checked), @a ind the
-    indentation. A welded-class result follows @ref handle_return_of for
-    policy @a Rv: owned kinds wrap with `owns: true`; view kinds with
+    managed return value. A welded-class result follows @ref handle_return_of
+    for policy @a Rv: owned kinds wrap with `owns: true`; view kinds with
     `owns: false`, and `view_keepalive` additionally stores @a owner in the
     view's `_owner` (preventing collection of the parent while the view
-    lives — the managed spelling of `reference_internal`). */
+    lives — the managed spelling of `reference_internal`).
+    @tparam R     the C++ return type reflection.
+    @tparam Style the name style.
+    @tparam Rv    the callable's resolved return-value policy.
+    @param pc    the P/Invoke call expression (its trailing `out WelderError
+                 _e` argument already spelled by the caller — the error CHECK
+                 is emitted here, immediately after the call, so no generated
+                 call site can forget it).
+    @param ind   the indentation of each emitted line.
+    @param owner the owner expression a `view_keepalive` result pins
+                 (usually `this`); empty when no owner applies.
+    @return the return-path statements, indented and newline-terminated. */
 template <std::meta::info R, class Style,
           ::welder::rv_kind Rv = ::welder::rv_kind::automatic>
 std::string wrapper_return_body(const std::string& pc, const std::string& ind,

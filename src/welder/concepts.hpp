@@ -96,7 +96,7 @@ concept caster_oracle = requires {
     container-typed member/signature never spells a raw C++ name in a generated stub (a
     def-time-ordering artifact); the Lua runtime rods and the text-emitting rods do not,
     and keep the single-pass sweep. Shape-probed with @ref welder::detail::any_type, like
-    @ref caster_oracle. @tparam B the rod type. */
+    @ref welder::caster_oracle. @tparam B the rod type. */
 template <class B>
 concept two_phase_rod = requires(typename B::module_type& m, const char* s) {
     B::template reopen_class<detail::any_type>(m, s);

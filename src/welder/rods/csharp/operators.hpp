@@ -10,12 +10,14 @@
 /** @file
     The C++-operator → **C#** map of the C# rod, and the operator half of the
     shared member-lookup layer (operators have no identifier, so `named_member`
-    cannot re-derive them — @ref named_operator looks up by (operator token,
+    cannot re-derive them — @ref welder::rods::csharp::named_operator looks up
+    by (operator token,
     arity, declaration index) instead, with the same generator ⇄ shim
     agreement contract).
 
     C# operator overloading is close to C++'s but not identical, so each C++
-    operator resolves to one of five shapes (@ref cs_op_kind):
+    operator resolves to one of five shapes
+    (@ref welder::rods::csharp::cs_op_kind):
     - **binary / unary** → a `public static` C# operator (`op_Addition`, …);
     - **comparison** → a static operator too, but routed through the class
       writer's pairing ledger: C# requires `==`/`!=`, `<`/`>` and `<=`/`>=`

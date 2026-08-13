@@ -1,6 +1,9 @@
 #pragma once
+#include <concepts>
+#include <cstddef>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 /** @file
@@ -17,6 +20,80 @@
 */
 
 namespace welder::inline v0::rods::csharp {
+
+/** @name The `{}` mini-format
+    One formatting vocabulary for BOTH worlds this backend assembles text in:
+    constant evaluation (symbol mangling, `emit/refs.hpp`'s constant-init
+    spellings) and generator runtime (every emitter, via
+    @ref welder::rods::csharp::code_writer). Neither `std::format` nor
+    `std::to_string` is usable in constant evaluation (verified on gcc-16 /
+    libstdc++), and {fmt}'s compile-time path would add a third-party dependency
+    to an otherwise dependency-free rod — so welder owns these ~40 lines.
+    `constexpr` (not `consteval`) is the point: the SAME implementation runs in
+    both worlds, so a spelling can move between them without reformatting. @{ */
+
+/** Append one format argument to @a out: the string-ish overload.
+    @param out the buffer under construction.
+    @param s   the argument (`string_view`, `const char*`, `std::string` and
+               `char` all land here via the overload set). */
+constexpr void cat_append(std::string& out, std::string_view s) { out += s; }
+/** @copydoc cat_append(std::string&,std::string_view) */
+constexpr void cat_append(std::string& out, char s) { out += s; }
+
+/** Append one format argument to @a out: the integral overload, rendered as
+    decimal (`std::to_string` is not constexpr, so the digits are hand-rolled).
+    @tparam I   an integral type other than `char`/`bool`.
+    @param out the buffer under construction.
+    @param v   the value to render. */
+template <std::integral I>
+    requires(!std::same_as<I, char> && !std::same_as<I, bool>)
+constexpr void cat_append(std::string& out, I v) {
+    if (v == 0) {
+        out += '0';
+        return;
+    }
+    char tmp[24]{};
+    std::size_t n{0};
+    using U = std::make_unsigned_t<I>;
+    U u{v < 0 ? static_cast<U>(0) - static_cast<U>(v) : static_cast<U>(v)};
+    while (u != 0) {
+        tmp[n++] = static_cast<char>('0' + u % 10);
+        u /= 10;
+    }
+    if (v < 0)
+        out += '-';
+    while (n != 0)
+        out += tmp[--n];
+}
+
+/** Format @a f, substituting each `{}` with the next of @a args — the
+    backend's `std::format` stand-in, usable in constant evaluation and at
+    runtime alike (see the group note above). Only what the emitted text needs
+    is supported: `{}` placeholders in order (no indexing, no format specs),
+    string-ish and integral arguments. Surplus placeholders (more `{}` than
+    arguments) are emitted verbatim; surplus ARGUMENTS append at the end —
+    both are visible in the golden rather than silently dropped.
+    @tparam Args the argument types (each with a @ref cat_append overload).
+    @param f    the format string.
+    @param args the values substituted for the `{}` placeholders, in order.
+    @return the formatted string. */
+template <class... Args>
+constexpr std::string cat(std::string_view f, const Args&... args) {
+    std::string out{};
+    out.reserve(f.size() + sizeof...(Args) * 8);
+    std::size_t pos{0};
+    [[maybe_unused]] auto emit_next = [&](const auto& a) {
+        const std::size_t brace{f.find("{}", pos)};
+        out += f.substr(pos, brace - pos); // npos → the whole tail
+        cat_append(out, a);
+        pos = brace == std::string_view::npos ? f.size() : brace + 2;
+    };
+    (emit_next(args), ...);
+    out += f.substr(pos);
+    return out;
+}
+
+/** @} */
 
 /** Append @a text as C# `/// ` XML-doc `<summary>` lines, or nothing when empty.
     @param out    the buffer to append to.

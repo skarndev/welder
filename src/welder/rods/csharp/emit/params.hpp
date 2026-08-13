@@ -6,6 +6,7 @@
 
 #include <welder/bind_traits.hpp>                 // param_types / aggregate_fields
 #include <welder/naming.hpp>                      // restyle
+#include <welder/rods/csharp/document/code_writer.hpp>
 #include <welder/rods/csharp/emit/refs.hpp>
 #include <welder/rods/csharp/emit/spellings.hpp>
 #include <welder/rods/csharp/emit/tuples.hpp>
@@ -130,8 +131,17 @@ struct call_pieces {
     }
 };
 
-/** Append one parameter (C++ type @a PT, position @a j, C# name @a csname) to
-    @a cp. Shared by the function-parameter and aggregate-field paths. */
+/** Append one parameter to @a cp — filling all five spellings, plus whatever
+    pinning (`fixed`), staging (@ref call_pieces::pre / @ref call_pieces::post)
+    or `unsafe` the type's marshalling demands. Shared by the
+    function-parameter and aggregate-field paths, and reused for property
+    setters, operator operands and map keys/values — the ONE inbound-conversion
+    source, so a conversion cannot drift between them.
+    @tparam PT    the parameter's C++ type reflection.
+    @tparam Style the name style.
+    @param cp     the pieces under construction.
+    @param j      the parameter's position (0-based; separators key on it).
+    @param csname the parameter's C# identifier (pre-restyled). */
 template <std::meta::info PT, class Style>
 void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
     // Marshallability is enforced here — once per parameter, loudly.
@@ -223,8 +233,33 @@ void append_one_param(call_pieces& cp, std::size_t j, const char* csname) {
         cp.has_string = true;
 }
 
+/** Emit a property's `set { … }` arm: the checked call statement inside
+    whatever staging the value's conversion needs (@ref call_pieces::wrap).
+    The ONE write-arm source shared by data-member fields, method-backed
+    properties and namespace variables — the write-path counterpart of
+    @ref wrapper_return_body.
+    @param w    the property's writer, positioned inside the property braces.
+    @param vcp  the value's parameter pieces (staging/pinning source).
+    @param call the complete setter call statement (ending in `;`). */
+inline void emit_set_arm(code_writer& w, const call_pieces& vcp,
+                         const std::string& call) {
+    w.line("set");
+    {
+        const auto arm{w.braces()};
+        const std::string sind{w.indentation() +
+                               (vcp.post.empty() ? "" : "    ")};
+        w.raw(vcp.wrap(sind + call + "\n" + sind +
+                           "WelderInterop.ThrowIfError(in _e);\n",
+                       w.indentation()));
+    }
+}
+
 /** Build the @ref call_pieces for callable @a Fn's parameters (a flat function
-    template + constant-index pack — the gcc-16 workaround luacats also uses). */
+    template + constant-index pack — the gcc-16 workaround luacats also uses).
+    @tparam Fn    a reflection of the callable.
+    @tparam Style the name style.
+    @tparam I     the parameter indices (`std::make_index_sequence`).
+    @return the five coordinated spellings of the whole parameter list. */
 template <std::meta::info Fn, class Style, std::size_t... I>
 call_pieces build_params(std::index_sequence<I...>) {
     call_pieces cp{};
@@ -240,8 +275,13 @@ call_pieces build_params(std::index_sequence<I...>) {
     return cp;
 }
 
-/** Build the @ref call_pieces for aggregate @a T's fields (parenthesized aggregate
-    construction). */
+/** Build the @ref call_pieces for aggregate @a T's fields (parenthesized
+    aggregate construction: each public field becomes one constructor
+    parameter).
+    @tparam T     the aggregate class.
+    @tparam Style the name style.
+    @tparam J     the field indices (`std::make_index_sequence`).
+    @return the five coordinated spellings of the field list. */
 template <class T, class Style, std::size_t... J>
 call_pieces aggregate_pieces(std::index_sequence<J...>) {
     call_pieces cp{};

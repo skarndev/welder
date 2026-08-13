@@ -3,6 +3,7 @@
 #include <meta>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <welder/rods/csharp/directors.hpp>
 #include <welder/rods/csharp/document.hpp>
@@ -19,6 +20,7 @@
     **Methods**: an overload group becomes natural C# overloads sharing one name,
     each with its own indexed symbol, so the shim re-derives the exact overload
     rather than resolving one over wire types.
+    @ref welder::rods::csharp::method_emitter is the component.
 
     An **overridable virtual slot** of a director-eligible type is the one shape
     that needs more than a thunk: it emits as `public virtual` and dispatches by
@@ -31,31 +33,164 @@
 
 namespace welder::inline v0::rods::csharp {
 
-/** Emit virtual slot @a Fn: the ordinary (virtual-dispatch) thunk, a
-    qualified base-call thunk, and a `public virtual` wrapper branching on
-    `_isDirector`. Records the slot's C# name for the director
-    scaffolding's placeholders. */
-template <std::meta::info Fn, class Style>
-void emit_virtual_method(class_writer& w, const std::string& name,
-                                 const std::string& sym,
-                                 const std::string& expr,
-                                 std::size_t slot) {
-    {
+/** The component that emits a class's method surface: instance overload
+    groups (@ref emit_group), static overload groups (@ref emit_static_group)
+    and the swept free ostream inserter as `ToString()`
+    (@ref emit_stringifier).
+
+    One emitter is constructed per driver hook over the class handle; the
+    group's resolved C# name and the class identities live on the object, so
+    the per-overload steps take only what genuinely varies per overload. */
+class method_emitter {
+  public:
+    /** Bind the emitter to class handle @a w.
+        @param w the class being emitted into. */
+    explicit method_emitter(class_writer& w) : w_{w} {}
+
+    /** Emit method overload group @a Fns as natural C# overloads sharing one
+        name, each with its own indexed symbol (the group's name resolves from
+        `Fns[0]`; the index re-derives the exact overload shim-side). An
+        overridable virtual slot of a director-eligible type routes to
+        @ref emit_virtual instead of the plain triple.
+        @tparam Fns   the carriage-computed overload group (a
+                      `std::array<std::meta::info, N>`).
+        @tparam Style the name style. */
+    template <auto Fns, class Style = ::welder::naming::none>
+    void emit_group() {
+        name_ = ::welder::name_of<Fns[0], lang::cs, Style,
+                                  ::welder::ent_kind::method>();
+        w_.surface_names.push_back(name_);
+        const std::string anchor{w_.cpp_anchor};
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            constexpr std::size_t k{index_of_named_member(fn)};
+            const std::string id{std::meta::identifier_of(fn)};
+            const member_scope ms{member_scope_of<fn>(w_.cpp_qualified, anchor,
+                                                      w_.type_token)};
+            const std::string sym{w_.sym_prefix + "_m_" + id + "_" +
+                                  std::to_string(k) + ms.suffix};
+            const std::string expr{"wcs::shim::method<" + anchor +
+                                   ", wcs::named_member(" + ms.owner + ", \"" +
+                                   id + "\", " + std::to_string(k) + ")>"};
+            static constexpr const char* fsig{std::define_static_string(
+                std::meta::display_string_of(std::meta::type_of(fn)))};
+            // The director scaffolding names slots through render-time
+            // placeholders keyed by (declaring class, identifier, signature) —
+            // record every bound method, so an inherited slot resolves through
+            // the BASE wrapper's binding.
+            w_.doc->record_type_name(
+                std::string{cpp_name_v<std::meta::parent_of(fn)>} + "#" + id +
+                    "#" + fsig,
+                name_);
+            collect_containers<fn>(*w_.doc);
+            std::size_t vslot_k{static_cast<std::size_t>(-1)};
+            if constexpr (std::meta::is_virtual(fn)) {
+                if (w_.is_director) {
+                    static constexpr const char* vid{
+                        std::define_static_string(
+                            std::meta::identifier_of(fn))};
+                    for (const auto& vs : w_.vslots)
+                        if (std::string_view{vs.name} == vid &&
+                            std::string_view{vs.sig} == fsig)
+                            vslot_k = vs.k;
+                }
+            }
+            if (vslot_k != static_cast<std::size_t>(-1)) {
+                emit_virtual<fn, Style>(sym, expr, vslot_k);
+            } else {
+                callable_emitter<fn, Style>{
+                    bound_symbol{*w_.doc, sym, w_.members, 2}, name_, expr,
+                    w_.handle_cs, w_.handle_field}
+                    .emit();
+            }
+        }
+    }
+
+    /** Emit static-method overload group @a Fns as `public static` overloads.
+        @tparam Fns   the carriage-computed overload group.
+        @tparam Style the name style. */
+    template <auto Fns, class Style = ::welder::naming::none>
+    void emit_static_group() {
+        name_ = ::welder::name_of<Fns[0], lang::cs, Style,
+                                  ::welder::ent_kind::static_method>();
+        w_.surface_names.push_back(name_);
+        template for (constexpr auto fn : std::define_static_array(Fns)) {
+            constexpr std::size_t k{index_of_named_member(fn)};
+            collect_containers<fn>(*w_.doc);
+            const std::string id{std::meta::identifier_of(fn)};
+            const std::string sym{w_.sym_prefix + "_s_" + id + "_" +
+                                  std::to_string(k)};
+            constexpr bool named_parent{spellable(std::meta::parent_of(fn))};
+            const std::string expr{
+                "wcs::shim::function<wcs::named_member(" +
+                owner_expr(named_parent, cpp_name_v<std::meta::parent_of(fn)>,
+                           w_.cpp_qualified, w_.cpp_anchor) +
+                ", \"" + id + "\", " + std::to_string(k) + ")>"};
+            callable_emitter<fn, Style>{
+                bound_symbol{*w_.doc, sym, w_.members, 2}, name_, expr}
+                .emit();
+        }
+    }
+
+    /** Bind the swept free ostream inserter @a Fn as `ToString()` (via
+        @ref welder::detail::stringify, dup'd across the wire).
+        @tparam T  the welded class.
+        @tparam Fn a reflection of the free `operator<<`. */
+    template <class T, std::meta::info Fn>
+    void emit_stringifier() {
+        bound_symbol sym{*w_.doc, w_.sym_prefix + "_str", w_.members, 2};
+        constexpr std::size_t k{index_of_operator(Fn)};
+        static constexpr const char* opid{std::define_static_string(
+            operator_enum_ident(std::meta::operator_of(Fn)))};
+        code_writer t{sym.thunk()};
+        t.line("const char* {}(void* self, welder_error* err) { return "
+               "wcs::shim::stringify_text<{}, wcs::named_operator(^^{}, "
+               "std::meta::operators::{}, false, {})>(self, err); }",
+               sym.name(), w_.cpp_anchor,
+               std::string_view{cpp_name_v<std::meta::parent_of(Fn)>}, opid, k);
+        t.blank();
+        sym.pinvoke().line(
+            "[LibraryImport(Lib)] internal static partial IntPtr {}({} self, "
+            "out WelderError err);",
+            sym.name(), w_.handle_cs);
+        code_writer mw{sym.wrapper()};
+        mw.line("public override string ToString()");
+        {
+            const auto body{mw.braces()};
+            mw.raw(wrapper_return_body<^^std::string, ::welder::naming::none>(
+                "NativeMethods." + sym.name() + "(" + w_.handle_field +
+                    ", out WelderError _e)",
+                mw.indentation()));
+        }
+        mw.blank();
+    }
+
+  private:
+    /** Emit virtual slot @a Fn: the ordinary (virtual-dispatch) thunk, a
+        qualified base-call thunk, P/Invokes for both, and one `public virtual`
+        wrapper branching on `_isDirector`. The slot's C# name was already
+        recorded for the director scaffolding's placeholders by
+        @ref emit_group.
+        @tparam Fn    a reflection of the virtual member function.
+        @tparam Style the name style (parameter identifiers).
+        @param sym  the slot's ordinary C symbol (`…_base` derives from it).
+        @param expr the ordinary thunk's delegate expression.
+        @param slot the slot's index in the type's overridable-slot set. */
+    template <std::meta::info Fn, class Style>
+    void emit_virtual(const std::string& sym, const std::string& expr,
+                      std::size_t slot) {
         const std::string ks{std::to_string(slot)};
 
         ::welder::validate_return_policy<Fn, lang::cs>();
         constexpr bool ret_checked{
-            (require_marshallable(std::meta::return_type_of(Fn), true),
-             true)};
+            (require_marshallable(std::meta::return_type_of(Fn), true), true)};
         static_assert(ret_checked);
         constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
         const call_pieces cp{
             build_params<Fn, Style>(std::make_index_sequence<n>{})};
-        const std::string bsym{sym + "_base"};
-        w.doc->record_symbol(sym);
-        w.doc->record_symbol(bsym);
+        const bound_symbol bs{*w_.doc, sym, w_.members, 2};
+        const bound_symbol bs_base{*w_.doc, sym + "_base", w_.members, 2};
 
-        const std::string idx{"wcs::director_slot(^^" + w.cpp_qualified +
+        const std::string idx{"wcs::director_slot(^^" + w_.cpp_qualified +
                               ", " + ks + ")"};
         std::string shim_params{"void* self" +
                                 (cp.shim_params.empty()
@@ -67,11 +202,11 @@ void emit_virtual_method(class_writer& w, const std::string& name,
                                        ? std::string{}
                                        : ", " + cp.delegate_args)};
         // 1) the ordinary thunk (virtual dispatch through the pmf)
-        w.doc->shim += std::string{
-                           wire_return_v<std::meta::return_type_of(Fn)>} +
-                       " " + sym + "(" +
-                       shim_params + ") { return " + expr + "(" +
-                       delegate_args + "); }\n\n";
+        code_writer t{bs.thunk()};
+        t.line("{} {}({}) { return {}({}); }",
+               wire_return_v<std::meta::return_type_of(Fn)>, bs.name(),
+               shim_params, expr, delegate_args);
+        t.blank();
         // 2) the qualified base-call thunk (never re-enters the director)
         {
             std::string conv{};
@@ -88,20 +223,21 @@ void emit_virtual_method(class_writer& w, const std::string& name,
             }
             static constexpr const char* fid{std::define_static_string(
                 std::meta::identifier_of(Fn))};
-            w.doc->shim +=
-                std::string{
-                    wire_return_v<std::meta::return_type_of(Fn)>} +
-                " " + bsym + "(" +
-                shim_params + ") {\n    auto* _o = static_cast<" +
-                w.cpp_qualified +
-                "*>(self);\n    return wcs::shim::guarded<"
-                "::std::meta::return_type_of(" +
-                idx + ")>(err, [&]() -> decltype(auto) { return _o->" +
-                w.cpp_qualified + "::" + fid + "(" + conv +
-                "); });\n}\n\n";
+            code_writer bt{bs_base.thunk()};
+            bt.line("{} {}({}) {",
+                    wire_return_v<std::meta::return_type_of(Fn)>,
+                    bs_base.name(), shim_params);
+            bt.deeper().line("auto* _o = static_cast<{}*>(self);",
+                             w_.cpp_qualified);
+            bt.deeper().line(
+                "return wcs::shim::guarded<::std::meta::return_type_of({})>"
+                "(err, [&]() -> decltype(auto) { return _o->{}::{}({}); });",
+                idx, w_.cpp_qualified, std::string_view{fid}, conv);
+            bt.line("}");
+            bt.blank();
         }
         // P/Invokes for both
-        std::string pin_params{w.handle_cs + " self" +
+        std::string pin_params{w_.handle_cs + " self" +
                                (cp.pinvoke_params.empty()
                                     ? std::string{}
                                     : ", " + cp.pinvoke_params) +
@@ -109,149 +245,52 @@ void emit_virtual_method(class_writer& w, const std::string& name,
         constexpr bool r_is_bool{
             classify(std::meta::return_type_of(Fn)) ==
             marshal_kind::boolean};
-        const std::string ret_attr{
-            r_is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : ""};
-        for (const std::string& s2 : {sym, bsym})
-            w.doc->pinvoke += "        " + import_attr(cp.has_string) + " " +
-                              ret_attr + "internal static partial " +
-                              pinvoke_type<std::meta::return_type_of(Fn),
-                                           Style>(true) +
-                              " " + s2 + "(" + pin_params + ");\n";
+        for (const bound_symbol* s2 : {&bs, &bs_base})
+            s2->pinvoke().line(
+                "{} {}internal static partial {} {}({});",
+                import_attr(cp.has_string),
+                r_is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "",
+                pinvoke_type<std::meta::return_type_of(Fn), Style>(true),
+                s2->name(), pin_params);
         // 3) the public virtual wrapper, branching by origin
-        emit_callable_docs<Fn>(w.members, "        ", cp);
-        std::string call_args{w.handle_field +
+        emit_callable_docs<Fn>(w_.members, "        ", cp);
+        std::string call_args{w_.handle_field +
                               (cp.wrapper_args.empty()
                                    ? std::string{}
                                    : ", " + cp.wrapper_args) +
                               ", out WelderError _e"};
-        w.members += "        public virtual " +
-                     public_return_type<std::meta::return_type_of(Fn),
-                                        Style>() +
-                     " " + name + "(" + cp.wrapper_params +
-                     ")\n        {\n            if (_isDirector)\n"
-                     "            {\n";
-        w.members += wrapper_return_body<std::meta::return_type_of(Fn),
-                                         Style,
-                                         ::welder::return_policy_of(
-                                             Fn, lang::cs)>(
-            "NativeMethods." + bsym + "(" + call_args + ")",
-            "                ", "this");
-        w.members += "            }\n            else\n            {\n";
-        w.members += wrapper_return_body<std::meta::return_type_of(Fn),
-                                         Style,
-                                         ::welder::return_policy_of(
-                                             Fn, lang::cs)>(
-            "NativeMethods." + sym + "(" + call_args + ")",
-            "                ", "this");
-        w.members += "            }\n        }\n\n";
-    }
-}
-/** Emit method overload group @a Fns as natural C# overloads sharing one
-    name, each with its own indexed symbol (the group's name resolves from
-    `Fns[0]`; the index re-derives the exact overload shim-side). An
-    overridable virtual slot of a director-eligible type emits as a
-    `public virtual` method that dispatches by origin — the ordinary
-    virtual thunk for a C++-originated object, the qualified base-call
-    thunk for a director (C# has already resolved the dynamic dispatch;
-    this is also what terminates `base.Method()` inside an override). */
-template <auto Fns, class Style = ::welder::naming::none>
-void emit_method_group(class_writer& w) {
-    const std::string name{::welder::name_of<Fns[0], lang::cs, Style,
-                                             ::welder::ent_kind::method>()};
-    w.surface_names.push_back(name);
-    const std::string anchor{w.cpp_anchor};
-    template for (constexpr auto fn : std::define_static_array(Fns)) {
-        constexpr std::size_t k{index_of_named_member(fn)};
-        const std::string id{std::meta::identifier_of(fn)};
-        const member_scope ms{member_scope_of<fn>(w.cpp_qualified, anchor,
-                                                  w.type_token)};
-        const std::string sym{w.sym_prefix + "_m_" + id + "_" +
-                              std::to_string(k) + ms.suffix};
-        const std::string expr{"wcs::shim::method<" + anchor +
-                               ", wcs::named_member(" + ms.owner + ", \"" +
-                               id + "\", " + std::to_string(k) + ")>"};
-        static constexpr const char* fsig{std::define_static_string(
-            std::meta::display_string_of(std::meta::type_of(fn)))};
-        // The director scaffolding names slots through render-time
-        // placeholders keyed by (declaring class, identifier, signature) —
-        // record every bound method, so an inherited slot resolves through
-        // the BASE wrapper's binding.
-        w.doc->record_type_name(
-            std::string{cpp_name_v<std::meta::parent_of(fn)>} + "#" + id +
-                "#" + fsig,
-            name);
-        collect_containers<fn>(*w.doc);
-        std::size_t vslot_k{static_cast<std::size_t>(-1)};
-        if constexpr (std::meta::is_virtual(fn)) {
-            if (w.is_director) {
-                static constexpr const char* vid{std::define_static_string(
-                    std::meta::identifier_of(fn))};
-                for (const auto& vs : w.vslots)
-                    if (std::string_view{vs.name} == vid &&
-                        std::string_view{vs.sig} == fsig)
-                        vslot_k = vs.k;
+        code_writer mw{bs.wrapper()};
+        mw.line("public virtual {} {}({})",
+                public_return_type<std::meta::return_type_of(Fn), Style>(),
+                name_, cp.wrapper_params);
+        {
+            const auto body{mw.braces()};
+            mw.line("if (_isDirector)");
+            {
+                const auto arm{mw.braces()};
+                mw.raw(wrapper_return_body<std::meta::return_type_of(Fn),
+                                           Style,
+                                           ::welder::return_policy_of(
+                                               Fn, lang::cs)>(
+                    "NativeMethods." + bs_base.name() + "(" + call_args + ")",
+                    mw.indentation(), "this"));
+            }
+            mw.line("else");
+            {
+                const auto arm{mw.braces()};
+                mw.raw(wrapper_return_body<std::meta::return_type_of(Fn),
+                                           Style,
+                                           ::welder::return_policy_of(
+                                               Fn, lang::cs)>(
+                    "NativeMethods." + bs.name() + "(" + call_args + ")",
+                    mw.indentation(), "this"));
             }
         }
-        if (vslot_k != static_cast<std::size_t>(-1)) {
-            emit_virtual_method<fn, Style>(w, name, sym, expr, vslot_k);
-        } else {
-            emit_callable<fn, Style, true>(*w.doc, sym, w.members,
-                                           "        ", name, expr,
-                                           w.handle_cs,
-                                           w.handle_field);
-        }
+        mw.blank();
     }
-}
 
-/** Emit static-method overload group @a Fns as `public static` overloads. */
-template <auto Fns, class Style = ::welder::naming::none>
-void emit_static_method_group(class_writer& w) {
-    const std::string name{
-        ::welder::name_of<Fns[0], lang::cs, Style,
-                          ::welder::ent_kind::static_method>()};
-    w.surface_names.push_back(name);
-    template for (constexpr auto fn : std::define_static_array(Fns)) {
-        constexpr std::size_t k{index_of_named_member(fn)};
-        collect_containers<fn>(*w.doc);
-        const std::string id{std::meta::identifier_of(fn)};
-        const std::string sym{w.sym_prefix + "_s_" + id + "_" +
-                              std::to_string(k)};
-        constexpr bool named_parent{
-            spellable(std::meta::parent_of(fn))};
-        const std::string expr{
-            "wcs::shim::function<wcs::named_member(" +
-            owner_expr(named_parent,
-                        cpp_name_v<std::meta::parent_of(fn)>,
-                        w.cpp_qualified, w.cpp_anchor) +
-            ", \"" + id + "\", " + std::to_string(k) + ")>"};
-        emit_callable<fn, Style, false>(*w.doc, sym, w.members, "        ",
-                                        name, expr);
-    }
-}
-/** Bind the swept free ostream inserter @a Fn as `ToString()` (via
-    @ref welder::detail::stringify, dup'd across the wire). */
-template <class T, std::meta::info Fn>
-void emit_stringifier(class_writer& w) {
-    const std::string sym{w.sym_prefix + "_str"};
-    w.doc->record_symbol(sym);
-    constexpr std::size_t k{index_of_operator(Fn)};
-    static constexpr const char* opid{std::define_static_string(
-        operator_enum_ident(std::meta::operator_of(Fn)))};
-    w.doc->shim += "const char* " + sym +
-                   "(void* self, welder_error* err) { return "
-                   "wcs::shim::stringify_text<" + w.cpp_anchor +
-                   ", wcs::named_operator(^^" +
-                   std::string{cpp_name_v<std::meta::parent_of(Fn)>} +
-                   ", std::meta::operators::" + opid + ", false, " +
-                   std::to_string(k) + ")>(self, err); }\n\n";
-    w.doc->pinvoke += "        [LibraryImport(Lib)] internal static partial "
-                      "IntPtr " + sym + "(" + w.handle_cs +
-                      " self, out WelderError err);\n";
-    w.members += "        public override string ToString()\n        {\n";
-    w.members += wrapper_return_body<^^std::string, ::welder::naming::none>(
-        "NativeMethods." + sym + "(" + w.handle_field +
-            ", out WelderError _e)",
-        "            ");
-    w.members += "        }\n\n";
-}
+    class_writer& w_;  /**< The class being emitted into. */
+    std::string name_; /**< The current group's resolved C# name. */
+};
+
 } // namespace welder::inline v0::rods::csharp

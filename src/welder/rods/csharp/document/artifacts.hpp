@@ -164,7 +164,7 @@ struct document {
         return text;
     }
 
-    /** Resolve every placeholder in @a text against @ref type_names: the
+    /** Resolve every placeholder in @a text against @ref type_names — the
         `\x01raw\x02` flavor substitutes the registered C# name verbatim
         (`Outer.Inner` for a nested type), the `\x03raw\x04` flavor its
         IDENTIFIER-SAFE form (dots → underscores — handle-field names). An

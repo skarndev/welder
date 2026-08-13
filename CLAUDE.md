@@ -80,7 +80,15 @@ class-keyed/custom-comparator maps, unique_ptr sinks. Driven by `welder_csharp_g
 consteval locks + a dotnet-gated round-trip (tests/csharp). The rod is split by
 LAYER — `type_map.hpp`, `shim_support.hpp` and `document.hpp` are umbrellas over
 `marshal/` + `reflect/`, `shim/` and `document/`, and `rod.hpp` is a hook table
-whose every hook one-line-forwards into `emit/` (see the architecture file map). Class-element
+whose every hook one-line-forwards into `emit/` (see the architecture file map).
+`emit/` is a COMPONENT MODEL of stateful emitter classes (callable / method /
+field / constructor / operator / namespace / director emitters + `class_opener`
++ the per-family container wrapper generators) over two vocabulary types in
+`document/code_writer.hpp` — the indentation-aware `code_writer` (with the
+constexpr `cat()` `{}`-mini-format in `text.hpp`, usable in consteval AND at
+runtime) and `bound_symbol` (one C symbol registered at construction + the three
+coordinated thunk/P-Invoke/wrapper sinks); `marshal/`, `reflect/` and `shim/`
+stay pure function libraries by design. Class-element
 containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
 Python rods opt in via a `reopen_class` hook): it registers every welded type's NAME,
 then binds the opaque containers, then fills members — so no container-typed

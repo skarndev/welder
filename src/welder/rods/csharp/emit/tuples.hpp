@@ -21,7 +21,12 @@
 
 namespace welder::inline v0::rods::csharp {
 
-/** One pair/tuple element's WRITE into its wire slot (the C# side). */
+/** One pair/tuple element's WRITE into its wire slot (the C# side): the
+    `new WelderOptWire { … }` initializer expression filling the slot member
+    that matches the element's kind (S/P/I/F).
+    @tparam E a reflection of the element type (a leaf kind).
+    @param val the C# expression yielding the element's value.
+    @return the slot-initializer expression. */
 template <std::meta::info E>
 std::string tuple_slot_write(const std::string& val) {
     constexpr marshal_kind k{classify(E)};
@@ -40,7 +45,13 @@ std::string tuple_slot_write(const std::string& val) {
 }
 
 /** One pair/tuple element's READ out of its wire slot (the C# side); a string
-    element needs statements (read + free), the rest are expressions. */
+    element needs statements (read + free in a `finally`), the rest are single
+    declarations.
+    @tparam E a reflection of the element type (a leaf kind).
+    @param slot the C# expression naming the element's wire slot.
+    @param var  the local the read value is declared into.
+    @param ind  the indentation of each emitted line.
+    @return the read statement(s), indented and newline-terminated. */
 template <std::meta::info E>
 std::string tuple_slot_read(const std::string& slot, const std::string& var,
                              const std::string& ind) {
@@ -71,6 +82,15 @@ std::string tuple_slot_read(const std::string& slot, const std::string& var,
     }
 }
 
+/** The statements staging a whole pair/tuple PARAMETER for a call: a
+    `stackalloc` slot array plus one @ref tuple_slot_write per element (read
+    from the ValueTuple's `.Item<n>` members). Lands in
+    @ref call_pieces::pre, unindented (the call site indents).
+    @tparam Type a reflection of the pair/tuple type.
+    @tparam J    the element indices (`std::make_index_sequence`).
+    @param tw   the staged slot-array local's name.
+    @param name the C# parameter holding the ValueTuple.
+    @return the staging statements, newline-terminated. */
 template <std::meta::info Type, std::size_t... J>
 std::string tuple_write_stmts(const std::string& tw,
                                     const std::string& name,
@@ -85,6 +105,14 @@ std::string tuple_write_stmts(const std::string& tw,
     return out;
 }
 
+/** The statements unpacking a returned pair/tuple wire (`_r`, a
+    `welder_seq_wire` over `welder_opt_wire` slots) into a ValueTuple return:
+    one @ref tuple_slot_read per element, the buffer freed, and the
+    `return (…)` tuple expression.
+    @tparam Type a reflection of the pair/tuple type.
+    @tparam J    the element indices (`std::make_index_sequence`).
+    @param ind the indentation of each emitted line.
+    @return the unpacking statements, newline-terminated. */
 template <std::meta::info Type, std::size_t... J>
 std::string tuple_read_stmts(const std::string& ind,
                                    std::index_sequence<J...>) {

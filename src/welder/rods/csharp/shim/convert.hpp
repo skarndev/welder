@@ -83,10 +83,18 @@ welder_opt_wire tuple_elem_to_slot(const auto& v) {
     type @a P receives. Scalars cast; an enum casts up from its underlying wire
     value; a string parameter constructs from the marshalled `const char*` (the
     buffer outlives the call — the P/Invoke layer owns it); a welded class
-    dereferences its handle (or passes the pointer through for a `T*` param).
+    dereferences its handle (or passes the pointer through for a `T*` param);
+    a `shared_ptr<welded>` parameter borrows via a non-owning aliasing copy over
+    the wrapper's object; an optional / value-sequence / string-sequence / tuple
+    parameter is rebuilt by value from its wire struct (an optional's or a tuple
+    slot's dup'd string buffer is freed here; a string-sequence's per-element
+    buffers stay the managed caller's to free).
     @tparam P a reflection of the parameter's declared type.
     @param w the wire argument (deduced).
-    @return the C++ argument, by value or by reference as @a P requires. */
+    @return the C++ argument, by value or by reference as @a P requires.
+    @throws std::invalid_argument when a fixed `std::array` parameter's wire
+            length differs from its extent — a designed error the enclosing
+            thunk's @ref caught boundary reports through the error slot. */
 template <std::meta::info P>
 constexpr decltype(auto) to_cpp(auto&& w) {
     constexpr marshal_kind k{classify(P)};
@@ -255,7 +263,9 @@ std::string expected_error_text(const E& e) {
     on @ref error_code::std_exception → `WelderNativeException` managed-side,
     carrying @ref expected_error_text.
     @tparam E the error type.
-    @param e  the error value. */
+    @param e  the error value.
+    @throws std::runtime_error always — carrying the rendered message; the
+            function does not return. */
 template <class E>
 [[noreturn]] void throw_expected_error(const E& e) {
     throw std::runtime_error{expected_error_text(e)};

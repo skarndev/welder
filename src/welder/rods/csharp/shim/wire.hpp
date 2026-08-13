@@ -37,8 +37,10 @@
     side reads and frees via `welder_free` (null when absent). Defined at global
     scope — it is the wire contract type the `extern "C"` signatures spell. */
 struct welder_error {
-    std::int32_t code;
-    char* message;
+    std::int32_t code; /**< `0` = success; else an
+                            @ref welder::rods::csharp::shim::error_code value. */
+    char* message;     /**< A malloc'd UTF-8 buffer (null when absent); the
+                            managed side frees it via `welder_free`. */
 };
 
 /** The by-value wire form of a `std::optional` with a LEAF payload: `has` plus
@@ -46,27 +48,28 @@ struct welder_error {
     `f`, a malloc'd UTF-8 buffer in `s`, an object pointer in `p`). Mirrored
     managed-side as the blittable `WelderOptWire`. */
 struct welder_opt_wire {
-    std::uint8_t has;
-    std::int64_t i;
-    double f;
-    const char* s;
-    void* p;
+    std::uint8_t has; /**< `1` when a value is present, `0` for an empty optional. */
+    std::int64_t i;   /**< The payload for an integral / bool / enum kind. */
+    double f;         /**< The payload for a floating-point kind. */
+    const char* s;    /**< The payload for a string kind: a malloc'd UTF-8 buffer. */
+    void* p;          /**< The payload for a welded-class kind: an object pointer. */
 };
 
 /** The by-value wire form of a `shared_ptr` RETURN: the object pointer plus
     the boxed `shared_ptr` copy keeping it alive (freed managed-side through
     the per-class `welder_sp_*_free` thunk). Both null for an empty pointer. */
 struct welder_sp_wire {
-    void* obj;
-    void* box;
+    void* obj; /**< The pointee — the managed view's handle. */
+    void* box; /**< The heap-boxed `shared_ptr` copy pinning the pointee alive. */
 };
 
 /** The by-value wire form of a scalar/enum sequence: an element-typed buffer +
     length. Returns malloc the buffer (freed managed-side via `welder_free`);
     parameters point at the managed array, pinned for the call. */
 struct welder_seq_wire {
-    void* data;
-    std::int64_t len;
+    void* data;       /**< The element-typed buffer (ownership per direction —
+                           see the struct doc). */
+    std::int64_t len; /**< The element count. */
 };
 
 namespace welder::inline v0::rods::csharp::shim {
@@ -157,7 +160,9 @@ struct managed_exception : std::runtime_error {
 
 /** Rethrow a director callback's failed error slot as @ref managed_exception
     (frees the slot's message buffer).
-    @param e the callback's error slot. */
+    @param e the callback's error slot.
+    @throws managed_exception always — carrying the slot's message (or a
+            placeholder when it had none); the function does not return. */
 [[noreturn]] inline void rethrow_managed(welder_error* e) {
     std::string msg{e && e->message ? e->message : "managed exception"};
     if (e && e->message)

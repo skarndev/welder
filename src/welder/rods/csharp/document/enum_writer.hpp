@@ -22,7 +22,7 @@ namespace welder::inline v0::rods::csharp {
     flushed by RAII (same rationale as @ref class_writer). No native thunks — an
     enum crosses as its underlying value. */
 struct enum_writer {
-    document* doc{nullptr};
+    document* doc{nullptr};     /**< The shared document (null = moved-from). */
     std::string* sink{nullptr}; /**< An outer class's members for a nested enum. */
     std::string cs_name{};      /**< The C# enum name (the leaf). */
     std::string cs_ns{};        /**< The enclosing C# namespace (`""` = root). */

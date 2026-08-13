@@ -153,7 +153,7 @@ consteval std::array<std::meta::info, N> leading_args() {
 
 /** Is @a type a `std::expected` specialization — the fallible-result family?
 
-    Deliberately NOT a row in @ref stl_wrappers: that table's contract is that
+    Deliberately NOT a row in @ref stl_wrappers — that table's contract is that
     every *leading* argument it names is value-bearing, and `std::expected`'s two
     arguments are not alike — `T` crosses, `E` does not. It gets its own branch in
     @ref bindable instead.
@@ -461,7 +461,7 @@ consteval void assert_setter_bindable() {
 
 namespace detail {
 
-/** The parameter walk behind @ref@ref assert_operands_bindable — gate each parameter
+/** The parameter walk behind @ref assert_operands_bindable — gate each parameter
     that is not the anchor type itself.
     @tparam B the rod. @tparam Fn the spaceship overload. @tparam Type the
     anchor type reflection. @tparam L the language. @tparam I the index pack. */

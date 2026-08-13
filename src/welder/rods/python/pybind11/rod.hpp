@@ -935,7 +935,7 @@ struct rod {
         return py::reinterpret_borrow<class_handle_type<T>>(scope.attr(name));
     }
 
-    /** The nested-scope form of @ref reopen_class: retrieve @a T from its enclosing
+    /** The nested-scope form of @ref reopen_class — retrieve @a T from its enclosing
         type's class handle (`outer.attr(name)`) rather than the module. @see welder::rod */
     template <class T>
     static class_handle_type<T> reopen_nested_class(module_type&, auto& outer,

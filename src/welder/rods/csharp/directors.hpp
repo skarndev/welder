@@ -34,7 +34,8 @@
     `shim::managed_exception`, and the next thunk boundary hands them back to
     C# with the original message.
 
-    **Eligibility** (@ref director_eligible): the type has overridable virtual
+    **Eligibility** (@ref welder::rods::csharp::director_eligible): the type
+    has overridable virtual
     slots (the shared `<welder/virtuals.hpp>` set — `welder::bind_flat` opts
     out per type or per method, exactly as for the Python trampolines) and a **virtual destructor** (the wrapper's destroy thunk
     deletes through `T*`). At most 64 slots (the bitmask). A slot whose shape

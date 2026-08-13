@@ -108,48 +108,48 @@ struct rod {
 
     // --- class binding ------------------------------------------------------
 
-    /** Open welded class @a T's binding. @see welder::rods::csharp::open_class */
+    /** Open welded class @a T's binding. @see welder::rods::csharp::class_opener */
     template <class T, auto Bases, std::size_t... I>
     static class_writer make_class(module_type& m, const char* name,
                                    const char* doc, std::index_sequence<I...>) {
-        return open_class<T, ^^T, Bases>(m, name, doc);
+        return class_opener{m}.open<T, ^^T, Bases>(name, doc);
     }
 
     /** The declaring-entity-aware form the carriage prefers: @a Decl is `^^T`,
         or the namespace-scope **alias** a class-template specialization was
         welded through — the one C++-spellable anchor such a target has, which
         the emitted shim's `^^…` spellings need.
-        @see welder::rods::csharp::open_class */
+        @see welder::rods::csharp::class_opener */
     template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
     static class_writer make_class(module_type& m, const char* name,
                                    const char* doc, std::index_sequence<I...>) {
-        return open_class<T, Decl, Bases>(m, name, doc);
+        return class_opener{m}.open<T, Decl, Bases>(name, doc);
     }
 
     /** Place a NESTED member class under its enclosing type's binding.
-        @see welder::rods::csharp::open_nested_class */
+        @see welder::rods::csharp::class_opener */
     template <class T, auto Bases, std::size_t... I>
     static class_writer make_nested_class(module_type& m, class_writer& outer,
                                           const char* name, const char* doc,
                                           std::index_sequence<I...>) {
-        return open_nested_class<T, ^^T, Bases>(m, outer, name, doc);
+        return class_opener{m}.open_nested<T, ^^T, Bases>(outer, name, doc);
     }
 
     /** The declaring-entity-aware nested form the carriage prefers.
-        @see welder::rods::csharp::open_nested_class */
+        @see welder::rods::csharp::class_opener */
     template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
     static class_writer make_nested_class(module_type& m, class_writer& outer,
                                           const char* name, const char* doc,
                                           std::index_sequence<I...>) {
-        return open_nested_class<T, Decl, Bases>(m, outer, name, doc);
+        return class_opener{m}.open_nested<T, Decl, Bases>(outer, name, doc);
     }
 
     /** Place a NESTED member enum under the outer's binding (same model).
-        @see welder::rods::csharp::open_nested_enum */
+        @see welder::rods::csharp::class_opener */
     template <class E>
     static enum_writer make_nested_enum(module_type& m, class_writer& outer,
                                         const char* name, const char* doc) {
-        return open_nested_enum<E>(m, outer, name, doc);
+        return class_opener{m}.open_nested_enum<E>(outer, name, doc);
     }
 
     /** Nothing to finalize — the nested writer's RAII flush lands its block
@@ -159,38 +159,39 @@ struct rod {
                                     const char*) {}
 
     /** Emit the whole constructor surface in one call (main's contract).
-        @see welder::rods::csharp::emit_constructors */
+        @see welder::rods::csharp::constructor_emitter */
     template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
     static void add_constructors(class_writer& w) {
-        emit_constructors<T, Ctors, HasDefault, Aggregate, Copyable>(w);
+        constructor_emitter{w}.emit_all<T, Ctors, HasDefault, Aggregate,
+                                        Copyable>();
     }
 
     /** Bind data member @a Mem as a C# property.
-        @see welder::rods::csharp::emit_field */
+        @see welder::rods::csharp::field_emitter */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(class_writer& w) {
-        emit_field<Mem, Style>(w);
+        field_emitter{w}.emit_field<Mem, Style>();
     }
 
     /** Bind a resolved accessor pair as a C# property.
-        @see welder::rods::csharp::emit_property */
+        @see welder::rods::csharp::field_emitter */
     template <class T, std::meta::info Getter, std::meta::info Setter>
     static void add_property(class_writer& w, const char* name) {
-        emit_property<T, Getter, Setter>(w, name);
+        field_emitter{w}.emit_property<T, Getter, Setter>(name);
     }
 
     /** Bind method overload group @a Fns as natural C# overloads.
-        @see welder::rods::csharp::emit_method_group */
+        @see welder::rods::csharp::method_emitter */
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_method(class_writer& w) {
-        emit_method_group<Fns, Style>(w);
+        method_emitter{w}.emit_group<Fns, Style>();
     }
 
     /** Bind static-method overload group @a Fns as `public static` overloads.
-        @see welder::rods::csharp::emit_static_method_group */
+        @see welder::rods::csharp::method_emitter */
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_static_method(class_writer& w) {
-        emit_static_method_group<Fns, Style>(w);
+        method_emitter{w}.emit_static_group<Fns, Style>();
     }
 
     /** Emit operator slot group @a Fns — member and anchored free entries
@@ -202,9 +203,10 @@ struct rod {
         get-only indexer; `operator()` an `Invoke` method. */
     template <class T, auto Fns>
     static void add_operator(class_writer& w) {
+        operator_emitter oe{w};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             collect_containers<fn>(*w.doc);
-            emit_operator<T, fn>(w);
+            oe.emit_operator<T, fn>();
         }
     }
 
@@ -219,25 +221,26 @@ struct rod {
         a defaulted spaceship's implicit `==` arrives via the operator path). */
     template <class T, auto Fns, auto Covered>
     static void add_comparisons(class_writer& w) {
+        operator_emitter oe{w};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
-            emit_comparison_set<T, fn, Covered>(w);
+            oe.emit_comparison_set<T, fn, Covered>();
         }
     }
 
     /** Bind the swept free ostream inserter @a Fn as `ToString()`.
-        @see welder::rods::csharp::emit_stringifier */
+        @see welder::rods::csharp::method_emitter */
     template <class T, std::meta::info Fn>
     static void add_stringifier(class_writer& w) {
-        emit_stringifier<T, Fn>(w);
+        method_emitter{w}.emit_stringifier<T, Fn>();
     }
 
     // --- enum binding -------------------------------------------------------
 
-    /** Open welded enum @a E's binding. @see welder::rods::csharp::open_enum */
+    /** Open welded enum @a E's binding. @see welder::rods::csharp::class_opener */
     template <class E>
     static enum_writer make_enum(module_type& m, const char* name,
                                  const char* doc) {
-        return open_enum<E>(m, name, doc);
+        return class_opener{m}.open_enum<E>(name, doc);
     }
 
     /** Emit a `Name = value,` line for enumerator @a Enum, preceded by its
@@ -275,17 +278,17 @@ struct rod {
     }
 
     /** Emit free-function overload group @a Fns onto the namespace's `Global`
-        static class. @see welder::rods::csharp::emit_function_group */
+        static class. @see welder::rods::csharp::namespace_emitter */
     template <auto Fns, class Style = ::welder::naming::none>
     static void add_function(module_type& m, const char* name = nullptr) {
-        emit_function_group<Fns, Style>(m, name);
+        namespace_emitter{m}.emit_function_group<Fns, Style>(name);
     }
 
     /** Emit namespace variable @a Var as a static property.
-        @see welder::rods::csharp::emit_variable */
+        @see welder::rods::csharp::namespace_emitter */
     template <std::meta::info Var, class Style = ::welder::naming::none>
     static void add_variable(module_type& m, session&, const char* name = nullptr) {
-        emit_variable<Var, Style>(m, name);
+        namespace_emitter{m}.emit_variable<Var, Style>(name);
     }
 
     /** A nested C++ namespace = a REAL nested C# namespace: extend the dotted
