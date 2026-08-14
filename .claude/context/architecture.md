@@ -68,7 +68,7 @@ src/welder/
       luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
       luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
     (the csharp/ tree was EXTRACTED 2026-08-14 — the C#/.NET rod is now an
-     out-of-tree extension, skarndev/welder-csharp (private for now), minting its
+     out-of-tree extension, skarndev/welder-csharp (PUBLIC), minting its
      language identity from welder::user_lang; <welder/virtuals.hpp> and the
      two-phase sweep it relied on stay in core. The extraction honored the C-ABI
      boundary rule: the rod's shim/marshal/reflect layers are C#-free below its

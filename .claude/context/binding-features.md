@@ -8,7 +8,7 @@ guide has the user-facing walkthrough, this has driver hooks + test files.
 All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 
 **C#/.NET (out of tree):** the C# rod now lives in skarndev/welder-csharp
-(private for now), minting its language identity from `welder::user_lang` —
+(PUBLIC), minting its language identity from `welder::user_lang` —
 welder's core no longer names C#. What its development left behind IS core and
 stays documented here:
 - **`weld` is a constexpr OBJECT** (mask 0 = all languages): a bare
