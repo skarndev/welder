@@ -69,7 +69,7 @@ Marker {
   =welder::doc("Add two integers."),
   =welder::returns("their sum")
 ]]
-int add(
+inline int add(
     [[=welder::doc("left operand")]] int a,
     [[=welder::doc("right operand")]] int b) {
     return a + b;
@@ -81,7 +81,7 @@ int add(
   =welder::weld(welder::lang::py),
   =welder::doc("Negate a value.")
 ]]
-int negate(int x) {
+inline int negate(int x) {
     return -x;
 }
 
@@ -91,7 +91,7 @@ int negate(int x) {
   =welder::weld(welder::lang::py),
   =welder::returns("the doubled value")
 ]]
-int twice(int x) {
+inline int twice(int x) {
     return 2 * x;
 }
 
@@ -133,7 +133,7 @@ Gadget {
       the combined result,
       described over two lines)")
 ]]
-int combine(
+inline int combine(
     [[=welder::doc(R"(
         the first operand,
         spanning two lines)")]] int a,

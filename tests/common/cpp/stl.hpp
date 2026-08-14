@@ -33,7 +33,7 @@ struct [[=welder::weld(welder::lang::py)]] Item {
 
 // --- vector<T> <-> list ------------------------------------------------------
 [[=welder::weld(welder::lang::py)]]
-std::vector<int> iota(int n) {
+inline std::vector<int> iota(int n) {
     std::vector<int> values{};
     for (int i{0}; i < n; ++i) {
         values.push_back(i);
@@ -42,7 +42,7 @@ std::vector<int> iota(int n) {
 }
 
 [[=welder::weld(welder::lang::py)]]
-int total(const std::vector<int>& values) {
+inline int total(const std::vector<int>& values) {
     int sum{0};
     for (int v : values) {
         sum += v;
@@ -51,7 +51,7 @@ int total(const std::vector<int>& values) {
 }
 
 [[=welder::weld(welder::lang::py)]]
-std::vector<Item> wrap_all(const std::vector<int>& ids) {
+inline std::vector<Item> wrap_all(const std::vector<int>& ids) {
     std::vector<Item> items{};
     items.reserve(ids.size());
     for (int i : ids) {
@@ -62,7 +62,7 @@ std::vector<Item> wrap_all(const std::vector<int>& ids) {
 
 // --- map<K, V> <-> dict ------------------------------------------------------
 [[=welder::weld(welder::lang::py)]]
-std::map<std::string, int> histogram(const std::vector<std::string>& words) {
+inline std::map<std::string, int> histogram(const std::vector<std::string>& words) {
     std::map<std::string, int> counts{};
     for (const std::string& w : words) {
         ++counts[w];
@@ -72,7 +72,7 @@ std::map<std::string, int> histogram(const std::vector<std::string>& words) {
 
 // --- optional<T> <-> T | None ------------------------------------------------
 [[=welder::weld(welder::lang::py)]]
-std::optional<int> find_positive(const std::vector<int>& values) {
+inline std::optional<int> find_positive(const std::vector<int>& values) {
     for (int v : values) {
         if (v > 0) {
             return v;
@@ -82,13 +82,13 @@ std::optional<int> find_positive(const std::vector<int>& values) {
 }
 
 [[=welder::weld(welder::lang::py)]]
-int value_or(std::optional<int> value, int fallback) {
+inline int value_or(std::optional<int> value, int fallback) {
     return value.value_or(fallback);
 }
 
 // --- pair <-> tuple ----------------------------------------------------------
 [[=welder::weld(welder::lang::py)]]
-std::pair<int, std::string> labelled(int n) {
+inline std::pair<int, std::string> labelled(int n) {
     return {n, std::to_string(n)};
 }
 

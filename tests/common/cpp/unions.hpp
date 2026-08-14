@@ -73,7 +73,7 @@ Holder {
 
 // A variant signature: parameter and return both convert.
 [[=welder::weld(welder::lang::py, welder::lang::lua)]]
-std::variant<std::int32_t, Boxed> box_if(bool box, std::int32_t n) {
+inline std::variant<std::int32_t, Boxed> box_if(bool box, std::int32_t n) {
     if (box)
         return Boxed{n};
     return n;

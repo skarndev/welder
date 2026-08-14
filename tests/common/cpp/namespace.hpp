@@ -45,18 +45,18 @@ Cat : public Animal2 {
 // --- free functions ---------------------------------------------------------
 
 [[=welder::weld]]
-int total(int a, int b) {
+inline int total(int a, int b) {
     return a + b;
 }
 
 // overload
 [[=welder::weld]]
-int total(int a) {
+inline int total(int a) {
     return a;
 }
 
 // no weld -> not exposed
-int internal_helper(int x) {
+inline int internal_helper(int x) {
     return x;
 }
 
@@ -65,7 +65,7 @@ int internal_helper(int x) {
   =welder::weld,
   =welder::mark::exclude(welder::lang::py)
 ]]
-int suppressed() {
+inline int suppressed() {
     return -1;
 }
 
@@ -87,7 +87,7 @@ inline int counter{0};
 
 // mutate the global from C++
 [[=welder::weld]]
-void bump() {
+inline void bump() {
     ++counter;
 }
 
@@ -121,7 +121,7 @@ strict {
 
 // welded, but not included -> skipped
 [[=welder::weld]]
-int candidate() {
+inline int candidate() {
     return 1;
 }
 
@@ -130,7 +130,7 @@ int candidate() {
   =welder::weld,
   =welder::mark::include(welder::lang::py)
 ]]
-int chosen() {
+inline int chosen() {
     return 2;
 }
 
@@ -189,7 +189,7 @@ inline void register_namespace(WELDER_TEST_MODULE_T& m) {
 namespace freestanding {
 
 [[=welder::weld]]
-int scale(int x, int factor) {
+inline int scale(int x, int factor) {
     return x * factor;
 }
 
@@ -200,14 +200,14 @@ inline constexpr int MANUAL_CONST{42};
 inline int manual_counter{0};
 
 [[=welder::weld]]
-void manual_bump() {
+inline void manual_bump() {
     ++manual_counter;
 }
 
 // Bound under a call-site name override, to check the verbatim name beats the
 // entity's own identifier.
 [[=welder::weld]]
-int renamable(int x) {
+inline int renamable(int x) {
     return x + 1;
 }
 
@@ -261,11 +261,11 @@ struct Coupler {
 };
 
 // Class-typed parameters + return, including the forward-referenced Coupler.
-Coupler fuse(const Widget& a, const Widget& b) {
+inline Coupler fuse(const Widget& a, const Widget& b) {
     return Coupler{a, b};
 }
 
-int add(int a, int b) {
+inline int add(int a, int b) {
     return a + b;
 }
 
@@ -279,7 +279,7 @@ struct Gadget {
 };
 } // namespace nested
 
-int gadget_id(const nested::Gadget& g) {
+inline int gadget_id(const nested::Gadget& g) {
     return g.id;
 }
 

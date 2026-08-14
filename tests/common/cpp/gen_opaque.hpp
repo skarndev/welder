@@ -96,7 +96,7 @@ struct [[=welder::weld(welder::lang::py)]] Series {
 
 // A container of a welded class, surfaced through a signature (return type).
 [[=welder::weld(welder::lang::py)]]
-std::vector<Reading> take(int n) {
+inline std::vector<Reading> take(int n) {
     std::vector<Reading> out{};
     for (int i{0}; i < n; ++i)
         out.emplace_back(static_cast<double>(i));
@@ -106,7 +106,7 @@ std::vector<Reading> take(int n) {
 // Round-trip helper for the nested member: read the C++-side rows back after
 // Python mutates them through the opaque wrappers.
 [[=welder::weld(welder::lang::py)]]
-double sum_grid(const Series& s) {
+inline double sum_grid(const Series& s) {
     double total{0.0};
     for (const std::vector<double>& row : s.grid)
         for (double x : row)
@@ -116,7 +116,7 @@ double sum_grid(const Series& s) {
 
 // Round-trip helper: read the C++-side vector back after Python mutates it.
 [[=welder::weld(welder::lang::py)]]
-double sum_points(const Series& s) {
+inline double sum_points(const Series& s) {
     double total{0.0};
     for (double x : s.points)
         total += x;
@@ -126,7 +126,7 @@ double sum_points(const Series& s) {
 // Round-trip helper for the std::array member: read the C++ value back after Python
 // mutates it through the fixed-size wrapper (origin[i] = x).
 [[=welder::weld(welder::lang::py)]]
-double origin_at(const Series& s, std::size_t i) {
+inline double origin_at(const Series& s, std::size_t i) {
     return s.origin.at(i);
 }
 
@@ -134,7 +134,7 @@ double origin_at(const Series& s, std::size_t i) {
 // Python mutates it via s.tiles[t].outer[i] = v — proving the whole reference chain
 // (opaque vector element -> array member -> array element) writes through to storage.
 [[=welder::weld(welder::lang::py)]]
-int tile_outer_at(const Series& s, std::size_t t, std::size_t i) {
+inline int tile_outer_at(const Series& s, std::size_t t, std::size_t i) {
     return s.tiles.at(t).outer.at(i);
 }
 

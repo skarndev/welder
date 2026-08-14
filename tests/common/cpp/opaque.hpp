@@ -77,7 +77,7 @@ struct [[=welder::weld(welder::lang::py)]] Signal {
 // Round-trip helpers: read a C++-side vector back after Python has mutated it, so a
 // test can assert the mutation actually reached C++ (not a throwaway copy).
 [[=welder::weld(welder::lang::py)]]
-double sum_samples(const Signal& s) {
+inline double sum_samples(const Signal& s) {
     double total{0.0};
     for (float x : s.samples)
         total += static_cast<double>(x);
@@ -85,7 +85,7 @@ double sum_samples(const Signal& s) {
 }
 
 [[=welder::weld(welder::lang::py)]]
-double sum_locked(const Signal& s) {
+inline double sum_locked(const Signal& s) {
     double total{0.0};
     for (float x : s.locked)
         total += static_cast<double>(x);
@@ -96,12 +96,12 @@ double sum_locked(const Signal& s) {
 // element access (`pts[i].x = v`) — proves the mutation reached the C++ container's
 // storage, not a throwaway __getitem__ copy. A live reference is what makes it stick.
 [[=welder::weld(welder::lang::py)]]
-double point_x_at(const PointList& pts, std::size_t i) {
+inline double point_x_at(const PointList& pts, std::size_t i) {
     return pts.at(i).x;
 }
 
 [[=welder::weld(welder::lang::py)]]
-double mapped_point_x(const PointMap& m, int key) {
+inline double mapped_point_x(const PointMap& m, int key) {
     return m.at(key).x;
 }
 
