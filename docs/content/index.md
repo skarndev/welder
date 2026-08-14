@@ -363,5 +363,5 @@ weld it once.
     end-to-end against the *same* shared C++ cases, plus three build-time rods
     (the **LuaCATS** stub, the Python **trampoline**, and the Python
     **opaque-container** generators). Further languages are designed-for but not
-    yet implemented in-tree; a C#/.NET rod exists as an out-of-tree extension
+    yet implemented in-tree; a C#/.NET rod exists as an out-of-tree extension, [welder-csharp](https://github.com/skarndev/welder-csharp)
     (built on the open `welder::user_lang` identity space).

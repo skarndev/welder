@@ -62,7 +62,7 @@ namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint`,
 `array<short,289>`→`ArrayShortIntx289` (element + `x` + extent) — overridable
 per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
 the name style). A **C#/.NET rod** exists as an **out-of-tree extension**
-(skarndev/welder-csharp, private for now): it mints its language identity from
+([skarndev/welder-csharp](https://github.com/skarndev/welder-csharp)): it mints its language identity from
 the open `welder::user_lang` range and reuses the bare-`weld` shared test cases;
 the backend-neutral machinery it motivated — `<welder/virtuals.hpp>`
 (`bind_flat`/`virtual_slot`), the two-phase namespace sweep, the bare `weld`
