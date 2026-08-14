@@ -42,7 +42,7 @@ class field_emitter {
   public:
     /** Bind the emitter to class handle @a w.
         @param w the class being emitted into. */
-    explicit field_emitter(class_writer& w) : w_{w} {}
+    explicit field_emitter(class_writer& w) : _writer{w} {}
 
     /** Bind data member @a Mem as a C# property. A non-const scalar/enum
         sequence member routes to the live-wrapper form (@ref
@@ -65,7 +65,7 @@ class field_emitter {
             emit_scalar_seq<Mem, Style>();
             return;
         }
-        ensure_for<MT>(*w_.doc);
+        ensure_for<MT>(*_writer.doc);
         constexpr bool checked{(require_marshallable(MT, true), true)};
         static_assert(checked);
         const std::string id{std::meta::identifier_of(Mem)};
@@ -74,9 +74,9 @@ class field_emitter {
         // member's symbol is namespaced by that scope — a base field shadowed
         // by a derived one of the same name would otherwise emit two identical
         // symbols.
-        const member_scope ms{member_scope_of<Mem>(w_.cpp_qualified,
-                                                   w_.cpp_anchor,
-                                                   w_.type_token)};
+        const member_scope ms{member_scope_of<Mem>(_writer.cpp_qualified,
+                                                   _writer.cpp_anchor,
+                                                   _writer.type_token)};
         const std::string lookup{"wcs::named_field(" + ms.owner + ", \"" + id +
                                  "\")"};
         constexpr bool read_only{std::meta::is_const_type(MT) ||
@@ -85,33 +85,33 @@ class field_emitter {
         constexpr bool is_bool{classify(MT) == marshal_kind::boolean};
 
         // getter thunk + P/Invoke
-        const bound_symbol get{*w_.doc, w_.sym_prefix + "_get_" + id + ms.suffix,
-                               w_.members, 2};
+        const bound_symbol get{*_writer.doc, _writer.sym_prefix + "_get_" + id + ms.suffix,
+                               _writer.members, 2};
         code_writer t{get.thunk()};
         t.line("{} {}(void* self, welder_error* err) { return "
                "wcs::shim::field_get<{}, {}>(self, err); }",
-               wire_return_v<MT>, get.name(), w_.cpp_anchor, lookup);
+               wire_return_v<MT>, get.name(), _writer.cpp_anchor, lookup);
         t.blank();
         get.pinvoke().line(
             "{} {}internal static partial {} {}({} self, out WelderError err);",
             import_attr(false),
             is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "",
-            pinvoke_type<MT, Style>(true), get.name(), w_.handle_cs);
+            pinvoke_type<MT, Style>(true), get.name(), _writer.handle_cs);
         std::string setsym{};
         if constexpr (!read_only) {
-            const bound_symbol set{*w_.doc,
-                                   w_.sym_prefix + "_set_" + id + ms.suffix,
-                                   w_.members, 2};
+            const bound_symbol set{*_writer.doc,
+                                   _writer.sym_prefix + "_set_" + id + ms.suffix,
+                                   _writer.members, 2};
             setsym = set.name();
             code_writer st{set.thunk()};
             st.line("void {}(void* self, {} v, welder_error* err) { return "
                     "wcs::shim::field_set<{}, {}>(self, err, v); }",
-                    set.name(), wire_param_v<MT>, w_.cpp_anchor, lookup);
+                    set.name(), wire_param_v<MT>, _writer.cpp_anchor, lookup);
             st.blank();
             set.pinvoke().line(
                 "{} internal static partial void {}({} self, {}{} v, out "
                 "WelderError err);",
-                import_attr(is_str), set.name(), w_.handle_cs,
+                import_attr(is_str), set.name(), _writer.handle_cs,
                 is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "",
                 pinvoke_type<MT, Style>(false));
         }
@@ -123,8 +123,8 @@ class field_emitter {
         const std::string pname{
             ::welder::name_of<Mem, lang::cs, Style,
                               ::welder::ent_kind::field>()};
-        w_.surface_names.push_back(pname);
-        emit_doc_comment(w_.members, "        ", ::welder::doc_of<Mem>());
+        _writer.surface_names.push_back(pname);
+        emit_doc_comment(_writer.members, "        ", ::welder::doc_of<Mem>());
         constexpr bool unsafe_prop{classify(MT) == marshal_kind::seq_value ||
                                    classify(MT) == marshal_kind::tuple_value};
         code_writer mw{get.wrapper()};
@@ -137,14 +137,14 @@ class field_emitter {
                 const auto arm{mw.braces()};
                 mw.raw(wrapper_return_body<MT, Style,
                                            field_return_policy(MT)>(
-                    "NativeMethods." + get.name() + "(" + w_.handle_field +
+                    "NativeMethods." + get.name() + "(" + _writer.handle_field +
                         ", out WelderError _e)",
                     mw.indentation(), "this"));
             }
             if constexpr (!read_only)
                 emit_set_arm(mw, vcp,
                              "NativeMethods." + setsym + "(" +
-                                 w_.handle_field + ", " + vcp.wrapper_args +
+                                 _writer.handle_field + ", " + vcp.wrapper_args +
                                  ", out WelderError _e);");
         }
         mw.blank();
@@ -160,10 +160,10 @@ class field_emitter {
         @param name the driver-resolved property name (verbatim). */
     template <class T, std::meta::info Getter, std::meta::info Setter>
     void emit_property(const char* name) {
-        w_.surface_names.push_back(name);
-        collect_containers<Getter>(*w_.doc);
+        _writer.surface_names.push_back(name);
+        collect_containers<Getter>(*_writer.doc);
         if constexpr (Setter != std::meta::info{})
-            collect_containers<Setter>(*w_.doc);
+            collect_containers<Setter>(*_writer.doc);
         ::welder::validate_return_policy<Getter, lang::cs>();
         constexpr std::meta::info RT{
             std::meta::remove_cvref(std::meta::return_type_of(Getter))};
@@ -172,17 +172,17 @@ class field_emitter {
         const std::string gid{std::meta::identifier_of(Getter)};
         const std::string glookup{
             "wcs::named_member(" +
-            member_scope_of<Getter>(w_.cpp_qualified, w_.cpp_anchor,
-                                    w_.type_token)
+            member_scope_of<Getter>(_writer.cpp_qualified, _writer.cpp_anchor,
+                                    _writer.type_token)
                 .owner +
             ", \"" + gid + "\", " +
             std::to_string(index_of_named_member(Getter)) + ")"};
-        const bound_symbol get{*w_.doc, w_.sym_prefix + "_pget_" + name,
-                               w_.members, 2};
+        const bound_symbol get{*_writer.doc, _writer.sym_prefix + "_pget_" + name,
+                               _writer.members, 2};
         code_writer t{get.thunk()};
         t.line("{} {}(void* self, welder_error* err) { return "
                "wcs::shim::method<{}, {}>(self, err); }",
-               wire_return_v<RT>, get.name(), w_.cpp_anchor, glookup);
+               wire_return_v<RT>, get.name(), _writer.cpp_anchor, glookup);
         t.blank();
         constexpr bool is_bool{classify(RT) == marshal_kind::boolean};
         get.pinvoke().line(
@@ -190,9 +190,9 @@ class field_emitter {
             import_attr(false),
             is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "",
             pinvoke_type<RT, ::welder::naming::none>(true), get.name(),
-            w_.handle_cs);
+            _writer.handle_cs);
 
-        emit_doc_comment(w_.members, "        ", ::welder::doc_of<Getter>());
+        emit_doc_comment(_writer.members, "        ", ::welder::doc_of<Getter>());
         code_writer mw{get.wrapper()};
         mw.line("public {} {}", public_type<RT, ::welder::naming::none>(),
                 name);
@@ -205,7 +205,7 @@ class field_emitter {
                                            ::welder::naming::none,
                                            ::welder::return_policy_of(
                                                Getter, lang::cs)>(
-                    "NativeMethods." + get.name() + "(" + w_.handle_field +
+                    "NativeMethods." + get.name() + "(" + _writer.handle_field +
                         ", out WelderError _e)",
                     mw.indentation(), "this"));
             }
@@ -226,47 +226,47 @@ class field_emitter {
     template <std::meta::info Mem, class Style>
     void emit_scalar_seq() {
         constexpr std::meta::info MT{std::meta::type_of(Mem)};
-        ensure_scalar_seq<bare(MT)>(*w_.doc);
+        ensure_scalar_seq<bare(MT)>(*_writer.doc);
         const std::string id{std::meta::identifier_of(Mem)};
-        const member_scope ms{member_scope_of<Mem>(w_.cpp_qualified,
-                                                   w_.cpp_anchor,
-                                                   w_.type_token)};
+        const member_scope ms{member_scope_of<Mem>(_writer.cpp_qualified,
+                                                   _writer.cpp_anchor,
+                                                   _writer.type_token)};
         const std::string lookup{"wcs::named_field(" + ms.owner + ", \"" + id +
                                  "\")"};
         constexpr bool read_only{::welder::member_no_reassign(Mem, lang::cs)};
         const std::string V{container_ref<bare(MT)>()};
-        const bound_symbol get{*w_.doc, w_.sym_prefix + "_get_" + id + ms.suffix,
-                               w_.members, 2};
+        const bound_symbol get{*_writer.doc, _writer.sym_prefix + "_get_" + id + ms.suffix,
+                               _writer.members, 2};
         code_writer t{get.thunk()};
         t.line("void* {}(void* self, welder_error* err) { return "
                "wcs::shim::field_addr<{}, {}>(self, err); }",
-               get.name(), w_.cpp_anchor, lookup);
+               get.name(), _writer.cpp_anchor, lookup);
         t.blank();
         get.pinvoke().line(
             "[LibraryImport(Lib)] internal static partial IntPtr {}({} self, "
             "out WelderError err);",
-            get.name(), w_.handle_cs);
+            get.name(), _writer.handle_cs);
         std::string setsym{};
         if constexpr (!read_only) {
-            const bound_symbol set{*w_.doc,
-                                   w_.sym_prefix + "_set_" + id + ms.suffix,
-                                   w_.members, 2};
+            const bound_symbol set{*_writer.doc,
+                                   _writer.sym_prefix + "_set_" + id + ms.suffix,
+                                   _writer.members, 2};
             setsym = set.name();
             code_writer st{set.thunk()};
             st.line("void {}(void* self, void* v, welder_error* err) { "
                     "wcs::shim::field_assign<{}, {}>(self, v, err); }",
-                    set.name(), w_.cpp_anchor, lookup);
+                    set.name(), _writer.cpp_anchor, lookup);
             st.blank();
             set.pinvoke().line(
                 "[LibraryImport(Lib)] internal static partial void {}({} "
                 "self, {}Handle v, out WelderError err);",
-                set.name(), w_.handle_cs, V);
+                set.name(), _writer.handle_cs, V);
         }
         const std::string pname{
             ::welder::name_of<Mem, lang::cs, Style,
                               ::welder::ent_kind::field>()};
-        w_.surface_names.push_back(pname);
-        emit_doc_comment(w_.members, "        ", ::welder::doc_of<Mem>());
+        _writer.surface_names.push_back(pname);
+        emit_doc_comment(_writer.members, "        ", ::welder::doc_of<Mem>());
         code_writer mw{get.wrapper()};
         mw.line("public {} {}", V, pname);
         {
@@ -275,7 +275,7 @@ class field_emitter {
             {
                 const auto arm{mw.braces()};
                 mw.line("IntPtr _r = NativeMethods.{}({}, out WelderError _e);",
-                        get.name(), w_.handle_field);
+                        get.name(), _writer.handle_field);
                 mw.line("WelderInterop.ThrowIfError(in _e);");
                 mw.line("var _v = new {}(_r, false);", V);
                 mw.line("_v._owner = this;");
@@ -287,7 +287,7 @@ class field_emitter {
                     const auto arm{mw.braces()};
                     mw.line("NativeMethods.{}({}, value._h_{}, out "
                             "WelderError _e);",
-                            setsym, w_.handle_field, V);
+                            setsym, _writer.handle_field, V);
                     mw.line("WelderInterop.ThrowIfError(in _e);");
                 }
             }
@@ -309,13 +309,13 @@ class field_emitter {
         const std::string sid{std::meta::identifier_of(Setter)};
         const std::string slookup{
             "wcs::named_member(" +
-            member_scope_of<Setter>(w_.cpp_qualified, w_.cpp_anchor,
-                                    w_.type_token)
+            member_scope_of<Setter>(_writer.cpp_qualified, _writer.cpp_anchor,
+                                    _writer.type_token)
                 .owner +
             ", \"" + sid + "\", " +
             std::to_string(index_of_named_member(Setter)) + ")"};
-        const bound_symbol set{*w_.doc, w_.sym_prefix + "_pset_" + name,
-                               w_.members, 2};
+        const bound_symbol set{*_writer.doc, _writer.sym_prefix + "_pset_" + name,
+                               _writer.members, 2};
         // A fluent (non-void) setter return is discarded here — the support
         // template returns the wire form of the REAL return type; the thunk
         // discards it by spelling void and an expression statement.
@@ -323,14 +323,14 @@ class field_emitter {
         st.line("void {}(void* self, {} v, welder_error* err) { "
                 "(void)wcs::shim::method<{}, {}>(self, err, v); }",
                 set.name(), wire_param_v<first_param_type(Setter)>,
-                w_.cpp_anchor, slookup);
+                _writer.cpp_anchor, slookup);
         st.blank();
         constexpr bool p_is_bool{classify(PT) == marshal_kind::boolean};
         constexpr bool p_is_str{classify(PT) == marshal_kind::utf8_string};
         set.pinvoke().line(
             "{} internal static partial void {}({} self, {}{} v, out "
             "WelderError err);",
-            import_attr(p_is_str), set.name(), w_.handle_cs,
+            import_attr(p_is_str), set.name(), _writer.handle_cs,
             p_is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "",
             pinvoke_type<first_param_type(Setter), ::welder::naming::none>(
                 false));
@@ -338,11 +338,11 @@ class field_emitter {
         append_one_param<first_param_type(Setter), ::welder::naming::none>(
             vcp, 0, "value");
         emit_set_arm(mw, vcp,
-                     "NativeMethods." + set.name() + "(" + w_.handle_field +
+                     "NativeMethods." + set.name() + "(" + _writer.handle_field +
                          ", " + vcp.wrapper_args + ", out WelderError _e);");
     }
 
-    class_writer& w_; /**< The class being emitted into. */
+    class_writer& _writer; /**< The class being emitted into. */
 };
 
 } // namespace welder::inline v0::rods::csharp

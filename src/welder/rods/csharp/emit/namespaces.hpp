@@ -36,7 +36,7 @@ class namespace_emitter {
   public:
     /** Bind the emitter to module handle @a m (one C# namespace's slice).
         @param m the module handle. */
-    explicit namespace_emitter(module_writer& m) : m_{m} {}
+    explicit namespace_emitter(module_writer& m) : _module{m} {}
 
     /** Emit free-function overload group @a Fns as `public static` overloads
         on the namespace's static class.
@@ -51,7 +51,7 @@ class namespace_emitter {
                                  ::welder::ent_kind::function>(name)};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
             constexpr std::size_t k{index_of_named_member(fn)};
-            collect_containers<fn>(*m_.doc);
+            collect_containers<fn>(*_module.doc);
             constexpr std::meta::info Ns{std::meta::parent_of(fn)};
             const std::string id{std::meta::identifier_of(fn)};
             const std::string sym{std::string{"welder_"} + upath_v<Ns> +
@@ -61,7 +61,7 @@ class namespace_emitter {
                 std::string{cpp_name_v<Ns>} + ", \"" + id + "\", " +
                 std::to_string(k) + ")>"};
             callable_emitter<fn, Style>{
-                bound_symbol{*m_.doc, sym, m_.doc->section(m_.cs_ns).statics,
+                bound_symbol{*_module.doc, sym, _module.doc->section(_module.cs_ns).statics,
                              2},
                 wname, expr}
                 .emit();
@@ -79,7 +79,7 @@ class namespace_emitter {
     template <std::meta::info Var, class Style = ::welder::naming::none>
     void emit_variable(const char* name) {
         constexpr std::meta::info VT{std::meta::type_of(Var)};
-        ensure_for<VT>(*m_.doc);
+        ensure_for<VT>(*_module.doc);
         constexpr bool checked{(require_marshallable(VT, true), true)};
         static_assert(checked);
         constexpr std::meta::info Ns{std::meta::parent_of(Var)};
@@ -92,9 +92,9 @@ class namespace_emitter {
         constexpr bool read_only{std::meta::is_const_type(VT)};
         constexpr bool is_str{classify(VT) == marshal_kind::utf8_string};
         constexpr bool is_bool{classify(VT) == marshal_kind::boolean};
-        std::string& body{m_.doc->section(m_.cs_ns).statics};
+        std::string& body{_module.doc->section(_module.cs_ns).statics};
 
-        const bound_symbol get{*m_.doc, base + "_get", body, 2};
+        const bound_symbol get{*_module.doc, base + "_get", body, 2};
         code_writer t{get.thunk()};
         t.line("{} {}(welder_error* err) { return wcs::shim::var_get<{}>(err); "
                "}",
@@ -107,7 +107,7 @@ class namespace_emitter {
             pinvoke_type<VT, Style>(true), get.name());
         std::string setsym{};
         if constexpr (!read_only) {
-            const bound_symbol set{*m_.doc, base + "_set", body, 2};
+            const bound_symbol set{*_module.doc, base + "_set", body, 2};
             setsym = set.name();
             code_writer st{set.thunk()};
             st.line("void {}({} v, welder_error* err) { return "
@@ -151,7 +151,7 @@ class namespace_emitter {
     }
 
   private:
-    module_writer& m_; /**< The module handle (this namespace's slice). */
+    module_writer& _module; /**< The module handle (this namespace's slice). */
 };
 
 } // namespace welder::inline v0::rods::csharp

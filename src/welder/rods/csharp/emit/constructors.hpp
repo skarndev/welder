@@ -39,7 +39,7 @@ class constructor_emitter {
   public:
     /** Bind the emitter to class handle @a w.
         @param w the class being emitted into. */
-    explicit constructor_emitter(class_writer& w) : w_{w} {}
+    explicit constructor_emitter(class_writer& w) : _writer{w} {}
 
     /** Emit the whole constructor surface: a no-argument form when
         @a HasDefault, one per member of @a Ctors (exact constructors, spliced
@@ -54,17 +54,17 @@ class constructor_emitter {
     template <class T, auto Ctors, bool HasDefault, bool Aggregate,
               bool Copyable>
     void emit_all() {
-        const std::string anchor{w_.cpp_anchor};
+        const std::string anchor{_writer.cpp_anchor};
         // A director-eligible type is C#-constructed AS its director subclass
         // (the handle stays "pointer to T" — construct_as adjusts), so a C#
         // subclass can override its virtuals; unoverridden slots fall through
         // to the qualified base call, so a plain C#-side instance behaves
         // identically to a T.
-        const std::string dir_anchor{w_.is_director ? "^^" + w_.director_ident
+        const std::string dir_anchor{_writer.is_director ? "^^" + _writer.director_ident
                                                     : std::string{}};
         if constexpr (HasDefault) {
-            emit_one(call_pieces{}, w_.sym_prefix + "_new_default",
-                     w_.is_director
+            emit_one(call_pieces{}, _writer.sym_prefix + "_new_default",
+                     _writer.is_director
                          ? "wcs::shim::default_construct_as<" + dir_anchor +
                                ", " + anchor + ">"
                          : "wcs::shim::default_construct<" + anchor + ">");
@@ -72,11 +72,11 @@ class constructor_emitter {
         template for (constexpr auto ctor : std::define_static_array(Ctors)) {
             constexpr std::size_t k{index_of_ctor(ctor)};
             constexpr std::size_t n{std::meta::parameters_of(ctor).size()};
-            collect_containers<ctor>(*w_.doc);
+            collect_containers<ctor>(*_writer.doc);
             emit_one(build_params<ctor, ::welder::naming::none>(
                          std::make_index_sequence<n>{}),
-                     w_.sym_prefix + "_new_" + std::to_string(k),
-                     w_.is_director
+                     _writer.sym_prefix + "_new_" + std::to_string(k),
+                     _writer.is_director
                          ? "wcs::shim::construct_as<" + dir_anchor + ", " +
                                anchor + ", wcs::ctor_at(" + anchor + ", " +
                                std::to_string(k) + ")>"
@@ -88,7 +88,7 @@ class constructor_emitter {
                 ::welder::detail::aggregate_fields<T>().size()};
             emit_one(aggregate_pieces<T, ::welder::naming::none>(
                          std::make_index_sequence<n>{}),
-                     w_.sym_prefix + "_new_agg",
+                     _writer.sym_prefix + "_new_agg",
                      "wcs::shim::aggregate_construct<" + anchor + ">");
         }
         if constexpr (Copyable)
@@ -106,7 +106,7 @@ class constructor_emitter {
                delegates into (`wcs::shim::construct<…>` and friends). */
     void emit_one(const call_pieces& cp, const std::string& sym,
                   const std::string& delegate_expr) {
-        const bound_symbol bs{*w_.doc, sym, w_.members, 2};
+        const bound_symbol bs{*_writer.doc, sym, _writer.members, 2};
         std::string shim_params{cp.shim_params};
         shim_params += (shim_params.empty() ? "" : ", ");
         shim_params += "welder_error* err";
@@ -150,9 +150,9 @@ class constructor_emitter {
             names += (names.empty() ? "" : ", ");
             names += n;
         }
-        mw.line("public {}({}) : this({}({}), true) {}", w_.cs_name,
+        mw.line("public {}({}) : this({}({}), true) {}", _writer.cs_name,
                 cp.wrapper_params, helper, names,
-                w_.is_director ? "{ _DirBind(); }" : "{}");
+                _writer.is_director ? "{ _DirBind(); }" : "{}");
         mw.blank();
     }
 
@@ -161,31 +161,31 @@ class constructor_emitter {
         (Not a `T(other)` constructor overload: it would collide with a
         one-argument user constructor.) */
     void emit_clone() {
-        const bound_symbol bs{*w_.doc, w_.sym_prefix + "_clone", w_.members, 2};
+        const bound_symbol bs{*_writer.doc, _writer.sym_prefix + "_clone", _writer.members, 2};
         code_writer t{bs.thunk()};
         t.line("void* {}(void* self, welder_error* err) { return "
                "wcs::shim::clone<{}>(self, err); }",
-               bs.name(), w_.cpp_anchor);
+               bs.name(), _writer.cpp_anchor);
         t.blank();
         bs.pinvoke().line(
             "[LibraryImport(Lib)] internal static partial IntPtr {}({} self, "
             "out WelderError err);",
-            bs.name(), w_.handle_cs);
+            bs.name(), _writer.handle_cs);
         code_writer mw{bs.wrapper()};
         mw.line("/// <summary>Copy this instance (the C++ copy "
                 "constructor).</summary>");
-        mw.line("public {} Clone()", w_.cs_name);
+        mw.line("public {} Clone()", _writer.cs_name);
         {
             const auto body{mw.braces()};
             mw.line("IntPtr _r = NativeMethods.{}({}, out WelderError _e);",
-                    bs.name(), w_.handle_field);
+                    bs.name(), _writer.handle_field);
             mw.line("WelderInterop.ThrowIfError(in _e);");
-            mw.line("return new {}(_r, true);", w_.cs_name);
+            mw.line("return new {}(_r, true);", _writer.cs_name);
         }
         mw.blank();
     }
 
-    class_writer& w_; /**< The class being emitted into. */
+    class_writer& _writer; /**< The class being emitted into. */
 };
 
 } // namespace welder::inline v0::rods::csharp

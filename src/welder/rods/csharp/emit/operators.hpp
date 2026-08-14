@@ -46,7 +46,7 @@ class operator_emitter {
   public:
     /** Bind the emitter to class handle @a w.
         @param w the class being emitted into. */
-    explicit operator_emitter(class_writer& w) : w_{w} {}
+    explicit operator_emitter(class_writer& w) : _writer{w} {}
 
     /** Emit one operator overload @a Fn of welded type @a T, by its mapped
         shape: arithmetic/bitwise/unary → a `public static operator`, a
@@ -66,7 +66,7 @@ class operator_emitter {
         constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
         const call_pieces cp{build_params<Fn, ::welder::naming::none>(
             std::make_index_sequence<n>{})};
-        const bound_symbol bs{*w_.doc, symbol<Fn>(), w_.members, 2};
+        const bound_symbol bs{*_writer.doc, symbol<Fn>(), _writer.members, 2};
 
         // --- shim thunk + P/Invoke (uniform: member → method, free → function)
         std::string shim_params{cp.shim_params};
@@ -76,7 +76,7 @@ class operator_emitter {
             shim_params = "void* self" +
                           (cp.shim_params.empty() ? "" : ", " + cp.shim_params);
             delegate_args = "self, err";
-            pin_params = w_.handle_cs + " self" +
+            pin_params = _writer.handle_cs + " self" +
                          (cp.pinvoke_params.empty()
                               ? ""
                               : ", " + cp.pinvoke_params);
@@ -90,7 +90,7 @@ class operator_emitter {
         pin_params += (pin_params.empty() ? "" : ", ");
         pin_params += "out WelderError err";
         const std::string expr{
-            is_member ? "wcs::shim::method<" + w_.cpp_anchor + ", " +
+            is_member ? "wcs::shim::method<" + _writer.cpp_anchor + ", " +
                             lookup<Fn>() + ">"
                       : "wcs::shim::function<" + lookup<Fn>() + ">"};
         code_writer t{bs.thunk()};
@@ -133,20 +133,20 @@ class operator_emitter {
     template <class T, std::meta::info Fn, auto Covered>
     void emit_comparison_set() {
         constexpr std::size_t k{index_of_operator(Fn)};
-        const bound_symbol bs{*w_.doc, w_.sym_prefix + "_cmp_" +
+        const bound_symbol bs{*_writer.doc, _writer.sym_prefix + "_cmp_" +
                                            std::to_string(k),
-                              w_.members, 2};
+                              _writer.members, 2};
         const std::string lk{lookup<Fn>()};
         // The operand: spelled through the SAME consteval re-derivation the
         // generator used, so the shim's compare<> sees the identical type.
         const std::string opnd{"::welder::detail::comparison_operand(" + lk +
-                               ", " + w_.cpp_anchor + ")"};
+                               ", " + _writer.cpp_anchor + ")"};
         code_writer t{bs.thunk()};
         t.line("std::int32_t {}(void* self, {} a0, welder_error* err) { "
                "return wcs::shim::compare<{}, {}>(self, err, a0); }",
                bs.name(),
                wire_param_v<::welder::detail::comparison_operand(Fn, ^^T)>,
-               w_.cpp_anchor, opnd);
+               _writer.cpp_anchor, opnd);
         t.blank();
         constexpr bool p_is_bool{
             classify(::welder::detail::comparison_operand(Fn, ^^T)) ==
@@ -154,7 +154,7 @@ class operator_emitter {
         bs.pinvoke().line(
             "[LibraryImport(Lib)] internal static partial int {}({} self, "
             "{}{} a0, out WelderError err);",
-            bs.name(), w_.handle_cs,
+            bs.name(), _writer.handle_cs,
             p_is_bool ? "[MarshalAs(UnmanagedType.U1)] " : "",
             pinvoke_type<::welder::detail::comparison_operand(Fn, ^^T),
                          ::welder::naming::none>(false));
@@ -189,8 +189,8 @@ class operator_emitter {
                      ", out WelderError _e);\n"
                      "            WelderInterop.ThrowIfError(in _e);\n"
                      "            return " + cond + ";\n";
-            if (!w_.have_comparison(c.op, c.lhs, c.rhs))
-                w_.comparisons.push_back(std::move(c));
+            if (!_writer.have_comparison(c.op, c.lhs, c.rhs))
+                _writer.comparisons.push_back(std::move(c));
         };
         if constexpr (!Covered[0]) record("<", false, "_c == -1");
         if constexpr (!Covered[1]) record("<=", false, "_c == -1 || _c == 0");
@@ -222,7 +222,7 @@ class operator_emitter {
         return "wcs::named_operator(" +
                (named_parent
                     ? "^^" + std::string{cpp_name_v<std::meta::parent_of(Fn)>}
-                    : w_.cpp_anchor) +
+                    : _writer.cpp_anchor) +
                ", std::meta::operators::" + opid +
                (u ? ", true, " : ", false, ") + std::to_string(k) + ")";
     }
@@ -237,7 +237,7 @@ class operator_emitter {
         constexpr bool u{::welder::detail::is_unary_operator(Fn)};
         constexpr std::size_t k{index_of_operator(Fn)};
         // strip the "op_" prefix for the symbol leaf
-        return w_.sym_prefix + "_op_" + (opid + 3) + (u ? "_u_" : "_b_") +
+        return _writer.sym_prefix + "_op_" + (opid + 3) + (u ? "_u_" : "_b_") +
                std::to_string(k);
     }
 
@@ -247,7 +247,7 @@ class operator_emitter {
         @param bs the operator's symbol and sinks. */
     template <std::meta::info Fn>
     void emit_invoke(const call_pieces& cp, const bound_symbol& bs) {
-        std::string args{w_.handle_field +
+        std::string args{_writer.handle_field +
                          (cp.wrapper_args.empty() ? ""
                                                   : ", " + cp.wrapper_args)};
         code_writer mw{bs.wrapper()};
@@ -277,10 +277,10 @@ class operator_emitter {
         @param bs the operator's symbol and sinks. */
     template <std::meta::info Fn>
     void emit_indexer(const call_pieces& cp, const bound_symbol& bs) {
-        if (std::find(w_.indexer_sigs.begin(), w_.indexer_sigs.end(),
-                      cp.wrapper_params) != w_.indexer_sigs.end())
+        if (std::find(_writer.indexer_sigs.begin(), _writer.indexer_sigs.end(),
+                      cp.wrapper_params) != _writer.indexer_sigs.end())
             return; // const/non-const C++ pair -> one C# indexer
-        w_.indexer_sigs.push_back(cp.wrapper_params);
+        _writer.indexer_sigs.push_back(cp.wrapper_params);
         code_writer mw{bs.wrapper()};
         mw.line("public {}{} this[{}]", cp.needs_unsafe ? "unsafe " : "",
                 public_return_type<std::meta::return_type_of(Fn),
@@ -296,7 +296,7 @@ class operator_emitter {
                                         ::welder::naming::none,
                                         ::welder::return_policy_of(
                                             Fn, lang::cs)>(
-                        "NativeMethods." + bs.name() + "(" + w_.handle_field +
+                        "NativeMethods." + bs.name() + "(" + _writer.handle_field +
                             ", " + cp.wrapper_args + ", out WelderError _e)",
                         mw.indentation() + (cp.post.empty() ? "" : "    "),
                         "this"),
@@ -369,8 +369,8 @@ class operator_emitter {
             c.ret = public_return_type<std::meta::return_type_of(Fn),
                                        ::welder::naming::none>();
             c.body = std::move(body);
-            if (!w_.have_comparison(c.op, c.lhs, c.rhs))
-                w_.comparisons.push_back(std::move(c));
+            if (!_writer.have_comparison(c.op, c.lhs, c.rhs))
+                _writer.comparisons.push_back(std::move(c));
         } else if constexpr (oi.kind == cs_op_kind::unary) {
             code_writer mw{bs.wrapper()};
             mw.line("public static {}{} operator {}({} v)",
@@ -410,7 +410,7 @@ class operator_emitter {
         }
     }
 
-    class_writer& w_; /**< The class being emitted into. */
+    class_writer& _writer; /**< The class being emitted into. */
 };
 
 } // namespace welder::inline v0::rods::csharp

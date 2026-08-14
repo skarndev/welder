@@ -78,7 +78,17 @@ src/welder/
                            the runtime support library the generated shim calls — a component
                            identity per file, not forced into structs); document/ is the document
                            object model. rod.hpp/shim_support.hpp/type_map.hpp keep their names as
-                           UMBRELLA includes, so every documented include path still works)
+                           UMBRELLA includes, so every documented include path still works.
+                           C-ABI BOUNDARY RULE (for future C-ABI rods — Java/Go/Swift per the
+                           language survey): everything BELOW emit/ + document/ — shim/ (the
+                           runtime marshalling library), reflect/ (the lookup layer), marshal/
+                           (classification + wire policy), the wire structs and the welder_error
+                           contract — must stay free of managed-side (C#) knowledge, so a second
+                           C-ABI rod can lift them into a shared rods/cabi/ layer via the same
+                           umbrella-include trick; bound_symbol is the designed seam (per-artifact
+                           sinks — a Java rod swaps the pinvoke/wrapper sinks, reuses the thunks).
+                           Deliberately NOT split today: one consumer would freeze C#-shaped wire
+                           choices unvalidated — promote when the second C-ABI rod lands)
       rod.hpp             C#/.NET rod: text-emitting welder::rod (welder::rods::csharp::rod, lang::cs) emitting TWO coordinated artifacts per pass — extern "C" shim.cpp (one-line thunks delegating into shim_support, spliced reflections) + [LibraryImport] Bindings.cs (SafeHandle wrappers, natural C# overloads, XML docs); overload groups get per-overload indexed symbols; whole-module generate<^^Ns>(shim_os, cs_os, options). A HOOK TABLE ONLY (~340 lines): every hook one-line-forwards into an emit/ component
       text.hpp            pure string helpers, no reflection: the constexpr `cat()` {}-mini-format (usable in BOTH consteval and runtime — std::format/std::to_string are not constexpr on gcc-16, {fmt}'s compile-time path would add a dependency; probed 2026-08-13), emit_doc_comment/one_line (XML docs), cs_escape (C# keywords), import_attr, split_param_names, capitalized
       reflect/symbols.hpp underscore_path (C-symbol prefix), qualified_cpp_name (the shim's ^^ anchors), spellable (has a writable qualified name?), symbol_token (UNIQUE per type — display string for a specialization)

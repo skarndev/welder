@@ -35,7 +35,7 @@ class shared_box_emitter {
   public:
     /** Bind the emitter to the growing document.
         @param doc the two-artifact document. */
-    explicit shared_box_emitter(document& doc) : doc_{&doc} {}
+    explicit shared_box_emitter(document& doc) : _doc{&doc} {}
 
     /** Generate the box for payload class @a T, if this is the first time it
         is seen (keyed by `sp:` + the qualified name).
@@ -44,15 +44,15 @@ class shared_box_emitter {
     void ensure() {
         static constexpr const char* key{std::define_static_string(
             std::string{"sp:"} + qualified_cpp_name(T))};
-        if (!doc_->claim_container(key))
+        if (!_doc->claim_container(key))
             return;
-        sym_ = std::string{"welder_sp_"} + symtok_v<T> + "_free";
+        _symbol = std::string{"welder_sp_"} + symtok_v<T> + "_free";
         // Deferred like the container elements: a shared_ptr payload can be
         // an alias-welded specialization, which has no qualified name to spell
         // here. @see anchor_ref
-        cpp_ = anchor_ref<T>();
-        box_ = field_ref<T>() + "SharedBox";
-        doc_->record_symbol(sym_);
+        _payload_spelling = anchor_ref<T>();
+        _box_name = field_ref<T>() + "SharedBox";
+        _doc->record_symbol(_symbol);
         emit_thunk();
         emit_pinvoke();
         emit_box_class();
@@ -61,30 +61,30 @@ class shared_box_emitter {
   private:
     /** Write the free thunk — a one-line delegation into `shim::sp_free`. */
     void emit_thunk() {
-        code_writer t{doc_->shim, 0};
-        t.line("void {}(void* box) { wcs::shim::sp_free<^^{}>(box); }", sym_,
-               cpp_);
+        code_writer t{_doc->shim, 0};
+        t.line("void {}(void* box) { wcs::shim::sp_free<^^{}>(box); }", _symbol,
+               _payload_spelling);
         t.blank();
     }
 
     /** Write the free thunk's `[LibraryImport]` declaration. */
     void emit_pinvoke() {
-        code_writer p{doc_->pinvoke, 2};
+        code_writer p{_doc->pinvoke, 2};
         p.line("[LibraryImport(Lib)] internal static partial void "
                "{}(IntPtr box);",
-               sym_);
+               _symbol);
     }
 
     /** Write the `SafeHandle` subclass whose release frees the boxed
         `shared_ptr` copy. */
     void emit_box_class() {
-        code_writer w{doc_->containers, 1};
-        w.line("internal sealed class {} : SafeHandle", box_);
+        code_writer w{_doc->containers, 1};
+        w.line("internal sealed class {} : SafeHandle", _box_name);
         {
             const auto cls{w.braces()};
             w.line("internal {}(IntPtr handle, bool owns) : "
                    "base(IntPtr.Zero, owns)",
-                   box_);
+                   _box_name);
             {
                 const auto body{w.braces()};
                 w.line("SetHandle(handle);");
@@ -93,18 +93,20 @@ class shared_box_emitter {
             w.line("protected override bool ReleaseHandle()");
             {
                 const auto body{w.braces()};
-                w.line("NativeMethods.{}(handle);", sym_);
+                w.line("NativeMethods.{}(handle);", _symbol);
                 w.line("return true;");
             }
         }
         w.blank();
     }
 
-    document* doc_;     /**< The shared document. */
-    std::string sym_{}; /**< The free thunk's C symbol
-                             (`welder_sp_<tok>_free`). */
-    std::string cpp_{}; /**< The payload's shim spelling (anchor-deferred). */
-    std::string box_{}; /**< The box class's name (`<Type>SharedBox`). */
+    document* _doc; /**< The shared document. */
+    /** The free thunk's C symbol (`welder_sp_<tok>_free`). */
+    std::string _symbol{};
+    /** The payload's shim spelling (anchor-deferred). */
+    std::string _payload_spelling{};
+    /** The box class's name (`<Type>SharedBox`). */
+    std::string _box_name{};
 };
 
 /** The per-class shared_ptr BOX: a SafeHandle whose release frees the

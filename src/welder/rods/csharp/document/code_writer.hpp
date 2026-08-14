@@ -40,7 +40,7 @@ class code_writer {
         @param out   the buffer written to (must outlive the writer).
         @param depth the current indentation, in 4-space units. */
     explicit code_writer(std::string& out, std::size_t depth = 0)
-        : out_{&out}, depth_{depth} {}
+        : _out{&out}, _depth{depth} {}
 
     /** Write one indented line: the current indent, then @a f formatted with
         @a args (see @ref cat), then a newline.
@@ -50,8 +50,8 @@ class code_writer {
     template <class... Args>
     void line(std::string_view f, const Args&... args) {
         indent();
-        *out_ += cat(f, args...);
-        *out_ += '\n';
+        *_out += cat(f, args...);
+        *_out += '\n';
     }
 
     /** Append formatted text verbatim — no indent, no newline (for building a
@@ -61,16 +61,16 @@ class code_writer {
         @param args the values substituted, in order. */
     template <class... Args>
     void text(std::string_view f, const Args&... args) {
-        *out_ += cat(f, args...);
+        *_out += cat(f, args...);
     }
 
     /** Append @a s completely verbatim — pre-indented multi-line text (e.g. a
         @ref call_pieces::wrap staging block) that manages its own layout.
         @param s the text. */
-    void raw(std::string_view s) { *out_ += s; }
+    void raw(std::string_view s) { *_out += s; }
 
     /** Write one empty line (the blank separating members / thunks). */
-    void blank() { *out_ += '\n'; }
+    void blank() { *_out += '\n'; }
 
     /** The RAII brace scope @ref braces returns: `{` on construction, `}` on
         destruction, one level deeper in between. Immovable — it pins the
@@ -79,20 +79,20 @@ class code_writer {
       public:
         /** Open the scope: write the `{` line and deepen @a w by one.
             @param w the writer the scope indents. */
-        explicit brace_scope(code_writer& w) : w_{w} {
-            w_.line("{");
-            ++w_.depth_;
+        explicit brace_scope(code_writer& w) : _writer{w} {
+            _writer.line("{");
+            ++_writer._depth;
         }
         brace_scope(const brace_scope&) = delete;
         brace_scope& operator=(const brace_scope&) = delete;
-        /** Close the scope: shallow @ref w_ back out and write the `}` line. */
+        /** Close the scope: shallow @ref _writer back out and write the `}` line. */
         ~brace_scope() {
-            --w_.depth_;
-            w_.line("}");
+            --_writer._depth;
+            _writer.line("}");
         }
 
       private:
-        code_writer& w_; /**< The writer whose depth this scope owns. */
+        code_writer& _writer; /**< The writer whose depth this scope owns. */
     };
 
     /** Open a brace scope at the current depth (C# style — the `{` on its own
@@ -106,22 +106,22 @@ class code_writer {
         @param delta the additional depth.
         @return the deeper writer. */
     [[nodiscard]] code_writer deeper(std::size_t delta = 1) const {
-        return code_writer{*out_, depth_ + delta};
+        return code_writer{*_out, _depth + delta};
     }
 
     /** The current indentation as text (for handing to legacy helpers that
         still take an indent string, e.g. @ref emit_doc_comment).
         @return `4 * depth` spaces. */
     [[nodiscard]] std::string indentation() const {
-        return std::string(4 * depth_, ' ');
+        return std::string(4 * _depth, ' ');
     }
 
   private:
     /** Write the current indent. */
-    void indent() { out_->append(4 * depth_, ' '); }
+    void indent() { _out->append(4 * _depth, ' '); }
 
-    std::string* out_;  /**< The target buffer. */
-    std::size_t depth_; /**< The current depth, in 4-space units. */
+    std::string* _out;  /**< The target buffer. */
+    std::size_t _depth; /**< The current depth, in 4-space units. */
 };
 
 /** One emitted C symbol and its three coordinated sinks.
@@ -145,36 +145,36 @@ class bound_symbol {
         @param wrapper_depth the wrapper text's indentation, in 4-space units. */
     bound_symbol(document& doc, std::string sym, std::string& wrapper_sink,
                  std::size_t wrapper_depth)
-        : doc_{&doc}, sym_{std::move(sym)}, wrapper_sink_{&wrapper_sink},
-          wrapper_depth_{wrapper_depth} {
-        doc_->record_symbol(sym_);
+        : _doc{&doc}, _symbol{std::move(sym)}, _wrapper_sink{&wrapper_sink},
+          _wrapper_depth{wrapper_depth} {
+        _doc->record_symbol(_symbol);
     }
 
     /** The C symbol all three sinks coordinate on.
         @return the symbol text. */
-    [[nodiscard]] const std::string& name() const { return sym_; }
+    [[nodiscard]] const std::string& name() const { return _symbol; }
 
     /** The native-thunk sink (the shim buffer, top level).
         @return a positioned writer. */
-    [[nodiscard]] code_writer thunk() const { return code_writer{doc_->shim, 0}; }
+    [[nodiscard]] code_writer thunk() const { return code_writer{_doc->shim, 0}; }
 
     /** The `[LibraryImport]` declaration sink (inside `NativeMethods`).
         @return a positioned writer. */
     [[nodiscard]] code_writer pinvoke() const {
-        return code_writer{doc_->pinvoke, 2};
+        return code_writer{_doc->pinvoke, 2};
     }
 
     /** The managed-wrapper sink this symbol was bound with.
         @return a positioned writer. */
     [[nodiscard]] code_writer wrapper() const {
-        return code_writer{*wrapper_sink_, wrapper_depth_};
+        return code_writer{*_wrapper_sink, _wrapper_depth};
     }
 
   private:
-    document* doc_;             /**< The shared document. */
-    std::string sym_;           /**< The registered C symbol. */
-    std::string* wrapper_sink_; /**< Where this symbol's wrapper text lands. */
-    std::size_t wrapper_depth_; /**< The wrapper text's depth. */
+    document* _doc;             /**< The shared document. */
+    std::string _symbol;        /**< The registered C symbol. */
+    std::string* _wrapper_sink; /**< Where this symbol's wrapper text lands. */
+    std::size_t _wrapper_depth; /**< The wrapper text's depth. */
 };
 
 } // namespace welder::inline v0::rods::csharp

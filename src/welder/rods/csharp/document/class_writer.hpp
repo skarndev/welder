@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <welder/rods/csharp/document/artifacts.hpp>
+#include <welder/rods/csharp/document/code_writer.hpp>
 #include <welder/rods/csharp/text.hpp> // emit_doc_comment
 
 /** @file
@@ -167,6 +168,7 @@ struct class_writer {
             return op == "==" ? "EqualsValue" : "NotEqualsValue";
         };
         std::string out{};
+        code_writer w{out, 2};
         for (const auto& c : comparisons) {
             const bool equality{c.op == "==" || c.op == "!="};
             const bool can_pair{have_comparison(partner(c.op), c.lhs, c.rhs) ||
@@ -175,25 +177,33 @@ struct class_writer {
             // Homogeneous wrapper equality gets the C# null protocol (a
             // wrapper is a reference type; `p == null` must not NRE).
             std::string guard{};
-            if (equality && c.lhs == c.rhs && c.lhs.front() == '\x01')
-                guard = c.op == "=="
-                            ? "            if (ReferenceEquals(l, r)) return "
-                              "true;\n            if (l is null || r is null) "
-                              "return false;\n"
-                            : "            if (ReferenceEquals(l, r)) return "
-                              "false;\n            if (l is null || r is null) "
-                              "return true;\n";
+            if (equality && c.lhs == c.rhs && c.lhs.front() == '\x01') {
+                code_writer g{guard, 3};
+                g.line("if (ReferenceEquals(l, r)) return {};",
+                       c.op == "==" ? "true" : "false");
+                g.line("if (l is null || r is null) return {};",
+                       c.op == "==" ? "false" : "true");
+            }
             const std::string q{guard.empty() ? "" : "?"};
             if (can_pair) {
-                out += "        public static " + c.ret + " operator " + c.op +
-                       "(" + c.lhs + q + " l, " + c.rhs + q +
-                       " r)\n        {\n" + guard + c.body + "        }\n\n";
+                w.line("public static {} operator {}({}{} l, {}{} r)", c.ret,
+                       c.op, c.lhs, q, c.rhs, q);
+                {
+                    const auto body{w.braces()};
+                    w.raw(guard);
+                    w.raw(c.body);
+                }
+                w.blank();
             } else {
                 // Unpairable (a lone heterogeneous relational, or a non-bool
                 // comparison): a named method instead of an operator.
-                out += "        public static " + c.ret + " " + demoted(c.op) +
-                       "(" + c.lhs + " l, " + c.rhs + " r)\n        {\n" +
-                       c.body + "        }\n\n";
+                w.line("public static {} {}({} l, {} r)", c.ret,
+                       demoted(c.op), c.lhs, c.rhs);
+                {
+                    const auto body{w.braces()};
+                    w.raw(c.body);
+                }
+                w.blank();
             }
         }
         // Synthesize the missing partners of pairable emissions.
@@ -208,25 +218,28 @@ struct class_writer {
                                   c.lhs.front() == '\x01')
                                      ? "?"
                                      : ""};
-            out += "        public static bool operator " + p + "(" + c.lhs +
-                   pq + " l, " + c.rhs + pq + " r) => ";
             if (equality)
-                out += "!(l " + c.op + " r);\n";
+                w.line("public static bool operator {}({}{} l, {}{} r) => "
+                       "!(l {} r);",
+                       p, c.lhs, pq, c.rhs, pq, c.op);
             else // homogeneous relational: swap the operands
-                out += "r " + c.op + " l;\n";
-            out += "\n";
+                w.line("public static bool operator {}({}{} l, {}{} r) => "
+                       "r {} l;",
+                       p, c.lhs, pq, c.rhs, pq, c.op);
+            w.blank();
         }
         // == over the class itself: give Equals/GetHashCode their overrides
         // (silencing CS0660/CS0661). The hash is reference identity — C++ has
         // no hash slot to mirror; equal VALUES may hash differently.
         const std::string self_ph{std::string{"\x01"} + cpp_qualified + "\x02"};
         if (have_comparison("==", self_ph, self_ph)) {
-            out += "        public override bool Equals(object? obj) => obj is " +
-                   cs_name + " _o && this == _o;\n";
-            out += "        /// <summary>Reference-identity hash (the C++ type "
-                   "has no hash to mirror).</summary>\n";
-            out += "        public override int GetHashCode() => "
-                   "base.GetHashCode();\n\n";
+            w.line("public override bool Equals(object? obj) => obj is {} _o "
+                   "&& this == _o;",
+                   cs_name);
+            w.line("/// <summary>Reference-identity hash (the C++ type has no "
+                   "hash to mirror).</summary>");
+            w.line("public override int GetHashCode() => base.GetHashCode();");
+            w.blank();
         }
         return out;
     }
@@ -235,82 +248,106 @@ struct class_writer {
         if (!doc)
             return;
         std::string& out{sink ? *sink : doc->section(cs_ns).types};
+        code_writer w{out, 1};
         // The per-class SafeHandle: ReleaseHandle calls the destroy thunk, so
         // finalization and Dispose share one release path.
-        out += "    internal sealed class " + cs_name +
-               "Handle : SafeHandle\n    {\n"
-               "        internal " + cs_name +
-               "Handle(IntPtr handle, bool owns) : base(IntPtr.Zero, owns)\n"
-               "        {\n            SetHandle(handle);\n        }\n"
-               "        public override bool IsInvalid => handle == "
-               "IntPtr.Zero;\n"
-               "        protected override bool ReleaseHandle()\n"
-               "        {\n            NativeMethods." + destroy_symbol +
-               "(handle);\n            return true;\n        }\n"
-               "    }\n\n";
-        emit_doc_comment(out, "    ", doc_text.empty() ? nullptr : doc_text.c_str());
+        w.line("internal sealed class {}Handle : SafeHandle", cs_name);
+        {
+            const auto handle_cls{w.braces()};
+            w.line("internal {}Handle(IntPtr handle, bool owns) : "
+                   "base(IntPtr.Zero, owns)",
+                   cs_name);
+            {
+                const auto body{w.braces()};
+                w.line("SetHandle(handle);");
+            }
+            w.line("public override bool IsInvalid => handle == IntPtr.Zero;");
+            w.line("protected override bool ReleaseHandle()");
+            {
+                const auto body{w.braces()};
+                w.line("NativeMethods.{}(handle);", destroy_symbol);
+                w.line("return true;");
+            }
+        }
+        w.blank();
+        emit_doc_comment(out, "    ",
+                         doc_text.empty() ? nullptr : doc_text.c_str());
         // Unsealed: another welded type may derive (and the directors phase
         // needs subclassable wrappers anyway).
-        out += "    public class " + cs_name + " : " +
-               (base_ref.empty() ? std::string{"IDisposable"} : base_ref) +
-               "\n    {\n";
-        // Per-LEVEL handle: this level's field holds the address of ITS base
-        // subobject (the derived constructor chains an upcast down), so a
-        // base-typed parameter always passes the correctly-adjusted pointer —
-        // multiple inheritance included.
-        out += "        internal " + cs_name + "Handle " + handle_field + ";\n";
-        if (base_ref.empty()) {
-            // The reference_internal anchor: a view stores its parent here so
-            // the parent cannot be collected while the view lives. Declared on
-            // the hierarchy root only (derived levels inherit it).
-            out += "        internal object? _owner;\n";
-            // Whether this instance was constructed from C# (a director): its
-            // virtual-slot methods then take the qualified base-call path.
-            out += "        internal bool _isDirector;\n";
-            out += "        internal " + cs_name + "(IntPtr handle, bool owns) { " +
-                   handle_field + " = new " + cs_name +
-                   "Handle(handle, owns); }\n\n";
-        } else {
-            // Chain the UPCAST pointer to the base level (non-owning there —
-            // the most-derived level owns and destroys via ITS destructor).
-            out += "        internal " + cs_name +
-                   "(IntPtr handle, bool owns) : base(NativeMethods." +
-                   base_upcast_sym + "(handle), false) { " + handle_field +
-                   " = new " + cs_name + "Handle(handle, owns); }\n\n";
+        w.line("public class {} : {}", cs_name,
+               base_ref.empty() ? std::string{"IDisposable"} : base_ref);
+        {
+            const auto cls{w.braces()};
+            // Per-LEVEL handle: this level's field holds the address of ITS
+            // base subobject (the derived constructor chains an upcast down),
+            // so a base-typed parameter always passes the correctly-adjusted
+            // pointer — multiple inheritance included.
+            w.line("internal {}Handle {};", cs_name, handle_field);
+            if (base_ref.empty()) {
+                // The reference_internal anchor: a view stores its parent here
+                // so the parent cannot be collected while the view lives.
+                // Declared on the hierarchy root only (derived levels inherit
+                // it).
+                w.line("internal object? _owner;");
+                // Whether this instance was constructed from C# (a director):
+                // its virtual-slot methods then take the qualified base-call
+                // path.
+                w.line("internal bool _isDirector;");
+                w.line("internal {}(IntPtr handle, bool owns) { {} = new "
+                       "{}Handle(handle, owns); }",
+                       cs_name, handle_field, cs_name);
+                w.blank();
+            } else {
+                // Chain the UPCAST pointer to the base level (non-owning
+                // there — the most-derived level owns and destroys via ITS
+                // destructor).
+                w.line("internal {}(IntPtr handle, bool owns) : "
+                       "base(NativeMethods.{}(handle), false) { {} = new "
+                       "{}Handle(handle, owns); }",
+                       cs_name, base_upcast_sym, handle_field, cs_name);
+                w.blank();
+            }
+            // A member or nested-type name beginning with '_' would land in
+            // the namespace of the generated scaffolding (_h_*, _owner,
+            // _isDirector, _New*, _Slot*, ...) — an underscore-led C++
+            // identifier restyles to one (`_leading` -> `_Leading`), and a
+            // weld_as can spell one verbatim. Reserved, diagnosed with the
+            // escape named. (#error lines sit at column 0, outside the
+            // writer's depth.)
+            code_writer diag{out, 0};
+            for (const auto* names : {&surface_names, &nested_names})
+                for (const auto& n : *names)
+                    if (!n.empty() && n.front() == '_')
+                        diag.line(
+                            "#error welder: the C# name '{}' bound on '{}' "
+                            "begins with an underscore, which is reserved for "
+                            "welder's generated scaffolding; rename the "
+                            "member, or give it a [[=welder::weld_as]] that "
+                            "does not start with '_'",
+                            n, cs_path);
+            // The nested-type/member name collision (C# CS0102), diagnosed
+            // here with welder's message rather than left to the consumer's
+            // compiler.
+            for (const auto& n : nested_names)
+                for (const auto& m : surface_names)
+                    if (n == m)
+                        diag.line(
+                            "#error welder: the nested type '{}.{}' and a "
+                            "bound member of '{}' share the C# name '{}' (C# "
+                            "forbids this, CS0102); rename one side with "
+                            "[[=welder::weld_as]]",
+                            cs_path, n, cs_path, n);
+            w.raw(members);
+            w.raw(flush_comparisons());
+            if (base_ref.empty())
+                w.line("public virtual void Dispose() => {}.Dispose();",
+                       handle_field);
+            else
+                w.line("public override void Dispose() { {}.Dispose(); "
+                       "base.Dispose(); }",
+                       handle_field);
         }
-        // A member or nested-type name beginning with '_' would land in the
-        // namespace of the generated scaffolding (_h_*, _owner, _isDirector,
-        // _New*, _Slot*, ...) — an underscore-led C++ identifier restyles to
-        // one (`_leading` -> `_Leading`), and a weld_as can spell one
-        // verbatim. Reserved, diagnosed with the escape named.
-        for (const auto* names : {&surface_names, &nested_names})
-            for (const auto& n : *names)
-                if (!n.empty() && n.front() == '_')
-                    out += "#error welder: the C# name '" + n + "' bound on '" +
-                           cs_path +
-                           "' begins with an underscore, which is reserved for "
-                           "welder's generated scaffolding; rename the member, "
-                           "or give it a [[=welder::weld_as]] that does not "
-                           "start with '_'\n";
-        // The nested-type/member name collision (C# CS0102), diagnosed here
-        // with welder's message rather than left to the consumer's compiler.
-        for (const auto& n : nested_names)
-            for (const auto& m : surface_names)
-                if (n == m)
-                    out += "#error welder: the nested type '" + cs_path + "." +
-                           n + "' and a bound member of '" + cs_path +
-                           "' share the C# name '" + n +
-                           "' (C# forbids this, CS0102); rename one side with "
-                           "[[=welder::weld_as]]\n";
-        out += members;
-        out += flush_comparisons();
-        if (base_ref.empty())
-            out += "        public virtual void Dispose() => " + handle_field +
-                   ".Dispose();\n";
-        else
-            out += "        public override void Dispose() { " + handle_field +
-                   ".Dispose(); base.Dispose(); }\n";
-        out += "    }\n\n";
+        w.blank();
     }
 };
 

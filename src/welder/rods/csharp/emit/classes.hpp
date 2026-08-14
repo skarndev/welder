@@ -53,7 +53,7 @@ class class_opener {
   public:
     /** Bind the opener to module handle @a m.
         @param m the module handle. */
-    explicit class_opener(module_writer& m) : m_{m} {}
+    explicit class_opener(module_writer& m) : _module{m} {}
 
     /** Open welded class @a T's binding at namespace scope. @a Decl is `^^T`,
         or the namespace-scope **alias** a class-template specialization was
@@ -68,15 +68,15 @@ class class_opener {
     template <class T, std::meta::info Decl, auto Bases>
     class_writer open(const char* name, const char* doc) {
         class_writer w{};
-        w.doc = m_.doc;
+        w.doc = _module.doc;
         w.cs_name = name;
-        w.cs_ns = m_.cs_ns;
+        w.cs_ns = _module.cs_ns;
         // The dotted path FROM THE ROOT namespace: what every cross-namespace
         // reference (P/Invoke handle types, base classes, views) spells —
         // valid from anywhere inside the root namespace, C# lookup walks
         // outward.
-        w.cs_path = m_.cs_ns.empty() ? std::string{name}
-                                     : m_.cs_ns + "." + name;
+        w.cs_path = _module.cs_ns.empty() ? std::string{name}
+                                     : _module.cs_ns + "." + name;
         w.doc_text = doc ? doc : "";
         w.cpp_qualified = cpp_name_v<Decl>;
         w.cpp_anchor = "^^" + w.cpp_qualified;
@@ -86,17 +86,17 @@ class class_opener {
         // name for the render-time reconciliation. The reference spelling is
         // ^^T's own (what type_ref emits), which for an alias-welded
         // specialization differs from Decl's — record both.
-        m_.doc->record_type_name(cpp_name_v<Decl>, w.cs_path);
+        _module.doc->record_type_name(cpp_name_v<Decl>, w.cs_path);
         // The SHIM's C++ spelling for this type, under the same keys. Decl is
         // the spellable one (the welding alias for a specialization), so it is
         // the anchor everything downstream must splice. @see anchor_ref
-        m_.doc->record_type_anchor(cpp_name_v<Decl>, w.cpp_qualified);
+        _module.doc->record_type_anchor(cpp_name_v<Decl>, w.cpp_qualified);
         if constexpr (spellable(std::meta::dealias(^^T))) {
             if (std::string{cpp_name_v<std::meta::dealias(^^T)>} !=
                 cpp_name_v<Decl>) {
-                m_.doc->record_type_name(cpp_name_v<std::meta::dealias(^^T)>,
+                _module.doc->record_type_name(cpp_name_v<std::meta::dealias(^^T)>,
                                          w.cs_path);
-                m_.doc->record_type_anchor(cpp_name_v<std::meta::dealias(^^T)>,
+                _module.doc->record_type_anchor(cpp_name_v<std::meta::dealias(^^T)>,
                                            w.cpp_qualified);
             }
         } else {
@@ -106,8 +106,8 @@ class class_opener {
             // has, and it is not a spelling the shim can use.
             static constexpr const char* d{std::define_static_string(
                 std::meta::display_string_of(std::meta::dealias(^^T)))};
-            m_.doc->record_type_name(d, w.cs_path);
-            m_.doc->record_type_anchor(d, w.cpp_qualified);
+            _module.doc->record_type_name(d, w.cs_path);
+            _module.doc->record_type_anchor(d, w.cpp_qualified);
         }
         w.sym_prefix = std::string{"welder_"} + upath_v<Decl>;
         // Same identifier-safe rule as the nested factory: the handle FIELD
@@ -140,7 +140,7 @@ class class_opener {
                              const char* doc) {
         outer.nested_names.push_back(name);
         class_writer w{};
-        w.doc = m_.doc;
+        w.doc = _module.doc;
         w.cs_name = name;
         w.doc_text = doc ? doc : "";
         // The nested segment's spelling comes from the DECLARED member — the
@@ -167,14 +167,14 @@ class class_opener {
         // Register the dotted path under every spelling a reference can key
         // on: the anchor, and — spellable — ^^T's own name, else the display
         // string (a nested type of a specialization; see type_ref).
-        m_.doc->record_type_name(w.cpp_qualified, w.cs_path);
+        _module.doc->record_type_name(w.cpp_qualified, w.cs_path);
         if constexpr (spellable(std::meta::dealias(^^T))) {
-            m_.doc->record_type_name(cpp_name_v<std::meta::dealias(^^T)>,
+            _module.doc->record_type_name(cpp_name_v<std::meta::dealias(^^T)>,
                                      w.cs_path);
         } else {
             static constexpr const char* d{std::define_static_string(
                 std::meta::display_string_of(std::meta::dealias(^^T)))};
-            m_.doc->record_type_name(d, w.cs_path);
+            _module.doc->record_type_name(d, w.cs_path);
         }
         finish<T, Bases>(w);
         return w;
@@ -188,13 +188,13 @@ class class_opener {
     template <class E>
     enum_writer open_enum(const char* name, const char* doc) {
         enum_writer w{};
-        w.doc = m_.doc;
+        w.doc = _module.doc;
         w.cs_name = name;
-        w.cs_ns = m_.cs_ns;
+        w.cs_ns = _module.cs_ns;
         w.doc_text = doc ? doc : "";
-        m_.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
-                                 m_.cs_ns.empty() ? std::string{name}
-                                                  : m_.cs_ns + "." + name);
+        _module.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
+                                 _module.cs_ns.empty() ? std::string{name}
+                                                  : _module.cs_ns + "." + name);
         constexpr const char* u{scalar_spell(
             std::meta::underlying_type(std::meta::dealias(^^E))).cs};
         w.underlying = u;
@@ -216,12 +216,12 @@ class class_opener {
         enum_writer w{open_enum<E>(name, doc)};
         w.sink = &outer.members;
         if constexpr (spellable(std::meta::dealias(^^E))) {
-            m_.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
+            _module.doc->record_type_name(cpp_name_v<std::meta::dealias(^^E)>,
                                      outer.cs_path + "." + name);
         } else {
             static constexpr const char* d{std::define_static_string(
                 std::meta::display_string_of(std::meta::dealias(^^E)))};
-            m_.doc->record_type_name(d, outer.cs_path + "." + name);
+            _module.doc->record_type_name(d, outer.cs_path + "." + name);
         }
         return w;
     }
@@ -247,7 +247,7 @@ class class_opener {
         std::size_t base_i{0};
         template for (constexpr auto base : std::define_static_array(Bases)) {
             const bound_symbol bs{
-                *m_.doc,
+                *_module.doc,
                 w.sym_prefix + "_as_" + upath_v<std::meta::dealias(base)>,
                 w.members, 2};
             code_writer t{bs.thunk()};
@@ -288,10 +288,10 @@ class class_opener {
             w.is_director = true;
             // "welder_" (7 chars incl. underscore) -> "welder_dir_..."
             w.director_ident = "welder_dir_" + w.sym_prefix.substr(7);
-            emit_director<T>(m_, w);
+            emit_director<T>(_module, w);
         }
         // The destructor thunk + its P/Invoke (the SafeHandle's release path).
-        const bound_symbol ds{*m_.doc, w.destroy_symbol, w.members, 2};
+        const bound_symbol ds{*_module.doc, w.destroy_symbol, w.members, 2};
         code_writer t{ds.thunk()};
         t.line("void {}(void* self) { wcs::shim::destroy<{}>(self); }",
                ds.name(), w.cpp_anchor);
@@ -313,7 +313,7 @@ class class_opener {
         return path;
     }
 
-    module_writer& m_; /**< The module handle. */
+    module_writer& _module; /**< The module handle. */
 };
 
 } // namespace welder::inline v0::rods::csharp

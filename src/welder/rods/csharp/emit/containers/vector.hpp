@@ -40,7 +40,7 @@ class vector_wrapper_emitter {
   public:
     /** Bind the emitter to the growing document.
         @param doc the two-artifact document. */
-    explicit vector_wrapper_emitter(document& doc) : doc_{&doc} {}
+    explicit vector_wrapper_emitter(document& doc) : _doc{&doc} {}
 
     /** Generate the wrapper for vector specialization @a C, if this is the
         first time it is seen (keyed by the display string): the rename
@@ -50,7 +50,7 @@ class vector_wrapper_emitter {
     void ensure() {
         static constexpr const char* key{
             std::define_static_string(std::meta::display_string_of(C))};
-        if (!doc_->claim_container(key))
+        if (!_doc->claim_container(key))
             return;
         constexpr std::meta::info El{
             std::meta::remove_cvref(sequence_element(C))};
@@ -58,18 +58,18 @@ class vector_wrapper_emitter {
         // (whose name is an identifier already), a welded one by its type
         // reference.
         constexpr bool welded_elem{classify(El) == marshal_kind::handle};
-        ensure_element_wrapper<El>(*doc_);
-        sym_ = std::string{"welder_vec_"} + symtok_v<El>;
-        eq_ = "^^" + element_cpp_spelling<El>();
-        V_ = container_ref<C>();
-        E_ = welded_elem ? type_ref<El>() : container_ref<El>();
-        Ef_ = welded_elem ? field_ref<El>() : container_ref<El>();
+        ensure_element_wrapper<El>(*_doc);
+        _symbol_stem = std::string{"welder_vec_"} + symtok_v<El>;
+        _element_anchor = "^^" + element_cpp_spelling<El>();
+        _wrapper_name = container_ref<C>();
+        _element_ref = welded_elem ? type_ref<El>() : container_ref<El>();
+        _element_field_ref = welded_elem ? field_ref<El>() : container_ref<El>();
         // The wrapper's NAME must be an identifier, so it derives from the
         // element's identifier-safe form (a nested element's dots sanitize).
-        doc_->record_type_name(key, "Vector" + Ef_);
+        _doc->record_type_name(key, "Vector" + _element_field_ref);
         for (const char* leaf : {"_new", "_destroy", "_size", "_get", "_set",
                                  "_add", "_clear"})
-            doc_->record_symbol(sym_ + leaf);
+            _doc->record_symbol(_symbol_stem + leaf);
         emit_thunks();
         emit_pinvokes();
         emit_wrapper();
@@ -79,76 +79,76 @@ class vector_wrapper_emitter {
     /** Write the native op thunks — one-line delegations into the compiled
         `shim::vec_*` support templates, parameterized by the element type. */
     void emit_thunks() {
-        code_writer t{doc_->shim, 0};
+        code_writer t{_doc->shim, 0};
         t.line("void* {}_new(welder_error* err) { return "
                "wcs::shim::vec_new<{}>(err); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
         t.line("void {}_destroy(void* self) { wcs::shim::vec_destroy<{}>"
                "(self); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
         t.line("std::int64_t {}_size(void* self, welder_error* err) { "
                "return wcs::shim::vec_size<{}>(self, err); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
         t.line("void* {}_get(void* self, std::int64_t i, welder_error* "
                "err) { return wcs::shim::vec_get<{}>(self, i, err); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
         t.line("void {}_set(void* self, std::int64_t i, void* elem, "
                "welder_error* err) { wcs::shim::vec_set<{}>"
                "(self, i, elem, err); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
         t.line("void {}_add(void* self, void* elem, welder_error* err) { "
                "wcs::shim::vec_add<{}>(self, elem, err); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
         t.line("void {}_clear(void* self, welder_error* err) { "
                "wcs::shim::vec_clear<{}>(self, err); }",
-               sym_, eq_);
+               _symbol_stem, _element_anchor);
         t.blank();
     }
 
     /** Write the `[LibraryImport]` declarations for the op thunks. */
     void emit_pinvokes() {
-        code_writer p{doc_->pinvoke, 2};
+        code_writer p{_doc->pinvoke, 2};
         p.line("[LibraryImport(Lib)] internal static partial IntPtr "
                "{}_new(out WelderError err);",
-               sym_);
+               _symbol_stem);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_destroy(IntPtr self);",
-               sym_);
+               _symbol_stem);
         p.line("[LibraryImport(Lib)] internal static partial long {}"
                "_size({}Handle self, out WelderError err);",
-               sym_, V_);
+               _symbol_stem, _wrapper_name);
         p.line("[LibraryImport(Lib)] internal static partial IntPtr "
                "{}_get({}Handle self, long i, out WelderError err);",
-               sym_, V_);
+               _symbol_stem, _wrapper_name);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_set({}Handle self, long i, {}Handle elem, out WelderError "
                "err);",
-               sym_, V_, E_);
+               _symbol_stem, _wrapper_name, _element_ref);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_add({}Handle self, {}Handle elem, out WelderError err);",
-               sym_, V_, E_);
+               _symbol_stem, _wrapper_name, _element_ref);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_clear({}Handle self, out WelderError err);",
-               sym_, V_);
+               _symbol_stem, _wrapper_name);
     }
 
     /** Write the managed side: the `SafeHandle` owning the native vector and
         the public wrapper class — `Count`, a live-view indexer with
         write-through set, `Add`, `Clear`, `Dispose`. */
     void emit_wrapper() {
-        code_writer w{doc_->containers, 1};
-        w.line("internal sealed class {}Handle : SafeHandle", V_);
+        code_writer w{_doc->containers, 1};
+        w.line("internal sealed class {}Handle : SafeHandle", _wrapper_name);
         {
             const auto cls{w.braces()};
             w.line("internal {}Handle(IntPtr handle, bool owns) : "
                    "base(IntPtr.Zero, owns)",
-                   V_);
+                   _wrapper_name);
             {
                 const auto body{w.braces()};
                 w.line("SetHandle(handle);");
@@ -157,30 +157,30 @@ class vector_wrapper_emitter {
             w.line("protected override bool ReleaseHandle()");
             {
                 const auto body{w.braces()};
-                w.line("NativeMethods.{}_destroy(handle);", sym_);
+                w.line("NativeMethods.{}_destroy(handle);", _symbol_stem);
                 w.line("return true;");
             }
         }
         w.blank();
         w.line("/// <summary>A reference-semantic C++ vector of {} (live "
                "element views).</summary>",
-               E_);
-        w.line("public sealed class {} : IDisposable", V_);
+               _element_ref);
+        w.line("public sealed class {} : IDisposable", _wrapper_name);
         {
             const auto cls{w.braces()};
-            w.line("internal {}Handle _h_{};", V_, V_);
+            w.line("internal {}Handle _h_{};", _wrapper_name, _wrapper_name);
             w.line("internal object? _owner;");
             w.line("internal {}(IntPtr handle, bool owns) { _h_{} = new "
                    "{}Handle(handle, owns); }",
-                   V_, V_, V_);
+                   _wrapper_name, _wrapper_name, _wrapper_name);
             // An empty C# body is a literal "{}" — an argument, never format
             // text (cat would eat it as a placeholder).
-            w.line("public {}() : this(_New(), true) {}", V_, "{}");
+            w.line("public {}() : this(_New(), true) {}", _wrapper_name, "{}");
             w.line("private static IntPtr _New()");
             {
                 const auto body{w.braces()};
                 w.line("IntPtr _r = NativeMethods.{}_new(out WelderError _e);",
-                       sym_);
+                       _symbol_stem);
                 w.line("WelderInterop.ThrowIfError(in _e);");
                 w.line("return _r;");
             }
@@ -192,12 +192,12 @@ class vector_wrapper_emitter {
                     const auto arm{w.braces()};
                     w.line("var _r = NativeMethods.{}_size(_h_{}, out "
                            "WelderError _e);",
-                           sym_, V_);
+                           _symbol_stem, _wrapper_name);
                     w.line("WelderInterop.ThrowIfError(in _e);");
                     w.line("return (int)_r;");
                 }
             }
-            w.line("public {} this[int i]", E_);
+            w.line("public {} this[int i]", _element_ref);
             {
                 const auto prop{w.braces()};
                 w.line("get");
@@ -205,9 +205,9 @@ class vector_wrapper_emitter {
                     const auto arm{w.braces()};
                     w.line("IntPtr _r = NativeMethods.{}_get(_h_{}, i, out "
                            "WelderError _e);",
-                           sym_, V_);
+                           _symbol_stem, _wrapper_name);
                     w.line("WelderInterop.ThrowIfError(in _e);");
-                    w.line("var _v = new {}(_r, false);", E_);
+                    w.line("var _v = new {}(_r, false);", _element_ref);
                     w.line("_v._owner = this;");
                     w.line("return _v;");
                 }
@@ -216,36 +216,41 @@ class vector_wrapper_emitter {
                     const auto arm{w.braces()};
                     w.line("NativeMethods.{}_set(_h_{}, i, value._h_{}, out "
                            "WelderError _e);",
-                           sym_, V_, Ef_);
+                           _symbol_stem, _wrapper_name, _element_field_ref);
                     w.line("WelderInterop.ThrowIfError(in _e);");
                 }
             }
-            w.line("public void Add({} item)", E_);
+            w.line("public void Add({} item)", _element_ref);
             {
                 const auto body{w.braces()};
                 w.line("NativeMethods.{}_add(_h_{}, item._h_{}, out "
                        "WelderError _e);",
-                       sym_, V_, Ef_);
+                       _symbol_stem, _wrapper_name, _element_field_ref);
                 w.line("WelderInterop.ThrowIfError(in _e);");
             }
             w.line("public void Clear()");
             {
                 const auto body{w.braces()};
                 w.line("NativeMethods.{}_clear(_h_{}, out WelderError _e);",
-                       sym_, V_);
+                       _symbol_stem, _wrapper_name);
                 w.line("WelderInterop.ThrowIfError(in _e);");
             }
-            w.line("public void Dispose() => _h_{}.Dispose();", V_);
+            w.line("public void Dispose() => _h_{}.Dispose();", _wrapper_name);
         }
         w.blank();
     }
 
-    document* doc_;   /**< The shared document. */
-    std::string sym_{}; /**< The C symbol stem (`welder_vec_<eltok>`). */
-    std::string eq_{};  /**< The shim's template argument (`^^element`). */
-    std::string V_{};   /**< The wrapper class's name reference. */
-    std::string E_{};   /**< The element's C# reference (view type). */
-    std::string Ef_{};  /**< The element's identifier-safe (field) form. */
+    document* _doc; /**< The shared document. */
+    /** The C symbol stem (`welder_vec_<eltok>`). */
+    std::string _symbol_stem{};
+    /** The shim's template argument (`^^element`). */
+    std::string _element_anchor{};
+    /** The wrapper class's name reference. */
+    std::string _wrapper_name{};
+    /** The element's C# reference (view type). */
+    std::string _element_ref{};
+    /** The element's identifier-safe (field) form. */
+    std::string _element_field_ref{};
 };
 
 /** Generate the reference-semantic wrapper for `std::vector<welded>` — or for

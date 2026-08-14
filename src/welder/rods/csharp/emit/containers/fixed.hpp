@@ -35,7 +35,7 @@ class fixed_wrapper_emitter {
   public:
     /** Bind the emitter to the growing document.
         @param doc the two-artifact document. */
-    explicit fixed_wrapper_emitter(document& doc) : doc_{&doc} {}
+    explicit fixed_wrapper_emitter(document& doc) : _doc{&doc} {}
 
     /** Generate the wrapper for array specialization @a C, if this is the
         first time it is seen (keyed by the display string): the rename
@@ -45,22 +45,22 @@ class fixed_wrapper_emitter {
     void ensure() {
         static constexpr const char* key{
             std::define_static_string(std::meta::display_string_of(C))};
-        if (!doc_->claim_container(key))
+        if (!_doc->claim_container(key))
             return;
         constexpr std::size_t n{fixed_extent(C)};
-        ns_ = std::to_string(n);
+        _extent_text = std::to_string(n);
         constexpr std::meta::info El{
             std::meta::remove_cvref(sequence_element(C))};
         constexpr bool welded_elem{classify(El) == marshal_kind::handle};
-        ensure_element_wrapper<El>(*doc_);
-        sym_ = std::string{"welder_arr"} + ns_ + "_" + symtok_v<El>;
-        targs_ = "^^" + element_cpp_spelling<El>() + ", " + ns_;
-        V_ = container_ref<C>();
-        E_ = welded_elem ? type_ref<El>() : container_ref<El>();
-        Ef_ = welded_elem ? field_ref<El>() : container_ref<El>();
-        doc_->record_type_name(key, "Array" + Ef_ + "x" + ns_);
+        ensure_element_wrapper<El>(*_doc);
+        _symbol_stem = std::string{"welder_arr"} + _extent_text + "_" + symtok_v<El>;
+        _template_args = "^^" + element_cpp_spelling<El>() + ", " + _extent_text;
+        _wrapper_name = container_ref<C>();
+        _element_ref = welded_elem ? type_ref<El>() : container_ref<El>();
+        _element_field_ref = welded_elem ? field_ref<El>() : container_ref<El>();
+        _doc->record_type_name(key, "Array" + _element_field_ref + "x" + _extent_text);
         for (const char* leaf : {"_new", "_destroy", "_get", "_set"})
-            doc_->record_symbol(sym_ + leaf);
+            _doc->record_symbol(_symbol_stem + leaf);
         emit_thunks();
         emit_pinvokes();
         emit_wrapper();
@@ -70,55 +70,55 @@ class fixed_wrapper_emitter {
     /** Write the native op thunks — one-line delegations into the compiled
         `shim::arr_*` support templates, parameterized by element and extent. */
     void emit_thunks() {
-        code_writer t{doc_->shim, 0};
+        code_writer t{_doc->shim, 0};
         t.line("void* {}_new(welder_error* err) { return "
                "wcs::shim::arr_new<{}>(err); }",
-               sym_, targs_);
+               _symbol_stem, _template_args);
         t.blank();
         t.line("void {}_destroy(void* self) { wcs::shim::arr_destroy<{}>"
                "(self); }",
-               sym_, targs_);
+               _symbol_stem, _template_args);
         t.blank();
         t.line("void* {}_get(void* self, std::int64_t i, welder_error* "
                "err) { return wcs::shim::arr_get<{}>(self, i, err); }",
-               sym_, targs_);
+               _symbol_stem, _template_args);
         t.blank();
         t.line("void {}_set(void* self, std::int64_t i, void* elem, "
                "welder_error* err) { wcs::shim::arr_set<{}>"
                "(self, i, elem, err); }",
-               sym_, targs_);
+               _symbol_stem, _template_args);
         t.blank();
     }
 
     /** Write the `[LibraryImport]` declarations for the op thunks. */
     void emit_pinvokes() {
-        code_writer p{doc_->pinvoke, 2};
+        code_writer p{_doc->pinvoke, 2};
         p.line("[LibraryImport(Lib)] internal static partial IntPtr "
                "{}_new(out WelderError err);",
-               sym_);
+               _symbol_stem);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_destroy(IntPtr self);",
-               sym_);
+               _symbol_stem);
         p.line("[LibraryImport(Lib)] internal static partial IntPtr "
                "{}_get({}Handle self, long i, out WelderError err);",
-               sym_, V_);
+               _symbol_stem, _wrapper_name);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_set({}Handle self, long i, {}Handle elem, out WelderError "
                "err);",
-               sym_, V_, E_);
+               _symbol_stem, _wrapper_name, _element_ref);
     }
 
     /** Write the managed side: the `SafeHandle` owning the native array and
         the public wrapper class — constant `Count`, a live-view indexer with
         write-through set, `Dispose`. */
     void emit_wrapper() {
-        code_writer w{doc_->containers, 1};
-        w.line("internal sealed class {}Handle : SafeHandle", V_);
+        code_writer w{_doc->containers, 1};
+        w.line("internal sealed class {}Handle : SafeHandle", _wrapper_name);
         {
             const auto cls{w.braces()};
             w.line("internal {}Handle(IntPtr handle, bool owns) : "
                    "base(IntPtr.Zero, owns)",
-                   V_);
+                   _wrapper_name);
             {
                 const auto body{w.braces()};
                 w.line("SetHandle(handle);");
@@ -127,35 +127,35 @@ class fixed_wrapper_emitter {
             w.line("protected override bool ReleaseHandle()");
             {
                 const auto body{w.braces()};
-                w.line("NativeMethods.{}_destroy(handle);", sym_);
+                w.line("NativeMethods.{}_destroy(handle);", _symbol_stem);
                 w.line("return true;");
             }
         }
         w.blank();
         w.line("/// <summary>A reference-semantic C++ std::array of {} {} "
                "(live element views; fixed size).</summary>",
-               ns_, E_);
-        w.line("public sealed class {} : IDisposable", V_);
+               _extent_text, _element_ref);
+        w.line("public sealed class {} : IDisposable", _wrapper_name);
         {
             const auto cls{w.braces()};
-            w.line("internal {}Handle _h_{};", V_, V_);
+            w.line("internal {}Handle _h_{};", _wrapper_name, _wrapper_name);
             w.line("internal object? _owner;");
             w.line("internal {}(IntPtr handle, bool owns) { _h_{} = new "
                    "{}Handle(handle, owns); }",
-                   V_, V_, V_);
+                   _wrapper_name, _wrapper_name, _wrapper_name);
             // An empty C# body is a literal "{}" — an argument, never format
             // text (cat would eat it as a placeholder).
-            w.line("public {}() : this(_New(), true) {}", V_, "{}");
+            w.line("public {}() : this(_New(), true) {}", _wrapper_name, "{}");
             w.line("private static IntPtr _New()");
             {
                 const auto body{w.braces()};
                 w.line("IntPtr _r = NativeMethods.{}_new(out WelderError _e);",
-                       sym_);
+                       _symbol_stem);
                 w.line("WelderInterop.ThrowIfError(in _e);");
                 w.line("return _r;");
             }
-            w.line("public int Count => {};", ns_);
-            w.line("public {} this[int i]", E_);
+            w.line("public int Count => {};", _extent_text);
+            w.line("public {} this[int i]", _element_ref);
             {
                 const auto prop{w.braces()};
                 w.line("get");
@@ -163,9 +163,9 @@ class fixed_wrapper_emitter {
                     const auto arm{w.braces()};
                     w.line("IntPtr _r = NativeMethods.{}_get(_h_{}, i, out "
                            "WelderError _e);",
-                           sym_, V_);
+                           _symbol_stem, _wrapper_name);
                     w.line("WelderInterop.ThrowIfError(in _e);");
-                    w.line("var _v = new {}(_r, false);", E_);
+                    w.line("var _v = new {}(_r, false);", _element_ref);
                     w.line("_v._owner = this;");
                     w.line("return _v;");
                 }
@@ -174,22 +174,28 @@ class fixed_wrapper_emitter {
                     const auto arm{w.braces()};
                     w.line("NativeMethods.{}_set(_h_{}, i, value._h_{}, out "
                            "WelderError _e);",
-                           sym_, V_, Ef_);
+                           _symbol_stem, _wrapper_name, _element_field_ref);
                     w.line("WelderInterop.ThrowIfError(in _e);");
                 }
             }
-            w.line("public void Dispose() => _h_{}.Dispose();", V_);
+            w.line("public void Dispose() => _h_{}.Dispose();", _wrapper_name);
         }
         w.blank();
     }
 
-    document* doc_;     /**< The shared document. */
-    std::string ns_{};  /**< The extent `N`, as text. */
-    std::string sym_{}; /**< The C symbol stem (`welder_arr<N>_<eltok>`). */
-    std::string targs_{}; /**< The shim's template arguments (`^^element, N`). */
-    std::string V_{};   /**< The wrapper class's name reference. */
-    std::string E_{};   /**< The element's C# reference (view type). */
-    std::string Ef_{};  /**< The element's identifier-safe (field) form. */
+    document* _doc; /**< The shared document. */
+    /** The extent `N`, as text. */
+    std::string _extent_text{};
+    /** The C symbol stem (`welder_arr<N>_<eltok>`). */
+    std::string _symbol_stem{};
+    /** The shim's template arguments (`^^element, N`). */
+    std::string _template_args{};
+    /** The wrapper class's name reference. */
+    std::string _wrapper_name{};
+    /** The element's C# reference (view type). */
+    std::string _element_ref{};
+    /** The element's identifier-safe (field) form. */
+    std::string _element_field_ref{};
 };
 
 /** The fixed-size sibling of @ref ensure_vector — `std::array<welded, N>` (or

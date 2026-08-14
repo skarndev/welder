@@ -84,8 +84,8 @@ class callable_emitter {
                — the thunk body appends `(err, a0, …)`. */
     callable_emitter(bound_symbol sym, std::string wrapper_name,
                      std::string delegate_expr)
-        : sym_{std::move(sym)}, name_{std::move(wrapper_name)},
-          expr_{std::move(delegate_expr)}, has_self_{false} {}
+        : _symbol{std::move(sym)}, _wrapper_name{std::move(wrapper_name)},
+          _delegate_expr{std::move(delegate_expr)}, _has_self{false} {}
 
     /** Prepare an INSTANCE emission (a leading `void* self` on the thunk, the
         class's `SafeHandle` on the P/Invoke, `this`' handle field on the call).
@@ -98,9 +98,9 @@ class callable_emitter {
     callable_emitter(bound_symbol sym, std::string wrapper_name,
                      std::string delegate_expr, std::string self_cs,
                      std::string self_field)
-        : sym_{std::move(sym)}, name_{std::move(wrapper_name)},
-          expr_{std::move(delegate_expr)}, self_cs_{std::move(self_cs)},
-          self_field_{std::move(self_field)}, has_self_{true} {}
+        : _symbol{std::move(sym)}, _wrapper_name{std::move(wrapper_name)},
+          _delegate_expr{std::move(delegate_expr)}, _self_handle_type{std::move(self_cs)},
+          _self_handle_field{std::move(self_field)}, _has_self{true} {}
 
     /** Write the triple: thunk, P/Invoke declaration, wrapper. Also the home
         of the per-callable generation-time gates (return-policy validity, the
@@ -122,81 +122,81 @@ class callable_emitter {
     /** Write the native thunk: a one-line delegation into the compiled
         marshalling library, parameterized by the exact member reflection. */
     void emit_thunk() {
-        std::string shim_params{cp_.shim_params};
-        if (has_self_)
+        std::string shim_params{_params.shim_params};
+        if (_has_self)
             shim_params = "void* self" +
-                          (cp_.shim_params.empty() ? "" : ", " + cp_.shim_params);
+                          (_params.shim_params.empty() ? "" : ", " + _params.shim_params);
         shim_params += (shim_params.empty() ? "" : ", ");
         shim_params += "welder_error* err";
-        std::string delegate_args{has_self_ ? "self, err" : "err"};
-        if (!cp_.delegate_args.empty())
-            delegate_args += ", " + cp_.delegate_args;
-        code_writer t{sym_.thunk()};
-        t.line("{} {}({}) { return {}({}); }", wire_return_v<R>, sym_.name(),
-               shim_params, expr_, delegate_args);
+        std::string delegate_args{_has_self ? "self, err" : "err"};
+        if (!_params.delegate_args.empty())
+            delegate_args += ", " + _params.delegate_args;
+        code_writer t{_symbol.thunk()};
+        t.line("{} {}({}) { return {}({}); }", wire_return_v<R>, _symbol.name(),
+               shim_params, _delegate_expr, delegate_args);
         t.blank();
     }
 
     /** Write the `[LibraryImport]` declaration (UTF-8 marshalling when any
         string crosses; `[return: MarshalAs(U1)]` for a `bool` return). */
     void emit_pinvoke() {
-        std::string pin_params{cp_.pinvoke_params};
-        if (has_self_)
-            pin_params = self_cs_ + " self" +
-                         (cp_.pinvoke_params.empty() ? ""
-                                                     : ", " + cp_.pinvoke_params);
+        std::string pin_params{_params.pinvoke_params};
+        if (_has_self)
+            pin_params = _self_handle_type + " self" +
+                         (_params.pinvoke_params.empty() ? ""
+                                                     : ", " + _params.pinvoke_params);
         pin_params += (pin_params.empty() ? "" : ", ");
         pin_params += "out WelderError err";
         constexpr bool r_is_bool{classify(R) == marshal_kind::boolean};
-        sym_.pinvoke().line(
+        _symbol.pinvoke().line(
             "{} {}internal static partial {} {}({});",
-            import_attr(cp_.has_string),
+            import_attr(_params.has_string),
             r_is_bool ? "[return: MarshalAs(UnmanagedType.U1)] " : "",
-            pinvoke_type<R, Style>(true), sym_.name(), pin_params);
+            pinvoke_type<R, Style>(true), _symbol.name(), pin_params);
     }
 
     /** Write the managed wrapper: XML docs, the signature, and the return
         path (@ref wrapper_return_body) inside whatever staging the parameter
         list demands (@ref call_pieces::wrap). */
     void emit_wrapper() {
-        code_writer w{sym_.wrapper()};
-        std::string call_args{has_self_ ? self_field_ : std::string{}};
-        if (!cp_.wrapper_args.empty())
-            call_args += (call_args.empty() ? "" : ", ") + cp_.wrapper_args;
+        code_writer w{_symbol.wrapper()};
+        std::string call_args{_has_self ? _self_handle_field : std::string{}};
+        if (!_params.wrapper_args.empty())
+            call_args += (call_args.empty() ? "" : ", ") + _params.wrapper_args;
         call_args += (call_args.empty() ? "" : ", ");
         call_args += "out WelderError _e";
-        const std::string pc{"NativeMethods." + sym_.name() + "(" + call_args +
+        const std::string pc{"NativeMethods." + _symbol.name() + "(" + call_args +
                              ")"};
         std::string docs{};
-        emit_callable_docs<Fn>(docs, w.indentation(), cp_);
+        emit_callable_docs<Fn>(docs, w.indentation(), _params);
         w.raw(docs);
         constexpr bool ret_unsafe{classify(R) == marshal_kind::seq_value ||
                                   classify(R) == marshal_kind::tuple_value};
         w.line("public {}{}{} {}({})",
-               cp_.needs_unsafe || ret_unsafe ? "unsafe " : "",
-               has_self_ ? "" : "static ", public_return_type<R, Style>(),
-               name_, cp_.wrapper_params);
+               _params.needs_unsafe || ret_unsafe ? "unsafe " : "",
+               _has_self ? "" : "static ", public_return_type<R, Style>(),
+               _wrapper_name, _params.wrapper_params);
         {
             const auto body{w.braces()};
-            w.raw(cp_.wrap(
+            w.raw(_params.wrap(
                 wrapper_return_body<R, Style,
                                     ::welder::return_policy_of(Fn, lang::cs)>(
-                    pc, w.indentation() + (cp_.post.empty() ? "" : "    "),
-                    has_self_ ? "this" : ""),
+                    pc, w.indentation() + (_params.post.empty() ? "" : "    "),
+                    _has_self ? "this" : ""),
                 w.indentation()));
         }
         w.blank();
     }
 
-    bound_symbol sym_;      /**< The symbol and its three coordinated sinks. */
-    std::string name_;      /**< The wrapper's resolved C# name. */
-    std::string expr_;      /**< The thunk's delegate expression. */
-    std::string self_cs_;   /**< Instance form: the handle class's C# type. */
-    std::string self_field_;/**< Instance form: the handle-field expression. */
-    bool has_self_;         /**< Whether this is an instance emission. */
+    bound_symbol _symbol;      /**< The symbol and its three coordinated sinks. */
+    std::string _wrapper_name;      /**< The wrapper's resolved C# name. */
+    std::string _delegate_expr;      /**< The thunk's delegate expression. */
+    std::string _self_handle_type;   /**< Instance form: the handle class's C# type. */
+    std::string _self_handle_field;/**< Instance form: the handle-field expression. */
+    bool _has_self;         /**< Whether this is an instance emission. */
     /** The parameter list in its five spellings (built once, shared by all
         three fragments). */
-    call_pieces cp_{build_params<Fn, Style>(
+    call_pieces _params{build_params<Fn, Style>(
         std::make_index_sequence<std::meta::parameters_of(Fn).size()>{})};
 };
 

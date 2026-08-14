@@ -46,7 +46,7 @@ class scalar_seq_wrapper_emitter {
   public:
     /** Bind the emitter to the growing document.
         @param doc the two-artifact document. */
-    explicit scalar_seq_wrapper_emitter(document& doc) : doc_{&doc} {}
+    explicit scalar_seq_wrapper_emitter(document& doc) : _doc{&doc} {}
 
     /** Generate the wrapper for sequence specialization @a C, if this is the
         first time it is seen (keyed by the display string): the rename
@@ -57,22 +57,22 @@ class scalar_seq_wrapper_emitter {
     void ensure() {
         static constexpr const char* key{
             std::define_static_string(std::meta::display_string_of(C))};
-        if (!doc_->claim_container(key))
+        if (!_doc->claim_container(key))
             return;
         constexpr std::meta::info E{
             std::meta::dealias(sequence_element(C))};
         constexpr bool fixed{is_fixed_sequence(C)};
         constexpr bool enum_elem{classify(E) == marshal_kind::enum_};
-        fixed_ = fixed;
-        enum_elem_ = enum_elem;
+        _fixed = fixed;
+        _enum_element = enum_elem;
         // the element's C# spelling / name token / wire spelling
         std::string ename{};
         if constexpr (enum_elem) {
-            ecs_ = type_ref<bare(E)>();
+            _element_cs = type_ref<bare(E)>();
             ename = field_ref<bare(E)>();
         } else {
             constexpr const char* c{scalar_spell(E).cs};
-            ecs_ = c;
+            _element_cs = c;
             ename = c;
             ename[0] = static_cast<char>(std::toupper(ename[0]));
         }
@@ -86,17 +86,17 @@ class scalar_seq_wrapper_emitter {
                       : std::string{scalar_spell(E).cs})};
         static constexpr const char* ecpp{
             std::define_static_string(leaf_cpp_spelling(E))};
-        wire_ = wire;
-        wire_cs_ = wire_cs;
+        _element_wire = wire;
+        _element_wire_cs = wire_cs;
         if constexpr (fixed)
-            ns_ = std::to_string(fixed_extent(C));
-        sym_ = fixed ? "welder_arrs_" + std::string{tok} + "_" + ns_
+            _extent_text = std::to_string(fixed_extent(C));
+        _symbol_stem = fixed ? "welder_arrs_" + std::string{tok} + "_" + _extent_text
                      : "welder_vecs_" + std::string{tok};
-        targs_ = fixed ? "^^" + std::string{ecpp} + ", " + ns_
+        _template_args = fixed ? "^^" + std::string{ecpp} + ", " + _extent_text
                        : "^^" + std::string{ecpp};
-        V_ = fixed ? "Array" + ename + "x" + ns_ : "Vector" + ename;
-        doc_->record_type_name(key, V_);
-        pfx_ = fixed ? "arr" : "vec";
+        _wrapper_name = fixed ? "Array" + ename + "x" + _extent_text : "Vector" + ename;
+        _doc->record_type_name(key, _wrapper_name);
+        _family_prefix = fixed ? "arr" : "vec";
         emit_thunks();
         emit_pinvokes();
         emit_wrapper();
@@ -108,39 +108,39 @@ class scalar_seq_wrapper_emitter {
         `_size`/`_push`/`_clear`. */
     void emit_thunks() {
         for (const char* leaf : {"_new", "_destroy", "_data", "_fill"})
-            doc_->record_symbol(sym_ + leaf);
-        code_writer t{doc_->shim, 0};
+            _doc->record_symbol(_symbol_stem + leaf);
+        code_writer t{_doc->shim, 0};
         t.line("void* {}_new(welder_error* err) { return wcs::shim::{}"
                "_new<{}>(err); }",
-               sym_, pfx_, targs_);
+               _symbol_stem, _family_prefix, _template_args);
         t.blank();
         t.line("void {}_destroy(void* self) { wcs::shim::{}_destroy<{}>"
                "(self); }",
-               sym_, pfx_, targs_);
+               _symbol_stem, _family_prefix, _template_args);
         t.blank();
         t.line("void* {}_data(void* self, welder_error* err) { return "
                "wcs::shim::{}_data<{}>(self, err); }",
-               sym_, pfx_, targs_);
+               _symbol_stem, _family_prefix, _template_args);
         t.blank();
         t.line("void {}_fill(void* self, const void* data, std::int64_t "
                "len, welder_error* err) { wcs::shim::{}_fill<{}>"
                "(self, data, len, err); }",
-               sym_, pfx_, targs_);
+               _symbol_stem, _family_prefix, _template_args);
         t.blank();
-        if (!fixed_) {
+        if (!_fixed) {
             for (const char* leaf : {"_size", "_push", "_clear"})
-                doc_->record_symbol(sym_ + leaf);
+                _doc->record_symbol(_symbol_stem + leaf);
             t.line("std::int64_t {}_size(void* self, welder_error* err) "
                    "{ return wcs::shim::vec_size<{}>(self, err); }",
-                   sym_, targs_);
+                   _symbol_stem, _template_args);
             t.blank();
             t.line("void {}_push(void* self, {} v, welder_error* err) { "
                    "wcs::shim::vec_push<{}>(self, v, err); }",
-                   sym_, wire_, targs_);
+                   _symbol_stem, _element_wire, _template_args);
             t.blank();
             t.line("void {}_clear(void* self, welder_error* err) { "
                    "wcs::shim::vec_clear<{}>(self, err); }",
-                   sym_, targs_);
+                   _symbol_stem, _template_args);
             t.blank();
         }
     }
@@ -148,30 +148,30 @@ class scalar_seq_wrapper_emitter {
     /** Write the `[LibraryImport]` declarations for the op thunks (the
         vector-only trio branches like the thunks). */
     void emit_pinvokes() {
-        code_writer p{doc_->pinvoke, 2};
+        code_writer p{_doc->pinvoke, 2};
         p.line("[LibraryImport(Lib)] internal static partial IntPtr "
                "{}_new(out WelderError err);",
-               sym_);
+               _symbol_stem);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_destroy(IntPtr self);",
-               sym_);
+               _symbol_stem);
         p.line("[LibraryImport(Lib)] internal static partial IntPtr "
                "{}_data({}Handle self, out WelderError err);",
-               sym_, V_);
+               _symbol_stem, _wrapper_name);
         p.line("[LibraryImport(Lib)] internal static partial void {}"
                "_fill({}Handle self, IntPtr data, long len, out "
                "WelderError err);",
-               sym_, V_);
-        if (!fixed_) {
+               _symbol_stem, _wrapper_name);
+        if (!_fixed) {
             p.line("[LibraryImport(Lib)] internal static partial long "
                    "{}_size({}Handle self, out WelderError err);",
-                   sym_, V_);
+                   _symbol_stem, _wrapper_name);
             p.line("[LibraryImport(Lib)] internal static partial void "
                    "{}_push({}Handle self, {} v, out WelderError err);",
-                   sym_, V_, wire_cs_);
+                   _symbol_stem, _wrapper_name, _element_wire_cs);
             p.line("[LibraryImport(Lib)] internal static partial void "
                    "{}_clear({}Handle self, out WelderError err);",
-                   sym_, V_);
+                   _symbol_stem, _wrapper_name);
         }
     }
 
@@ -180,13 +180,13 @@ class scalar_seq_wrapper_emitter {
         `AsSpan()`, the span-backed indexer, `Add`/`Clear` (vector only),
         `ToArray`, `CopyFrom`, the implicit `T[]` conversion, `Dispose`. */
     void emit_wrapper() {
-        code_writer w{doc_->containers, 1};
-        w.line("internal sealed class {}Handle : SafeHandle", V_);
+        code_writer w{_doc->containers, 1};
+        w.line("internal sealed class {}Handle : SafeHandle", _wrapper_name);
         {
             const auto cls{w.braces()};
             w.line("internal {}Handle(IntPtr handle, bool owns) : "
                    "base(IntPtr.Zero, owns)",
-                   V_);
+                   _wrapper_name);
             {
                 const auto body{w.braces()};
                 w.line("SetHandle(handle);");
@@ -195,7 +195,7 @@ class scalar_seq_wrapper_emitter {
             w.line("protected override bool ReleaseHandle()");
             {
                 const auto body{w.braces()};
-                w.line("NativeMethods.{}_destroy(handle);", sym_);
+                w.line("NativeMethods.{}_destroy(handle);", _symbol_stem);
                 w.line("return true;");
             }
         }
@@ -203,29 +203,29 @@ class scalar_seq_wrapper_emitter {
         w.line("/// <summary>A reference-semantic C++ {}{} (live element "
                "access; AsSpan() is a zero-copy view over the C++ buffer, "
                "valid until a size-changing operation or Dispose).</summary>",
-               fixed_ ? "std::array of " + ns_ + " " : std::string{"vector of "},
-               ecs_);
-        w.line("public sealed class {} : IDisposable", V_);
+               _fixed ? "std::array of " + _extent_text + " " : std::string{"vector of "},
+               _element_cs);
+        w.line("public sealed class {} : IDisposable", _wrapper_name);
         {
             const auto cls{w.braces()};
-            w.line("internal {}Handle _h_{};", V_, V_);
+            w.line("internal {}Handle _h_{};", _wrapper_name, _wrapper_name);
             w.line("internal object? _owner;");
             w.line("internal {}(IntPtr handle, bool owns) { _h_{} = new "
                    "{}Handle(handle, owns); }",
-                   V_, V_, V_);
+                   _wrapper_name, _wrapper_name, _wrapper_name);
             // An empty C# body is a literal "{}" — an argument, never format
             // text (cat would eat it as a placeholder).
-            w.line("public {}() : this(_New(), true) {}", V_, "{}");
+            w.line("public {}() : this(_New(), true) {}", _wrapper_name, "{}");
             w.line("private static IntPtr _New()");
             {
                 const auto body{w.braces()};
                 w.line("IntPtr _r = NativeMethods.{}_new(out WelderError _e);",
-                       sym_);
+                       _symbol_stem);
                 w.line("WelderInterop.ThrowIfError(in _e);");
                 w.line("return _r;");
             }
-            if (fixed_)
-                w.line("public int Count => {};", ns_);
+            if (_fixed)
+                w.line("public int Count => {};", _extent_text);
             else {
                 w.line("public int Count");
                 const auto prop{w.braces()};
@@ -234,36 +234,36 @@ class scalar_seq_wrapper_emitter {
                     const auto arm{w.braces()};
                     w.line("var _r = NativeMethods.{}_size(_h_{}, out "
                            "WelderError _e);",
-                           sym_, V_);
+                           _symbol_stem, _wrapper_name);
                     w.line("WelderInterop.ThrowIfError(in _e);");
                     w.line("return (int)_r;");
                 }
             }
-            w.line("public unsafe Span<{}> AsSpan()", ecs_);
+            w.line("public unsafe Span<{}> AsSpan()", _element_cs);
             {
                 const auto body{w.braces()};
                 w.line("IntPtr _d = NativeMethods.{}_data(_h_{}, out "
                        "WelderError _e);",
-                       sym_, V_);
+                       _symbol_stem, _wrapper_name);
                 w.line("WelderInterop.ThrowIfError(in _e);");
-                w.line("var _s = new Span<{}>((void*)_d, Count);", ecs_);
+                w.line("var _s = new Span<{}>((void*)_d, Count);", _element_cs);
                 w.line("GC.KeepAlive(this);");
                 w.line("return _s;");
             }
-            w.line("public {} this[int i]", ecs_);
+            w.line("public {} this[int i]", _element_cs);
             {
                 const auto prop{w.braces()};
                 w.line("get => AsSpan()[i];");
                 w.line("set => AsSpan()[i] = value;");
             }
-            if (!fixed_) {
-                w.line("public void Add({} item)", ecs_);
+            if (!_fixed) {
+                w.line("public void Add({} item)", _element_cs);
                 {
                     const auto body{w.braces()};
                     w.line("NativeMethods.{}_push(_h_{}, {}, out "
                            "WelderError _e);",
-                           sym_, V_,
-                           enum_elem_ ? "(" + wire_cs_ + ")item"
+                           _symbol_stem, _wrapper_name,
+                           _enum_element ? "(" + _element_wire_cs + ")item"
                                       : std::string{"item"});
                     w.line("WelderInterop.ThrowIfError(in _e);");
                 }
@@ -272,46 +272,55 @@ class scalar_seq_wrapper_emitter {
                     const auto body{w.braces()};
                     w.line("NativeMethods.{}_clear(_h_{}, out "
                            "WelderError _e);",
-                           sym_, V_);
+                           _symbol_stem, _wrapper_name);
                     w.line("WelderInterop.ThrowIfError(in _e);");
                 }
             }
-            w.line("public {}[] ToArray() => AsSpan().ToArray();", ecs_);
-            w.line("public unsafe void CopyFrom(ReadOnlySpan<{}> src)", ecs_);
+            w.line("public {}[] ToArray() => AsSpan().ToArray();", _element_cs);
+            w.line("public unsafe void CopyFrom(ReadOnlySpan<{}> src)", _element_cs);
             {
                 const auto body{w.braces()};
-                w.line("fixed ({}* _p = src)", ecs_);
+                w.line("fixed ({}* _p = src)", _element_cs);
                 {
                     const auto pin{w.braces()};
                     w.line("NativeMethods.{}_fill(_h_{}, (IntPtr)_p, "
                            "src.Length, out WelderError _e);",
-                           sym_, V_);
+                           _symbol_stem, _wrapper_name);
                     w.line("WelderInterop.ThrowIfError(in _e);");
                 }
             }
-            w.line("public static implicit operator {}({}[] a)", V_, ecs_);
+            w.line("public static implicit operator {}({}[] a)", _wrapper_name, _element_cs);
             {
                 const auto body{w.braces()};
-                w.line("var _v = new {}();", V_);
+                w.line("var _v = new {}();", _wrapper_name);
                 w.line("_v.CopyFrom(a);");
                 w.line("return _v;");
             }
-            w.line("public void Dispose() => _h_{}.Dispose();", V_);
+            w.line("public void Dispose() => _h_{}.Dispose();", _wrapper_name);
         }
         w.blank();
     }
 
-    document* doc_;       /**< The shared document. */
-    bool fixed_{false};   /**< `std::array` (fixed) vs `std::vector`. */
-    bool enum_elem_{false}; /**< Whether the element is an enum (push casts). */
-    std::string ecs_{};   /**< The element's C# spelling. */
-    std::string ns_{};    /**< Fixed form: the extent `N`, as text. */
-    std::string sym_{};   /**< The C symbol stem (`welder_vecs_…`/`welder_arrs_…`). */
-    std::string targs_{}; /**< The shim's template arguments. */
-    std::string V_{};     /**< The wrapper class's name. */
-    std::string wire_{};  /**< The element's C-ABI wire spelling. */
-    std::string wire_cs_{}; /**< The element's C# wire spelling. */
-    std::string pfx_{};   /**< The shim family prefix (`vec`/`arr`). */
+    document* _doc;     /**< The shared document. */
+    bool _fixed{false}; /**< `std::array` (fixed) vs `std::vector`. */
+    /** Whether the element is an enum (push casts). */
+    bool _enum_element{false};
+    /** The element's C# spelling. */
+    std::string _element_cs{};
+    /** Fixed form: the extent `N`, as text. */
+    std::string _extent_text{};
+    /** The C symbol stem (`welder_vecs_…`/`welder_arrs_…`). */
+    std::string _symbol_stem{};
+    /** The shim's template arguments. */
+    std::string _template_args{};
+    /** The wrapper class's name. */
+    std::string _wrapper_name{};
+    /** The element's C-ABI wire spelling. */
+    std::string _element_wire{};
+    /** The element's C# wire spelling. */
+    std::string _element_wire_cs{};
+    /** The shim family prefix (`vec`/`arr`). */
+    std::string _family_prefix{};
 };
 
 /** The reference-semantic wrapper for a SCALAR/ENUM sequence used as a
