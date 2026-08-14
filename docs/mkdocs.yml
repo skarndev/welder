@@ -132,7 +132,6 @@ nav:
       - The bindability gate: guide/bindability.md
       - Trust & type casters: guide/trust-casters.md
       - Generating C++ docs: guide/cpp-docs.md
-      - "C# / .NET bindings": guide/csharp.md
       - Extending welder: guide/extending.md
       - Troubleshooting & FAQ: guide/faq.md
   - Cookbook:
@@ -147,7 +146,6 @@ nav:
       - 08 Tack welding: cookbook/tack-welding.md
       - 09 Custom traversal: cookbook/custom-traversal.md
       - 10 Containers by reference: cookbook/containers.md
-      - "11 C# / .NET bindings": cookbook/csharp.md
   - Languages:
       - backends/index.md
       - Python (pybind11 & nanobind): backends/python.md

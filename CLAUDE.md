@@ -40,7 +40,7 @@ two **Python** (**pybind11**, **nanobind**) and two **Lua** (**sol2**,
 **LuaBridge3**) — all sharing the same core and the *same* backend-neutral C++ test
 cases, which each rod binds and asserts (pytest for Python, busted `.lua` specs for
 Lua) as a cross-rod consistency check. The two Lua rods run the *same* busted specs
-(selected by `WELDER_TEST_LUA_MODULE`). Four more are *build-time* text-emitting rods
+(selected by `WELDER_TEST_LUA_MODULE`). Three more are *build-time* text-emitting rods
 over the same driver: **`welder::rods::luacats::rod`** reflects the welded Lua types and
 emits a **LuaCATS (`---@meta`) stub file** (the Lua analogue of the Python `.pyi` stubs,
 carrying the docstrings Lua has no runtime slot for); **`welder::rods::trampolines::rod`**
@@ -61,40 +61,18 @@ can emit; blanket over welded types, `by_value` opt-out, **collision-free
 namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint`,
 `array<short,289>`→`ArrayShortIntx289` (element + `x` + extent) — overridable
 per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
-the name style); and **`welder::rods::csharp::rod`** (`lang::cs`, branch
-`feature/csharp`, Phases 1–7 core done: + full exception taxonomy → BCL types, rv:: ownership mapping — owned/adopted/view/view-pinned per handle_return_of, live class-field views, nullable pointer returns; operators — static C# operators incl. reflected/free entries, pairing ledger synthesizing missing partners, <=> → relational set via a compare thunk, indexer, ToString(), Equals/GetHashCode + null protocol on ==; inheritance — base chains as C# base classes over per-level upcast-chained handles (`_h_<Class>` fields, compiled static_cast thunks, MI/virtual-diamond-correct), extra bases as As<Base>() views, non-welded bases flattened; directors — C# subclasses override C++ virtuals via a generated director subclass + [UnmanagedCallersOnly] fnptr tables, per-type override bitmask, weak-GCHandle ctx, origin-branched wrapper methods (director → qualified base call, so base.Method() terminates), managed exceptions cross as code 7, bind_flat + virtual-dtor gating shared with the Python trampoline machinery; value-family containers — optional<leaf> ⇄ T? and vector/array<scalar|enum> ⇄ T[] copies over fixed by-value wire structs, params pinned via fixed, array-extent checked; vector<welded> → a generated reference-semantic Vector<Element> wrapper — live element views, write-through Add/indexer/Clear, collected per instantiation with display-string rename keys; nested member types as real C# nested types — sink-flushed writers, dotted references, identifier-sanitized handle fields via a second placeholder flavor; pair/tuple<leaf…> ⇄ ValueTuple over welder_opt_wire slot arrays; map/unordered_map (leaf key, default form) → generated reference-semantic Map/UMap wrappers (live mapped-value views, insert-or-assign indexer); array<welded,N> → a fixed-size ArrayElemxN wrapper (vector protocol minus size ops); shared_ptr returns → view + boxed-copy SharedBox pinning (welder_sp_wire), shared_ptr params borrowed via aliasing copy, unique_ptr returns transfer ownership (unique_ptr params a designed error); non-const scalar/enum sequence FIELDS → live wrappers with zero-copy Span<T> AsSpan() over the C++ buffer + implicit T[] conversion (params/returns stay T[] copies); vector/array<string> ⇄ `string[]` (a per-element UTF-8 buffer array on the wire — copies everywhere, fields included); NESTED value sequences (vector<vector<T>>, vector<array<T,N>>, recursively) → seq_ref, each element a live view of the INNER sequence's wrapper (so the inner scalar span still writes through); nested C++ namespaces → REAL nested C# namespaces (per-namespace Global static class for functions/variables); welder_csharp_nuget_project() emits a packable csproj (lib/<tfm> + runtimes/<rid>/native NuGet layout); the four build-time rod targets (luacats/trampolines/opaque_containers/csharp) are EXPORTED so find_package consumers get every helper; alias-welded template instantiations incl. nested-of-specialization + cs-scoped weld_as CS0102 escape; protected members via weld_protected (direct-splice field access); covariant + pointer-returning director slots as views). Shared-case widening COMPLETE (methods/enums/overloads/properties/naming/nested/namespace incl. the tack-welding + semi-manual routes and protected nested types via enumeration anchors; py-only stay: doc/stl/chaining/opaque — Python-stub/framework-mixing stories). Out by design: variant (C# has no sum type), abstract directors, unique_ptr sinks, span/vector-of-string outers; Windows PROVEN on CI (the MinGW-built shim runs the managed round-trip under the native .NET host) — C# has no in-process registration C API, so this
-rod emits **two coordinated artifacts** per pass: an `extern "C"` C-ABI **shim**
-(compiled *with reflection* against the same welded header — each thunk one-line
-delegates into `shim_support.hpp`, parameterized by the exact member reflection
-re-derived through a shared lookup layer (`named_member`/`ctor_at`/`named_field`),
-the trampoline rod's splice-don't-respell idiom applied to the C ABI; a drifted
-header fails the shim build, never calls the wrong overload) and a
-**`[LibraryImport]` C# wrapper** (net7+; a `SafeHandle` per class, fields/accessor
-marks → properties, overload groups → natural C# overloads with per-overload
-symbols, Copyable → `Clone()`, `enum : <underlying>` with per-enumerator docs, full
-XML doc comments; every thunk carries a trailing `welder_error*` — C++ exceptions
-map to `WelderNativeException`, never unwinding the C ABI). Phase-gated hard
-errors (`diag::csharp_unmarshallable`) for what stays out by design: variant,
-class-keyed/custom-comparator maps, unique_ptr sinks. Driven by `welder_csharp_generate_bindings()`
-(cmake/WelderCSharpModule.cmake); tests: goldens + `compile.csharp_marshal`
-consteval locks + a dotnet-gated round-trip (tests/csharp). The rod is split by
-LAYER — `type_map.hpp`, `shim_support.hpp` and `document.hpp` are umbrellas over
-`marshal/` + `reflect/`, `shim/` and `document/`, and `rod.hpp` is a hook table
-whose every hook one-line-forwards into `emit/` (see the architecture file map).
-`emit/` is a COMPONENT MODEL of stateful emitter classes (callable / method /
-field / constructor / operator / namespace / director emitters + `class_opener`
-+ the per-family container wrapper generators) over two vocabulary types in
-`document/code_writer.hpp` — the indentation-aware `code_writer` (with the
-constexpr `cat()` `{}`-mini-format in `text.hpp`, usable in consteval AND at
-runtime) and `bound_symbol` (one C symbol registered at construction + the three
-coordinated thunk/P-Invoke/wrapper sinks); `marshal/`, `reflect/` and `shim/`
-stay pure function libraries by design. Class-element
+the name style). A **C#/.NET rod** exists as an **out-of-tree extension**
+(skarndev/welder-csharp, private for now): it mints its language identity from
+the open `welder::user_lang` range and reuses the bare-`weld` shared test cases;
+the backend-neutral machinery it motivated — `<welder/virtuals.hpp>`
+(`bind_flat`/`virtual_slot`), the two-phase namespace sweep, the bare `weld`
+form — stays in welder's core. Class-element
 containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
 Python rods opt in via a `reopen_class` hook): it registers every welded type's NAME,
 then binds the opaque containers, then fills members — so no container-typed
 member/signature ever spells a raw C++ name in a stub. Further languages are
 designed-for but not yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
-section): a *standalone* super-project of 11 CTest-asserted recipes (incl. a C#/.NET one with a NuGet pack check) that obtains welder
+section): a *standalone* super-project of 10 CTest-asserted recipes that obtains welder
 via FetchContent — CI builds it against the checkout, so it doubles as the consumer-
 packaging test (details in `.claude/context/build-test-run.md`). For the
 feature-by-feature detail and test locations, see the context files below.

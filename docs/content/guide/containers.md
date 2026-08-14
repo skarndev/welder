@@ -272,12 +272,3 @@ opaque aliases and to ordinary bindings).
 - **You lose transparent `list` interop for that type.** An opaque `std::vector<int>`
   parameter no longer auto-accepts a Python `list` — callers pass `IntVector([...])`.
   That is the inherent cost of reference semantics; weigh it per element type.
-
-!!! note "On the C# rod"
-    The C# backend needs no `WELDER_OPAQUE` phase: containers of a **welded
-    class** (and `std::map`/`std::unordered_map` with leaf keys) always bind
-    reference-semantically through generated wrapper classes with live element
-    views, and a **scalar/enum sequence member** binds as a live wrapper whose
-    `AsSpan()` is a zero-copy `Span<T>` over the C++ buffer — the buffer
-    protocol's C# analogue. Parameters and returns cross as ergonomic `T[]`
-    copies. See [C# / .NET bindings](csharp.md).

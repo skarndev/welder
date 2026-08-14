@@ -161,12 +161,4 @@ the runtime bindings and for the generated [LuaCATS (`---@meta`) stub](stubs.md)
 alike; in the stub, references are emitted with the raw C++ name and reconciled with
 their declarations in a final pass, so declaration order never matters.
 
-!!! note "On the C# rod"
-    The shipped style is `welder::rods::csharp::dotnet`: PascalCase for every
-    public member, verbatim enumerators, camelCase parameters (leading
-    underscores shed). It presumes class names are authored PascalCase; for a
-    codebase where exact spellings must survive, subclass it and override
-    `transform_class`, or pin individual names with `weld_as` — per-language
-    scoping works as everywhere (`weld_as(welder::lang::cs, "…")`).
-
 Next: [The bindability gate](bindability.md).

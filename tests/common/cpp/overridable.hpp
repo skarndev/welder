@@ -17,7 +17,7 @@ namespace overridable {
 
 // A polymorphic base a Python subclass can override.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::cs)]]
+[[=welder::weld]]
 Animal {
     virtual ~Animal() = default;
 
@@ -78,7 +78,7 @@ struct [[=welder::rods::python::trampoline]] PyShape : Shape {
 // base chain, not just members_of), so PyBird must redeclare speak + legs + fly;
 // omitting the inherited ones is a coverage static_assert failure.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::cs)]]
+[[=welder::weld]]
 Bird : Animal {
     [[=welder::doc("How this bird flies.")]]
     virtual std::string fly() const { return "flap"; }
@@ -96,7 +96,7 @@ struct PyBird : Bird {
 // virtual pair, and a protected NVI hook. Each has a C++ caller so the tests can
 // observe the C++ -> Python dispatch, not just the Python-level attribute.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::cs)]]
+[[=welder::weld]]
 Robot {
     virtual ~Robot() = default;
 
@@ -158,7 +158,7 @@ struct PyRobot : Robot {
 // most-derived (Tree*) signature — its trampoline redeclares that narrowed form.
 // The returned pointer is non-owning, hence the reference return policy.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::cs)]]
+[[=welder::weld]]
 Plant {
     virtual ~Plant() = default;
 
@@ -171,7 +171,7 @@ Plant {
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::cs)]]
+[[=welder::weld]]
 Tree : Plant {
     [[=welder::return_policy(welder::rv::reference)]]
     Tree* parent() const override { return nullptr; }

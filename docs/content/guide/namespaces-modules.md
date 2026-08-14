@@ -350,12 +350,4 @@ WELDER_MODULE(shapes, pybind11,
     `luaopen_shapes`), so one shared object can carry both. That's the basis for
     [shipping the same module across rods](../backends/multiple.md).
 
-!!! note "On the C# rod"
-    Nested C++ namespaces map to **real nested C# namespaces**
-    (`geo::util::Circle` → `geo.Util.Circle`; `using geo.Util;` works). Free
-    functions and variables — which C# cannot place at namespace scope —
-    collect into one `Global` static class per namespace
-    (`geo.Util.Global.Dist(a, b)`; `using static` brings them into scope
-    bare). See [C# / .NET bindings](csharp.md).
-
 Next: [Return policies & lifetimes](return-policies.md).

@@ -11,13 +11,13 @@
     functions of a type are *overridable from the target language*, and the
     `bind_flat` opt-out marker.
 
-    Two very different backends consume the same answers: the **Python** rods
+    Very different backends consume the same answers: the **Python** rods
     route these slots through hand-authored trampolines (the authoring macros
     and the trampoline registration live in
     `<welder/rods/python/trampoline.hpp>`, which re-exports everything here
-    under its historical `welder::rods::python` spellings), and the **C#** rod
-    generates *director* subclasses over the identical slot set
-    (`<welder/rods/csharp/directors.hpp>`). Keeping the slot semantics in one
+    under its historical `welder::rods::python` spellings), while out-of-tree
+    rods can generate e.g. *director* subclasses over the identical slot set.
+    Keeping the slot semantics in one
     place is what makes "overridable" mean the same thing in every language:
     vtable-slot identity (covariant overrides fold to one slot), inherited
     virtuals folded in, protected NVI hooks included, private declarations

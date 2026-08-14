@@ -22,11 +22,11 @@ your types (e.g. [pybind11] `class_<T>` calls) directly, through template
 instantiation. You mark a type with attributes saying *which languages* it should be
 exposed to and *which members* participate; welder reflects over it and lays the
 bindings down. On top of that it carries the reflected documentation into the target
-language — Python `.pyi` stubs, Lua LuaCATS stubs, C# XML doc comments — so IDE
-autocompletion and static analysis come along for free.
+language — Python `.pyi` stubs and Lua LuaCATS stubs — so IDE autocompletion and
+static analysis come along for free.
 
 > **Status: early proof-of-concept.** Verified end-to-end (an importable Python
-> module; a `require`-able Lua module; a P/Invoked .NET assembly), but the API is still moving and **gcc-16 is
+> module; a `require`-able Lua module), but the API is still moving and **gcc-16 is
 > the only compiler** that implements the papers it needs. Targets **C++26 and newer
 > only**. Pre-1.0, a 0.x **minor** release may change the API (a 0.x patch only
 > fixes); 1.0.0 comes once the API settles and a second compiler ships P2996.
@@ -45,7 +45,6 @@ same annotated type binds through any rod you weld it for:
 | Lua | [sol2] | loadable module |
 | Lua | [LuaBridge3] | loadable module |
 | Lua | [LuaCATS] | build-time `---@meta` stub file |
-| C# / .NET | [LibraryImport] P/Invoke | build-time C-ABI shim (native shared library) + idiomatic C# wrapper; NuGet-packable |
 
 Adding a language is one rod struct; the language-agnostic core is reused verbatim,
 and the language identity space is open (`welder::user_lang`), so an out-of-tree rod
@@ -285,5 +284,4 @@ Doxygen-generated C++ reference, rebuilt and published on every push. Highlights
 [sol2]: https://github.com/ThePhD/sol2
 [LuaBridge3]: https://github.com/kunitoki/LuaBridge3
 [LuaCATS]: https://luals.github.io/wiki/annotations/
-[LibraryImport]: https://learn.microsoft.com/dotnet/standard/native-interop/pinvoke-source-generation
 [CPM.cmake]: https://github.com/cpm-cmake/CPM.cmake

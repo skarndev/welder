@@ -11,7 +11,7 @@ Generate language bindings for annotated C++ types straight from
 <strong>C++26 reflection</strong> — no external code generator, no parsing step.
 </p>
 
-You mark a C++ entity with attributes describing *which languages* (currently Python, Lua & C#/.NET) it should be
+You mark a C++ entity with attributes describing *which languages* (currently Python & Lua) it should be
 exposed to and *which members* participate; welder reflects over it at **compile time** and emits the binding
 registration boilerplate directly, through template instantiation. On top of that, it carries the reflected
 documentation into the target-language module, enabling IDE autocompletion and static analysis.
@@ -115,18 +115,6 @@ struct to Python & Lua:
             .addFunction("length", &Vec2::length)
             .addFunction("__add", &Vec2::operator+)
         .endClass();
-    ```
-
-- ### C# / .NET
-
-    ```csharp
-    // hand-written P/Invoke: one extern per member, a
-    // marshalling layer, ownership + error rules ...
-    [LibraryImport("vec2native")]
-    internal static partial IntPtr vec2_new(float x, float y);
-    [LibraryImport("vec2native")]
-    internal static partial float vec2_length(IntPtr self);
-    // ... plus the extern "C" shim on the native side
     ```
 
 </div>
@@ -375,4 +363,5 @@ weld it once.
     end-to-end against the *same* shared C++ cases, plus three build-time rods
     (the **LuaCATS** stub, the Python **trampoline**, and the Python
     **opaque-container** generators). Further languages are designed-for but not
-    yet implemented.
+    yet implemented in-tree; a C#/.NET rod exists as an out-of-tree extension
+    (built on the open `welder::user_lang` identity space).

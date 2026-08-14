@@ -31,7 +31,7 @@ src/welder/
   naming.hpp            name styling: split_words/join_words/restyle + naming::{none,uniform<Kind>,snake_case,…} + weld_as_of / name_of (weld_as override → else style hook) + name_of_or (the call-site-override form the driver/rods use: override wins, name_of fallback compiled ONLY when the entity has an identifier or weld_as — an identifier-less template instantiation with no override throws std::invalid_argument at binding time; the lazy `if constexpr` is what makes weld_type<Box<int>>(m,"IntBox") legal) — uses <meta>, depends on vocabulary (detail::weld_as_spec), NOT annotations.hpp. The `name_style` concept (per-kind transform_* hooks) now lives in concepts.hpp
   bind_traits.hpp       rod-agnostic "what binds": param/ctor/method/operator/namespace-member SHAPE selectors (is_method_candidate/is_operator_candidate are shape-only; participation is the Resolution's class_member_participates, composed by the carriage) + the resolution-aware OVERLOAD-GROUP machinery ({method,operator,function}_overload_set<Resolution> / overload_group / is_overload_leader / manual_function_group / ctor_group — moved here from the deleted rods/lua/overloads.hpp; the CARRIAGE computes groups, rods never re-derive membership) + aggregate_initializable<T,L,Resolution> + native-base collection. NB ctor_group takes the policy as a param (ctors resolve symmetrically; the carriage's no-constructor-left guard probes the automatic baseline; default_ctor_admitted exempts the implicit default ctor from opt_in while honoring a declared one's explicit marks) — uses <meta>
   concepts.hpp          welder's **core interface concepts**, pooled in one catalogue: `welder::rod` (emission contract) + `welder::caster_oracle` (backend leaf test) + `welder::resolution` (the carriage's which-participates policy: participates/is_native_base/member_participates/class_member_participates (per CLASS member — field/method/operator/ctor/enumerator — resolved PER OVERLOAD; the carriage computes overload groups from it)/namespace_participates/counts_as_registered consteval predicates + the native_bases<T,L> hook, shape-probed with the fixed `welder::detail::any_type` placeholder — the same trick caster_oracle uses for has_native_caster) + `welder::doc_style` + `welder::naming::name_style`. A dependency-light leaf — forward-declares `welder::detail::function_doc` (defined in doc.hpp) rather than including it; the machinery headers (bindable/naming/doc/carriage) include this. Uses <meta>; vocabulary-first for `lang`/`policy_kind`
-  virtuals.hpp          backend-NEUTRAL virtual-slot machinery: bind_flat (welder::bind_flat — the canonical spelling; rods::python re-exports the historical one) + bound_flat, is_overridable_virtual, detail::{same_slot (vtable-slot identity — covariant folds), collect_virtuals}, overridable_virtuals (inherited folded, protected NVI in, private withdraws), virtual_slot (overload disambiguator), virtual_slot_count, has_virtual_methods. Consumed by the Python trampolines (rods/python/trampoline.hpp re-exports under welder::rods::python) AND the C# directors (rods/csharp/directors.hpp) — one slot semantics for every language. Uses <meta> + diag.hpp
+  virtuals.hpp          backend-NEUTRAL virtual-slot machinery: bind_flat (welder::bind_flat — the canonical spelling; rods::python re-exports the historical one) + bound_flat, is_overridable_virtual, detail::{same_slot (vtable-slot identity — covariant folds), collect_virtuals}, overridable_virtuals (inherited folded, protected NVI in, private withdraws), virtual_slot (overload disambiguator), virtual_slot_count, has_virtual_methods. Consumed by the Python trampolines (rods/python/trampoline.hpp re-exports under welder::rods::python) and by out-of-tree rods — one slot semantics for every language. Uses <meta> + diag.hpp
   bindable.hpp          generic bindability gate (STL-wrapper recursion); the `caster_oracle` concept it uses now lives in concepts.hpp — uses <meta>
   carriage.hpp          the **carriage** (`carriages::basic_carriage<Resolution>`): the reflection-driven traversal driver, a stateless struct of static member templates (bind_type / bind_enum / bind_function / bind_variable / bind_namespace / bind_namespace_as_submodule / build_module + private bind_members) parameterized on a **resolution** policy (marker_resolution = stitch, greedy_resolution = tack). Aliases: `welder::stitch_welding_carriage` (default), `welder::tack_welding_carriage`, `welder::carriage` (= stitch). Split out of welder.hpp — uses <meta>
   welder.hpp            the `welder::welder<Rod, Style=naming::none, Carriage=carriage>` public entry point (weld_type / weld_function / weld_variable / weld_namespace / weld_namespace_as_submodule / weld_module), each a one-line forward to the carriage (subclass it, or inject a carriage, to extend). Includes concepts.hpp + carriage.hpp. Threads Style through the carriage → every generated name goes through name_of (call-site name override, else weld_as, else the style hook)
@@ -67,67 +67,13 @@ src/welder/
       luacats/module.hpp    the WELDER_LUACATS_MAIN generator-main() macro; include only for a stub-generator TU
       luacats/type_map.hpp  the LuaCATS rendering primitives: C++→LuaCATS type map (lua_type_string), ---@operator name map (operator_luacats), the is_native_lua caster trait, and the --- comment text helpers
       luacats/document.hpp  the LuaCATS document assembler: signature/overload rendering + the RAII *_writer handle types (document / module_writer / class_writer / enum_writer) the driver's module/class/enum handles deduce to
-    csharp/               (split by LAYER 2026-08-11; COMPONENT MODEL 2026-08-13 — the emit/
-                           layer is stateful EMITTER CLASSES (one class per concern, contextual
-                           strings as members, private named steps) over two vocabulary types in
-                           document/code_writer.hpp: `code_writer` (indentation-aware line()/RAII
-                           braces()/raw(), depth in 4-space units) + `bound_symbol` (registers the
-                           C symbol at construction and hands out the coordinated thunk/P-Invoke/
-                           wrapper sinks — the triple invariant made structural). marshal/, reflect/
-                           and shim/ stay FUNCTION LIBRARIES by design (pure consteval predicates /
-                           the runtime support library the generated shim calls — a component
-                           identity per file, not forced into structs); document/ is the document
-                           object model. rod.hpp/shim_support.hpp/type_map.hpp keep their names as
-                           UMBRELLA includes, so every documented include path still works.
-                           C-ABI BOUNDARY RULE (for future C-ABI rods — Java/Go/Swift per the
-                           language survey): everything BELOW emit/ + document/ — shim/ (the
-                           runtime marshalling library), reflect/ (the lookup layer), marshal/
-                           (classification + wire policy), the wire structs and the welder_error
-                           contract — must stay free of managed-side (C#) knowledge, so a second
-                           C-ABI rod can lift them into a shared rods/cabi/ layer via the same
-                           umbrella-include trick; bound_symbol is the designed seam (per-artifact
-                           sinks — a Java rod swaps the pinvoke/wrapper sinks, reuses the thunks).
-                           Deliberately NOT split today: one consumer would freeze C#-shaped wire
-                           choices unvalidated — promote when the second C-ABI rod lands)
-      rod.hpp             C#/.NET rod: text-emitting welder::rod (welder::rods::csharp::rod, lang::cs) emitting TWO coordinated artifacts per pass — extern "C" shim.cpp (one-line thunks delegating into shim_support, spliced reflections) + [LibraryImport] Bindings.cs (SafeHandle wrappers, natural C# overloads, XML docs); overload groups get per-overload indexed symbols; whole-module generate<^^Ns>(shim_os, cs_os, options). A HOOK TABLE ONLY (~340 lines): every hook one-line-forwards into an emit/ component
-      text.hpp            pure string helpers, no reflection: the constexpr `cat()` {}-mini-format (usable in BOTH consteval and runtime — std::format/std::to_string are not constexpr on gcc-16, {fmt}'s compile-time path would add a dependency; probed 2026-08-13), emit_doc_comment/one_line (XML docs), cs_escape (C# keywords), import_attr, split_param_names, capitalized
-      reflect/symbols.hpp underscore_path (C-symbol prefix), qualified_cpp_name (the shim's ^^ anchors), spellable (has a writable qualified name?), symbol_token (UNIQUE per type — display string for a specialization)
-      reflect/lookup.hpp  the SHARED member-lookup layer (named_member/ctor_at/named_field/nested_type + index inverses — generator<->shim agreement; a drifted header throws diag::csharp_member_lookup_mismatch at shim build)
-      marshal/families.hpp  the std type families as consteval predicates/accessors (optional/vector/array/span/map/pair/tuple/shared_ptr/unique_ptr/expected) + bare/peel_expected/type_trait/is_pointer_flavor
-      marshal/classify.hpp  marshal_kind + classify (THE decision point every spelling branches on) + is_handle_like/is_container_ref + require_marshallable (phase gate → diag::csharp_unmarshallable)
-      marshal/spellings.hpp paired C-ABI+C# scalar spellings (scalar_spell/enum_wire_spell), leaf_cpp_spelling/map_token, the is_native_dotnet oracle
-      marshal/ownership.hpp rv:: → handle_return resolution (copy/move/adopt/view/view_keepalive), handle_return_nullable, field_return_policy
-      type_map.hpp        UMBRELLA over text.hpp + reflect/* + marshal/* (the documented "C# type machinery" include)
-      shim/wire.hpp       the global-scope wire structs the extern "C" signatures spell (welder_error/welder_opt_wire/welder_sp_wire/welder_seq_wire), the error_code taxonomy, dup/dup_utf8, managed_exception, and caught (THE catch boundary)
-      shim/convert.hpp    wire ⇄ C++ conversion: to_cpp (per declared param type), wire_return_type, guarded (result → wire, under the error contract; unwraps std::expected), expected_error_text's rendering ladder
-      shim/entities.hpp   one thunk body per bound entity kind: method/function/construct*/clone/destroy/field_get/field_set/field_addr/field_assign/compare/stringify_text/upcast/var_get/var_set
-      shim/containers.hpp the generated container wrappers' operations: vec_*/arr_*/map_*/sp_free
-      shim/director_wire.hpp  the director callback's direction: to_wire_arg (owning holders) / from_wire_return
-      shim_support.hpp    UMBRELLA over shim/* (+ operators.hpp/directors.hpp) — the ONE include a generated shim.cpp needs
-      document/artifacts.hpp  the two-artifact document (shim/pinvoke/per-namespace types+statics/containers buffers + symbol-collision check + the \x01..\x06 placeholder registries and their render passes) + module_writer; renders the C# error scaffolding (WelderError/WelderInterop/WelderNativeException)
-      document/code_writer.hpp  the emission vocabulary: `code_writer` (indentation-aware writer — line() with the cat {}-format, RAII braces(), raw(), deeper(); depth in 4-space units) + `bound_symbol` (one C symbol = registration at construction + the three coordinated sinks: thunk() at depth 0 over doc.shim, pinvoke() at depth 2, wrapper() over the caller's sink — an emitter cannot write a thunk and forget its declaration). NB cat treats every literal `{}` pair as a placeholder — pass a literal `{}` as an ARGUMENT
-      document/class_writer.hpp  the RAII class handle: member accumulation, the comparison-PAIRING ledger (C# needs ==/!=, </>, <=/>= in pairs), the CS0102 + reserved-underscore diagnostics, one SafeHandle subclass per class
-      document/enum_writer.hpp   the RAII enum handle (enum : <underlying>; per-enumerator docs)
-      document.hpp        UMBRELLA over document/*
-      emit/refs.hpp       the constant-init variable templates (cpp_name_v/ident_v/upath_v/symtok_v/styled_v — the gcc-16 consteval-in-runtime-expression workaround) + the 4 placeholder flavors (type_ref/field_ref/anchor_ref/container_ref) + owner_expr
-      emit/spellings.hpp  one type, three spellings: shim_wire_spelling (C ABI), pinvoke_type (managed P/Invoke), public_type/public_return_type (the idiomatic wrapper surface)
-      emit/tuples.hpp     the pair/tuple slot read/write statement builders
-      emit/params.hpp     call_pieces (the FIVE spellings one parameter needs at once) + append_one_param — the ONE inbound-conversion source shared by params, setters, operands and map keys/values — + emit_set_arm (the ONE `set { … }` write-arm shared by fields, method-backed properties and namespace variables)
-      emit/returns.hpp    wrapper_return_body — the managed return path (guarded's mirror; where rv:: becomes owns:true / a view / a pinned _owner)
-      emit/callables.hpp  `callable_emitter<Fn, Style>` — the thunk+P/Invoke+wrapper TRIPLE over one bound_symbol (static + instance ctor forms; the per-callable gates live in emit()) + emit_callable_docs
-      emit/classes.hpp    `class_opener` — open/open_nested/open_enum/open_nested_enum (the four identities: C# path, C++ spelling, symbol prefix, handle field) + the private finish step (base upcast thunks, As<Base>() views, director hookup, destroy thunk)
-      emit/constructors.hpp  `constructor_emitter` — emit_all (default/declared/aggregate/Clone; director-constructed via construct_as); the internal (IntPtr,bool) chaining lives in ONE private emit_one step
-      emit/fields.hpp     `field_emitter` — emit_field (live Span<T> sequence fields via the private emit_scalar_seq) / emit_property (accessor pairs)
-      emit/methods.hpp    `method_emitter` — emit_group (with the private emit_virtual: origin-branched director dispatch) / emit_static_group / emit_stringifier
-      emit/operators.hpp  `operator_emitter` — emit_operator (dispatching to the private invoke/indexer/static-shape steps by cs_op_kind) + emit_comparison_set (<=> → the relational set over one compare thunk); lookup/symbol are private members
-      emit/containers.hpp ensure_for + collect_containers (the per-signature sweep), over containers/{vector,fixed,scalar_seq,map,shared}.hpp — per-family wrapper-generator emitters (`vector_wrapper_emitter` / `fixed_wrapper_emitter` / `scalar_seq_wrapper_emitter` / `map_wrapper_emitter` / `shared_box_emitter`, each: ensure<C>() claims the key, derives the spellings into members, then emit_thunks/emit_pinvokes/emit_wrapper), one generated wrapper per distinct instantiation, keyed by display string (the ensure_* free-function entry points remain)
-      emit/directors.hpp  `director_emitter` — the C++ director subclass + dir_init/dir_bind thunks + the [UnmanagedCallersOnly] callbacks + _OverrideMask, as four named steps over member accumulators (emit_director stays as the one-line entry)
-      emit/namespaces.hpp `namespace_emitter` — emit_function_group / emit_variable (onto the namespace's Global static class)
-      naming.hpp          welder::rods::csharp::dotnet name style (PascalCase; enumerators verbatim — the pep8 pattern)
-      operators.hpp       the C++-operator → C# map (cs_op_kind/cs_operator) + named_operator (the operator half of the lookup layer)
-      directors.hpp       director eligibility + the overridable-slot set (over <welder/virtuals.hpp>) + director_slot (the shim's re-derivation)
-      module.hpp          the WELDER_CSHARP_MAIN(ns, header, lib) generator-main() macro (argv[1]=shim.cpp, argv[2]=Bindings.cs)
-    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats, welder::trampolines, welder::opaque_containers, welder::csharp
+    (the csharp/ tree was EXTRACTED 2026-08-14 — the C#/.NET rod is now an
+     out-of-tree extension, skarndev/welder-csharp (private for now), minting its
+     language identity from welder::user_lang; <welder/virtuals.hpp> and the
+     two-phase sweep it relied on stay in core. The extraction honored the C-ABI
+     boundary rule: the rod's shim/marshal/reflect layers are C#-free below its
+     emit/ + document/ layers — reusable groundwork for future C-ABI rods)
+    CMakeLists.txt      targets: welder::pybind11, welder::nanobind, welder::sol2, welder::luabridge, welder::luacats, welder::trampolines, welder::opaque_containers
 src/CMakeLists.txt      target: welder::headers (the header-only core; the C++20 `welder::module` wrapper was removed — see gcc16-toolchain.md)
 cmake/
   WelderPybind11Stubgen.cmake  welder_pybind11_generate_stubs() — .pyi via pybind11-stubgen
@@ -136,7 +82,6 @@ cmake/
   WelderLuaCATSStub.cmake      welder_luacats_generate_stub() — build a generator exe (welder::luacats) + run it → <name>.lua (ALL target)
   WelderTrampolines.cmake      welder_generate_trampolines() — build a generator exe (welder::trampolines) + run it → <name>.trampolines.hpp (ALL target); the Python trampoline analogue of the LuaCATS stub helper
   WelderOpaqueContainers.cmake welder_generate_opaque_containers() — build a generator exe (welder::opaque_containers) + run it → <name>.opaque.hpp (ALL target); the opaque-container analogue of the trampoline helper
-  WelderCSharpModule.cmake     welder_csharp_generate_bindings() — build a generator exe (welder::csharp) + run it → shim.cpp + Bindings.cs, then compile the shim into a SHARED lib named for P/Invoke (Windows: PREFIX "", MinGW: static gcc runtimes); .cs path in the WELDER_CSHARP_BINDINGS target property
 tools/
   welder_doxygen_filter.py     Doxygen INPUT_FILTER driver: welder annotations → Doxygen comments (needs `lark`)
   welder_doxygen_filter.lark   its grammar: C++ lexical soup (layer 1) + attribute-list (layer 2)
@@ -460,22 +405,7 @@ is the Python analogue: also `lang::py`, also a build-time text emitter, but it 
 *C++ trampoline source* (not a stub) — its `make_class<T>` renders a trampoline subclass
 for a welded virtual type; every other primitive is a no-op, and `has_native_caster` is
 permissive (it only reproduces virtual *signatures*, which splicing handles for any
-type, so it needs no bindability oracle). The **`welder::rods::csharp::rod`** is the
-third build-time text emitter and the first for a language with NO in-process
-registration C API (`lang::cs`): one driver pass emits an `extern "C"` C-ABI shim
-(compiled with reflection against the same welded header — each thunk is a one-line
-delegation into `shim_support.hpp`, parameterized by the exact member reflection
-re-derived via the shared lookup layer, the trampolines splice idiom applied to the
-C ABI) plus a `[LibraryImport]` C# wrapper (SafeHandle per class, natural overloads,
-`Clone()` for Copyable, `enum : <underlying>`, XML docs, and a `welder_error`
-out-param on every thunk mapping C++ exceptions to `WelderNativeException`).
-Phase-gated: what the gate admits but the marshalling layer cannot yet carry
-(containers) throws
-`diag::csharp_unmarshallable` at generation — never a silent `void*`. Ownership
-is policy-mapped (type_map.hpp `handle_return_of`, consumed by BOTH sides):
-owned copy/move, adopted pointer, or a non-owning view — `reference_internal`
-(and every non-const class-typed field) pins the parent via the view's
-managed `_owner`. (`welder::rods` is deliberately a grouping
+type, so it needs no bindability oracle). (`welder::rods` is deliberately a grouping
 namespace with room for non-rod helpers alongside the rods, e.g. `welder::rods::python`
 / `welder::rods::lua`.)
 
@@ -530,13 +460,6 @@ framework's own mechanisms, separately from core resolution — design pending.
   `<name>.trampolines.hpp` as an ALL target. The generated header is backend-neutral;
   the consuming binding TU adds it on its include path, `#include`s it after the active
   backend's `trampoline.hpp`, and depends on the generation target so it exists first.
-- **`welder::csharp`** — INTERFACE, the C#/.NET P/Invoke rod. Pure reflection →
-  text at generation time (dotnet is only needed to *consume* the wrapper), so it is
-  **unconditional** — just `welder::headers`. Emit a binding pair with
-  `welder_csharp_generate_bindings()` (cmake/WelderCSharpModule.cmake): generator exe
-  → `shim.cpp` + `Bindings.cs` → the shim compiled (with reflection, against the
-  welded header — the generated thunks re-run the generator's reflection queries and
-  splice) into a SHARED library named for the default P/Invoke resolver.
 
 Reflection flags are **not** propagated to consumers: `welder::headers` is the include
 path only (no `cxx_std_26`, no `-freflection`). welder's own build applies

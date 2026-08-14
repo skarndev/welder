@@ -42,7 +42,6 @@ namespace welder::inline v0 {
 enum class lang : unsigned char {
     py,   /**< Python (via the pybind11 and nanobind backends). */
     lua,  /**< Lua (via the sol2 and LuaBridge3 backends). */
-    cs,   /**< C#/.NET (via the build-time C-ABI + P/Invoke backend). */
 };
 
 /** A **user-defined language**: the @a Slot-th identity from the mask's user

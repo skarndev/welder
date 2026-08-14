@@ -114,11 +114,4 @@ It is repeatable — declare one annotation per lifetime dependency — and maps
 pybind11/nanobind `keep_alive<Nurse, Patient>`. Like `return_policy`, it is a
 Python-binding concept: the Lua rods have no equivalent and ignore it.
 
-!!! note "On the C# rod"
-    `return_policy` is honored exactly as on the Python rods: owned copies,
-    adopted pointers, non-owning views; `reference_internal` (and every
-    class-typed field) pins the parent wrapper against garbage collection
-    through an internal owner reference. `keep_alive` is documented-ignored,
-    as on the Lua rods. See [C# / .NET bindings](csharp.md).
-
 Next: [Docstrings](docstrings.md).

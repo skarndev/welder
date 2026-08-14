@@ -218,34 +218,5 @@ struct property_name_collision {
         "getter(\"name\"), or exclude the colliding member";
 };
 
-/** Thrown by the C# rod's `require_marshallable`
-    (`<welder/rods/csharp/type_map.hpp>`) when a participating member's type is
-    admitted by the bindability gate but cannot yet cross the C ABI — the
-    marshalling families land phase by phase (references/pointers to welded
-    classes as returns, then STL containers), and a silent `void*` would
-    corrupt data rather than fail loudly. */
-struct csharp_unmarshallable {
-    /** What went wrong and how to fix it. */
-    const char* what =
-        "welder: this type cannot cross the C#/.NET C-ABI boundary yet (the "
-        "marshalling for this type family is not implemented); exclude the "
-        "member for lang::cs (mark::exclude(welder::lang::cs)), or wait for "
-        "the family to land";
-};
-
-/** Thrown by the C# rod's member-lookup layer
-    (`<welder/rods/csharp/type_map.hpp>` — `named_member` / `ctor_at` /
-    `named_field`) when the generated shim's re-derivation finds no matching
-    declaration: the welded header changed between generating the shim and
-    compiling it, so splicing would bind the wrong member. Regenerate (the
-    CMake helper re-runs the generator when the header is a DEPENDS). */
-struct csharp_member_lookup_mismatch {
-    /** What went wrong and how to fix it. */
-    const char* what =
-        "welder: the generated C# shim references a member the welded header "
-        "no longer declares at that position - the header changed since the "
-        "shim was generated; re-run the bindings generator (a stale build "
-        "artifact), do not edit the generated shim";
-};
 
 } // namespace welder::inline v0::diag

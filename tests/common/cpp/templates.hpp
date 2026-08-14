@@ -55,7 +55,7 @@ namespace templates_ns {
 
 template <class T>
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Crate {
     T item{};
     T get() const { return item; }
@@ -74,7 +74,7 @@ using RenamedCrate [[=welder::weld_as("CrateOfDouble")]] = Crate<double>;
 // every instantiation of Tagged alike, so pair it with a single alias.)
 template <class T>
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 [[=welder::weld_as("TaggedBox")]]
 Tagged {
     T tag{};
@@ -84,7 +84,7 @@ using TaggedInt = Tagged<int>;
 // The third-party opt-in: vendor_tpl::Pack is unwelded; the weld on the
 // alias-declaration itself (annotations are legal there) takes precedence.
 using IntPack
-    [[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]] = vendor_tpl::Pack<int>;
+    [[=welder::weld]] = vendor_tpl::Pack<int>;
 
 // NESTED types of an alias-welded instantiation: Silo<int>'s member class/enum
 // resolve under the instantiation (the template's policy + their own marks, no
@@ -94,7 +94,7 @@ using IntPack
 // rule recurses into it.
 template <class T>
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Silo {
     struct Hatch {
         int width{4};
@@ -105,7 +105,6 @@ Silo {
     // C# forbids a member and a nested type sharing one name, and `hatch`
     // PascalCases into the nested `Hatch` — the cs-scoped weld_as is exactly
     // the escape welder's generation-time diagnostic prescribes.
-    [[=welder::weld_as(welder::lang::cs, "Door")]]
     Hatch hatch{};
 
     State flip(State s) const {
@@ -118,7 +117,7 @@ using IntSilo = Silo<int>;
 // every annotation: the alias-welded Vault<int> binds its protected members.
 template <class T>
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 [[=welder::policy::weld_protected]]
 Vault {
     T peek() const { return locked; }

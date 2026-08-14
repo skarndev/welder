@@ -17,7 +17,7 @@ namespace enums {
 
 // scoped enum, automatic policy: all enumerators bound except the excluded one.
 enum class
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Direction {
     North,
     East,
@@ -27,7 +27,7 @@ Direction {
 
 // unscoped enum: its values are also exported unqualified into the module scope.
 enum
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Signal {
     Green,
     Yellow,
@@ -37,7 +37,7 @@ Signal {
 // scoped enum, opt_in policy: only explicitly included enumerators bind.
 enum class
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs),
+  =welder::weld,
   =welder::policy::opt_in
 ]]
 Level {
@@ -49,7 +49,7 @@ Level {
 // an enum used as a struct member: welder's gate passes because Direction is
 // welded, and register_enums binds the enum before the struct that uses it.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Compass {
     Direction facing;
 };

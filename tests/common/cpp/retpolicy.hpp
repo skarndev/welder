@@ -6,11 +6,8 @@
 // [[=welder::return_policy]] (pybind11 return_value_policy / nanobind rv_policy),
 // while the garbage-collected Lua runtimes decide ownership *structurally* from the
 // C++ return type and so ignore the policy at runtime — exactly as they ignore
-// [[=welder::doc]]. The C# rod sides with Python: reference kinds hand out a
-// non-owning view wrapper (reference_internal additionally pins the parent via
-// the view's __owner), copy snapshots — asserted by tests/csharp/app/Program.cs
-// over this same Inner/Owner pair. Registry stays Python-only (keep_alive is a
-// Python call policy; the C# rod documents it as ignored). What no rod ignores is a contradiction (a reference to a
+// [[=welder::doc]]. Registry stays Python-only (keep_alive is a Python call
+// policy). What no rod ignores is a contradiction (a reference to a
 // returned temporary): that is a compile error everywhere (the negative-compile
 // case cpp/neg/return_policy_dangling.cpp).
 //
@@ -22,13 +19,13 @@ namespace retpolicy {
 // A small bound value type; `view()`/`snapshot()` below hand one back under
 // different policies so the difference is observable from the target language.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Inner {
     int v{0};
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua, welder::lang::cs)]]
+[[=welder::weld]]
 Owner {
     Owner() = default;
 
