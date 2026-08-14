@@ -218,4 +218,5 @@ struct property_name_collision {
         "getter(\"name\"), or exclude the colliding member";
 };
 
+
 } // namespace welder::inline v0::diag

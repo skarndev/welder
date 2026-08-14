@@ -109,3 +109,13 @@ header-only (e.g. `#include <welder/rods/python/pybind11/rod.hpp>`).
   bug; report drafted for the user 2026-07-15 (splice-vs-extract equal-value
   inconsistency as the core argument). welder doesn't use extract for members,
   so no additional workaround needed.
+- **Spliced member access through an inferred base adjustment — a SEGFAULT
+  (found 2026-08).** `(*obj).[:Mem:]` ICEs when `obj` is typed as the derived
+  class but `Mem` is declared in a base reached through an alias (a
+  class-template specialization whose base arrives via `std::conditional_t`) —
+  the compiler crashes rather than inferring the base adjustment. Workaround
+  for any splice site that can hit this: cast through the member's DECLARING
+  class first (`static_cast<Owner*>(static_cast<Obj*>(self))`), a no-op for a
+  member the class declares itself. A 23-line reproducer and a Bugzilla draft
+  live OUTSIDE this repo at `~/WoWModding/gcc-splice-base-member-ice/`
+  (deliberately not committed — 85f2495 removed it from the tree).

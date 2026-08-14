@@ -17,17 +17,30 @@
 
 namespace welder::inline v0 {
 
+/** Does a `weld` mask admit language @a L?
+
+    An **empty** mask is the bare `[[=welder::weld]]` (equivalently
+    `welder::weld()`): the language-agnostic weld, admitting every language. Any
+    other mask names its languages explicitly.
+    @param mask the mask from a detail::weld_spec.
+    @param L    the target language.
+    @return `true` iff @a mask is the all-languages sentinel or names @a L. */
+consteval bool weld_mask_admits(unsigned mask, lang L) {
+    return mask == 0 || (mask & lang_bit(L)) != 0;
+}
+
 /** Is @a type welded for language @a L — i.e. does it carry a matching `weld`
     annotation?
 
     @param type a reflection of the type to test.
     @param L    the target language.
-    @return `true` iff @a type's `weld` annotation lists @a L.
+    @return `true` iff @a type carries a `weld` annotation that admits @a L
+            (bare — every language — or naming @a L).
 */
 consteval bool welded_for(std::meta::info type, lang L) {
     auto anns{std::meta::annotations_of_with_type(type, ^^detail::weld_spec)};
     return !anns.empty() &&
-           (std::meta::extract<detail::weld_spec>(anns[0]).mask & lang_bit(L)) != 0;
+           weld_mask_admits(std::meta::extract<detail::weld_spec>(anns[0]).mask, L);
 }
 
 /** Is @a mem a namespace-scope alias naming a class-template specialization —
@@ -61,8 +74,8 @@ consteval bool names_template_specialization(std::meta::info mem) {
 consteval bool alias_welded_for(std::meta::info mem, lang L) {
     auto own{std::meta::annotations_of_with_type(mem, ^^detail::weld_spec)};
     if (!own.empty())
-        return (std::meta::extract<detail::weld_spec>(own[0]).mask & lang_bit(L)) !=
-               0;
+        return weld_mask_admits(
+            std::meta::extract<detail::weld_spec>(own[0]).mask, L);
     return welded_for(std::meta::dealias(mem), L);
 }
 

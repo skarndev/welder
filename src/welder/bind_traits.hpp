@@ -252,7 +252,7 @@ consteval bool free_operator_reflected(std::meta::info f, std::meta::info type) 
     return ps.size() == 2 && !decays_to(std::meta::type_of(ps[0]), type);
 }
 
-/** Split slot group @a Fns by @ref@ref free_operator_reflected — the entries whose
+/** Split slot group @a Fns by @ref free_operator_reflected — the entries whose
     reflectedness equals @a Reflected, in group order. A rod whose framework
     registers by exact signature shape (LuaBridge3) uses this to route the
     direct (anchor-on-the-left) entries through its typed registration and the

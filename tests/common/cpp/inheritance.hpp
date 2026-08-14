@@ -16,7 +16,7 @@ namespace inheritance {
 // --- native inheritance from a welded base ----------------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Base {
     int base_field{1};
 
@@ -31,7 +31,7 @@ Base {
 
 // issubclass(Derived, Base)
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Derived : public Base {
     int derived_field{2};
 
@@ -43,13 +43,13 @@ Derived : public Base {
 // A multi-level welded chain (Leaf -> Mid -> Base): every level stays a Python
 // superclass and contributes its members through the MRO.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Mid : public Base {
     int mid_field{5};
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Leaf : public Mid {
     int leaf_field{6};
 };
@@ -70,7 +70,7 @@ struct Mixin {
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 WithMixin : public Mixin {
     int own_field{4};
 };
@@ -80,7 +80,7 @@ WithMixin : public Mixin {
 // survive the non-welded bridge.
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Welded {
     int welded_field{10};
 
@@ -95,7 +95,7 @@ struct Bridge : public Welded {
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Through : public Bridge {
     int through_field{12};
 };
@@ -113,25 +113,25 @@ Through : public Bridge {
 #ifdef WELDER_TEST_MULTIPLE_INHERITANCE
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Apex {
     int apex_field{20};
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Left : public virtual Apex {
     int left_field{21};
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Right : public virtual Apex {
     int right_field{22};
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Bottom : public Left, public Right {
     int bottom_field{23};
 };

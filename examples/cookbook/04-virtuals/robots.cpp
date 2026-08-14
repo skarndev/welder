@@ -32,7 +32,7 @@ Robot {
 
     // Deliberately bound FLAT: callable from Python, but not overridable — it
     // stays out of the trampoline (C++ never dispatches it back into Python).
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string vendor() const { return "ACME"; }
 
     std::string status() const {

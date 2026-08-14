@@ -61,13 +61,18 @@ can emit; blanket over welded types, `by_value` opt-out, **collision-free
 namespace-qualified derived names** — `vector<geo::Point>`→`VectorGeoPoint`,
 `array<short,289>`→`ArrayShortIntx289` (element + `x` + extent) — overridable
 per-type via an optional `transform_opaque_container(enclosing, container, member)` hook on
-the name style). Class-element
+the name style). A **C#/.NET rod** exists as an **out-of-tree extension**
+([skarndev/welder-csharp](https://github.com/skarndev/welder-csharp)): it mints its language identity from
+the open `welder::user_lang` range and reuses the bare-`weld` shared test cases;
+the backend-neutral machinery it motivated — `<welder/virtuals.hpp>`
+(`bind_flat`/`virtual_slot`), the two-phase namespace sweep, the bare `weld`
+form — stays in welder's core. Class-element
 containers are made ordering-safe by the driver's **two-phase namespace sweep** (the
 Python rods opt in via a `reopen_class` hook): it registers every welded type's NAME,
 then binds the opaque containers, then fills members — so no container-typed
 member/signature ever spells a raw C++ name in a stub. Further languages are
 designed-for but not yet implemented. There is also a **cookbook** (`examples/cookbook` + the docs Cookbook
-section): a *standalone* super-project of 9 CTest-asserted recipes that obtains welder
+section): a *standalone* super-project of 10 CTest-asserted recipes that obtains welder
 via FetchContent — CI builds it against the checkout, so it doubles as the consumer-
 packaging test (details in `.claude/context/build-test-run.md`). For the
 feature-by-feature detail and test locations, see the context files below.

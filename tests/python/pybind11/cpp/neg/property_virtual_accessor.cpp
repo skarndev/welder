@@ -13,7 +13,7 @@
 #include <welder/rods/python/pybind11/rod.hpp>
 
 struct [[=welder::weld(welder::lang::py),
-         =welder::rods::python::bind_flat]] Widget {
+         =welder::bind_flat]] Widget {
     Widget() = default;
     virtual ~Widget() = default;
     [[=welder::getter]] virtual int get_size() const { return 0; }

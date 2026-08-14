@@ -39,7 +39,7 @@ namespace nested {
 
 // automatic outer: every nested type participates unless marked out.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Robot {
     // nested class -> Robot.Sensor
     struct Sensor {
@@ -67,7 +67,7 @@ Robot {
     // excluded from the sweep AND welded: the manual flat-registration escape —
     // register_nested() welds it by hand as `RobotBeacon` at module scope.
     struct
-    [[=welder::weld(welder::lang::py, welder::lang::lua), =welder::mark::exclude]]
+    [[=welder::weld, =welder::mark::exclude]]
     Beacon {
         int strength{9};
     };
@@ -83,6 +83,10 @@ Robot {
 
     // members whose types are the nested types above: the bindability gate
     // passes because the nested-type sweep registers them with Robot itself.
+    // C# forbids a member and a nested type sharing one name, and `sensor` /
+    // `mode` PascalCase into the nested `Sensor` / `Mode` — the cs-scoped
+    // weld_as is the escape welder's generation-time diagnostic prescribes
+    // (py/lua keep the styled names).
     Sensor sensor{};
     Mode mode{Mode::idle};
 
@@ -95,12 +99,13 @@ Robot {
 
 // nesting recurses: Machine.Part.Bolt
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Machine {
     struct Part {
         struct Bolt {
             int size{5};
         };
+        // the same CS0102 escape as Robot's fields, one level down
         Bolt bolt{};
     };
     Part part{};
@@ -110,7 +115,7 @@ Machine {
 // like a data member under opt_in.
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld,
   =welder::policy::opt_in
 ]]
 Panel {
@@ -131,7 +136,7 @@ Panel {
 // alias-registered types pass the gate through the SCOPE-AWARE oracle (a class's
 // own member aliases are visible to it).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Console {
     using Dial = nested_vendor::Dial;      // unwelded vendor type  -> Console.Dial
     using Ints = nested_vendor::Roll<int>; // unwelded specialization -> Console.Ints
@@ -154,7 +159,8 @@ Console {
     };
     using Heart = Core;
 
-    // signatures using the alias-registered types (the scope-aware oracle):
+    // signatures using the alias-registered types (the scope-aware oracle);
+    // `dial` gets the cs-scoped CS0102 rename away from the Dial alias above:
     nested_vendor::Dial dial{};
     nested_vendor::Roll<int> roll{};
 
@@ -167,7 +173,7 @@ Console {
 // (policy::weld_protected) — it resolves like any admitted member.
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld,
   =welder::policy::weld_protected
 ]]
 Rig {
@@ -181,7 +187,7 @@ Rig {
 
 // a PRIVATE nested type never binds (and is skipped without error).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Cabinet {
     int drawers{2};
 

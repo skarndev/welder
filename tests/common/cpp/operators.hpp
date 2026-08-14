@@ -16,7 +16,7 @@
 namespace operators {
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Vec {
     double x{0.0};
     double y{0.0};
@@ -48,7 +48,7 @@ Vec {
 // Case 1: the other operand is itself welded. Its member operator takes a Feet,
 // and because Feet is registered with pybind11 the dunder converts it and works.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Feet {
     double value{0.0};
     Feet() = default;
@@ -56,7 +56,7 @@ Feet {
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Meters {
     double value{0.0};
     Meters() = default;
@@ -73,7 +73,7 @@ Meters {
 // (tests/pybind11/cpp/neg/operand_not_welded.cpp). Shown here for context:
 //
 //   struct RawTag { int id{0}; };                        // no weld
-//   struct [[=welder::weld(welder::lang::py, welder::lang::lua)]] Tagged {
+//   struct [[=welder::weld]] Tagged {
 //       int id{0};
 //       Tagged operator+(const RawTag&) const;           // -> hard compile error
 //   };
@@ -84,7 +84,7 @@ Meters {
 // binds as __add__ exactly like a member one — and a marked one resolves like
 // any member (the excluded operator- below never appears).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Coin {
     int cents{0};
     Coin() = default;
@@ -99,7 +99,7 @@ inline Coin operator-(const Coin& a, const Coin& b) { return Coin{a.cents - b.ce
 // which store one value per metamethod slot (two separate registrations would
 // clobber; one sol::overload / variadic addFunction holds both).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Mixed {
     int v{0};
     Mixed() = default;
@@ -114,7 +114,7 @@ inline Mixed operator+(const Mixed& a, int b) { return Mixed{a.v + b}; } // free
 // signature to __mul (Lua passes a metamethod its operands as written). The free
 // ostream inserter becomes Python __str__ / Lua __tostring.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Scaled {
     double f{1.0};
     Scaled() = default;
@@ -134,7 +134,7 @@ inline std::ostream& operator<<(std::ostream& os, const Scaled& s) {
 // A DEFAULTED spaceship also implicitly declares a defaulted operator==, which
 // binds through the ordinary operator path — so Version gets the full set.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Version {
     // (not `major`/`minor` — glibc leaks those as macros)
     int maj{0};
@@ -147,7 +147,7 @@ Version {
 // A CUSTOM spaceship synthesizes the four relationals but NOT == (C++ itself
 // only rewrites == from operator==; none is declared here).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Temp {
     double celsius{0.0};
     Temp() = default;
@@ -164,7 +164,7 @@ Temp {
 // return NotImplemented on an operand mismatch; Lua consults either operand's
 // metamethod and the synthesis registers both operand orders).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Account {
     int balance{0};
     Account() = default;
@@ -178,7 +178,7 @@ Account {
 // operator< is what < binds, while >, <=, >= still synthesize from <=> — the
 // exact asymmetry a C++ caller sees.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Ordered {
     int rank{0};
     Ordered() = default;
@@ -192,7 +192,7 @@ Ordered {
 // Marks on the spaceship scope the synthesis per language like any member:
 // Python compares, Lua does not.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 PyOnlyCmp {
     int v{0};
     PyOnlyCmp() = default;
@@ -208,7 +208,7 @@ PyOnlyCmp {
 // and under opt_in an operator binds only when explicitly included.
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 [[=welder::policy::automatic]]
 OpAutomatic {
     int v{0};
@@ -220,7 +220,7 @@ OpAutomatic {
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 [[=welder::policy::opt_in]]
 OpOptIn {
     [[=welder::mark::include]] int v{0};  // included so the test can read a result

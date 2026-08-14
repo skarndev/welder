@@ -22,7 +22,7 @@ Engine {
 
     virtual int rpm() const { return 800; }
 
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string label() const { return "engine"; }
 
     // Non-virtual, dispatches into the virtuals — observable proof that a C++

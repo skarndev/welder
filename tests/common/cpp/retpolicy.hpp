@@ -6,7 +6,8 @@
 // [[=welder::return_policy]] (pybind11 return_value_policy / nanobind rv_policy),
 // while the garbage-collected Lua runtimes decide ownership *structurally* from the
 // C++ return type and so ignore the policy at runtime — exactly as they ignore
-// [[=welder::doc]]. What no rod ignores is a contradiction (a reference to a
+// [[=welder::doc]]. Registry stays Python-only (keep_alive is a Python call
+// policy). What no rod ignores is a contradiction (a reference to a
 // returned temporary): that is a compile error everywhere (the negative-compile
 // case cpp/neg/return_policy_dangling.cpp).
 //
@@ -18,13 +19,13 @@ namespace retpolicy {
 // A small bound value type; `view()`/`snapshot()` below hand one back under
 // different policies so the difference is observable from the target language.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Inner {
     int v{0};
 };
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Owner {
     Owner() = default;
 

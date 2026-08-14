@@ -234,6 +234,7 @@ add_test(NAME compile.properties
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_properties --config $<CONFIG>)
 
+
 # Doxygen INPUT_FILTER tests (text-level; python3, optionally doxygen).
 add_subdirectory(doxyfilter)
 
@@ -241,6 +242,7 @@ add_subdirectory(doxyfilter)
 # backend depends on neither sol2 nor a Lua runtime, so it is registered here, not
 # under the sol2-gated lua/ tree).
 add_subdirectory(luacats)
+
 
 # Per-language test trees. python/ builds the pybind11 + nanobind extensions and
 # runs the shared pytest specs against each (a cross-backend consistency check);

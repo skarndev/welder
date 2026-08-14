@@ -37,10 +37,10 @@ struct Tree : Plant {
     Tree* parent() const override { return nullptr; }  // covariant
 };
 
-static_assert(wrp::virtual_slot_count(^^Plant) == 1);
-static_assert(wrp::virtual_slot_count(^^Tree) == 1,
+static_assert(::welder::virtual_slot_count(^^Plant) == 1);
+static_assert(::welder::virtual_slot_count(^^Tree) == 1,
               "covariant override must dedup to ONE slot, not two");
-static_assert(std::meta::return_type_of(wrp::overridable_virtuals(^^Tree)[0]) ==
+static_assert(std::meta::return_type_of(::welder::overridable_virtuals(^^Tree)[0]) ==
                   ^^Tree*,
               "the kept slot carries the most-derived (narrowed) return type");
 
@@ -58,18 +58,18 @@ struct Robot {
     virtual std::string send(const std::string&) const { return {}; }
 };
 
-static_assert(wrp::virtual_slot_count(^^Robot) == 2);
-static_assert(wrp::virtual_slot(^^Robot, "send", ^^std::string(int) const) !=
-                  wrp::virtual_slot(^^Robot, "send",
+static_assert(::welder::virtual_slot_count(^^Robot) == 2);
+static_assert(::welder::virtual_slot(^^Robot, "send", ^^std::string(int) const) !=
+                  ::welder::virtual_slot(^^Robot, "send",
                                     ^^std::string(const std::string&) const),
               "virtual_slot must distinguish the overloads by function type");
 static_assert(std::meta::is_virtual(
-    wrp::virtual_slot(^^Robot, "send", ^^std::string(int) const)));
+    ::welder::virtual_slot(^^Robot, "send", ^^std::string(int) const)));
 
 // virtual_slot sees inherited slots too (it searches overridable_virtuals).
 struct Droid : Robot {};
-static_assert(wrp::virtual_slot(^^Droid, "send", ^^std::string(int) const) ==
-              wrp::virtual_slot(^^Robot, "send", ^^std::string(int) const));
+static_assert(::welder::virtual_slot(^^Droid, "send", ^^std::string(int) const) ==
+              ::welder::virtual_slot(^^Robot, "send", ^^std::string(int) const));
 
 // --- access: protected is a slot, private is not, privatizing withdraws --------
 
@@ -83,14 +83,14 @@ struct Nvi {
   private:
     virtual int hidden() const { return 0; }  // unroutable: base call inaccessible
 };
-static_assert(wrp::virtual_slot_count(^^Nvi) == 1,
+static_assert(::welder::virtual_slot_count(^^Nvi) == 1,
               "protected hook in, private virtual out");
 
 struct NviShut : Nvi {
   private:
     std::string rite() const override { return "silence"; }  // privatizes the slot
 };
-static_assert(wrp::virtual_slot_count(^^NviShut) == 0,
+static_assert(::welder::virtual_slot_count(^^NviShut) == 0,
               "a private redeclaration withdraws the inherited slot");
 
 // --- noexcept strengthening: still the same slot -------------------------------
@@ -102,9 +102,9 @@ struct Soft {
 struct Hard : Soft {
     int op() noexcept override { return 2; }  // strengthened exception spec
 };
-static_assert(wrp::virtual_slot_count(^^Hard) == 1,
+static_assert(::welder::virtual_slot_count(^^Hard) == 1,
               "a noexcept-strengthening override is the same slot");
-static_assert(std::meta::is_noexcept(wrp::overridable_virtuals(^^Hard)[0]),
+static_assert(std::meta::is_noexcept(::welder::overridable_virtuals(^^Hard)[0]),
               "…kept with the most-derived (noexcept) declaration");
 
 // --- the generator's rendering of the hard shapes -------------------------------
@@ -135,7 +135,7 @@ struct Printer {
     virtual ~Printer() = default;
     virtual void log(const char* /*fmt*/, ...) {}
 };
-static_assert(wrt::is_c_variadic(wrp::overridable_virtuals(^^Printer)[0]));
+static_assert(wrt::is_c_variadic(::welder::overridable_virtuals(^^Printer)[0]));
 static_assert(contains(wrt::render_trampoline(^^Printer), "static_assert(false"));
 static_assert(contains(wrt::render_trampoline(^^Printer), "bind_flat"));
 
@@ -151,7 +151,7 @@ struct Ring {
 };
 using IntRing = Ring<int>;
 
-static_assert(wrp::virtual_slot_count(^^IntRing) == 1,
+static_assert(::welder::virtual_slot_count(^^IntRing) == 1,
               "the reflection layer accepts an alias (dealiased at entry)");
 static_assert(contains(wrt::render_trampoline(^^IntRing),
                        "struct ts_IntRing_trampoline : ::ts::IntRing {"));

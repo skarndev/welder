@@ -23,7 +23,7 @@
 namespace overloads {
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Calc {
     int value{0};
 
@@ -50,11 +50,11 @@ Calc {
 };
 
 // Free-function overload sets resolve the same way.
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 inline int pick(int x) { return x; }
 
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld,
   =welder::mark::exclude(welder::lang::lua)
 ]]
 inline std::string pick(const std::string& s) { return s + "!"; }
@@ -64,7 +64,7 @@ inline std::string pick(const std::string& s) { return s + "!"; }
 // declaration to mark), so the type stays default-instantiable.
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld,
   =welder::policy::opt_in
 ]]
 OptInCtor {
@@ -85,7 +85,7 @@ OptInCtor {
 // the guard's automatic baseline, so "no constructor at all" compiles as a
 // deliberate surface (instances arrive from C++ only).
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 FactoryOnly {
     [[=welder::mark::exclude]]
     FactoryOnly(int tag) : id{tag} {}
@@ -93,13 +93,13 @@ FactoryOnly {
     int id{0};
 };
 
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 inline FactoryOnly forge(int tag) { return FactoryOnly{tag}; }
 
 // A DECLARED default constructor's explicit marks are honored: T() is
 // suppressed while the value constructor stays.
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 NoDefault {
     [[=welder::mark::exclude]]
     NoDefault() = default;

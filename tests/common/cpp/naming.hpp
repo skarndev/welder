@@ -17,7 +17,7 @@
 namespace styling {
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 HttpClient {
     // camelCase data member: PEP 8 / snake_case -> base_url.
     std::string baseUrl{};

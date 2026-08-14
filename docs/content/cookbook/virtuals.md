@@ -21,7 +21,7 @@ Robot {
 
     // Bound FLAT: callable, but not overridable — no trampoline slot, no
     // C++->Python dispatch cost.
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string vendor() const { return "ACME"; }
 
     // Non-virtual, calls the virtuals polymorphically: observing it from Python

@@ -7,6 +7,26 @@ guide has the user-facing walkthrough, this has driver hooks + test files.
 
 All honor exclude/include/policy via `reflect.hpp` `member_bound`.
 
+**C#/.NET (out of tree):** the C# rod now lives in skarndev/welder-csharp
+(PUBLIC), minting its language identity from `welder::user_lang` —
+welder's core no longer names C#. What its development left behind IS core and
+stays documented here:
+- **`weld` is a constexpr OBJECT** (mask 0 = all languages): a bare
+  `[[=welder::weld]]` is the language-agnostic spelling, `weld(langs…)` still
+  scopes; `weld_mask_admits` (reflect.hpp) is the single reader. The shared
+  cases (tests/common/cpp) weld bare wherever a case is not language-specific —
+  which is exactly how an out-of-tree rod reuses them.
+- **The gate** (`bindable.hpp`): `std::expected` and `std::span` get their own
+  branches AFTER the `has_native_caster` check, deliberately NOT `stl_wrappers`
+  rows — a row makes EVERY rod recurse into the element, and the Python rods
+  reach both families through whole-type casters (nanobind converts neither a
+  bare `std::byte` element nor a project's `Result<T>`), so a row would break
+  them.
+- **The NEUTRAL virtual-slot machinery** is hoisted to `src/welder/virtuals.hpp`
+  (`welder::bind_flat` / `virtual_slot` are the canonical spellings;
+  rods/python/trampoline.hpp re-exports the historical ones) — one slot
+  semantics for every language's trampolines/directors.
+
 ## Data members & constructors
 Public data members (a mutable member read/write via `def_readwrite`; a **const**
 member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on
@@ -622,7 +642,7 @@ via `_make_class`'s new `Trampoline` param + `static_assert(trampoline_covers(..
 (every overridable virtual is redeclared in `PyT`, matched by name + `type_of` — full
 signature incl. cv/ref, so overloads/covariant returns don't false-match); else
 `static_assert(bound_flat(^^T))` — a virtual type must register a trampoline or carry
-`[[=welder::rods::python::bind_flat]]` (type-level = whole type flat; per-method =
+`[[=welder::bind_flat]]` (type-level = whole type flat; per-method =
 that virtual stays a plain bound method, out of slot count + coverage).
 
 **Dispatch:** `WELDER_PY_OVERRIDE(fn, args…)` → `WELDER_PY_OVERRIDE_AS(^^welder_py_base::fn, fn, args…)`
@@ -630,7 +650,7 @@ that virtual stays a plain bound method, out of slot count + coverage).
 reflection). The `_AS` form exists because `^^Base::fn` is **ill-formed for an
 overloaded virtual** (no overload-set reflection in P2996; gcc-16: "cannot take the
 reflection of an overload set") — for overloads, hand-written trampolines pass an
-explicit slot via `welder::rods::python::virtual_slot(^^T, "fn", ^^ret(args) quals)`
+explicit slot via `welder::virtual_slot(^^T, "fn", ^^ret(args) quals)`
 (searches `overridable_virtuals`, so inherited slots too; no match = const-eval error
 naming a diagnostic function; extra parens keep commas out of macro splitting), while
 the textual `fn` arg only spells the qualified base fallback (overload resolution

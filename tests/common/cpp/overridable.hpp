@@ -5,7 +5,7 @@
 // WELDER_PY_TRAMPOLINE / WELDER_PY_OVERRIDE macros, so the SAME source binds under
 // either Python rod. The binding TU must include the active backend's
 // <welder/rods/python/<backend>/trampoline.hpp> *before* this header (for the macros
-// and welder::rods::python::{trampoline_for,bind_flat}). The Lua backends do not
+// and welder::bind_flat + welder::rods::python::trampoline_for). The Lua backends do not
 // include this header — trampolines are a Python-family concept.
 //
 // The cases live in namespace `overridable`, bound under an `overridable` submodule
@@ -17,7 +17,7 @@ namespace overridable {
 
 // A polymorphic base a Python subclass can override.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld]]
 Animal {
     virtual ~Animal() = default;
 
@@ -29,7 +29,7 @@ Animal {
     // A virtual deliberately bound *flat*: it stays a plain, callable method but is
     // not routed through the trampoline, so it needs no override and drops out of the
     // slot count and coverage check. C++ never dispatches it back into Python.
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string kingdom() const { return "Animalia"; }
 
     // A non-virtual method that calls the virtuals polymorphically: observing its
@@ -78,7 +78,7 @@ struct [[=welder::rods::python::trampoline]] PyShape : Shape {
 // base chain, not just members_of), so PyBird must redeclare speak + legs + fly;
 // omitting the inherited ones is a coverage static_assert failure.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld]]
 Bird : Animal {
     [[=welder::doc("How this bird flies.")]]
     virtual std::string fly() const { return "flap"; }
@@ -96,7 +96,7 @@ struct PyBird : Bird {
 // virtual pair, and a protected NVI hook. Each has a C++ caller so the tests can
 // observe the C++ -> Python dispatch, not just the Python-level attribute.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld]]
 Robot {
     virtual ~Robot() = default;
 
@@ -140,13 +140,13 @@ struct PyRobot : Robot {
     // macro spells only the qualified base fallback, where overload resolution picks
     // the right overload from the forwarded argument.
     std::string send(int code) const override {
-        WELDER_PY_OVERRIDE_AS((welder::rods::python::virtual_slot(
+        WELDER_PY_OVERRIDE_AS((welder::virtual_slot(
                                   ^^Robot, "send", ^^std::string(int) const)),
                               send, code);
     }
     std::string send(const std::string& text) const override {
         WELDER_PY_OVERRIDE_AS(
-            (welder::rods::python::virtual_slot(
+            (welder::virtual_slot(
                 ^^Robot, "send", ^^std::string(const std::string&) const)),
             send, text);
     }
@@ -158,7 +158,7 @@ struct PyRobot : Robot {
 // most-derived (Tree*) signature — its trampoline redeclares that narrowed form.
 // The returned pointer is non-owning, hence the reference return policy.
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld]]
 Plant {
     virtual ~Plant() = default;
 
@@ -171,7 +171,7 @@ Plant {
 };
 
 struct
-[[=welder::weld(welder::lang::py)]]
+[[=welder::weld]]
 Tree : Plant {
     [[=welder::return_policy(welder::rv::reference)]]
     Tree* parent() const override { return nullptr; }

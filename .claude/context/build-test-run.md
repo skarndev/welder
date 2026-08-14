@@ -321,6 +321,18 @@ matter (`undefined-doc-name`/`-class`, `unknown-operator`) are forced on via
 directory check with the config co-located (a single-file `--check` ignores it).
 This lint is what caught the invalid `---@operator eq/lt/le/index` emissions.
 
+## tests/ gating + the out-of-tree C# rod
+
+**The whole tests/ tree is added on `WELDER_BUILD_TESTS` alone** — it used to
+also require a Python backend (`AND (WELDER_BUILD_PYBIND11 OR
+WELDER_BUILD_NANOBIND)`), which made the LuaCATS, doxyfilter and compile-only
+checks unreachable for anyone building a single non-Python rod; the per-backend
+gates live *inside* tests/CMakeLists.txt (python/ and lua/ are the only
+conditional subdirectories). The C#/.NET rod is an out-of-tree extension
+(skarndev/welder-csharp, private for now) and its build/test story moved with
+it; it reuses `tests/common/cpp` through the shared cases' bare
+`[[=welder::weld]]` spelling.
+
 ## Test-side type gates (mypy)
 Three test-side mypy gates:
 - `stubcheck` — mypy over each stub tree.

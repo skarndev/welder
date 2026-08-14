@@ -104,8 +104,8 @@ struct rod {
     template <class T, auto Bases, std::size_t... I>
     static class_handle make_class(module_type& m, const char* /*name*/,
                                    const char* /*doc*/, std::index_sequence<I...>) {
-        if constexpr (!::welder::rods::python::overridable_virtuals(^^T).empty() &&
-                      !::welder::rods::python::bound_flat(^^T))
+        if constexpr (!::welder::overridable_virtuals(^^T).empty() &&
+                      !::welder::bound_flat(^^T))
             m.doc->template add<^^T>();
         return {};
     }
@@ -120,8 +120,8 @@ struct rod {
     template <class T, std::meta::info Decl, auto Bases, std::size_t... I>
     static class_handle make_class(module_type& m, const char* /*name*/,
                                    const char* /*doc*/, std::index_sequence<I...>) {
-        if constexpr (!::welder::rods::python::overridable_virtuals(Decl).empty() &&
-                      !::welder::rods::python::bound_flat(std::meta::dealias(Decl)))
+        if constexpr (!::welder::overridable_virtuals(Decl).empty() &&
+                      !::welder::bound_flat(std::meta::dealias(Decl)))
             m.doc->template add<Decl>();
         return {};
     }

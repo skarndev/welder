@@ -5,7 +5,8 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 
 | Annotation | Meaning |
 |---|---|
-| `weld(lang…)` | Languages this type is exposed to. **Required to bind.** |
+| `weld` | Bind this type for **every** language. **Required to bind.** |
+| `weld(lang…)` | Bind it for the listed languages only. |
 | `policy::automatic` | *(default)* Greedy: reflect every member unless excluded. |
 | `policy::opt_in` | Conservative: bind only members marked `include`. |
 | `policy::weld_protected` / `…(lang…)` | Admit the type's **protected** members into resolution (combinable with `automatic`/`opt_in`). Private members never bind. |
@@ -39,9 +40,20 @@ registered entity welder may bind, e.g. when walking a namespace), and it lists 
 **languages** it is exposed to.
 
 ```cpp
-struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // py + lua
+struct [[=welder::weld]]                                       // every language
 Widget { /* … */ };
+
+struct [[=welder::weld(welder::lang::py, welder::lang::lua)]]  // py + lua only
+Gadget { /* … */ };
 ```
+
+**Prefer the bare form.** Most types are not language-specific — nothing about a
+`Widget` is Pythonic or Lua-ish — and a bare `weld` says exactly that: bind me
+wherever this project builds a rod. The payoff is that adding a backend later
+costs no annotation churn; enumerate languages only where a type genuinely
+belongs to one language's surface, and let the per-member `mark::only` /
+`mark::exclude` carry the finer-grained per-language decisions.
+(`welder::weld()`, called with no languages, is the same all-languages mask.)
 
 A `lang` is stored as a bit in an `unsigned` mask, and the value space is **open**:
 `welder::lang::py` / `welder::lang::lua` name the shipped languages, while

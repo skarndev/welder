@@ -12,8 +12,10 @@
 #include <list>
 #include <map>
 #include <memory>
+#include <expected>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -149,6 +151,45 @@ consteval std::array<std::meta::info, N> leading_args() {
     return out;
 }
 
+/** Is @a type a `std::expected` specialization — the fallible-result family?
+
+    Deliberately NOT a row in @ref stl_wrappers — that table's contract is that
+    every *leading* argument it names is value-bearing, and `std::expected`'s two
+    arguments are not alike — `T` crosses, `E` does not. It gets its own branch in
+    @ref bindable instead.
+    @param type a reflection of the cv/ref/pointer-stripped type. */
+consteval bool is_expected_specialization(std::meta::info type) {
+    return std::meta::has_template_arguments(type) &&
+           std::meta::template_of(type) == ^^std::expected;
+}
+
+/** The VALUE argument of the `std::expected` @a type (its first).
+    @param type a reflection of the expected specialization. */
+consteval std::meta::info expected_value_arg(std::meta::info type) {
+    return std::meta::template_arguments_of(type)[0];
+}
+
+/** Is @a type a `std::span` specialization — the non-owning sequence view?
+
+    Also kept OUT of @ref stl_wrappers, for a different reason than
+    `std::expected`: a span *is* element-wise, but adding the row would make the
+    gate recurse into the element for EVERY rod, and the Python rods reach spans
+    through a whole-type caster today (nanobind has no converter for, say, a bare
+    `std::byte` element). Recursing behind the native-caster check keeps that path
+    byte-for-byte unchanged while letting a rod without such a caster still admit
+    the span by its element.
+    @param type a reflection of the cv/ref/pointer-stripped type. */
+consteval bool is_span_specialization(std::meta::info type) {
+    return std::meta::has_template_arguments(type) &&
+           std::meta::template_of(type) == ^^std::span;
+}
+
+/** The ELEMENT argument of the `std::span` @a type (its first).
+    @param type a reflection of the span specialization. */
+consteval std::meta::info span_element_arg(std::meta::info type) {
+    return std::meta::template_arguments_of(type)[0];
+}
+
 /** Whether every one of a wrapper's value arguments (spliced back to types) binds.
     @tparam B    the rod.
     @tparam L    the target language.
@@ -197,6 +238,29 @@ consteval bool bindable() {
                 std::make_index_sequence<args.size()>{});
         } else if constexpr (B::template has_native_caster<typename [:u:]>) {
             return true;
+        } else if constexpr (is_expected_specialization(u)) {
+            // A rod that maps the error branch onto the target language's
+            // exception channel never converts E at all, so only the VALUE
+            // argument has to bind. Placed AFTER the native-caster check on
+            // purpose: a rod whose framework converts the whole expected
+            // wholesale — a hand-written pybind11/nanobind caster for a
+            // project's `Result<T>` — still wins, so this widening cannot
+            // change what the Python rods already accept.
+            //
+            // `std::expected<void, E>` carries no value at all: it is a pure
+            // effect that can fail, so there is nothing to convert and it always
+            // binds. (The gate never sees a bare `void` return — only this
+            // wrapper can put one in a value position.)
+            if constexpr (std::meta::dealias(expected_value_arg(u)) == ^^void)
+                return true;
+            else
+                return bindable<B, typename [:expected_value_arg(u):], L, Reg>();
+        } else if constexpr (is_span_specialization(u)) {
+            // Element-wise, but checked here rather than from the table so a rod
+            // whose framework casts the whole span keeps winning (see
+            // is_span_specialization). Whether a span may appear in RETURN
+            // position at all is the rod's call, not the gate's.
+            return bindable<B, typename [:span_element_arg(u):], L, Reg>();
         } else if constexpr (std::meta::is_union_type(u)) {
             // Unions never bind — not even welded ones (no sweep registers
             // them; see assert_bindable's union diagnostic for why and for
@@ -397,7 +461,7 @@ consteval void assert_setter_bindable() {
 
 namespace detail {
 
-/** The parameter walk behind @ref@ref assert_operands_bindable — gate each parameter
+/** The parameter walk behind @ref assert_operands_bindable — gate each parameter
     that is not the anchor type itself.
     @tparam B the rod. @tparam Fn the spaceship overload. @tparam Type the
     anchor type reflection. @tparam L the language. @tparam I the index pack. */

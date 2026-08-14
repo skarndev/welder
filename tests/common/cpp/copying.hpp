@@ -25,7 +25,7 @@ namespace copying {
 // --- implicit copy constructor: the copy protocol rides along ----------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Sheet {
     int width{0};
     std::string title;
@@ -34,7 +34,7 @@ Sheet {
 // --- deleted copy: not copy-constructible -> no copy protocol ----------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Pinned {
     Pinned() = default;
     Pinned(const Pinned&) = delete;
@@ -46,7 +46,7 @@ Pinned {
 // --- a declared copy constructor's marks are honored: excluded ---------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Sealed {
     Sealed() = default;
 
@@ -59,7 +59,7 @@ Sealed {
 // --- ... and per language: excluded for py only ------------------------------
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 PyBlocked {
     PyBlocked() = default;
 
@@ -77,7 +77,7 @@ PyBlocked {
 
 struct
 [[
-  =welder::weld(welder::lang::py, welder::lang::lua),
+  =welder::weld,
   =welder::policy::opt_in
 ]]
 Choosy {
@@ -92,7 +92,7 @@ Choosy {
 // No error, nothing bound for it; the copy protocol is untouched.
 
 struct
-[[=welder::weld(welder::lang::py, welder::lang::lua)]]
+[[=welder::weld]]
 Shifty {
     Shifty() = default;
     Shifty(const Shifty&) = default;

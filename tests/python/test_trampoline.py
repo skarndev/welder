@@ -251,7 +251,7 @@ def test_hand_written_trampoline_for_template_instantiation(ov: ModuleType) -> N
 
 # --- a per-method bind_flat virtual -----------------------------------------
 def test_bind_flat_virtual_is_bound_but_not_overridable(ov: ModuleType) -> None:
-    # kingdom() is virtual but marked [[=welder::rods::python::bind_flat]]: it is
+    # kingdom() is virtual but marked [[=welder::bind_flat]]: it is
     # still a callable bound method returning the C++ value...
     assert ov.Animal().kingdom() == "Animalia"
 

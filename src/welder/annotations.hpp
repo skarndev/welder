@@ -109,9 +109,30 @@ namespace detail {
 
 // --- weld: the type-level annotation declaring target languages -------------
 
-/** The stored form of a `weld` annotation: the mask of target languages. */
+/** The stored form of a `weld` annotation: the mask of target languages.
+
+    Usable bare (every language welder binds) or called with languages to scope
+    it, like exclude_spec and weld_protected_spec:
+    @code
+    struct [[=welder::weld]] A { ... };                     // every language
+    struct [[=welder::weld(welder::lang::py)]] B { ... };   // Python only
+    @endcode
+    The bare form is the **language-agnostic** spelling a project reaches for when
+    it wants a type to appear in whatever rods it builds — adding a backend later
+    (a C# module beside a Python one) then needs no annotation churn. Scope it
+    only where a type genuinely belongs to one language's surface.
+*/
 struct weld_spec {
-    unsigned mask = 0; /**< The languages this entity is welded for. */
+    unsigned mask = 0; /**< The languages this entity is welded for; `0` == all. */
+
+    /** Scope the weld to specific languages.
+        @tparam Ls the language enum types (deduced).
+        @param ls  the target languages this entity is exposed to.
+        @return a scoped weld_spec. */
+    template <class... Ls>
+    consteval weld_spec operator()(Ls... ls) const {
+        return weld_spec{lang_mask(ls...)};
+    }
 };
 
 // --- policy: how greedily members are reflected -----------------------------
@@ -513,18 +534,22 @@ struct keep_alive_spec {
 
 // --- weld: the type-level annotation declaring target languages -------------
 
-/** Build a `weld` annotation naming the target languages.
+/** The `weld` annotation: declare an entity bound, and for which languages.
 
-    Usage: `[[=welder::weld(welder::lang::py, welder::lang::lua)]]`.
-
-    @tparam Ls the language enum types (deduced).
-    @param ls  the target languages this entity is exposed to.
-    @return a weld_spec carrying the language mask.
-*/
-template <class... Ls>
-consteval detail::weld_spec weld(Ls... ls) {
-    return detail::weld_spec{lang_mask(ls...)};
-}
+    A constexpr object (like `mark::exclude` and `policy::weld_protected`), so it
+    is usable **bare** — welded for every language — or *called* to scope it:
+    @code
+    struct [[=welder::weld]] A { ... };                     // every language
+    struct [[=welder::weld(welder::lang::py)]] B { ... };   // Python only
+    struct [[=welder::weld(welder::lang::py,
+                           welder::lang::lua)]] C { ... };  // those two
+    @endcode
+    Prefer the bare form unless a type really belongs to one language's surface:
+    a project that welds language-agnostically picks up a newly built rod without
+    touching a single annotation. `welder::weld()` — called with no languages —
+    is the same all-languages mask, so both spellings agree.
+    @see detail::weld_spec */
+inline constexpr detail::weld_spec weld{};
 
 // --- policy: how greedily members are reflected -----------------------------
 

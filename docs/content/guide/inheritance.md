@@ -196,13 +196,13 @@ Python does not need a trampoline; mark it (or an individual virtual) as bound f
 
 ```cpp
 struct [[=welder::weld(welder::lang::py)]]
-       [[=welder::rods::python::bind_flat]]        // whole type: not overridable
+       [[=welder::bind_flat]]        // whole type: not overridable
 Handle { virtual ~Handle() = default; virtual int fd() const { return -1; } };
 
 struct [[=welder::weld(welder::lang::py)]] Animal {
     virtual ~Animal() = default;
     virtual std::string speak() const { return "..."; }        // overridable
-    [[=welder::rods::python::bind_flat]]
+    [[=welder::bind_flat]]
     virtual std::string kingdom() const { return "Animalia"; } // this one: flat
 };
 ```
@@ -259,7 +259,7 @@ An **overloaded** virtual needs one more spelling. `WELDER_PY_OVERRIDE(send)` re
 the method's reflection from its name — but `^^Robot::send` is ill-formed when
 `send` names an overload set (C++26 reflection has no overload-set reflection). Use
 the general form, `WELDER_PY_OVERRIDE_AS`, and select the overload by its function
-type with `welder::rods::python::virtual_slot`:
+type with `welder::virtual_slot`:
 
 ```cpp
 struct [[=welder::weld(welder::lang::py)]] Robot {
@@ -272,13 +272,13 @@ struct [[=welder::weld(welder::lang::py)]] Robot {
 struct [[=welder::rods::python::trampoline]] PyRobot : Robot {
     WELDER_PY_TRAMPOLINE(PyRobot, Robot);
     std::string send(int code) const override {
-        WELDER_PY_OVERRIDE_AS((welder::rods::python::virtual_slot(
+        WELDER_PY_OVERRIDE_AS((welder::virtual_slot(
                                   ^^Robot, "send", ^^std::string(int) const)),
                               send, code);
     }
     std::string send(const std::string& text) const override {
         WELDER_PY_OVERRIDE_AS(
-            (welder::rods::python::virtual_slot(
+            (welder::virtual_slot(
                 ^^Robot, "send", ^^std::string(const std::string&) const)),
             send, text);
     }
@@ -356,6 +356,6 @@ instantiation needs no alias — `trampoline_for<Ring<int>>` works directly.)
 The one shape reflection cannot reproduce is a **C-style variadic** virtual
 (`f(int, ...)`): C++26 reflection exposes no ellipsis query. Such a virtual makes the
 generator emit a `static_assert` (a clear compile error) unless you mark it
-`[[=welder::rods::python::bind_flat]]`.
+`[[=welder::bind_flat]]`.
 
 Next: [Namespaces & modules](namespaces-modules.md).
