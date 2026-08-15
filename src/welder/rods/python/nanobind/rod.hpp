@@ -652,6 +652,85 @@ struct rod {
         }
     }
 
+    /** Whether @a Mem can bind through the class-ERASED field path (see
+        `_def_erased_field`): a public, non-bit-field member declared DIRECTLY
+        in bound class @a Bound, of a type nanobind converts to an IMMUTABLE
+        Python object (arithmetic, enum, or std::string — where by-value vs
+        by-reference at the C++ boundary is unobservable and the caster is the
+        same either way).
+
+        The direct-declaration gate is a correctness gate, not a heuristic:
+        the erased accessors add `offset_of(Mem)` — an offset relative to the
+        DECLARING class — to the raw instance pointer. For a member flattened
+        in from a base, the base-subobject conversion belongs to the language
+        (`self.*p` on the member-pointer path), so those members keep it. */
+    template <std::meta::info Mem, class Bound>
+    static constexpr bool _erasable_field{[] {
+        if (!std::meta::is_public(Mem) || std::meta::is_bit_field(Mem))
+            return false;
+        if (std::meta::parent_of(Mem) != ^^Bound)
+            return false;
+        using F = [:std::meta::remove_cv(std::meta::type_of(Mem)):];
+        if (std::meta::is_volatile_type(std::meta::type_of(Mem)))
+            return false;
+        return std::is_arithmetic_v<F> || std::is_enum_v<F> ||
+               std::is_same_v<F, std::string>;
+    }()};
+
+    /** Bind one field as a property through CLASS-ERASED accessors: the
+        closures capture the member's byte offset as runtime state and take
+        `nb::handle self`, so their closure TYPE — and therefore nanobind's
+        `func_create` instantiation — depends only on the field type @a D.
+        One instantiation per field type serves every welded class in the
+        module, where `def_rw` instantiates per (class, field type): on a
+        surface of ~4200 generated record classes that difference was the
+        single largest code bucket in the binding shards.
+
+        Installed through nanobind's type-erased `property_install`, NOT
+        `class_<T>::def_prop_rw` — the latter is a member of `class_<T>` and
+        would reintroduce the class dimension this path exists to remove.
+
+        Why this is not UB, precisely:
+        - `nb_inst_ptr(self)` is the SAME unadjusted instance pointer nanobind
+          hands `def_rw`'s `const T&` parameter — `nb_type_get` performs no
+          this-pointer adjustment anywhere (single-inheritance model, base and
+          derived share an address), so the two paths see identical addresses
+          in every case nanobind supports.
+        - `static_cast<char*>(p) + offset` then casting to `D*` is the
+          `offsetof` pattern: `std::meta::offset_of` yields the member's real
+          ABI offset, so the final pointer's VALUE is the address of the live
+          `D` subobject, and accessing a `D` through a `D*` that points at a
+          `D` violates neither aliasing nor lifetime rules. The residual
+          [expr.add] wording gap on char arithmetic over an object
+          representation is the same one `offsetof` itself rests on (P1839);
+          every implementation defines it.
+        - Bit-fields (no addressable offset) and members inherited from bases
+          (offset relative to the wrong class) never reach this path — see
+          `_erasable_field`. */
+    template <class D>
+    static void _def_erased_field(nb::handle cls, const char* name,
+                                  std::size_t offset, bool read_only,
+                                  const char* doc) {
+        auto get = [offset](nb::handle self) -> D {
+            return *reinterpret_cast<const D*>(
+                static_cast<const char*>(nb::inst_ptr<void>(self)) + offset);
+        };
+        nb::object get_p{doc ? nb::cpp_function(get, nb::is_method(),
+                                                nb::is_getter(), doc)
+                             : nb::cpp_function(get, nb::is_method(),
+                                                nb::is_getter())};
+        nb::object set_p{};
+        if (!read_only) {
+            auto set = [offset](nb::handle self, D value) {
+                *reinterpret_cast<D*>(
+                    static_cast<char*>(nb::inst_ptr<void>(self)) + offset) =
+                    std::move(value);
+            };
+            set_p = nb::cpp_function(set, nb::is_method());
+        }
+        nb::detail::property_install(cls.ptr(), name, get_p.ptr(), set_p.ptr());
+    }
+
     /** Bind data member @a Mem as an attribute.
 
         nanobind data members become Python properties (data descriptors on the
@@ -661,6 +740,11 @@ struct rod {
         otherwise-mutable member is read/write (`def_rw`). The doc, when present, is
         passed as the property docstring. There is deliberately no setter docstring:
         a Python `property` surfaces only the getter's `__doc__`.
+
+        A directly-declared member of immutable-converting type binds through
+        the class-erased path (`_def_erased_field`) — observably identical,
+        one template instantiation per field TYPE instead of per (class,
+        field type). Everything else takes the member-pointer path below.
         @see welder::rod */
     template <std::meta::info Mem, class Style = ::welder::naming::none>
     static void add_field(auto& cls) {
@@ -694,6 +778,12 @@ struct rod {
                     cls.def_prop_rw(name, &fa::get, &fa::set,
                                     nb::rv_policy::reference_internal);
             }
+        } else if constexpr (_erasable_field<
+                                 Mem, typename std::remove_reference_t<
+                                          decltype(cls)>::Type>) {
+            using F = [:std::meta::remove_cv(std::meta::type_of(Mem)):];
+            _def_erased_field<F>(cls, name, std::meta::offset_of(Mem).bytes,
+                                 read_only, doc);
         } else if constexpr (read_only) {
             if constexpr (doc)
                 cls.def_ro(name, &[:Mem:], doc);

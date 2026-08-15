@@ -30,7 +30,19 @@ stays documented here:
 ## Data members & constructors
 Public data members (a mutable member read/write via `def_readwrite`; a **const**
 member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on
-const); a member's `[[=welder::doc]]` becomes its property `__doc__` (see
+const); **The nanobind rod binds a directly-declared public member of
+arithmetic/enum/std::string type through a CLASS-ERASED property instead of
+`def_rw`** (`_erasable_field` gate + `_def_erased_field<D>` in its rod.hpp):
+offset-capturing `nb::handle` closures installed via `detail::property_install`,
+so nanobind's `func_create` instantiates once per field TYPE rather than per
+(class, type) — on a generated surface of thousands of record classes that was
+the largest code bucket per binding TU. Observably identical (immutable Python
+conversions either way, same caster, same unadjusted instance pointer nanobind
+hands `def_rw` — `nb_type_get` never adjusts this-pointers); members inherited
+from bases, bit-fields, volatiles and protected members keep the old paths (the
+offset is relative to the DECLARING class, so the direct-declaration gate is
+correctness, not tuning). The full not-UB rationale is a doc comment on
+`_def_erased_field`. a member's `[[=welder::doc]]` becomes its property `__doc__` (see
 `docs-and-doxygen.md`). **`[[=welder::mark::no_reassign]]`** forces the read-only
 binding on an *otherwise-mutable* member — the const-member path without the const
 (motivating case: a mutable opaque container that should stay appendable but reject a
