@@ -80,6 +80,7 @@
 // (trust, caster) live alongside this file.
 #include "resolution.hpp"
 #include "methods.hpp"
+#include "defaults.hpp"
 #include "inheritance.hpp"
 #include "overridable.hpp"
 #include "gen_trampolines.hpp"                // welded virtual types (trampolines generated)
@@ -114,6 +115,7 @@ NB_MODULE(WELDER_TEST_MODNAME, m) {
     m.attr("__doc__") = "welder nanobind test bindings";
     register_resolution(m);  // <-> test_resolution.py
     register_methods(m);     // <-> test_methods.py
+    register_defaults(m);    // <-> test_defaults.py (C++ default arguments)
     register_inheritance(m); // <-> test_inheritance.py
     register_overridable(m); // <-> test_trampoline.py
     register_gen_trampolines(m); // <-> test_gen_trampolines.py (generated trampolines)

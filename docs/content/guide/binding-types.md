@@ -340,6 +340,45 @@ Rect {
     welder builds one idiomatic read/write property instead — see
     [Properties](properties.md).
 
+### C++ default arguments
+
+A trailing `= value` on a parameter carries over: calling with fewer arguments
+applies the **real C++ default**.
+
+```cpp
+struct [[=welder::weld]]
+Dial {
+    int value{0};
+    int bump(int by = 1, int times = 1) { return value += by * times; }
+};
+```
+
+```pycon
+>>> d = Dial()
+>>> d.bump()        # by=1, times=1 — the C++ defaults
+1
+>>> d.bump(5)       # times still defaulted
+6
+>>> d.bump(2, 3)
+12
+```
+
+How: reflection can see that a parameter *has* a default
+(`has_default_argument`) but cannot read the defaulting expression, so the
+Python rods bind one **truncated overload per omissible arity** — a wrapper
+that calls the C++ function with fewer arguments and lets the language apply
+the default at the call site. The bound behavior and the C++ default therefore
+cannot drift apart, and a default may be an arbitrary expression (not just a
+literal). It applies to methods, static methods, free functions and
+constructors alike; argument names ride along, so keyword calls
+(`d.bump(by=4)`) keep working on every arity.
+
+Two consequences of the overload form: signatures and `.pyi` stubs show the
+arities as separate overloads rather than one `by: int = 1` line, and a
+`keep_alive` annotation is honored on the full arity only (an omitted argument
+cannot nurse anything). The Lua rods do not synthesize the truncated
+overloads (call with all arguments there).
+
 ## Overloaded operators
 
 An operator binds under the target language's special method / metamethod, told

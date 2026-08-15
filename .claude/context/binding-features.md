@@ -27,6 +27,18 @@ stays documented here:
   rods/python/trampoline.hpp re-exports the historical ones) — one slot
   semantics for every language's trampolines/directors.
 
+## C++ default arguments (2026-08-15)
+Both Python rods bind a TRUNCATED overload per trailing defaulted parameter
+(`_def_truncated` / `_def_default_truncations`; ctors reuse `_def_init` with a
+shorter index sequence): the wrapper calls with fewer args and the LANGUAGE
+applies the real default — P2996 exposes `has_default_argument` but not the
+expression, so restating the value is impossible and this is the only faithful
+form (`welder::detail::trailing_default_count<Fn>()`, bind_traits.hpp). Applies
+to methods/statics/free functions/ctors; arg names ride along (kwargs work);
+doc on the full arity only; keep_alives not repeated on truncations (an omitted
+arg can't nurse); rv_policy repeated. Lua rods unchanged. Cases:
+tests/common/cpp/defaults.hpp (python-only wiring) <-> tests/test_defaults.py.
+
 ## Data members & constructors
 Public data members (a mutable member read/write via `def_readwrite`; a **const**
 member read-only via `def_readonly` — `def_readwrite`'s setter won't compile on

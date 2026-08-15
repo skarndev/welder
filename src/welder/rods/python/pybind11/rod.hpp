@@ -204,6 +204,54 @@ struct rod {
         }
     }
 
+    /** Bind ONE truncated overload of @a Fn taking its first `sizeof...(I)`
+        parameters — the pybind11 mirror of the nanobind rod's
+        `_def_truncated`: the wrapper calls the C++ function with fewer
+        arguments and the LANGUAGE applies the real default(s), because
+        reflection can see that a default exists but not its value. @a Self is
+        the bound class for a nonstatic member, `void` for free/static. Arg
+        names ride along (kwargs keep working); the docstring stays on the
+        full-arity def; keep_alives are not repeated (an omitted argument
+        cannot nurse anything). */
+    template <std::meta::info Fn, class Self, class Def, std::size_t... I>
+    static void _def_truncated(const char* name, Def def_into,
+                               std::index_sequence<I...>) {
+        static constexpr auto params{::welder::detail::param_types<Fn>()};
+        static constexpr auto names{::welder::detail::param_names<Fn>()};
+        constexpr py::return_value_policy rvp{
+            _return_value_policy(::welder::return_policy_of(Fn, language))};
+        if constexpr (std::is_void_v<Self>) {
+            auto wrapper = [](typename [:params[I]:]... a) -> decltype(auto) {
+                return [:Fn:](std::forward<typename [:params[I]:]>(a)...);
+            };
+            if constexpr (::welder::detail::all_params_named<Fn>())
+                def_into(name, wrapper, py::arg(names[I])..., rvp);
+            else
+                def_into(name, wrapper, rvp);
+        } else {
+            auto wrapper = [](Self& self,
+                              typename [:params[I]:]... a) -> decltype(auto) {
+                return self.[:Fn:](std::forward<typename [:params[I]:]>(a)...);
+            };
+            if constexpr (::welder::detail::all_params_named<Fn>())
+                def_into(name, wrapper, py::arg(names[I])..., rvp);
+            else
+                def_into(name, wrapper, rvp);
+        }
+    }
+
+    /** Bind every omissible arity of @a Fn — arities `P-D .. P-1`; the
+        full-arity def is @ref _def_function's. */
+    template <std::meta::info Fn, class Self, class Def, std::size_t... K>
+    static void _def_default_truncations(const char* name, Def def_into,
+                                         std::index_sequence<K...>) {
+        constexpr std::size_t P{std::meta::parameters_of(Fn).size()};
+        constexpr std::size_t D{sizeof...(K)};
+        (_def_truncated<Fn, Self>(name, def_into,
+                                  std::make_index_sequence<P - D + K>{}),
+         ...);
+    }
+
     /** Convenience overload: derive the parameter and keep_alive index sequences
         from @a Fn. */
     template <std::meta::info Fn, class Def>
@@ -222,6 +270,20 @@ struct rod {
         @tparam I the parameter index pack.
         @param cls the class handle.
     */
+    /** Bind every omissible arity of constructor @a Ctor (arities `P-D ..
+        P-1`): @ref _def_init already takes the parameter index sequence, so
+        each omissible arity is just a shorter one — the init calls the
+        constructor with fewer arguments and the LANGUAGE applies the real
+        defaults. A named template (not an immediately-invoked lambda): a
+        lambda whose body touches `std::meta::parameters_of` is escalated to an
+        immediate function, and the runtime `_def_init` call inside would then
+        be ill-formed. */
+    template <std::meta::info Ctor, std::size_t D, std::size_t... K>
+    static void _def_init_truncations(auto& cls, std::index_sequence<K...>) {
+        constexpr std::size_t P{std::meta::parameters_of(Ctor).size()};
+        (_def_init<Ctor>(cls, std::make_index_sequence<P - D + K>{}), ...);
+    }
+
     template <std::meta::info Ctor, std::size_t... I>
     static void _def_init(auto& cls, std::index_sequence<I...>) {
         static constexpr auto params{::welder::detail::param_types<Ctor>()};
@@ -612,6 +674,10 @@ struct rod {
         template for (constexpr auto ctor : std::define_static_array(Ctors)) {
             _def_init<ctor>(cls, std::make_index_sequence<
                                      std::meta::parameters_of(ctor).size()>{});
+            constexpr std::size_t d{::welder::detail::trailing_default_count<ctor>()};
+            if constexpr (d > 0)
+                _def_init_truncations<ctor, d>(cls,
+                                               std::make_index_sequence<d>{});
         }
         if constexpr (Aggregate) {
             constexpr auto fields{::welder::detail::aggregate_fields<T>()};
@@ -743,6 +809,15 @@ struct rod {
             _def_function<fn>(name, [&cls](auto&&... a) {
                 cls.def(std::forward<decltype(a)>(a)...);
             });
+            constexpr std::size_t d{::welder::detail::trailing_default_count<fn>()};
+            if constexpr (d > 0)
+                _def_default_truncations<
+                    fn, typename std::remove_reference_t<decltype(cls)>::type>(
+                    name,
+                    [&cls](auto&&... a) {
+                        cls.def(std::forward<decltype(a)>(a)...);
+                    },
+                    std::make_index_sequence<d>{});
         }
     }
 
@@ -756,6 +831,14 @@ struct rod {
             _def_function<fn>(name, [&cls](auto&&... a) {
                 cls.def_static(std::forward<decltype(a)>(a)...);
             });
+            constexpr std::size_t d{::welder::detail::trailing_default_count<fn>()};
+            if constexpr (d > 0)
+                _def_default_truncations<fn, void>(
+                    name,
+                    [&cls](auto&&... a) {
+                        cls.def_static(std::forward<decltype(a)>(a)...);
+                    },
+                    std::make_index_sequence<d>{});
         }
     }
 
@@ -1028,6 +1111,12 @@ struct rod {
             _def_function<fn>(fn_name, [&m](auto&&... a) {
                 m.def(std::forward<decltype(a)>(a)...);
             });
+            constexpr std::size_t d{::welder::detail::trailing_default_count<fn>()};
+            if constexpr (d > 0)
+                _def_default_truncations<fn, void>(
+                    fn_name,
+                    [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); },
+                    std::make_index_sequence<d>{});
         }
         return m.attr(fn_name);
     }

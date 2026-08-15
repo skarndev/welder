@@ -48,6 +48,28 @@ consteval auto param_types() {
     return types;
 }
 
+/** How many TRAILING parameters of @a Fn carry a C++ default argument.
+
+    The count is what a binding can act on: P2996 exposes that a default
+    EXISTS (`has_default_argument`) but not the defaulting expression itself,
+    so a rod cannot re-state the value — it can, however, bind one truncated
+    overload per omissible arity that calls the function with fewer arguments
+    and lets the LANGUAGE apply the real default at the call site. That keeps
+    the bound default and the C++ default incapable of drifting apart.
+    @tparam Fn a reflection of the function (or constructor).
+    @return the number of trailing defaulted parameters. */
+template <std::meta::info Fn>
+consteval std::size_t trailing_default_count() {
+    auto ps = std::meta::parameters_of(Fn);
+    std::size_t n{0};
+    for (std::size_t i = ps.size(); i > 0; --i) {
+        if (!std::meta::has_default_argument(ps[i - 1]))
+            break;
+        ++n;
+    }
+    return n;
+}
+
 /** A function's parameter *names*, in order.
 
     @tparam Fn a reflection of the function.
