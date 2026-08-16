@@ -115,6 +115,34 @@ struct welder {
             return Carriage::template bind_type<B, T, Style>(m, name);
     }
 
+    /** Weld a class-template instantiation through its namespace-scope ALIAS
+        reflection — the semi-manual analogue of the namespace walk's alias
+        branch.
+
+        The alias is the one C++-spellable anchor a specialization has: the
+        text-emitting rods (trampolines, C#) splice and symbol-name through it.
+        Binding such a type MANUALLY must therefore pass the alias, not just
+        the type — plain `weld_type<T>` anchors on the specialization itself,
+        which has no spellable declaring scope, and on the C# rod every such
+        symbol collapses onto the enclosing namespace and collides. The
+        runtime rods accept either form.
+
+        Prefer an explicit @a name; `nullptr` resolves from the TYPE's
+        `weld_as`/styled name (not the alias identifier), matching
+        `weld_type<T>`.
+        @tparam Alias a reflection of the namespace-scope alias declaration.
+        @param m    the module handle to register onto.
+        @param name the target name (verbatim), or `nullptr` to resolve.
+        @return the rod's class handle, for chaining. */
+    template <std::meta::info Alias>
+    static auto weld_type(module_type& m, const char* name = nullptr) {
+        using T = [:Alias:];
+        static_assert(!std::is_enum_v<T>,
+                      "welder: weld_type<Alias>: enums are never alias-welded — "
+                      "call weld_type<E>() with the enum type itself");
+        return Carriage::template bind_type<B, T, Style, Alias>(m, name);
+    }
+
     /** Reflect over free function @a Fn and register it on module @a m.
 
         The semi-manual analogue of what namespace binding does for a namespace's
