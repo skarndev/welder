@@ -88,6 +88,13 @@ jobs:
         run: |
           set -euo pipefail
           LUA_PREFIX=$(cygpath -m "$MSYSTEM_PREFIX")
+          # dkjson 2.11 (busted's transitive dep, released 2026-08) ships a
+          # tarball this runner's extractor cannot unpack — every other rock
+          # in the same install extracts fine, and reruns fail identically.
+          # Pre-install the long-stable 2.10 so the resolver sees dkjson
+          # satisfied and never fetches 2.11.
+          luarocks --lua-version 5.5 --lua-dir "$LUA_PREFIX" \
+            --tree "$(pwd)/.lua_modules" install dkjson 2.10-1
           luarocks --lua-version 5.5 --lua-dir "$LUA_PREFIX" \
             --tree "$(pwd)/.lua_modules" install busted 2.3.0
           echo "WELDER_BUSTED_EXECUTABLE=$(cygpath -m "$(pwd)/.lua_modules/bin/busted.bat")" \
