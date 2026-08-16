@@ -216,7 +216,10 @@ struct rod {
     template <std::meta::info Fn, class Self, class Def, std::size_t... I>
     static void _def_truncated(const char* name, Def def_into,
                                std::index_sequence<I...>) {
-        static constexpr auto params{::welder::detail::param_types<Fn>()};
+        // maybe_unused: a zero-arity truncation has an empty I pack, so the
+        // splices below never reference params and gcc flags it set-but-unused.
+        [[maybe_unused]] static constexpr auto params{
+            ::welder::detail::param_types<Fn>()};
         static constexpr auto names{::welder::detail::param_names<Fn>()};
         constexpr py::return_value_policy rvp{
             _return_value_policy(::welder::return_policy_of(Fn, language))};
