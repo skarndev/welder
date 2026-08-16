@@ -88,15 +88,26 @@ jobs:
         run: |
           set -euo pipefail
           LUA_PREFIX=$(cygpath -m "$MSYSTEM_PREFIX")
-          # dkjson 2.11 (busted's transitive dep, released 2026-08) ships a
-          # tarball this runner's extractor cannot unpack — every other rock
-          # in the same install extracts fine, and reruns fail identically.
-          # Pre-install the long-stable 2.10 so the resolver sees dkjson
-          # satisfied and never fetches 2.11.
+          # luarocks' OWN .tar.gz extraction broke on this image (2026-08-15):
+          # dkjson 2.11 and the long-stable 2.10 fail identically at "failed
+          # extracting <src>.tar.gz", while the .src.rock zips unpack fine —
+          # so it is the embedded-source-tarball path, not any one rock.
+          # Sidestep it: unpack the rock and its tarball with Python (whose
+          # tarfile has no such opinion) and `luarocks make` the sources in
+          # place; the resolver then sees dkjson satisfied and busted's
+          # install never touches the broken path.
+          TREE="$(pwd)/.lua_modules"
+          curl -sSL -o dkjson.src.rock https://luarocks.org/dkjson-2.10-1.src.rock
+          python - <<'PY'
+          import tarfile, zipfile
+          zipfile.ZipFile('dkjson.src.rock').extractall('dkjson_rock')
+          tarfile.open('dkjson_rock/dkjson-2.10.tar.gz').extractall('dkjson_rock')
+          PY
+          ( cd dkjson_rock/dkjson-2.10 && \
+            luarocks --lua-version 5.5 --lua-dir "$LUA_PREFIX" \
+              --tree "$TREE" make ../dkjson-2.10-1.rockspec )
           luarocks --lua-version 5.5 --lua-dir "$LUA_PREFIX" \
-            --tree "$(pwd)/.lua_modules" install dkjson 2.10-1
-          luarocks --lua-version 5.5 --lua-dir "$LUA_PREFIX" \
-            --tree "$(pwd)/.lua_modules" install busted 2.3.0
+            --tree "$TREE" install busted 2.3.0
           echo "WELDER_BUSTED_EXECUTABLE=$(cygpath -m "$(pwd)/.lua_modules/bin/busted.bat")" \
             >> "$GITHUB_ENV"
 
