@@ -230,6 +230,28 @@ consteval bool trusted_for(std::meta::info member, lang L) {
     return false;
 }
 
+/** Does welded base class @a type opt its family into a rod-synthesized
+    version-agnostic surface for language @a L (a `family_surface` mark)?
+
+    Synthesizing members onto a base is strictly opt-in (see
+    detail::family_surface_spec): a rod implementing family surfaces must
+    synthesize nothing for a base that does not carry the mark. welder core
+    only stores and answers this query; the surface itself is the honoring
+    rod's contract.
+    @param type a reflection of the welded base class to test.
+    @param L    the target language.
+    @return `true` iff a `family_surface` mark covers @a L (mask `0` covers
+            all languages). */
+consteval bool family_surface_for(std::meta::info type, lang L) {
+    for (auto a : std::meta::annotations_of_with_type(
+             type, ^^detail::family_surface_spec)) {
+        auto s{std::meta::extract<detail::family_surface_spec>(a)};
+        if (s.mask == 0 || (s.mask & lang_bit(L)) != 0)
+            return true;
+    }
+    return false;
+}
+
 /** Is data member @a member bound **read-only** for @a L by a `no_reassign` mark?
 
     `no_reassign` forces the read-only binding on a mutable member (see

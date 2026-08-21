@@ -284,6 +284,46 @@ struct no_reassign_spec {
     }
 };
 
+// --- family_surface: opt a welded base into rod-synthesized family surfaces --
+
+/** The stored form of a `family_surface` mark: the languages a welded BASE
+    class opts its family into a rod-synthesized version-agnostic surface for.
+
+    A *family* is two or more welded classes deriving one welded base — the
+    shape a versioned class template welded per instantiation makes. A rod that
+    implements family surfaces (the C# rod's dispatch members are the first)
+    may then hoist the member intersection the derived classes bind identically
+    onto the base, so base-typed code reads and writes data without naming a
+    concrete. Synthesizing members onto a base is too intrusive to infer from
+    structure alone, so it is strictly OPT-IN: a rod must synthesize nothing
+    for a base that does not carry this mark.
+
+    The mark goes on the BASE class (the entity that receives the synthesized
+    surface), not on the derived classes. welder core only stores and queries
+    it (@ref welder::family_surface_for); what a surface consists of is each
+    honoring rod's contract — a rod without the feature ignores the mark.
+
+    Usable bare (all languages) or called with languages to scope it, like
+    exclude_spec:
+    @code
+    [[=welder::mark::family_surface]]                   // every honoring rod
+    [[=welder::mark::family_surface(welder::lang::py)]] // one language only
+    @endcode
+    Repeated annotations union their languages.
+*/
+struct family_surface_spec {
+    unsigned mask = 0; /**< The languages to synthesize for; `0` == all languages. */
+
+    /** Scope the family surface to specific languages.
+        @tparam Ls the language enum types (deduced).
+        @param ls  the languages to synthesize the surface for.
+        @return a scoped family_surface_spec. */
+    template <class... Ls>
+    consteval family_surface_spec operator()(Ls... ls) const {
+        return family_surface_spec{lang_mask(ls...)};
+    }
+};
+
 // --- trust_bindable: vouch that a type is representable outside welder's view --
 
 /** The stored form of a `trust_bindable` member mark.
@@ -596,6 +636,7 @@ inline constexpr detail::include_spec include{};               /**< @see welder:
 inline constexpr detail::only_spec only{};                     /**< @see welder::detail::only_spec — must be called with ≥ 1 language */
 inline constexpr detail::no_reassign_spec no_reassign{};       /**< @see welder::detail::no_reassign_spec */
 inline constexpr detail::trust_bindable_spec trust_bindable{}; /**< @see welder::detail::trust_bindable_spec */
+inline constexpr detail::family_surface_spec family_surface{}; /**< @see welder::detail::family_surface_spec */
 } // namespace mark
 
 // --- getter / setter: method-backed properties -------------------------------

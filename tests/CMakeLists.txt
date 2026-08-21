@@ -91,6 +91,20 @@ add_test(NAME compile.user_lang
   COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
           --target welder_user_lang --config $<CONFIG>)
 
+# The family_surface TYPE mark (compile-only): a welded base's opt-in to
+# rod-synthesized version-agnostic family surfaces. Locks storage + the
+# family_surface_for query: bare = all languages (user-minted included),
+# scoped = exactly the named ones, repeats union, unmarked = false — the
+# opt-in default an honoring rod must respect by synthesizing nothing.
+add_library(welder_family_surface_mark OBJECT EXCLUDE_FROM_ALL
+  core/family_surface_mark.cpp)
+target_compile_features(welder_family_surface_mark PRIVATE cxx_std_26)
+target_link_libraries(welder_family_surface_mark PRIVATE welder::headers
+  welder_warnings)
+add_test(NAME compile.family_surface_mark
+  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}
+          --target welder_family_surface_mark --config $<CONFIG>)
+
 # Template ↔ annotation semantics (compile-only): annotations on a template
 # declaration are readable through every *instantiation* (primary / partial /
 # explicit precedence; member, weld/mark and parameter annotations included) —
