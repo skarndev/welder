@@ -644,7 +644,8 @@ struct rod {
         `dict` — a bare `dict` in the generated stub fails strict mypy
         (disallow_any_generics). @see _def_init @see _def_aggregate_init
         @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable,
+              class Style = ::welder::naming::none>
     static void add_constructors(auto& cls) {
         if constexpr (HasDefault)
             cls.def(py::init<>());

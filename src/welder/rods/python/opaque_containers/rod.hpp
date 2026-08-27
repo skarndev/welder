@@ -101,13 +101,14 @@ struct rod {
         return {m.doc};
     }
 
-    /** Collect from each participating constructor's parameter types. The carriage's
-        `add_constructors` hook carries no name style, so these are unstyled sites (a
-        later data-member visit refines any custom name). @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+    /** Collect from each participating constructor's parameter types, styling
+        parameter names through @a Style like the nanobind rod's kwargs.
+        @see welder::rod */
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable,
+              class Style = ::welder::naming::none>
     static void add_constructors(class_handle& cls) {
         template for (constexpr auto ctor : std::define_static_array(Ctors))
-            cls.doc->template collect_callable<ctor, ::welder::naming::none>(false);
+            cls.doc->template collect_callable<ctor, Style>(false);
     }
 
     /** Collect the container(s) in data member @a Mem's type — excluded when @a Mem

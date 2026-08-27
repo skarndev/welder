@@ -533,7 +533,8 @@ struct rod {
         to (the Python rods' `__copy__`/`__deepcopy__` home), exactly as
         `[[=welder::doc]]` and `return_policy` are ignored here.
         @see _ctor_signatures @see _set_constructors @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable,
+              class Style = ::welder::naming::none>
     static void add_constructors(::sol::usertype<T>& ut) {
         constexpr auto sigs{_ctor_sigs_array<T, Ctors, HasDefault, Aggregate>()};
         if constexpr (sigs.size() != 0)

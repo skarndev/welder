@@ -248,7 +248,8 @@ struct rod {
         into `---@overload` lines on flush. @a Copyable is ignored — the stub
         mirrors the Lua runtime rods, and Lua has no copy protocol for the copy
         constructor to bind to. @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable,
+              class Style = ::welder::naming::none>
     static void add_constructors(class_writer& w) {
         if constexpr (HasDefault) {
             func_overload o{};

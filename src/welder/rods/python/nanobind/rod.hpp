@@ -174,10 +174,29 @@ struct rod {
         @param name     the Python name.
         @param def_into adapts the target — `cls.def`, `cls.def_static`, or `m.def`.
     */
-    template <std::meta::info Fn, class Def, std::size_t... I, std::size_t... K>
+    /** The styled kwarg names of @a Fn's parameters: each named parameter's
+        identifier reshaped through the style's FIELD hook — a keyword argument
+        is attribute-shaped in the target language, so it follows the same
+        convention as data members (`clientPath` C++ ⇒ `client_path` kwarg under
+        a snake_case style). Unnamed parameters stay null.
+        @tparam Fn a reflection of the callable.
+        @return one entry per parameter, static storage. */
+    template <std::meta::info Fn, class Style>
+    static consteval auto _styled_param_names() {
+        constexpr std::size_t n{std::meta::parameters_of(Fn).size()};
+        std::array<const char*, n> names{};
+        std::size_t i{0};
+        for (auto p : std::meta::parameters_of(Fn))
+            names[i++] = std::meta::has_identifier(p)
+                             ? std::define_static_string(Style::transform_field(p))
+                             : nullptr;
+        return names;
+    }
+
+    template <std::meta::info Fn, class Style, class Def, std::size_t... I, std::size_t... K>
     static void _def_function(const char* name, Def def_into,
                               std::index_sequence<I...>, std::index_sequence<K...>) {
-        static constexpr auto names{::welder::detail::param_names<Fn>()};
+        static constexpr auto names{_styled_param_names<Fn, Style>()};
         static constexpr auto ka{::welder::detail::keep_alive_pairs<Fn>()};
         ::welder::validate_return_policy<Fn, language>();
         constexpr nb::rv_policy rvp{_rv_policy(::welder::return_policy_of(Fn, language))};
@@ -213,14 +232,14 @@ struct rod {
         keep_alive annotations are deliberately not repeated — an omitted
         argument cannot nurse anything, and the full overload still carries
         them for explicit calls. */
-    template <std::meta::info Fn, class Self, class Def, std::size_t... I>
+    template <std::meta::info Fn, class Self, class Style, class Def, std::size_t... I>
     static void _def_truncated(const char* name, Def def_into,
                                std::index_sequence<I...>) {
         // maybe_unused: a zero-arity truncation has an empty I pack, so the
         // splices below never reference params and gcc flags it set-but-unused.
         [[maybe_unused]] static constexpr auto params{
             ::welder::detail::param_types<Fn>()};
-        static constexpr auto names{::welder::detail::param_names<Fn>()};
+        static constexpr auto names{_styled_param_names<Fn, Style>()};
         constexpr nb::rv_policy rvp{
             _rv_policy(::welder::return_policy_of(Fn, language))};
         if constexpr (std::is_void_v<Self>) {
@@ -246,21 +265,21 @@ struct rod {
     /** Bind every omissible arity of @a Fn (one per trailing defaulted
         parameter): arities `P-D .. P-1`, the full-arity def having been bound
         by @ref _def_function already. */
-    template <std::meta::info Fn, class Self, class Def, std::size_t... K>
+    template <std::meta::info Fn, class Self, class Style, class Def, std::size_t... K>
     static void _def_default_truncations(const char* name, Def def_into,
                                          std::index_sequence<K...>) {
         constexpr std::size_t P{std::meta::parameters_of(Fn).size()};
         constexpr std::size_t D{sizeof...(K)};
-        (_def_truncated<Fn, Self>(name, def_into,
+        (_def_truncated<Fn, Self, Style>(name, def_into,
                                   std::make_index_sequence<P - D + K>{}),
          ...);
     }
 
     /** Convenience overload: derive the parameter and keep_alive index sequences
         from @a Fn. */
-    template <std::meta::info Fn, class Def>
+    template <std::meta::info Fn, class Style, class Def>
     static void _def_function(const char* name, Def def_into) {
-        _def_function<Fn>(
+        _def_function<Fn, Style>(
             name, def_into,
             std::make_index_sequence<std::meta::parameters_of(Fn).size()>{},
             std::make_index_sequence<
@@ -282,16 +301,16 @@ struct rod {
         lambda whose body touches `std::meta::parameters_of` is escalated to an
         immediate function, and the runtime `_def_init` call inside would then
         be ill-formed. */
-    template <std::meta::info Ctor, std::size_t D, std::size_t... K>
+    template <std::meta::info Ctor, std::size_t D, class Style, std::size_t... K>
     static void _def_init_truncations(auto& cls, std::index_sequence<K...>) {
         constexpr std::size_t P{std::meta::parameters_of(Ctor).size()};
-        (_def_init<Ctor>(cls, std::make_index_sequence<P - D + K>{}), ...);
+        (_def_init<Ctor, Style>(cls, std::make_index_sequence<P - D + K>{}), ...);
     }
 
-    template <std::meta::info Ctor, std::size_t... I>
+    template <std::meta::info Ctor, class Style, std::size_t... I>
     static void _def_init(auto& cls, std::index_sequence<I...>) {
         static constexpr auto params{::welder::detail::param_types<Ctor>()};
-        static constexpr auto names{::welder::detail::param_names<Ctor>()};
+        static constexpr auto names{_styled_param_names<Ctor, Style>()};
         if constexpr (::welder::detail::all_params_named<Ctor>())
             cls.def(nb::init<typename [:params[I]:]...>(), nb::arg(names[I])...);
         else
@@ -423,11 +442,11 @@ struct rod {
         @tparam I the field index.
         @param probe a value-initialized instance supplying the default values
                      (unused for a required or lazy-default field). */
-    template <class T, std::size_t I>
+    template <class T, std::size_t I, class Style>
     static auto _aggregate_arg([[maybe_unused]] const T& probe) {
         static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
-        constexpr const char* name{
-            std::define_static_string(std::meta::identifier_of(fields[I]))};
+        constexpr const char* name{::welder::name_of<fields[I], language, Style,
+                                                      ::welder::ent_kind::field>()};
         if constexpr (_lazy_default<T, I>()) {
             // A registration-needed default (a welded class/enum instance)
             // has no expression-shaped repr anyway — the signature spells it
@@ -453,7 +472,7 @@ struct rod {
         @tparam I the field index pack.
         @param cls the class handle.
     */
-    template <class T, std::size_t... I>
+    template <class T, class Style, std::size_t... I>
     static void _def_aggregate_init(auto& cls, std::index_sequence<I...>) {
         static constexpr auto fields{::welder::detail::aggregate_fields<T>()};
         if constexpr (::welder::detail::aggregate_defaults_from<T>() <
@@ -467,15 +486,15 @@ struct rod {
                 [](T* self, _init_param<T, I>... args) {
                     new (self) T{_init_value<T, I>(std::move(args))...};
                 },
-                _aggregate_arg<T, I>(probe)...);
+                _aggregate_arg<T, I, Style>(probe)...);
         } else {
             cls.def(
                 "__init__",
                 [](T* self, typename [:std::meta::type_of(fields[I]):]... args) {
                     new (self) T{std::move(args)...};
                 },
-                nb::arg(std::define_static_string(
-                    std::meta::identifier_of(fields[I])))...);
+                nb::arg(::welder::name_of<fields[I], language, Style,
+                                          ::welder::ent_kind::field>())...);
         }
     }
 
@@ -683,7 +702,8 @@ struct rod {
         `dict` — a bare `dict` in the generated stub fails strict mypy
         (disallow_any_generics). @see _def_init @see _def_aggregate_init
         @see welder::rod */
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable,
+              class Style = ::welder::naming::none>
     static void add_constructors(auto& cls) {
         if constexpr (HasDefault)
             cls.def(nb::init<>());
@@ -714,7 +734,7 @@ struct rod {
                 nb::arg("memo"));
         }
         template for (constexpr auto ctor : std::define_static_array(Ctors)) {
-            _def_init<ctor>(cls, std::make_index_sequence<
+            _def_init<ctor, Style>(cls, std::make_index_sequence<
                                      std::meta::parameters_of(ctor).size()>{});
             // C++ default arguments on constructors: _def_init already takes
             // the parameter index sequence, so each omissible arity is just a
@@ -722,12 +742,12 @@ struct rod {
             // N arguments and the language applies the real defaults.
             constexpr std::size_t d{::welder::detail::trailing_default_count<ctor>()};
             if constexpr (d > 0)
-                _def_init_truncations<ctor, d>(cls,
+                _def_init_truncations<ctor, d, Style>(cls,
                                                std::make_index_sequence<d>{});
         }
         if constexpr (Aggregate) {
             constexpr auto fields{::welder::detail::aggregate_fields<T>()};
-            _def_aggregate_init<T>(cls, std::make_index_sequence<fields.size()>{});
+            _def_aggregate_init<T, Style>(cls, std::make_index_sequence<fields.size()>{});
         }
     }
 
@@ -942,7 +962,7 @@ struct rod {
         constexpr const char* name{
             ::welder::name_of<Fns[0], language, Style, ::welder::ent_kind::method>()};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
-            _def_function<fn>(name, [&cls](auto&&... a) {
+            _def_function<fn, Style>(name, [&cls](auto&&... a) {
                 cls.def(std::forward<decltype(a)>(a)...);
             });
             // C++ default arguments: one truncated overload per omissible
@@ -950,7 +970,8 @@ struct rod {
             constexpr std::size_t d{::welder::detail::trailing_default_count<fn>()};
             if constexpr (d > 0)
                 _def_default_truncations<
-                    fn, typename std::remove_reference_t<decltype(cls)>::Type>(
+                    fn, typename std::remove_reference_t<decltype(cls)>::Type,
+                    Style>(
                     name,
                     [&cls](auto&&... a) {
                         cls.def(std::forward<decltype(a)>(a)...);
@@ -966,12 +987,12 @@ struct rod {
             ::welder::name_of<Fns[0], language, Style,
                               ::welder::ent_kind::static_method>()};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
-            _def_function<fn>(name, [&cls](auto&&... a) {
+            _def_function<fn, Style>(name, [&cls](auto&&... a) {
                 cls.def_static(std::forward<decltype(a)>(a)...);
             });
             constexpr std::size_t d{::welder::detail::trailing_default_count<fn>()};
             if constexpr (d > 0)
-                _def_default_truncations<fn, void>(
+                _def_default_truncations<fn, void, Style>(
                     name,
                     [&cls](auto&&... a) {
                         cls.def_static(std::forward<decltype(a)>(a)...);
@@ -1158,12 +1179,12 @@ struct rod {
         const char* fn_name{::welder::name_of_or<Fns[0], language, Style,
                                                  ::welder::ent_kind::function>(name)};
         template for (constexpr auto fn : std::define_static_array(Fns)) {
-            _def_function<fn>(fn_name, [&m](auto&&... a) {
+            _def_function<fn, Style>(fn_name, [&m](auto&&... a) {
                 m.def(std::forward<decltype(a)>(a)...);
             });
             constexpr std::size_t d{::welder::detail::trailing_default_count<fn>()};
             if constexpr (d > 0)
-                _def_default_truncations<fn, void>(
+                _def_default_truncations<fn, void, Style>(
                     fn_name,
                     [&m](auto&&... a) { m.def(std::forward<decltype(a)>(a)...); },
                     std::make_index_sequence<d>{});

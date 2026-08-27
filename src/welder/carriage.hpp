@@ -728,8 +728,19 @@ struct basic_carriage {
         constexpr bool copyable{
             std::is_copy_constructible_v<T> &&
             detail::copy_ctor_admitted<Resolution, ^^T, L>()};
-        B::template add_constructors<T, ctors, has_default, aggregate, copyable>(
-            cls);
+        // Pass the name style through when the rod's hook takes it (it styles
+        // constructor keyword-argument names); a rod predating the parameter
+        // still binds with its 5-argument form.
+        if constexpr (requires {
+                          B::template add_constructors<T, ctors, has_default,
+                                                       aggregate, copyable,
+                                                       Style>(cls);
+                      })
+            B::template add_constructors<T, ctors, has_default, aggregate,
+                                         copyable, Style>(cls);
+        else
+            B::template add_constructors<T, ctors, has_default, aggregate,
+                                         copyable>(cls);
 
         // Data members + methods (T's own, plus flattened bases).
         bind_members<B, ^^T, ^^T, Style>(cls);

@@ -126,7 +126,8 @@ struct rod {
         return {};
     }
 
-    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable>
+    template <class T, auto Ctors, bool HasDefault, bool Aggregate, bool Copyable,
+              class Style = ::welder::naming::none>
     static void add_constructors(class_handle&) {}
     template <std::meta::info, class = ::welder::naming::none>
     static void add_field(class_handle&) {}
