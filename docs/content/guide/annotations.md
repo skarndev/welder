@@ -25,6 +25,7 @@ with P3394's `[[=…]]` annotation syntax. There are only a handful.
 | `weld_as([lang…,] "name")` | Force this entity's target name **verbatim**, bypassing the [name style](naming.md). The name is last; any languages it applies to come first (none = all). |
 | `return_policy([lang…,] rv::kind)` | How a callable's returned object is owned/converted — see [Return policies & lifetimes](return-policies.md). |
 | `keep_alive(nurse, patient)` | Tie one call participant's lifetime to another's — see [Return policies & lifetimes](return-policies.md#keep_alive). |
+| `flags` | Declare a welded **enum** a bitmask: instances carry OR-combined (and possibly unnamed) bits. Python binds `enum.IntFlag`; rods without the concept ignore it. See [Enums](enums.md#bitmask-flags-enums). |
 
 !!! example "In the cookbook"
 
@@ -290,6 +291,27 @@ top (a reference-category policy on a by-value return is a hard error in every
 language). The full story — the `welder::rv::` kinds, per-language scoping, how
 the Lua rods decide ownership structurally instead, and `keep_alive`'s index
 convention — lives on [Return policies & lifetimes](return-policies.md).
+
+## `flags` — bitmask enums
+
+An enum whose instances carry **OR-combined** enumerator bits (and, in binary
+file formats, often bits no enumerator names) declares that with `flags`:
+
+```cpp
+enum class [[=welder::weld, =welder::flags]] Styles : std::uint32_t {
+    Bold = 0x1, Italic = 0x2, Underline = 0x4,
+};
+```
+
+It is a semantic statement, not a rendering choice, and each rod renders it in
+its own idiom: the Python rods bind an `enum.IntFlag` instead of an
+`enum.IntEnum` — combined and unnamed values **convert** where an `IntEnum`
+raises `ValueError` — while the Lua rods, whose enums cross as plain integers,
+ignore it (like `keep_alive`, it is not language-scoped: backends with the
+concept honor it, the rest ignore it). A text-emitting rod can read it through
+`welder::flags_enum()` and stamp the language's own marker (the C# rod emits
+`[System.Flags]`). Details and the stub-generator caveats are on
+[Enums](enums.md#bitmask-flags-enums).
 
 The two `trust_bindable` escape hatches are covered in
 [Trust & type casters](trust-casters.md), and `weld_as` — the verbatim per-entity

@@ -152,7 +152,10 @@ a[0]['x'] = 1.5                 # writes straight into the C++ struct
 ```
 
 welder reflects the struct's fields (names, types, offsets — padding included) and
-serves NumPy the layout through the `__array_interface__` protocol — a plain attribute,
+serves NumPy the layout through the `__array_interface__` protocol. An **enum**
+field (a [`flags` bitmask](enums.md#bitmask-flags-enums) or a plain enum) does
+not disqualify the struct: NumPy has no enum dtype, so the field views as the
+enum's fixed underlying integer — a plain attribute,
 so this needs **no NumPy at build or import time**, and works identically on both Python
 rods. It fires automatically for any POD-struct element; a type with a vtable (a
 virtual/overridable type), a `std::string`, or a pointer isn't trivially copyable, so it

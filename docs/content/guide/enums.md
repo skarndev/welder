@@ -6,7 +6,8 @@ data member**: the enum's `policy` plus per-enumerator `exclude`/`include` marks
 decide what binds. What it becomes in the target language differs:
 
 - **Python** — a stdlib `enum.IntEnum` (pybind11 `py::native_enum`, nanobind
-  `nb::is_arithmetic`; int-convertible).
+  `nb::is_arithmetic`; int-convertible) — or an `enum.IntFlag` for a
+  [`flags` enum](#bitmask-flags-enums).
 - **Lua** — a plain `name → value` **table** (Lua has no enum type).
 
 !!! example "In the cookbook"
@@ -90,6 +91,49 @@ Level {
     Trace                               // not opted in → not bound
 };
 ```
+
+## Bitmask (flags) enums
+
+A stdlib `IntEnum` rejects any value that is not a named enumerator — converting
+`Direction(0x1234)` raises `ValueError`. That is correct for a closed value set,
+and wrong for a **bitmask**, whose instances are OR-combinations of the named
+bits (binary file formats also routinely ship bits no enumerator names).
+Declare a bitmask with the [`flags` annotation](annotations.md#flags-bitmask-enums):
+
+```cpp
+enum class [[=welder::weld, =welder::flags]] Styles : std::uint32_t {
+    Bold = 0x1, Italic = 0x2, Underline = 0x4,
+};
+```
+
+Python then binds an **`enum.IntFlag`** (nanobind `nb::is_flag()`, pybind11
+`native_enum … "enum.IntFlag"`):
+
+```pycon
+>>> Styles.Bold | Styles.Italic          # combining stays inside the type
+<Styles.Bold|Italic: 3>
+>>> Styles(0x81)                         # unnamed bit 0x80: kept, not rejected
+<Styles.Bold|128: 129>
+>>> Styles.Bold in (Styles.Bold | Styles.Underline)
+True
+```
+
+`IntFlag` still inherits `int`, so existing `value & 0x4` call sites keep
+working. The Lua rods ignore the annotation — their enums cross as plain
+integers, which combine freely anyway. An enum-typed **field** of a POD struct
+also keeps its [zero-copy structured-array
+view](containers.md#pod-structs-structured-arrays): NumPy has no enum dtype, so
+the field views as the enum's fixed underlying integer.
+
+!!! note "Stub generators and `IntFlag`"
+
+    Both Python stub generators leave `IntFlag` artifacts a strict `mypy`
+    rejects (nanobind emits the class-dict alias `__str__ = __repr__` *before*
+    the `__repr__` it references; `pybind11-stubgen` renders flag members as
+    annotations, which mypy counts as "an enum with zero members"). welder
+    ships `tools/welder_stub_sanitizer.py` — point it at a generated stubs
+    directory between stub generation and type-checking, as welder's own test
+    gates do.
 
 ## Enum-typed members
 
