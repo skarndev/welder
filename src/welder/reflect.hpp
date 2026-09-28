@@ -43,6 +43,18 @@ consteval bool welded_for(std::meta::info type, lang L) {
            weld_mask_admits(std::meta::extract<detail::weld_spec>(anns[0]).mask, L);
 }
 
+/** Is @a type a bitmask enum — does it carry a `flags` annotation?
+
+    A flags enum's instances hold OR-combined enumerator bits (and possibly
+    unnamed ones); rods that would otherwise reject out-of-enumerator values
+    (the Python rods' stdlib enums) branch on this to bind a flag-tolerant
+    representation instead.
+    @param type a reflection of the enum type to test.
+    @return `true` iff @a type carries a `flags` annotation. */
+consteval bool flags_enum(std::meta::info type) {
+    return !std::meta::annotations_of_with_type(type, ^^detail::flags_spec).empty();
+}
+
 /** Is @a mem a namespace-scope alias naming a class-template specialization —
     the one way an *instantiation* can enter a namespace sweep?
 

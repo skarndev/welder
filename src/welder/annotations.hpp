@@ -530,6 +530,21 @@ struct keep_alive_spec {
     unsigned patient = 0; /**< The dependant kept alive until the nurse is collected (e.g. `2`, an appended item). */
 };
 
+// --- flags: an enum is a bitmask ---------------------------------------------
+
+/** The stored form of a `flags` annotation on an enum type.
+
+    A semantic statement, not a rendering choice: instances of the enum carry
+    OR-combined enumerator bits (and possibly bits no enumerator names), so a
+    backend must not reject values outside the enumerator set. Each rod renders
+    it in its own idiom — the Python rods bind an `enum.IntFlag` instead of an
+    `enum.IntEnum`; a text-emitting rod may stamp the language's flags marker
+    (C#'s `[System.Flags]`); the Lua rods, whose enums cross as plain integers,
+    ignore it. Not language-scoped for the same reason `keep_alive` is not:
+    every backend that *has* the concept honors it, the rest ignore it.
+*/
+struct flags_spec {};
+
 } // namespace detail
 
 // --- weld: the type-level annotation declaring target languages -------------
@@ -822,5 +837,21 @@ consteval detail::return_policy_spec return_policy(Args... args) {
 consteval detail::keep_alive_spec keep_alive(unsigned nurse, unsigned patient) {
     return detail::keep_alive_spec{nurse, patient};
 }
+
+// --- flags: an enum is a bitmask ---------------------------------------------
+
+/** The `flags` annotation: declare a welded enum a bitmask, whose instances
+    hold OR-combinations of its enumerators (and possibly undocumented bits).
+
+    The Python rods then bind it as an `enum.IntFlag` — combined and unknown
+    values convert instead of raising — and text-emitting rods may stamp the
+    language's own flags marker. Attach it beside `weld` on the enum:
+    @code
+    enum class [[=welder::weld, =welder::flags]] GroupFlags : std::uint32_t {
+        HasBsp = 0x1, HasVertexColors = 0x4, ...
+    };
+    @endcode
+    @see detail::flags_spec */
+inline constexpr detail::flags_spec flags{};
 
 } // namespace welder

@@ -1104,6 +1104,8 @@ struct rod {
         `nb::is_arithmetic()` makes it a Python `enum.IntEnum`, so enumerators are
         int-convertible (`int(E.Value)`) and compare against ints — matching the
         pybind11 backend, whose `py::native_enum` also binds an `enum.IntEnum`.
+        A `[[=welder::flags]]` enum adds `nb::is_flag()` — an `enum.IntFlag`, so
+        OR-combined and undocumented bit values convert instead of raising.
         @see welder::rod */
     template <class E>
     static auto make_enum(module_type& m, const char* name,
@@ -1114,9 +1116,16 @@ struct rod {
         // branched out rather than passed. nb::enum_ builds the type in its ctor and
         // copies the doc, so the transient string here is safe.
         const std::string doc{DocStyle::format_enum(ed)};
-        if (!doc.empty())
-            return nb::enum_<E>(m, name, doc.c_str(), nb::is_arithmetic());
-        return nb::enum_<E>(m, name, nb::is_arithmetic());
+        if constexpr (::welder::flags_enum(^^E)) {
+            if (!doc.empty())
+                return nb::enum_<E>(m, name, doc.c_str(), nb::is_arithmetic(),
+                                    nb::is_flag());
+            return nb::enum_<E>(m, name, nb::is_arithmetic(), nb::is_flag());
+        } else {
+            if (!doc.empty())
+                return nb::enum_<E>(m, name, doc.c_str(), nb::is_arithmetic());
+            return nb::enum_<E>(m, name, nb::is_arithmetic());
+        }
     }
 
     /** Create the `nb::enum_<E>` for a **nested** member enum, scoped to its
@@ -1128,9 +1137,18 @@ struct rod {
     static auto make_nested_enum(module_type&, auto& outer_cls, const char* name,
                                  const ::welder::detail::enum_doc& ed) {
         const std::string doc{DocStyle::format_enum(ed)};
-        if (!doc.empty())
-            return nb::enum_<E>(outer_cls, name, doc.c_str(), nb::is_arithmetic());
-        return nb::enum_<E>(outer_cls, name, nb::is_arithmetic());
+        if constexpr (::welder::flags_enum(^^E)) {
+            if (!doc.empty())
+                return nb::enum_<E>(outer_cls, name, doc.c_str(),
+                                    nb::is_arithmetic(), nb::is_flag());
+            return nb::enum_<E>(outer_cls, name, nb::is_arithmetic(),
+                                nb::is_flag());
+        } else {
+            if (!doc.empty())
+                return nb::enum_<E>(outer_cls, name, doc.c_str(),
+                                    nb::is_arithmetic());
+            return nb::enum_<E>(outer_cls, name, nb::is_arithmetic());
+        }
     }
 
     /** Add enumerator @a Enum to the enum handle. @see welder::rod */

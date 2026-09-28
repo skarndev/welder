@@ -53,3 +53,31 @@ def test_enum_typed_member_roundtrips(enums: ModuleType) -> None:
     compass = enums.Compass()
     compass.facing = enums.Direction.West
     assert compass.facing == enums.Direction.West
+
+
+# --- flags (bitmask) enums ---------------------------------------------------
+def test_flags_enum_binds_an_intflag(enums: ModuleType) -> None:
+    import enum
+
+    # [[=welder::flags]] -> enum.IntFlag: combining stays inside the type.
+    assert issubclass(enums.Styles, enum.IntFlag)
+    v = enums.Styles.Bold | enums.Styles.Italic
+    assert isinstance(v, enums.Styles)
+    assert int(v) == 0x3
+
+
+def test_flags_enum_accepts_combined_and_unknown_bits(enums: ModuleType) -> None:
+    # The C++ default carries Bold plus an undocumented 0x80 bit — a plain
+    # IntEnum would raise ValueError converting it; IntFlag keeps the bits.
+    t = enums.Text()
+    assert int(t.styles) == 0x81
+    assert enums.Styles.Bold in t.styles
+
+    t.styles = enums.Styles.Bold | enums.Styles.Underline
+    assert int(t.styles) == 0x5
+
+
+def test_plain_enum_still_rejects_combined_values(enums: ModuleType) -> None:
+    # The IntEnum behavior of unmarked enums is unchanged.
+    with pytest.raises(ValueError):
+        enums.Direction(0x1234)

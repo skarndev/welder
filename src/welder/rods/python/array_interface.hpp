@@ -55,9 +55,15 @@ consteval bool ai_is_unsigned(std::meta::info t) {
     type, or `long double`).
 
     `float`→`"<f4"`, `double`→`"<f8"`, `bool`→`"|b1"`, signed/unsigned integers by
-    size — `int`→`"<i4"`, `unsigned char`→`"|u1"`, `std::int64_t`→`"<i8"`, … */
+    size — `int`→`"<i4"`, `unsigned char`→`"|u1"`, `std::int64_t`→`"<i8"`, …
+    An enum field views as its fixed underlying integer: NumPy has no enum
+    dtype, and dropping the whole struct off the structured-array path because
+    one field is (say) a `[[=welder::flags]]` bitmask would cost the zero-copy
+    view exactly where binary formats need it most. */
 consteval std::string numpy_typestr(std::meta::info t) {
     t = std::meta::dealias(t);
+    if (std::meta::is_enum_type(t))
+        t = std::meta::dealias(std::meta::underlying_type(t));
     if (t == ^^bool)
         return "|b1";
     if (t == ^^float)

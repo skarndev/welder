@@ -54,6 +54,29 @@ Compass {
     Direction facing;
 };
 
+// bitmask enum: [[=welder::flags]] binds an enum.IntFlag instead of an
+// enum.IntEnum — instances carry OR-combined enumerator bits, and real binary
+// formats also ship bits no enumerator names, both of which a plain IntEnum
+// rejects at conversion (ValueError).
+enum class
+[[
+  =welder::weld,
+  =welder::flags
+]]
+Styles : unsigned {
+    Bold = 0x1,
+    Italic = 0x2,
+    Underline = 0x4
+};
+
+// a flags member whose C++ default carries a combined value INCLUDING an
+// undocumented bit (0x80) — the from-C++ conversion IntFlag must tolerate.
+struct
+[[=welder::weld]]
+Text {
+    Styles styles = static_cast<Styles>(0x80 | 0x1);
+};
+
 } // namespace enums
 
 inline void register_enums(WELDER_TEST_MODULE_T& m) {

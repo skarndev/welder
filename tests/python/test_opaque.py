@@ -126,6 +126,25 @@ def test_pod_struct_numpy_structured_view(op: ModuleType) -> None:
     assert pts[1].x == pytest.approx(99.0)
 
 
+# --- an enum field views as its underlying integer in the structured dtype ----
+def test_enum_field_maps_to_underlying_dtype(op: ModuleType) -> None:
+    np = pytest.importorskip("numpy")
+    cells = op.CellList()  # Cell { int32 id; CellBits(u8) bits; }
+    c = op.Cell()
+    c.id = 7
+    c.bits = op.CellBits.A | op.CellBits.B
+    cells.append(c)
+    a = np.asarray(cells)
+    # id, bits, plus an auto-named void field for the 3 trailing padding
+    # bytes (int32 + u8 in an align-4 struct) — the descr keeps the itemsize
+    # honest.
+    assert a.dtype.names[:2] == ("id", "bits")
+    assert a.dtype["bits"] == np.uint8  # the enum's underlying integer
+    assert a.dtype.itemsize == 8
+    assert not a.flags["OWNDATA"]  # still the zero-copy view
+    assert int(a[0]["bits"]) == 0x3
+
+
 # --- no_reassign: read-only binding, in-place mutation still writes through ----
 def test_no_reassign_member(op: ModuleType) -> None:
     s = op.Signal()

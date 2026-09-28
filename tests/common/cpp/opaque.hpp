@@ -28,6 +28,21 @@ struct [[=welder::weld(welder::lang::py)]] Point2D {
     double x{0.0};
     double y{0.0};
 };
+
+// A POD element with an ENUM field (a flags bitmask, the common binary-format
+// shape): NumPy has no enum dtype, so the structured view maps the field to the
+// enum's underlying integer — the struct must NOT fall off the zero-copy path
+// just because one field is an enum.
+enum class [[=welder::weld(welder::lang::py), =welder::flags]]
+CellBits : std::uint8_t {
+    A = 1,
+    B = 2,
+};
+
+struct [[=welder::weld(welder::lang::py)]] Cell {
+    std::int32_t id{0};
+    CellBits bits{};
+};
 } // namespace opaque
 
 // The frameworks select a container's caster by TYPE, module-wide, so opaqueness is a
@@ -38,6 +53,7 @@ struct [[=welder::weld(welder::lang::py)]] Point2D {
 // them opaque does not clobber that group's semantics in the same translation unit.
 WELDER_TEST_MAKE_OPAQUE(std::vector<float>)
 WELDER_TEST_MAKE_OPAQUE(std::vector<opaque::Point2D>)
+WELDER_TEST_MAKE_OPAQUE(std::vector<opaque::Cell>)
 WELDER_TEST_MAKE_OPAQUE(std::map<int, std::string>)
 WELDER_TEST_MAKE_OPAQUE(std::unordered_map<std::string, int>)
 WELDER_TEST_MAKE_OPAQUE(std::map<int, opaque::Point2D>)
@@ -52,6 +68,7 @@ namespace opaque {
 // that the element's own registration gates through (Point2D is welded).
 using FloatVector [[=welder::weld(welder::lang::py)]] = std::vector<float>;
 using PointList  [[=welder::weld(welder::lang::py)]] = std::vector<Point2D>;
+using CellList   [[=welder::weld(welder::lang::py)]] = std::vector<Cell>;
 
 // --- bind_map containers -----------------------------------------------------
 using IntStrMap  [[=welder::weld(welder::lang::py)]] = std::map<int, std::string>;

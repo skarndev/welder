@@ -124,12 +124,24 @@ foreach(variant IN LISTS _variants)
     # same accepted artifacts of binding a type with comparison operators as in the
     # pybind11 tree: `override` (operator== narrows object.__eq__) and `assignment`
     # (defining __eq__ sets __hash__ = None vs object's Callable).
+    # Normalize the generator's stdlib-enum artifacts first (the forward
+    # __str__ alias, annotation-style flag members) — tools/welder_stub_sanitizer.py
+    # documents both.
+    add_test(
+      NAME stubsanitize.${variant}
+      COMMAND ${WELDER_TEST_VENV_PYTHON}
+              ${CMAKE_SOURCE_DIR}/tools/welder_stub_sanitizer.py
+              ${_stubs_dir}/${variant})
+    set_tests_properties(stubsanitize.${variant} PROPERTIES
+      FIXTURES_SETUP stubs_clean_${variant})
     add_test(
       NAME stubcheck.${variant}
       COMMAND ${WELDER_TEST_VENV_PYTHON} -m mypy
               --disable-error-code=override --disable-error-code=assignment
               ${_stubs_dir}/${variant}
       WORKING_DIRECTORY ${WELDER_TEST_PYDIR})
+    set_tests_properties(stubcheck.${variant} PROPERTIES
+      FIXTURES_REQUIRED stubs_clean_${variant})
   endif()
 endforeach()
 

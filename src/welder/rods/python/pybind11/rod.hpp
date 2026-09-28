@@ -1040,6 +1040,15 @@ struct rod {
         return DocStyle::format_enum(ed);
     }
 
+    /** The stdlib base a welded enum binds as: `enum.IntFlag` for a
+        `[[=welder::flags]]` bitmask enum (combined and undocumented bit values
+        convert instead of raising), `enum.IntEnum` otherwise — matching the
+        nanobind backend's `is_arithmetic` [+ `is_flag`] choice. */
+    template <class E>
+    static consteval const char* _enum_base() {
+        return ::welder::flags_enum(^^E) ? "enum.IntFlag" : "enum.IntEnum";
+    }
+
     /** Create the `enum_handle` for @a E; @a ed's summary + enumerator docs become
         its class docstring (see @ref _enum_docstring). @see welder::rod */
     template <class E>
@@ -1050,7 +1059,7 @@ struct rod {
         // nullptr behaviour when the enum carries no documentation.
         const std::string doc{_enum_docstring(ed)};
         return {m, name,
-                std::make_unique<py::native_enum<E>>(m, name, "enum.IntEnum",
+                std::make_unique<py::native_enum<E>>(m, name, _enum_base<E>(),
                                                      doc.c_str())};
     }
 
@@ -1066,7 +1075,7 @@ struct rod {
         const std::string doc{_enum_docstring(ed)};
         return {outer_cls, name,
                 std::make_unique<py::native_enum<E>>(outer_cls, name,
-                                                     "enum.IntEnum",
+                                                     _enum_base<E>(),
                                                      doc.c_str())};
     }
 
